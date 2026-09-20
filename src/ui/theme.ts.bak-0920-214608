@@ -1,0 +1,44 @@
+export const C = {
+  bg: '#f3f4fb',
+  bgTop: '#fbfbff',
+  bgBottom: '#eceef9',
+  dangerTop: '#fff6f6',
+  dangerBottom: '#ffe8ea',
+  card: '#ffffff',
+  cardBorder: '#e9eaf5',
+  rowBg: '#f7f8fd',
+  track: '#e9ecf6',
+  text: '#161a2e',
+  sub: '#6b7291',
+  muted: '#9aa1bd',
+
+  // الهوية: أزرق للأدوات، بنفسجي للذكاء
+  blue: '#2f6bff',
+  blueSoft: '#eaf0ff',
+  blueDeep: '#1b47c7',
+  violet: '#7c5cff',
+  violetSoft: '#f1edff',
+
+  // الحالة فقط
+  green: '#12b76a',
+  greenSoft: '#e8f8f0',
+  gold: '#f79009',
+  goldSoft: '#fff6e8',
+  red: '#e5484d',
+  redSoft: '#ffeef0',
+
+  line: '#e9eaf5',
+  lineSoft: '#f0f1f8',
+  onAccent: '#ffffff',
+  onAccentSoft: '#cfe0ff',
+  shadow: '#131a3a',
+};
+
+/** أنصاف الأقطار — ثلاث درجات فقط */
+export const R = { sm: 11, md: 15, lg: 19, pill: 999 };
+
+/** المسافات على شبكة ٤ */
+export const S = { xs: 4, sm: 8, md: 12, lg: 16, xl: 22 };
+
+/** مقاسات الخط */
+export const T = { h1: 22, h2: 16.5, body: 13, label: 11.5, tiny: 10 };
