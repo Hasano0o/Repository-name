@@ -15,7 +15,7 @@ export const TONE: Record<Tone, { fg: string; bg: string }> = {
 };
 
 /** رقم + وحدته باتجاه LTR — يمنع انقلاب الإشارة السالبة */
-export function Num({ value, unit, color = C.text, size = T.metric ?? 22 }:
+export function Num({ value, unit, color = C.text, size = T.score }:
   { value: string | number; unit?: string; color?: string; size?: number }) {
   return (
     <View style={st.num}>

@@ -21,3 +21,6 @@ GoogleService-Info.plist
 .DS_Store
 *.orig
 _patch*.py
+
+*.bak
+*.bak-*
