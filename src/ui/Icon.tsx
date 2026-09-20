@@ -5,6 +5,7 @@ export type IconName =
   | 'home' | 'tower' | 'bands' | 'aim' | 'game' | 'folder' | 'report'
   | 'settings' | 'chevron' | 'down' | 'up' | 'phone' | 'tv' | 'refresh'
   | 'spark' | 'bulb' | 'lock' | 'sms' | 'speed' | 'chart' | 'user' | 'power'
+  | 'eye' | 'eye-off'
   | 'antenna' | 'layers' | 'pin' | 'clock';
 
 export function Icon({
@@ -30,6 +31,8 @@ export function Icon({
       {name === 'spark' && <><Path d="M12 17v4" {...p} /><Path d="M9 21h6" {...p} /><Path d="M12 3 9.2 8.6 3 9.5l4.5 4.4L6.4 20 12 17.1 17.6 20l-1.1-6.1L21 9.5l-6.2-.9z" {...p} /></>}
       {name === 'bulb' && <><Path d="M9 18h6" {...p} /><Path d="M10 21h4" {...p} /><Path d="M12 3a6 6 0 0 0-3.6 10.8c.5.4.8.9.9 1.5h5.4c.1-.6.4-1.1.9-1.5A6 6 0 0 0 12 3z" {...p} /></>}
       {name === 'lock' && <><Rect x={4} y={10} width={16} height={11} rx={3} {...p} /><Path d="M8 10V7a4 4 0 0 1 8 0v3" {...p} /></>}
+      {name === 'eye' && <><Path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" {...p} /><Circle cx={12} cy={12} r={3} {...p} /></>}
+      {name === 'eye-off' && <><Path d="M2 12s3.5-7 10-7c2.2 0 4.1.7 5.7 1.7M22 12s-3.5 7-10 7c-2.2 0-4.1-.7-5.7-1.7" {...p} /><Path d="M4 4l16 16" {...p} /></>}
       {name === 'sms' && <><Path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z" {...p} /></>}
       {name === 'speed' && <><Path d="M12 14l4-4" {...p} /><Path d="M4 18a9 9 0 1 1 16 0" {...p} /></>}
       {name === 'chart' && <><Path d="M4 19V5" {...p} /><Path d="M4 19h16" {...p} /><Path d="M8 15l4-5 3 3 4-6" {...p} /></>}

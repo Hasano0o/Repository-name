@@ -120,7 +120,7 @@ export default function AddRouter() {
               accessibilityRole="button"
               accessibilityLabel={show ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
             >
-              <Icon name={show ? 'up' : 'lock'} size={17} color={show ? C.blue : C.muted} />
+              <Icon name={show ? 'eye' : 'eye-off'} size={17} color={show ? C.blue : C.muted} />
             </Pressable>
           </View>
           <Text style={s.hint}>

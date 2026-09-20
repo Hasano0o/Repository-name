@@ -64,4 +64,4 @@ export const R = { sm: 14, md: 18, lg: 26, pill: 999 };
 export const S = { xs: 4, sm: 8, md: 12, lg: 16, xl: 22 };
 
 /** مقاسات الخط */
-export const T = { score: 44, h1: 22, h2: 16.5, body: 13, label: 11.5, tiny: 10 };
+export const T = { score: 44, h1: 22, h2: 16.5, body: 13, label: 12, tiny: 11 };

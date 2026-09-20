@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Carrier, RouterDriver, Signal } from '../drivers/types';
 import { SavedRouter } from '../store/routers';
-import { withSession } from '../store/sessions';
+import { withSession, withRouterLock } from '../store/sessions';
 import { trafficBurst } from './nrprobe';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -18,6 +18,8 @@ export interface Snapshot {
   /** مؤشر سعة نسبي (للمقارنة فقط — مو سرعة حقيقية) */
   cap: number;
   bands: string;
+  /** رقم الخلية الأساسية — نكشف فيه هل تغيّر البرج أثناء القياس */
+  pci?: string;
 }
 
 const mhz = (s?: string) => {
@@ -68,6 +70,7 @@ export async function snapshot(r: SavedRouter, withNr = false, samples = 3): Pro
   let n = 0;
   let nr = false;
   let bands = '';
+  let pci: string | undefined;
   for (let i = 0; i < samples; i++) {
     try {
       const { sig, carriers } = await withSession(r, async (d: RouterDriver) => {
@@ -84,11 +87,12 @@ export async function snapshot(r: SavedRouter, withNr = false, samples = 3): Pro
       n = Math.max(n, res.n);
       nr = nr || sig.nrRsrp !== undefined;
       bands = res.bands || bands;
+      pci = sig.pci ?? pci;
     } catch {}
     if (i < samples - 1) await sleep(2500);
   }
   if (!caps.length) return null;
-  return { cap: avg(caps)!, rsrp: avg(rs), sinr: avg(ss), bw, carriers: n, nr, bands };
+  return { cap: avg(caps)!, rsrp: avg(rs), sinr: avg(ss), bw, carriers: n, nr, bands, pci };
 }
 
 export async function waitOnline(r: SavedRouter, timeoutMs: number, isCancelled: () => boolean) {
@@ -119,6 +123,8 @@ export interface TrialResult {
   change?: number;
   /** رجّعنا الإعداد لكن الراوتر ما رجع أونلاين — يحتاج تدخّل المستخدم */
   restoreFailed?: boolean;
+  /** تغيّر البرج الأساسي أثناء القياس — المقارنة صارت تقديرية */
+  towerChanged?: boolean;
 }
 
 export interface Trial {
@@ -138,7 +144,7 @@ const BETTER = 0.1;
  * يقيس قبل ← يطبق ← ينتظر الاتصال ← يقيس بعد ← لو صار أسوأ يرجع تلقائياً.
  * withNr: نصحّي 5G بتحميل قصير وقت القياس (يستهلك باقة) — للتغييرات اللي تخص 5G.
  */
-export async function safeApply(o: {
+export interface SafeApplyOpts {
   r: SavedRouter;
   key: string;
   label: string;
@@ -147,7 +153,14 @@ export async function safeApply(o: {
   onStatus?: (s: string) => void;
   isCancelled?: () => boolean;
   withNr?: boolean;
-}): Promise<TrialResult> {
+}
+
+/** يطبّق بأمان، ومقفول لكل راوتر عشان ما تشتغل عمليتان معاً */
+export function safeApply(o: SafeApplyOpts): Promise<TrialResult> {
+  return withRouterLock(o.r.id, () => safeApplyInner(o));
+}
+
+async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
   const say = o.onStatus ?? (() => {});
   const cancelled = o.isCancelled ?? (() => false);
   const measure = async () => {
@@ -182,6 +195,7 @@ export async function safeApply(o: {
   const after = await measure();
 
   const change = before && after && before.cap > 0 ? (after.cap - before.cap) / before.cap : undefined;
+  const towerChanged = !!(before?.pci && after?.pci && before.pci !== after.pci);
   let verdict: TrialVerdict = 'same';
   if (!after) verdict = 'noconn';
   else if (change !== undefined && change <= WORSE) verdict = 'worse';
@@ -195,7 +209,7 @@ export async function safeApply(o: {
     const back = await waitOnline(o.r, 45000, () => false);
     restoreFailed = !back;
   }
-  const res: TrialResult = { verdict, kept, before, after, change, restoreFailed };
+  const res: TrialResult = { verdict, kept, before, after, change, restoreFailed, towerChanged };
   await record(o.r.id, o.key, o.label, res);
   return res;
 }
@@ -248,9 +262,10 @@ const fmtSnap = (s: Snapshot | null) =>
 export function trialMessage(res: TrialResult, label: string): { title: string; body: string } {
   const b = `قبل: ${fmtSnap(res.before)}\nبعد: ${fmtSnap(res.after)}`;
   const warn = res.restoreFailed ? '⚠️ ما قدرنا نتأكد إن إعدادك رجع للوضع السابق — افحص راوترك، ولو النت مقطوع سوّ إعادة تشغيل.\n\n' : '';
+  const tower = res.towerChanged ? '\n\n(لاحظنا تغيّر البرج أثناء القياس — المقارنة تقديرية)' : '';
   switch (res.verdict) {
     case 'better':
-      return { title: '✅ صار أفضل', body: `${label} رفع السعة المتوقعة تقريباً ${pct(res.change!)} — خليناه.\n\n${b}` };
+      return { title: '✅ صار أفضل', body: `${label} رفع السعة المتوقعة تقريباً ${pct(res.change!)} — خليناه.\n\n${b}${tower}` };
     case 'same':
       return {
         title: '➖ ما فرق كثير',
@@ -259,7 +274,7 @@ export function trialMessage(res: TrialResult, label: string): { title: string; 
     case 'worse':
       return {
         title: '↩️ رجعنا الإعداد السابق',
-        body: `${warn}${label} خلّى الاتصال أسوأ بـ ${pct(res.change!)}${res.before && res.after && res.after.carriers < res.before.carriers ? ' — غالباً لأنه أوقف دمج الترددات' : ''}، فرجعنا إعدادك تلقائياً.\n\n${b}`,
+        body: `${warn}${label} خلّى الاتصال أسوأ بـ ${pct(res.change!)}${res.before && res.after && res.after.carriers < res.before.carriers ? ' — غالباً لأنه أوقف دمج الترددات' : ''}، فرجعنا إعدادك تلقائياً.\n\n${b}${tower}`,
       };
     default:
       return { title: '↩️ ما اتصل', body: `${warn}الراوتر ما اتصل بعد ${label}، فرجعنا إعدادك السابق تلقائياً.` };
