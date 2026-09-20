@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
+
+SplashScreen.preventAutoHideAsync().catch(() => {});
 import {
   useFonts,
   IBMPlexSansArabic_400Regular,
@@ -46,17 +48,13 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    SplashScreen.hideAsync().catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (error) console.log('FONT ERROR', error);
-    if (loaded) console.log('FONTS LOADED');
+    if (loaded || error) {
+      try { applyGlobalFont(); } catch {}
+      SplashScreen.hideAsync().catch(() => {});
+    }
   }, [loaded, error]);
 
-  if (loaded) {
-    try { applyGlobalFont(); } catch {}
-  }
+  if (!loaded && !error) return null;
 
   return (
     <>

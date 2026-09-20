@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import {
-  ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, LayoutAnimation, RefreshControl,
+  ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, LayoutAnimation, RefreshControl, AppState,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,7 +9,7 @@ import { SavedRouter, getRouter, deleteRouter } from '../../src/store/routers';
 import { withSession, dropSession } from '../../src/store/sessions';
 import { Signal, Usage, ConnectedDevice, Traffic, RouterDriver, DeviceDetails, DataPlan, ActiveLock } from '../../src/drivers/types';
 import {
-  Level, LEVEL_COLOR, LEVEL_LABEL, overallLevel, parseBands, signalScore,
+  Level, LEVEL_COLOR, LEVEL_LABEL, overallLevel, parseBands, parseNrBands, signalScore,
   rsrpLevel, rsrqLevel, sinrLevel, rssiLevel,
 } from '../../src/utils/signal';
 import { fmtRate, fmtDuration, fmtBytes } from '../../src/utils/format';
@@ -162,6 +162,7 @@ export default function RouterDashboard() {
 
   const poll = useCallback(async (r: SavedRouter) => {
     if (polling.current) return;
+    if (AppState.currentState !== 'active') return; // ما نستهلك بطارية/باقة والتطبيق بالخلفية
     polling.current = true;
     setSyncing(true);
     try {
@@ -198,7 +199,7 @@ export default function RouterDashboard() {
       await loadAll(r);
       if (!alive) return;
       setLoading(false);
-      timer = setInterval(() => poll(r), 3000);
+      timer = setInterval(() => poll(r), 5000);
     })();
     return () => { alive = false; if (timer) clearInterval(timer); };
   }, [id, loadAll, poll]));
@@ -368,7 +369,7 @@ export default function RouterDashboard() {
 
   const bands = parseBands(signal?.band);
   const hasNr = !!signal && (signal.nrRsrp !== undefined || !!signal.nrBand);
-  const nrList = signal?.nrBand ? parseBands(signal.nrBand) : [];
+  const nrList = parseNrBands(signal?.nrBand);
   const allBands = [...new Set([...bands, ...nrList])];
   const primary = hasNr && signal
     ? { rsrp: signal.nrRsrp, sinr: signal.nrSinr }

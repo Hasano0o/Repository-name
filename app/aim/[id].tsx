@@ -15,7 +15,7 @@ const Haptics = {
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { Signal, CellTower, CellLockTarget } from '../../src/drivers/types';
-import { LEVEL_COLOR, LEVEL_LABEL, overallLevel, signalScore, parseBands } from '../../src/utils/signal';
+import { LEVEL_COLOR, LEVEL_LABEL, overallLevel, signalScore, parseBands, parseNrBands } from '../../src/utils/signal';
 import { C } from '../../src/ui/theme';
 import { linkHealth } from '../../src/utils/linkHealth';
 import { LinkHealthChips } from '../../src/ui/LinkHealth';
@@ -357,7 +357,7 @@ export default function AimScreen() {
   const level = overallLevel(current ? { rsrp: shown, sinr: current.sinr } : null);
   const delta = shown !== undefined && baseline !== null ? shown - baseline : undefined;
   const bands = parseBands(signal?.band);
-  const nrBands = signal?.nrBand ? parseBands(signal.nrBand) : [];
+  const nrBands = parseNrBands(signal?.nrBand);
   const nrActive = signal?.nrRsrp !== undefined;
   const bestShown = best?.smooth ?? best?.rsrp;
   const otherCell = !!best && !!current && cellKey(best.cell) !== cellKey(current.cell);

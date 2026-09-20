@@ -42,6 +42,13 @@ export function signalScore(s?: Pick<Signal, 'rsrp' | 'sinr'> | null): number {
   return Math.min(...parts) * 0.6 + avg * 0.4;
 }
 
+/** ترددات 5G من حقل قد يجي بدون حرف n (مثل "78" أو "n78" أو "n41+n78") */
+export function parseNrBands(nrBand?: string): string[] {
+  if (!nrBand) return [];
+  const found = [...String(nrBand).matchAll(/n?(\d+)/gi)].map(m => `n${m[1]}`);
+  return [...new Set(found)];
+}
+
 export function parseBands(band?: string): string[] {
   if (!band) return [];
   const lte = [...band.matchAll(/\bB(\d+)/gi)].map(m => `B${m[1]}`);

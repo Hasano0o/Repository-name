@@ -117,6 +117,8 @@ export interface TrialResult {
   after: Snapshot | null;
   /** نسبة التغير في السعة (0.3 = أفضل ٣٠٪) */
   change?: number;
+  /** رجّعنا الإعداد لكن الراوتر ما رجع أونلاين — يحتاج تدخّل المستخدم */
+  restoreFailed?: boolean;
 }
 
 export interface Trial {
@@ -168,8 +170,8 @@ export async function safeApply(o: {
   if (!online) {
     say('ما اتصل — نرجع الإعداد السابق...');
     try { await withSession(o.r, o.revert, false); } catch {}
-    await waitOnline(o.r, 45000, () => false);
-    const res: TrialResult = { verdict: 'noconn', kept: false, before, after: null };
+    const back = await waitOnline(o.r, 45000, () => false);
+    const res: TrialResult = { verdict: 'noconn', kept: false, before, after: null, restoreFailed: !back };
     await record(o.r.id, o.key, o.label, res);
     return res;
   }
@@ -186,12 +188,14 @@ export async function safeApply(o: {
   else if (change !== undefined && change >= BETTER) verdict = 'better';
 
   const kept = verdict === 'better' || verdict === 'same';
+  let restoreFailed = false;
   if (!kept) {
     say('صار أسوأ — نرجع الإعداد السابق...');
     try { await withSession(o.r, o.revert, false); } catch {}
-    await waitOnline(o.r, 45000, () => false);
+    const back = await waitOnline(o.r, 45000, () => false);
+    restoreFailed = !back;
   }
-  const res: TrialResult = { verdict, kept, before, after, change };
+  const res: TrialResult = { verdict, kept, before, after, change, restoreFailed };
   await record(o.r.id, o.key, o.label, res);
   return res;
 }
@@ -243,6 +247,7 @@ const fmtSnap = (s: Snapshot | null) =>
 /** عنوان ونص رسالة النتيجة */
 export function trialMessage(res: TrialResult, label: string): { title: string; body: string } {
   const b = `قبل: ${fmtSnap(res.before)}\nبعد: ${fmtSnap(res.after)}`;
+  const warn = res.restoreFailed ? '⚠️ ما قدرنا نتأكد إن إعدادك رجع للوضع السابق — افحص راوترك، ولو النت مقطوع سوّ إعادة تشغيل.\n\n' : '';
   switch (res.verdict) {
     case 'better':
       return { title: '✅ صار أفضل', body: `${label} رفع السعة المتوقعة تقريباً ${pct(res.change!)} — خليناه.\n\n${b}` };
@@ -254,9 +259,9 @@ export function trialMessage(res: TrialResult, label: string): { title: string; 
     case 'worse':
       return {
         title: '↩️ رجعنا الإعداد السابق',
-        body: `${label} خلّى الاتصال أسوأ بـ ${pct(res.change!)}${res.before && res.after && res.after.carriers < res.before.carriers ? ' — غالباً لأنه أوقف دمج الترددات' : ''}، فرجعنا إعدادك تلقائياً.\n\n${b}`,
+        body: `${warn}${label} خلّى الاتصال أسوأ بـ ${pct(res.change!)}${res.before && res.after && res.after.carriers < res.before.carriers ? ' — غالباً لأنه أوقف دمج الترددات' : ''}، فرجعنا إعدادك تلقائياً.\n\n${b}`,
       };
     default:
-      return { title: '↩️ ما اتصل', body: `الراوتر ما اتصل بعد ${label}، فرجعنا إعدادك السابق تلقائياً.` };
+      return { title: '↩️ ما اتصل', body: `${warn}الراوتر ما اتصل بعد ${label}، فرجعنا إعدادك السابق تلقائياً.` };
   }
 }

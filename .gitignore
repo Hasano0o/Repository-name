@@ -24,3 +24,6 @@ _patch*.py
 
 *.bak
 *.bak-*
+
+*.bak
+*.bak-*
