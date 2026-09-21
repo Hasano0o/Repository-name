@@ -135,16 +135,75 @@ export class ZteDriver implements RouterDriver {
     try { return JSON.parse(await res.text()); } catch { return null; }
   }
 
-  /** توقيع AD — الفيرموير يرفض أي أمر (غير الدخول) بدونه */
-  private async signAd(): Promise<string | undefined> {
+  /**
+   * مرشحو صيغة AD — من الأكثر شيوعاً للأقل. كلها موثقة من فيرمويرات ZTE،
+   * مو brute-force. نجربها مرة وحدة ثم نحفظ الناجحة.
+   */
+  private static readonly AD_FORMULAS = ['wa+cr', 'wa', 'wa+cr+web', 'wa+web', 'concat'] as const;
+  private adFormula: string | null = null;
+  private adProbed = false;
+
+  private async computeAd(formula: string): Promise<string | undefined> {
     try {
-      const v = await this.get(['wa_inner_version', 'cr_version']);
+      const v = await this.get(['wa_inner_version', 'cr_version', 'web_version']);
       const rd = (await this.get(['RD'])).RD;
       if (!rd) return undefined;
-      return md5Hex(md5Hex((v.wa_inner_version ?? '') + (v.cr_version ?? '')) + rd);
+      const wa = v.wa_inner_version ?? '';
+      const cr = v.cr_version ?? '';
+      const web = v.web_version ?? '';
+      switch (formula) {
+        case 'wa+cr': return md5Hex(md5Hex(wa + cr) + rd);
+        case 'wa': return md5Hex(md5Hex(wa) + rd);
+        case 'wa+cr+web': return md5Hex(md5Hex(wa + cr + web) + rd);
+        case 'wa+web': return md5Hex(md5Hex(wa + web) + rd);
+        case 'concat': return md5Hex(wa + cr + rd);
+        default: return undefined;
+      }
     } catch {
       return undefined;
     }
+  }
+
+  /** يختبر الصيغ على SET_WEB_LANGUAGE (بلا تأثير جانبي — نفس اللغة). */
+  private async probeAdFormula(): Promise<void> {
+    if (this.adProbed) return;
+    this.adProbed = true;
+    try {
+      const v = await this.get(['wa_inner_version', 'cr_version', 'web_version']);
+      const rd = (await this.get(['RD'])).RD;
+      if (!rd) return;
+      const wa = v.wa_inner_version ?? '';
+      const cr = v.cr_version ?? '';
+      const web = v.web_version ?? '';
+      const formulas: Array<[string, string]> = [
+        ['wa+cr', md5Hex(md5Hex(wa + cr) + rd)],
+        ['wa', md5Hex(md5Hex(wa) + rd)],
+        ['wa+cr+web', md5Hex(md5Hex(wa + cr + web) + rd)],
+        ['wa+web', md5Hex(md5Hex(wa + web) + rd)],
+        ['concat', md5Hex(wa + cr + rd)],
+      ];
+      for (const [name, ad] of formulas) {
+        try {
+          const form = `isTest=false&goformId=SET_WEB_LANGUAGE&Language=en&AD=${encodeURIComponent(ad)}`;
+          const res = await http(this.base() + '/goform/goform_set_cmd_process', {
+            method: 'POST',
+            headers: this.headers({ 'Content-Type': 'application/x-www-form-urlencoded' }),
+            body: form,
+          });
+          const out = await res.text();
+          if (/"result"\s*:\s*"?0"?/.test(out) || /success/i.test(out)) {
+            this.adFormula = name;
+            return;
+          }
+        } catch {}
+      }
+      this.adFormula = 'wa+cr';
+    } catch {}
+  }
+
+  private async signAd(): Promise<string | undefined> {
+    if (!this.adProbed) await this.probeAdFormula();
+    return this.computeAd(this.adFormula ?? 'wa+cr');
   }
 
   private async post(body: Record<string, string>): Promise<string> {
