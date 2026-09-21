@@ -6,7 +6,9 @@ import {
   Usage, DeviceDetails, CellTower, BandConfig, ActiveLock, Carrier,
 } from '../types';
 import { http } from '../http';
-import { parsePci, decodeBandMask, encodeBandMask } from '../../utils/normalize';
+import {
+  parsePci, decodeBandMask, encodeBandMask, parseZteCa, bandLabel,
+} from '../../utils/normalize';
 
 const sha256Upper = (s: string) => bytesToHex(sha256(utf8ToBytes(s))).toUpperCase();
 const md5Hex = (s: string) => bytesToHex(md5(utf8ToBytes(s)));
@@ -60,6 +62,7 @@ const bandNum = (v?: string): number | undefined => {
 /**
  * نص الترددات بنفس صيغة هواوي عشان الواجهة تعرض الدمج:
  * "20MHz@500(B1) + 20MHz@1450(B3) + 20MHz@9310(B28)"
+ * نستخدم bandLabel حتى يبقى التسمية موحدة عبر الدرايفرات.
  */
 function caBandString(r: Record<string, string>): string | undefined {
   const earfcn = r.wan_active_channel || r.lte_ca_pcell_freq || '';
@@ -67,7 +70,8 @@ function caBandString(r: Record<string, string>): string | undefined {
     ?? bandNum(r.wan_active_band) ?? lteBandOf(num(earfcn));
   if (!pb) return undefined;
   const bw = num(r.lte_ca_pcell_bandwidth);
-  const parts = [(bw ? bw + 'MHz' : '') + (earfcn ? '@' + earfcn : '') + '(B' + pb + ')'];
+  const label = bandLabel(pb, 'LTE') ?? ('B' + pb);
+  const parts = [(bw ? bw + 'MHz' : '') + (earfcn ? '@' + earfcn : '') + '(' + label + ')'];
   const ca = r.wan_lte_ca || '';
   if (/activ/i.test(ca) && !/deactiv|inactiv/i.test(ca)) {
     for (const row of (r.lte_multi_ca_scell_info || '').split(';')) {
@@ -76,7 +80,8 @@ function caBandString(r: Record<string, string>): string | undefined {
       const b = bandNum(f[3]) ?? lteBandOf(num(f[4]));
       if (!b) continue;
       const w = num(f[5]);
-      parts.push((w ? w + 'MHz' : '') + '@' + f[4] + '(B' + b + ')');
+      const lbl = bandLabel(b, 'LTE') ?? ('B' + b);
+      parts.push((w ? w + 'MHz' : '') + '@' + f[4] + '(' + lbl + ')');
     }
   }
   return parts.join(' + ');
@@ -367,6 +372,18 @@ export class ZteDriver implements RouterDriver {
         kind: 'serving', tech: 'NR', pci: s.nrPci, arfcn: s.nrArfcn,
         band: bandNum(s.nrBand), rsrp: s.nrRsrp, rsrq: s.nrRsrq, sinr: s.nrSinr,
       });
+    }
+    // النواقل الثانوية من نص الدمج "20MHz@500(B1) + ..." — parseZteCa يفكّها كاملة
+    if (s.band) {
+      for (const c of parseZteCa(s.band)) {
+        if (c.role !== 'SCC') continue;
+        out.push({
+          kind: 'secondary',
+          tech: c.tech,
+          band: c.band,
+          arfcn: c.arfcn,
+        });
+      }
     }
     // الأبراج المجاورة (MU5001): "earfcn,pci,rsrq,rsrp,rssi;..." — PCI هنا عشري،
     // وأول سطر غالباً هو البرج الحالي نفسه فنتخطاه
