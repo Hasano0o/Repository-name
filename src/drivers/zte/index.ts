@@ -246,24 +246,41 @@ export class ZteDriver implements RouterDriver {
     try { await this.post({ goformId: 'GOFORM_LOGOUT' }); } catch {}
     await new Promise(r => setTimeout(r, 800));
 
-    // ═══ اجلب LD طازج (يتغيّر بعد LOGOUT) ═══
+    // ═══ اجلب LD و RD طازج ═══
     let ld = '';
-    try { ld = (await this.get(['LD'])).LD || ''; } catch {}
-    this.log('login: LD =', ld ? (ld.slice(0, 16) + '...') : '(فاضي)');
+    let rd = '';
+    try {
+      const vals = await this.get(['LD', 'RD']);
+      ld = vals.LD || '';
+      rd = vals.RD || '';
+    } catch {}
+    this.log('login: LD =', ld ? (ld.slice(0, 16) + '...') : '(فاضي)',
+             '| RD =', rd ? (rd.slice(0, 16) + '...') : '(فاضي)');
 
-    // ═══ صيغ الهاش — كلها موثّقة من فيرمويرات ZTE مختلفة ═══
     const candidates: Array<{ name: string; val: string }> = [];
+
+    // ═══ صيغ MD5 (لأجهزة STC وأغلب فيرمويرات ZTE الحديثة) ═══
+    // من service.js: var ad = md5(md5(pw) + RD)
+    if (rd) {
+      candidates.push({ name: 'md5(md5(pw)+RD)', val: md5Hex(md5Hex(password) + rd) });
+      candidates.push({ name: 'md5(pw+RD)', val: md5Hex(password + rd) });
+      candidates.push({ name: 'md5(md5(pw)+RD.upper)', val: md5Hex(md5Hex(password) + rd.toUpperCase()) });
+    }
     if (ld) {
-      candidates.push({
-        name: 'sha2(pw)+LD.upper',
-        val: sha256Upper(sha256Upper(password) + ld.toUpperCase()),
-      });
-      candidates.push({
-        name: 'sha2(pw+LD.upper)',
-        val: sha256Upper(sha256Upper(password + ld.toUpperCase())),
-      });
+      candidates.push({ name: 'md5(md5(pw)+LD)', val: md5Hex(md5Hex(password) + ld) });
+      candidates.push({ name: 'md5(md5(pw)+LD.upper)', val: md5Hex(md5Hex(password) + ld.toUpperCase()) });
+    }
+    candidates.push({ name: 'md5(md5(pw))', val: md5Hex(md5Hex(password)) });
+    candidates.push({ name: 'md5(pw)', val: md5Hex(password) });
+
+    // ═══ صيغ SHA256 (للفيرمويرات الأقدم — احتياطي) ═══
+    if (ld) {
+      candidates.push({ name: 'sha2(pw)+LD.upper', val: sha256Upper(sha256Upper(password) + ld.toUpperCase()) });
+      candidates.push({ name: 'sha2(pw+LD.upper)', val: sha256Upper(sha256Upper(password + ld.toUpperCase())) });
     }
     candidates.push({ name: 'sha2(pw)', val: sha256Upper(password) });
+
+    // ═══ احتياطي أخير ═══
     try { candidates.push({ name: 'base64(pw)', val: btoa(password) }); } catch {}
 
     let sawBusy = false;
@@ -294,9 +311,8 @@ export class ZteDriver implements RouterDriver {
       if (/"result"\s*:\s*"?3"?/.test(out)) { sawBusy = true; continue; }
     }
 
-    // ═══ لو كل شي فشل، نأكد عدم وجود جلسة قديمة قبل ما نرمي ═══
     if (await this.verifyLogin()) {
-      this.log('login: موجودين داخلين أصلاً (جلسة سابقة)');
+      this.log('login: موجودين داخلين أصلاً');
       return;
     }
 
@@ -304,7 +320,7 @@ export class ZteDriver implements RouterDriver {
       throw new Error('الراوتر قبل الدخول لكن loginfo ما رجع "ok" — جرّب مرة ثانية');
     }
     if (sawBusy) {
-      throw new Error('الراوتر فيه جلسة عالقة ولا يقبل دخول جديد. جرّب: أعد تشغيل الراوتر، أو اقفل صفحته من أي متصفح، أو انتظر 5 دقائق.');
+      throw new Error('الراوتر فيه جلسة عالقة. جرّب: أعد تشغيل الراوتر، أو اقفل صفحته من أي متصفح، أو انتظر 5 دقائق.');
     }
     if (sawWrong) {
       throw new Error('كلمة المرور غير صحيحة');
