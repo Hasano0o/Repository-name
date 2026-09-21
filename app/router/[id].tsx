@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, ReactNode } from 'react';
 import {
   ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, LayoutAnimation, RefreshControl, AppState,
 } from 'react-native';
@@ -84,6 +84,23 @@ function InfoPill({ label, icon, value, wide }: { label: string; icon: string; v
 }
 
 
+
+function Acc({ title, children }: { title: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View style={s.acc}>
+      <Pressable
+        style={s.accHead}
+        accessibilityRole="button"
+        onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setOpen(o => !o); }}
+      >
+        <Text style={s.accTitle}>{title}</Text>
+        <Icon name={open ? 'up' : 'down'} size={16} color={C.muted} />
+      </Pressable>
+      {open && <View style={s.accBody}>{children}</View>}
+    </View>
+  );
+}
 
 export default function RouterDashboard() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -457,83 +474,13 @@ export default function RouterDashboard() {
 
         {!loading && info && (
           <LinearGradient colors={['#f4f8ff', '#e9f2ff', '#e8f8f1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.heroX}>
-            <View style={s.heroMain}>
-              {/* يمين: الجودة والقوة */}
-              <View style={s.heroSide}>
-                <View style={[s.sideCard, s.sideRow]}>
-                  <View style={s.sideTxt}>
-                    <Text style={s.sideLabel}>جودة الاتصال</Text>
-                    <Text style={[s.sideVal, { color: LEVEL_COLOR[sinrLevel(primary.sinr)] }]} numberOfLines={1} adjustsFontSizeToFit>{primary.sinr ?? '—'}</Text>
-                    <Text style={s.sideUnit}>SINR dB</Text>
-                  </View>
-                  <View style={[s.sideIcon, { backgroundColor: '#dbeafe' }]}><Icon name="bands" size={15} color={C.blue} /></View>
-                </View>
-                <View style={[s.sideCard, s.sideRow]}>
-                  <View style={s.sideTxt}>
-                    <Text style={s.sideLabel}>القوة{hasNr ? ' · 5G' : ''}</Text>
-                    <Text style={[s.sideVal, { color: LEVEL_COLOR[rsrpLevel(primary.rsrp)] }]} numberOfLines={1} adjustsFontSizeToFit>{primary.rsrp ?? '—'}</Text>
-                    <Text style={s.sideUnit}>dBm</Text>
-                  </View>
-                  <View style={[s.sideIcon, { backgroundColor: '#dcfce7' }]}><Icon name="antenna" size={15} color={C.green} /></View>
-                </View>
-              </View>
-
-              {/* النص: العدّاد */}
-              <View style={s.heroGauge}>
-                <ArcGauge score={signalScore(primary)} label={LEVEL_LABEL[level]} color={LEVEL_COLOR[level]} size={138} />
-              </View>
-
-              {/* يسار: نوع الشبكة والترددات */}
-              <View style={s.heroSide}>
-                <LinearGradient
-                  colors={hasNr ? ['#8b5cf6', '#6d28d9'] : ['#4f8bff', '#2f6bff']}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                  style={s.netBig}
-                >
-                  <Text style={s.netBigText}>{hasNr ? '5G' : bands.length > 1 ? '4G+' : '4G'}</Text>
-                  <Icon name="bands" size={16} color="#fff" />
-                </LinearGradient>
-                <Text style={s.netCaption}>{hasNr ? (bands.length ? '5G مع 4G' : '5G') : nrIdle ? '5G متاح' : 'نوع الشبكة'}</Text>
-                <View style={s.sideCard}>
-                  <View style={s.sideHead}>
-                    <Text style={s.sideLabel}>{allBands.length > 1 ? 'دمج الترددات' : 'التردد'}</Text>
-                    <View style={[s.sideIcon, s.sideIconSm, { backgroundColor: '#ede9fe' }]}><Icon name="layers" size={13} color={C.violet} /></View>
-                  </View>
-                  <View style={s.bandChips}>
-                    {allBands.length ? allBands.map(b2 => (
-                      <View key={b2} style={[s.bandChip, b2.startsWith('n') && { backgroundColor: C.violetSoft }]}>
-                        <Text style={[s.bandChipText, b2.startsWith('n') && { color: C.violet }]}>{b2}</Text>
-                      </View>
-                    )) : <Text style={s.bandChipText}>—</Text>}
-                  </View>
-                  <Text style={s.sideUnit}>{allBands.length > 1 ? `${allBands.length} ترددات مدموجة` : hasNr ? '5G' : '4G'}</Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={s.statsRow}>
-              <View style={s.statItem}>
-                <View style={[s.statIcon, { backgroundColor: '#dbeafe' }]}><Icon name="down" size={16} color={C.blue} /></View>
-                <View style={s.statText}>
-                  <Text style={s.statLbl}>تنزيل</Text>
-                  <Text style={[s.statNum, { color: C.blue }]} numberOfLines={1} adjustsFontSizeToFit>{traffic ? fmtRate(traffic.downBytesPerSec) : '—'}</Text>
-                </View>
-              </View>
-              <View style={s.statItem}>
-                <View style={[s.statIcon, { backgroundColor: '#ede9fe' }]}><Icon name="up" size={16} color={C.violet} /></View>
-                <View style={s.statText}>
-                  <Text style={s.statLbl}>رفع</Text>
-                  <Text style={[s.statNum, { color: C.violet }]} numberOfLines={1} adjustsFontSizeToFit>{traffic ? fmtRate(traffic.upBytesPerSec) : '—'}</Text>
-                </View>
-              </View>
-              <View style={s.statItem}>
-                <View style={[s.statIcon, { backgroundColor: '#dcfce7' }]}><Icon name="phone" size={16} color={C.green} /></View>
-                <View style={s.statText}>
-                  <Text style={s.statLbl}>الأجهزة</Text>
-                  <Text style={[s.statNum, { color: C.green }]}>{devices.length}</Text>
-                </View>
-              </View>
-            </View>
+            <ArcGauge score={signalScore(primary)} label={LEVEL_LABEL[level]} color={LEVEL_COLOR[level]} size={172} />
+            <Text style={s.heroLine}>{disconnected ? 'الراوتر غير متصل' : `اتصالك ${LEVEL_LABEL[level]}`}</Text>
+            <Text style={s.heroSub}>
+              {disconnected
+                ? 'ما فيه إشارة الآن'
+                : `${netLabel}${allBands.length ? '  ·  ' + allBands.join(' + ') : ''}${traffic ? '  ·  ' + fmtRate(traffic.downBytesPerSec) : ''}`}
+            </Text>
             {!!traffic && traffic.connectedSecs > 0 && (
               <View style={s.sinceRow}>
                 <SyncIcon active={syncing} />
@@ -543,102 +490,40 @@ export default function RouterDashboard() {
           </LinearGradient>
         )}
 
-        {!loading && moving && info && (
-          <Pressable style={s.moveBar} onPress={() => router.push(`/aim/${info.id}` as Href)}>
-            <Text style={s.moveText}>تحرّك الراوتر؟ افتح التوجيه — يحدّث كل ثانية ويساعدك تلقى أفضل مكان ‹</Text>
-          </Pressable>
-        )}
-
         {!loading && signal && info && (() => {
           const adv = buildAdvice(signal);
+          if (!adv.action) return null;
+          const soft = level === 'excellent';
           return (
-            <View style={s.adviceCard}>
-              <View style={s.adviceHead}>
-                <View style={s.adviceIcon}><Icon name="bulb" size={14} color={C.blue} /></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.adviceLabel}>💡 اقتراح التطبيق</Text>
-                  <Text style={s.adviceText}>{adv.sentence}</Text>
-                </View>
-              </View>
-              {!!adv.action && (
-                <Pressable
-                  style={s.adviceBtn}
-                  onPress={() => router.push(`/${adv.action!.route}/${info.id}` as Href)}
-                >
-                  <Icon name="spark" size={16} color={C.onAccent} />
-                  <Text style={s.adviceBtnText}>{adv.action.label}</Text>
-                  {!!adv.action.hint && <Text style={s.adviceHint}>{adv.action.hint}</Text>}
-                </Pressable>
-              )}
-            </View>
+            <Pressable
+              style={[s.cta, soft ? s.ctaSoft : s.ctaSolid]}
+              onPress={() => router.push(`/${adv.action!.route}/${info.id}` as Href)}
+            >
+              <Icon name="spark" size={17} color={soft ? C.blue : C.onAccent} />
+              <Text style={[s.ctaText, { color: soft ? C.blue : C.onAccent }]}>{adv.action.label}</Text>
+            </Pressable>
           );
         })()}
 
         {!loading && info && (
-          <Section title="حسّن اتصالك" icon="spark">
-            <TileGrid>
-              <ToolTile wide icon="aim" color="#2f6bff" title="التوجيه" sub="لقّط أقوى إشارة"
-                onPress={() => router.push(`/aim/${info.id}` as Href)} />
-              {feat.bands && (
-                <ToolTile wide icon="bands" color="#7c5cff" title="أفضل تردد" sub="سرعة · ألعاب · يدوي"
-                  onPress={() => router.push(`/finder/${info.id}` as Href)} />
-              )}
-              <ToolTile wide icon="pin" color="#0ea5a4" title="الأماكن" sub="وين أحط الراوتر؟"
-                onPress={() => router.push(`/places/${info.id}` as Href)} />
-              <ToolTile wide icon="antenna" color="#f97316" title="الأنتنا" sub="تحتاجها؟ وأي نوع"
-                onPress={() => router.push(`/antenna/${info.id}` as Href)} />
-            </TileGrid>
-          </Section>
+          <TileGrid>
+            <ToolTile wide icon="aim" color="#2f6bff" title="التوجيه" sub="لقّط أقوى إشارة"
+              onPress={() => router.push(`/aim/${info.id}` as Href)} />
+            <ToolTile wide icon="antenna" color="#f97316" title="الأنتنا" sub="تحتاجها؟ وأي نوع"
+              onPress={() => router.push(`/antenna/${info.id}` as Href)} />
+            {feat.bands && (
+              <ToolTile wide icon="bands" color="#7c5cff" title="أفضل تردد" sub="أسرع نت وأقل بنق"
+                onPress={() => router.push(`/finder/${info.id}` as Href)} />
+            )}
+            {feat.cells && (
+              <ToolTile wide icon="tower" color="#12b76a" title="الأبراج" sub="النواقل والدمج"
+                onPress={() => router.push(`/towers/${info.id}` as Href)} />
+            )}
+          </TileGrid>
         )}
 
-        {!loading && info && (
-          <Section title="افحص وراقب" icon="chart">
-            <TileGrid>
-              <ToolTile icon="speed" color="#12b76a" title="السرعة" sub="تنزيل ورفع وبنق"
-                onPress={() => router.push(`/speed/${info.id}` as Href)} />
-              {feat.cells && (
-                <ToolTile icon="tower" color="#6366f1" title="الأبراج" sub="والنواقل المدموجة"
-                  onPress={() => router.push(`/towers/${info.id}` as Href)} />
-              )}
-              <ToolTile icon="clock" color="#0ea5e9" title="السجل" sub="الإشارة عبر الوقت"
-                onPress={() => router.push(`/history/${info.id}` as Href)} />
-              <ToolTile icon="phone" color="#ec4899" title="الأجهزة" sub="المتصلين والاستهلاك"
-                onPress={() => router.push(`/device/${info.id}` as Href)} />
-              <ToolTile icon="report" color="#64748b" title="التقرير" sub="شارك حالتك"
-                onPress={() => router.push(`/report/${info.id}` as Href)} />
-            </TileGrid>
-          </Section>
-        )}
-
-        {!loading && info && (
-          <Section title="الإعدادات" icon="settings">
-            <TileGrid>
-              {feat.network && (
-                <ToolTile icon="settings" color="#0891b2" title="الشبكة" sub="APN و DNS"
-                  onPress={() => router.push(`/network/${info.id}` as Href)} />
-              )}
-              <ToolTile icon="folder" color="#a16207" title="ملفات التعريف" sub="احفظ واسترجع"
-                onPress={() => router.push(`/profiles/${info.id}` as Href)} />
-              {feat.sms && (
-                <ToolTile icon="sms" color="#16a34a" title="الرسائل" sub="وارد وإرسال"
-                  onPress={() => router.push(`/sms/${info.id}` as Href)} />
-              )}
-              <ToolTile icon="power" color="#e5484d" title="إعادة التشغيل" sub="يأخذ دقيقتين"
-                onPress={onReboot} />
-            </TileGrid>
-          </Section>
-        )}
-
-        {!loading && signal && (
-          <Section
-            title="مؤشرات الاتصال"
-            icon="chart"
-            accessory={
-              <Pressable onPress={toggleAdvanced} style={[s.pill, advanced && s.pillOn]}>
-                <Text style={[s.pillText, advanced && { color: C.onAccent }]}>تفاصيل تقنية</Text>
-              </Pressable>
-            }
-          >
+        {!loading && signal && info && (
+          <Acc title="التفاصيل التقنية">
             <MetricCard>
             {(() => {
               const rings: RingSpec[] = [
@@ -665,40 +550,96 @@ export default function RouterDashboard() {
               }
               return <MetricRings items={rings} size={62} />;
             })()}
-            {advanced && (
-              <View style={s.advanced}>
-                <MetricRow label="قوة الإشارة (RSRP)" value={signal.rsrp} unit="dBm" level={rsrpLevel(signal.rsrp)} />
-                <MetricRow label="جودة الإشارة (SINR)" value={signal.sinr} unit="dB" level={sinrLevel(signal.sinr)} />
-                <MetricRow label="RSRQ" value={signal.rsrq} unit="dB" level={rsrqLevel(signal.rsrq)} />
-                <MetricRow label="RSSI" value={signal.rssi} unit="dBm" level={rssiLevel(signal.rssi)} />
-                <InfoRow label="الباند" value={signal.band} />
-                <InfoRow label="Cell ID" value={signal.cellId} />
-                <InfoRow label="PCI" value={signal.pci} />
-                <InfoRow label="EARFCN" value={signal.earfcn} />
-                <InfoRow label="عرض النطاق" value={[signal.dlBandwidth, signal.ulBandwidth].filter(Boolean).join(' / ')} />
-                <InfoRow label="رقم البرج (eNodeB)" value={signal.enodebId} />
-                <InfoRow label="CQI" value={signal.cqi !== undefined ? String(signal.cqi) : undefined} />
-                <InfoRow label="MCS تنزيل / رفع" value={[signal.dlMcs, signal.ulMcs].filter(v => v !== undefined).join(' / ') || undefined} />
-                <InfoRow label="قوة الإرسال" value={signal.txPower !== undefined ? `${signal.txPower} dBm` : undefined} />
-                {hasNr && (
-                  <View style={s.nrBlock}>
-                    <Text style={s.nrTitle}>قياسات 5G</Text>
-                    <MetricRow label="قوة إشارة 5G (RSRP)" value={signal.nrRsrp} unit="dBm" level={rsrpLevel(signal.nrRsrp)} />
-                    <MetricRow label="جودة إشارة 5G (SINR)" value={signal.nrSinr} unit="dB" level={sinrLevel(signal.nrSinr)} />
-                    <MetricRow label="RSRQ 5G" value={signal.nrRsrq} unit="dB" level={rsrqLevel(signal.nrRsrq)} />
-                    <InfoRow label="تردد 5G" value={signal.nrBand} />
-                    <InfoRow label="PCI 5G" value={signal.nrPci} />
-                    <InfoRow label="ARFCN 5G" value={signal.nrArfcn} />
-                    <InfoRow label="عرض نطاق 5G" value={signal.nrDlBandwidth} />
-                  </View>
-                )}
-              </View>
-            )}
+            <View style={s.advanced}>
+              <MetricRow label="قوة الإشارة (RSRP)" value={signal.rsrp} unit="dBm" level={rsrpLevel(signal.rsrp)} />
+              <MetricRow label="جودة الإشارة (SINR)" value={signal.sinr} unit="dB" level={sinrLevel(signal.sinr)} />
+              <MetricRow label="RSRQ" value={signal.rsrq} unit="dB" level={rsrqLevel(signal.rsrq)} />
+              <MetricRow label="RSSI" value={signal.rssi} unit="dBm" level={rssiLevel(signal.rssi)} />
+              <InfoRow label="الباند" value={signal.band} />
+              <InfoRow label="Cell ID" value={signal.cellId} />
+              <InfoRow label="PCI" value={signal.pci} />
+              <InfoRow label="EARFCN" value={signal.earfcn} />
+              <InfoRow label="عرض النطاق" value={[signal.dlBandwidth, signal.ulBandwidth].filter(Boolean).join(' / ')} />
+              <InfoRow label="رقم البرج (eNodeB)" value={signal.enodebId} />
+              <InfoRow label="CQI" value={signal.cqi !== undefined ? String(signal.cqi) : undefined} />
+              <InfoRow label="MCS تنزيل / رفع" value={[signal.dlMcs, signal.ulMcs].filter(v => v !== undefined).join(' / ') || undefined} />
+              <InfoRow label="قوة الإرسال" value={signal.txPower !== undefined ? `${signal.txPower} dBm` : undefined} />
+              {hasNr && (
+                <View style={s.nrBlock}>
+                  <Text style={s.nrTitle}>قياسات 5G</Text>
+                  <MetricRow label="قوة إشارة 5G (RSRP)" value={signal.nrRsrp} unit="dBm" level={rsrpLevel(signal.nrRsrp)} />
+                  <MetricRow label="جودة إشارة 5G (SINR)" value={signal.nrSinr} unit="dB" level={sinrLevel(signal.nrSinr)} />
+                  <MetricRow label="RSRQ 5G" value={signal.nrRsrq} unit="dB" level={rsrqLevel(signal.nrRsrq)} />
+                  <InfoRow label="تردد 5G" value={signal.nrBand} />
+                  <InfoRow label="PCI 5G" value={signal.nrPci} />
+                  <InfoRow label="ARFCN 5G" value={signal.nrArfcn} />
+                  <InfoRow label="عرض نطاق 5G" value={signal.nrDlBandwidth} />
+                </View>
+              )}
+            </View>
             </MetricCard>
-          </Section>
+            <View style={{ height: 10 }} />
+            <DiagnosisCard routerId={info.id} signal={signal} downBps={traffic?.downBytesPerSec} />
+          </Acc>
         )}
 
-        {!loading && signal && info && <DiagnosisCard routerId={info.id} signal={signal} downBps={traffic?.downBytesPerSec} />}
+        {!loading && info && (
+          <Acc title="معلومات وأدوات أكثر">
+            <View style={s.statsRow}>
+              <View style={s.statItem}>
+                <View style={[s.statIcon, { backgroundColor: '#dbeafe' }]}><Icon name="down" size={16} color={C.blue} /></View>
+                <View style={s.statText}>
+                  <Text style={s.statLbl}>تنزيل</Text>
+                  <Text style={[s.statNum, { color: C.blue }]} numberOfLines={1} adjustsFontSizeToFit>{traffic ? fmtRate(traffic.downBytesPerSec) : '—'}</Text>
+                </View>
+              </View>
+              <View style={s.statItem}>
+                <View style={[s.statIcon, { backgroundColor: '#ede9fe' }]}><Icon name="up" size={16} color={C.violet} /></View>
+                <View style={s.statText}>
+                  <Text style={s.statLbl}>رفع</Text>
+                  <Text style={[s.statNum, { color: C.violet }]} numberOfLines={1} adjustsFontSizeToFit>{traffic ? fmtRate(traffic.upBytesPerSec) : '—'}</Text>
+                </View>
+              </View>
+              <View style={s.statItem}>
+                <View style={[s.statIcon, { backgroundColor: '#dcfce7' }]}><Icon name="phone" size={16} color={C.green} /></View>
+                <View style={s.statText}>
+                  <Text style={s.statLbl}>الأجهزة</Text>
+                  <Text style={[s.statNum, { color: C.green }]}>{devices.length}</Text>
+                </View>
+              </View>
+            </View>
+
+            <Text style={s.grp}>افحص وراقب</Text>
+            <TileGrid>
+              <ToolTile icon="speed" color="#12b76a" title="السرعة" sub="تنزيل ورفع وبنق"
+                onPress={() => router.push(`/speed/${info.id}` as Href)} />
+              <ToolTile icon="clock" color="#0ea5e9" title="السجل" sub="الإشارة عبر الوقت"
+                onPress={() => router.push(`/history/${info.id}` as Href)} />
+              <ToolTile icon="phone" color="#ec4899" title="الأجهزة" sub="المتصلين والاستهلاك"
+                onPress={() => router.push(`/device/${info.id}` as Href)} />
+              <ToolTile icon="pin" color="#0ea5a4" title="الأماكن" sub="وين أحط الراوتر؟"
+                onPress={() => router.push(`/places/${info.id}` as Href)} />
+              <ToolTile icon="report" color="#64748b" title="التقرير" sub="شارك حالتك"
+                onPress={() => router.push(`/report/${info.id}` as Href)} />
+            </TileGrid>
+
+            <Text style={s.grp}>الإعدادات</Text>
+            <TileGrid>
+              {feat.network && (
+                <ToolTile icon="settings" color="#0891b2" title="الشبكة" sub="APN و DNS"
+                  onPress={() => router.push(`/network/${info.id}` as Href)} />
+              )}
+              <ToolTile icon="folder" color="#a16207" title="ملفات التعريف" sub="احفظ واسترجع"
+                onPress={() => router.push(`/profiles/${info.id}` as Href)} />
+              {feat.sms && (
+                <ToolTile icon="sms" color="#16a34a" title="الرسائل" sub="وارد وإرسال"
+                  onPress={() => router.push(`/sms/${info.id}` as Href)} />
+              )}
+              <ToolTile icon="power" color="#e5484d" title="إعادة التشغيل" sub="يأخذ دقيقتين"
+                onPress={onReboot} />
+            </TileGrid>
+          </Acc>
+        )}
 
         {!loading && info && (
           <Pressable onPress={onDelete}>
@@ -756,7 +697,7 @@ const s = StyleSheet.create({
   bandChips: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 4, marginVertical: 5, alignSelf: 'stretch' },
   bandChip: { backgroundColor: C.blueSoft, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
   bandChipText: { color: C.blue, fontWeight: '800', fontSize: 12.5 },
-  heroX: { borderRadius: 24, padding: 14, gap: 12, borderWidth: 1, borderColor: '#e3ecff' },
+  heroX: { borderRadius: 24, padding: 16, gap: 6, borderWidth: 1, borderColor: '#e3ecff', alignItems: 'center' },
   heroMain: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   heroSide: { flex: 1, gap: 8, alignItems: 'stretch' },
   heroGauge: { alignItems: 'center', justifyContent: 'center' },
@@ -875,4 +816,15 @@ const s = StyleSheet.create({
   },
   fabDanger: { borderColor: C.cardBorder },
   fabText: { fontWeight: '800', fontSize: 15 },
+  heroLine: { color: C.text, fontSize: 18, fontWeight: '800', textAlign: 'center', marginTop: 4 },
+  heroSub: { color: C.sub, fontSize: 12.5, fontWeight: '700', textAlign: 'center', marginTop: 1 },
+  cta: { height: 54, borderRadius: 16, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 9 },
+  ctaSolid: { backgroundColor: C.blue },
+  ctaSoft: { backgroundColor: C.blueSoft },
+  ctaText: { fontWeight: '800', fontSize: 15.5 },
+  acc: { backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: C.cardBorder, overflow: 'hidden' },
+  accHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 15 },
+  accTitle: { color: C.text, fontWeight: '800', fontSize: 14.5, textAlign: 'right' },
+  accBody: { paddingHorizontal: 12, paddingBottom: 14, paddingTop: 2, gap: 10, borderTopWidth: 1, borderTopColor: C.line },
+  grp: { color: C.sub, fontSize: 12, fontWeight: '800', textAlign: 'right', marginTop: 6, marginBottom: -2 },
 });
