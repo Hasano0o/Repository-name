@@ -13,6 +13,7 @@ import {
 import { buildSnapshot } from '../../utils/snapshot';
 
 const sha256Upper = (s: string) => bytesToHex(sha256(utf8ToBytes(s))).toUpperCase();
+const sha256Hex = (s: string) => bytesToHex(sha256(utf8ToBytes(s)));
 const md5Hex = (s: string) => bytesToHex(md5(utf8ToBytes(s)));
 
 /**
@@ -241,7 +242,7 @@ export class ZteDriver implements RouterDriver {
     this.host = host;
     this.password = password;
 
-    // ═══ MU5001 يقبل مستخدم واحد فقط — نفكّ أي جلسة عالقة أول ═══
+    // ═══ نفكّ أي جلسة عالقة أول (MU5001 يقبل مستخدم واحد فقط) ═══
     try { await this.post({ goformId: 'LOGOUT' }); } catch {}
     try { await this.post({ goformId: 'GOFORM_LOGOUT' }); } catch {}
     await new Promise(r => setTimeout(r, 800));
@@ -254,38 +255,43 @@ export class ZteDriver implements RouterDriver {
       ld = vals.LD || '';
       rd = vals.RD || '';
     } catch {}
-    this.log('login: LD =', ld ? (ld.slice(0, 16) + '...') : '(فاضي)',
-             '| RD =', rd ? (rd.slice(0, 16) + '...') : '(فاضي)');
+    this.log('login: LD=' + (ld ? ld.slice(0, 12) + '..' : '∅'),
+             'RD=' + (rd ? rd.slice(0, 12) + '..' : '∅'));
 
+    // ═══ من service.js: WEB_ATTR_IF_SUPPORT_SHA256 له 3 حالات ═══
     const candidates: Array<{ name: string; val: string }> = [];
+    const s1u = sha256Upper(password);  // sha256(pw) upper-hex
+    const s1l = sha256Hex(password);    // sha256(pw) lower-hex
 
-    // ═══ صيغ MD5 (لأجهزة STC وأغلب فيرمويرات ZTE الحديثة) ═══
-    // من service.js: var ad = md5(md5(pw) + RD)
-    if (rd) {
-      candidates.push({ name: 'md5(md5(pw)+RD)', val: md5Hex(md5Hex(password) + rd) });
-      candidates.push({ name: 'md5(pw+RD)', val: md5Hex(password + rd) });
-      candidates.push({ name: 'md5(md5(pw)+RD.upper)', val: md5Hex(md5Hex(password) + rd.toUpperCase()) });
-    }
+    // حالة "2": sha256(sha256(pw) + LD) — الأكثر شيوعاً في MU5001
     if (ld) {
-      candidates.push({ name: 'md5(md5(pw)+LD)', val: md5Hex(md5Hex(password) + ld) });
-      candidates.push({ name: 'md5(md5(pw)+LD.upper)', val: md5Hex(md5Hex(password) + ld.toUpperCase()) });
+      candidates.push({ name: 'sha2(sha2(pw)+LD)', val: sha256Upper(s1u + ld) });
+      candidates.push({ name: 'sha2(sha2(pw)+LD.up)', val: sha256Upper(s1u + ld.toUpperCase()) });
+      candidates.push({ name: 'sha2(sha2L+LD)', val: sha256Hex(s1l + ld) });
+      candidates.push({ name: 'sha2(pw+LD)', val: sha256Upper(password + ld) });
+      candidates.push({ name: 'sha2(pw+LD.up)', val: sha256Upper(password + ld.toUpperCase()) });
     }
+    candidates.push({ name: 'sha2(pw).up', val: s1u });
+    candidates.push({ name: 'sha2(pw).lo', val: s1l });
+
+    // حالة "1": sha256(base64(pw))
+    try {
+      const b64 = btoa(password);
+      candidates.push({ name: 'sha2(b64).up', val: sha256Upper(b64) });
+      candidates.push({ name: 'sha2(b64).lo', val: sha256Hex(b64) });
+    } catch {}
+
+    // حالة "0": base64(pw)
+    try { candidates.push({ name: 'b64(pw)', val: btoa(password) }); } catch {}
+
+    // ═══ احتياطي MD5 ═══
+    if (rd) candidates.push({ name: 'md5(md5(pw)+RD)', val: md5Hex(md5Hex(password) + rd) });
     candidates.push({ name: 'md5(md5(pw))', val: md5Hex(md5Hex(password)) });
-    candidates.push({ name: 'md5(pw)', val: md5Hex(password) });
 
-    // ═══ صيغ SHA256 (للفيرمويرات الأقدم — احتياطي) ═══
-    if (ld) {
-      candidates.push({ name: 'sha2(pw)+LD.upper', val: sha256Upper(sha256Upper(password) + ld.toUpperCase()) });
-      candidates.push({ name: 'sha2(pw+LD.upper)', val: sha256Upper(sha256Upper(password + ld.toUpperCase())) });
-    }
-    candidates.push({ name: 'sha2(pw)', val: sha256Upper(password) });
-
-    // ═══ احتياطي أخير ═══
-    try { candidates.push({ name: 'base64(pw)', val: btoa(password) }); } catch {}
+    const isOk = (s: string) =>
+      /"result"\s*:\s*"?0"?/.test(s) || /"result"\s*:\s*"?success"?/i.test(s);
 
     let sawBusy = false;
-    let sawWrong = false;
-    let sawSuccessReply = false;
 
     for (const c of candidates) {
       let out = '';
@@ -297,35 +303,21 @@ export class ZteDriver implements RouterDriver {
       }
       this.log('login:', c.name, '→', out.slice(0, 120));
 
-      if (/"result"\s*:\s*"?0"?/.test(out)) {
-        sawSuccessReply = true;
+      // ✅ نجاح صريح — نرجع فوراً بدون انتظار verifyLogin
+      if (isOk(out)) {
+        this.log('login: ✓ ✓ ✓ نجح بـ', c.name);
         await new Promise(r => setTimeout(r, 400));
-        if (await this.verifyLogin()) {
-          this.log('login: ✓ نجح بـ', c.name);
-          return;
-        }
-        this.log('login: result=0 لكن verify فشل — نكمل');
-        continue;
+        return;
       }
-      if (/"result"\s*:\s*"?1"?/.test(out)) { sawWrong = true; continue; }
-      if (/"result"\s*:\s*"?3"?/.test(out)) { sawBusy = true; continue; }
+      // 2 = duplicateUser (مستخدم آخر داخل) — نتذكره ونكمل
+      if (/"result"\s*:\s*"?2"?/.test(out)) sawBusy = true;
+      // غير ذلك: نجرّب الصيغة التالية (1 أو 3 ما نوقف)
     }
 
-    if (await this.verifyLogin()) {
-      this.log('login: موجودين داخلين أصلاً');
-      return;
-    }
-
-    if (sawSuccessReply) {
-      throw new Error('الراوتر قبل الدخول لكن loginfo ما رجع "ok" — جرّب مرة ثانية');
-    }
     if (sawBusy) {
-      throw new Error('الراوتر فيه جلسة عالقة. جرّب: أعد تشغيل الراوتر، أو اقفل صفحته من أي متصفح، أو انتظر 5 دقائق.');
+      throw new Error('الراوتر فيه مستخدم ثاني داخل حالياً. اقفل صفحته من أي متصفح وانتظر دقيقة.');
     }
-    if (sawWrong) {
-      throw new Error('كلمة المرور غير صحيحة');
-    }
-    throw new Error('تعذّر تسجيل الدخول في راوتر ZTE');
+    throw new Error('ما نجحت أي صيغة من ' + candidates.length + ' محاولة — جرّب تقفل التطبيق وتفتحه من جديد');
   }
 
   /** يفكّ الجلسة العالقة في الفيرموير اللي يسمح بمستخدم واحد */
