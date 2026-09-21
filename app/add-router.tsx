@@ -74,8 +74,9 @@ export default function AddRouterScreen() {
 
       try {
         await driver.login(h, u, password);
-      } catch {
-        Alert.alert('فشل الدخول', 'تحقق من اسم المستخدم وكلمة المرور');
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        Alert.alert('فشل الدخول', msg || 'تحقق من اسم المستخدم وكلمة المرور');
         return;
       }
 

@@ -95,6 +95,10 @@ export class ZteDriver implements RouterDriver {
   private host = '';
   private password = '';
 
+  private log(...a: unknown[]) {
+    if (__DEV__) console.log('[zte]', ...a);
+  }
+
   private base() {
     const h = this.host.replace(/\/+$/, '');
     return h.startsWith('http') ? h : 'http://' + h;
@@ -236,8 +240,13 @@ export class ZteDriver implements RouterDriver {
   async login(host: string, _username: string, password: string): Promise<void> {
     this.host = host;
     this.password = password;
+    // MU5001 يقبل مستخدم واحد فقط — نفكّ أي جلسة عالقة أول
+    try { await this.post({ goformId: 'LOGOUT' }); } catch {}
+    try { await this.post({ goformId: 'GOFORM_LOGOUT' }); } catch {}
+    await new Promise(r => setTimeout(r, 600));
     let ld = '';
     try { ld = (await this.get(['LD'])).LD || ''; } catch {}
+    this.log('login: LD =', ld ? (ld.slice(0, 16) + '...') : '(فاضي)');
     const attempts: string[] = [];
     if (ld) attempts.push(sha256Upper(sha256Upper(password) + ld.toUpperCase()));
     attempts.push(sha256Upper(password));
@@ -245,12 +254,22 @@ export class ZteDriver implements RouterDriver {
     attempts.push(password);
     let lastResult = '';
     let busy = false;
-    for (const pw of attempts) {
+    for (let i = 0; i < attempts.length; i++) {
+      const pw = attempts[i];
       for (let round = 0; round < 2; round++) {
         let out = '';
-        try { out = await this.post({ goformId: 'LOGIN', password: pw }); } catch { break; }
+        try {
+          out = await this.post({ goformId: 'LOGIN', password: pw });
+        } catch (e) {
+          this.log('login: attempt#' + i + ' r' + round + ' THREW', (e as any)?.message ?? String(e));
+          break;
+        }
         lastResult = out;
-        if (/"result"\s*:\s*"?0"?/.test(out)) break;
+        this.log('login: attempt#' + i + ' r' + round + ' →', out.slice(0, 120));
+        if (/"result"\s*:\s*"?0"?/.test(out)) {
+          this.log('login: attempt#' + i + ' returned success');
+          break;
+        }
         if (/"result"\s*:\s*"?1"?/.test(out)) throw new Error('كلمة المرور غير صحيحة');
         if (/"result"\s*:\s*"?3"?/.test(out) && round === 0) {
           busy = true;
@@ -259,14 +278,18 @@ export class ZteDriver implements RouterDriver {
         }
         break;
       }
-      if (await this.verifyLogin()) return;
+      if (await this.verifyLogin()) {
+        this.log('login: verified with attempt#' + i);
+        return;
+      }
+      this.log('login: attempt#' + i + ' did not verify');
     }
     if (await this.verifyLogin()) return;
     if (/"result"\s*:\s*"?1"?/.test(lastResult)) throw new Error('كلمة المرور غير صحيحة');
     if (busy || /"result"\s*:\s*"?3"?/.test(lastResult)) {
       throw new Error('الراوتر فيه جلسة عالقة. اقفل صفحة الراوتر من أي متصفح، أو انتظر ٥ دقايق، أو أعد تشغيل الراوتر وجرّب.');
     }
-    throw new Error('تعذّر تسجيل الدخول في راوتر ZTE');
+    throw new Error('تعذّر تسجيل الدخول في راوتر ZTE — آخر رد: ' + ((lastResult || '').slice(0, 80) || 'لا يوجد'));
   }
 
   /** يفكّ الجلسة العالقة في الفيرموير اللي يسمح بمستخدم واحد */
