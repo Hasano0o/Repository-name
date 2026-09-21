@@ -1,15 +1,16 @@
-import { RouterDriver, Capability, Signal, SignalSnapshot } from '../types';
+import { RouterDriver, Capability, SignalSnapshot } from '../types';
 import { http } from '../http';
 import { isLanHost } from '../../utils/host';
 import {
   detectSignatureScheme, tryStrategies, LoginStrategy,
 } from '../../utils/authStrategy';
 import { buildSnapshot } from '../../utils/snapshot';
+import { markSuccess, getDiscovery } from '../../store/discovery';
 
 /**
  * درايفر احتياطي لأي راوتر لم يتعرّف عليه الريجستري.
  *  - detect: صحيح فقط إذا فيه صفحة HTML فيها حقل كلمة مرور.
- *  - login: يجرّب LOGIN_STRATEGIES (Basic / ZTE SHA256+LD / Form Post) — محاولة واحدة لكل واحدة.
+ *  - login: يستشير ذاكرة الاستكشاف أولاً، ثم يجرّب LOGIN_STRATEGIES.
  *  - لا قدرات قراءة إشارة (غير معروفة) — getSignal/getCarriers غير معرّفة.
  */
 export class UnknownDriver implements RouterDriver {
@@ -47,13 +48,32 @@ export class UnknownDriver implements RouterDriver {
     } catch {
       throw new Error('تعذّر الوصول إلى صفحة الراوتر');
     }
+
     const scheme = detectSignatureScheme(homeHtml);
+
+    // ذاكرة الاستكشاف: لو نعرف استراتيجية ناجحة سابقاً لهذا الراوتر، جرّبها أولاً
+    let knownStrategy: string | undefined;
+    try {
+      const memo = await getDiscovery(host);
+      if (memo?.loginStrategy) knownStrategy = memo.loginStrategy;
+    } catch { /* ذاكرة غير متوفرة — نكمل عادي */ }
+
     const result = await tryStrategies({
       host: base, user: username, pass: password, homeHtml, scheme,
+      preferredStrategyId: knownStrategy,
     });
+
     if (!result.ok) {
       throw new Error('ما نجحنا ندخل على هذا الراوتر — جرّب من لوحة الراوتر مباشرة');
     }
+
+    // سجّل نجاح الاتصال + معرّف الاستراتيجية (أسماء فقط — لا أسرار)
+    try {
+      await markSuccess(host, {
+        loginStrategy: result.strategyId,
+        apiStyle: 'unknown',
+      });
+    } catch { /* فشل التخزين لا يكسر الدخول */ }
   }
 
   async logout(): Promise<void> {
@@ -66,5 +86,4 @@ export class UnknownDriver implements RouterDriver {
   }
 }
 
-// إشارة للـ TypeScript أن الاستراتيجيات متاحة للاستيراد من الخارج إن لزم
 export type { LoginStrategy };

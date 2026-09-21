@@ -20,7 +20,6 @@ const sha256Upper = (s: string) => bytesToHex(sha256(utf8ToBytes(s))).toUpperCas
 /** يستنتج نمط التشفير المحتمل من محتوى JS/HTML. أفضل-جهد، مو ضمانة. */
 export function detectSignatureScheme(js: string): SignatureScheme {
   if (!js) return 'unknown';
-  // الأكثر تحديداً أولاً
   if (/sha256\s*\(\s*sha256/i.test(js)) return 'sha256-upper-ld';
   if (/sha256Upper\s*\(\s*sha256Upper/i.test(js)) return 'sha256-upper-ld';
   if (/sha256[^\n]{0,80}?toUpperCase\s*\(\s*\)\s*\+\s*[A-Za-z_$]/i.test(js)) return 'sha256-upper';
@@ -76,6 +75,8 @@ export interface LoginContext {
   /** محتوى الصفحة الرئيسية — للتحليل الداخلي فقط، لا يُعرض ولا يُحفظ. */
   homeHtml: string;
   scheme: SignatureScheme;
+  /** معرّف استراتيجية نجحت سابقاً (من ذاكرة الاستكشاف) — تُجرَّب أولاً. */
+  preferredStrategyId?: string;
 }
 
 export interface LoginStrategy {
@@ -100,7 +101,6 @@ function resolveLocal(base: string, action: string): string | null {
   return base + '/' + a.replace(/^\.\//, '');
 }
 
-/** Basic Auth: نجاح إذا رجع 200 وما رجع تحدي Basic. */
 const basicStrategy: LoginStrategy = {
   id: 'basic',
   label: 'Basic Auth',
@@ -117,7 +117,6 @@ const basicStrategy: LoginStrategy = {
   },
 };
 
-/** SHA256(sha256Upper(pw) + LD.toUpperCase()) — نمط ZTE-style على فيرموير مجهول. */
 const zteShaStrategy: LoginStrategy = {
   id: 'zte-sha256-ld',
   label: 'SHA256 + LD',
@@ -147,7 +146,6 @@ const zteShaStrategy: LoginStrategy = {
   },
 };
 
-/** POST عام إلى أول فورم فيه حقل باسورد. يجرّب عدة ترميزات شائعة للباسورد. */
 const formPostStrategy: LoginStrategy = {
   id: 'form-post',
   label: 'Form Post',
@@ -196,9 +194,7 @@ const formPostStrategy: LoginStrategy = {
         });
         if (res.status >= 400) continue;
         const out = await res.text();
-        // فشل مؤكد: الصفحة رجعت حقل باسورد (نموذج دخول)
         if (/<input[^>]*type\s*=\s*["']password/i.test(out)) continue;
-        // فشل مؤكد: كلمة صريحة عن الخطأ
         if (/incorrect|invalid|wrong\s+password|كلمة المرور غير صحيحة/i.test(out)) continue;
         return true;
       } catch { /* جرّب النسخة التالية */ }
@@ -216,11 +212,24 @@ export const LOGIN_STRATEGIES: LoginStrategy[] = [
 
 /**
  * يجرّب الاستراتيجيات بترتيبها، محاولة واحدة لكل واحدة، ويرجع أول نجاح.
+ * إذا كان فيه preferredStrategyId (من ذاكرة الاستكشاف) → يُجرَّب أولاً.
  * لا يخزّن أي شي — كلمة المرور تبقى في الذاكرة العابرة فقط.
  */
-export async function tryStrategies(ctx: LoginContext): Promise<{ ok: boolean; strategyId?: string }> {
+export async function tryStrategies(
+  ctx: LoginContext,
+): Promise<{ ok: boolean; strategyId?: string }> {
   if (!isLanHost(ctx.host)) return { ok: false };
-  for (const s of LOGIN_STRATEGIES) {
+
+  const ordered = [...LOGIN_STRATEGIES];
+  if (ctx.preferredStrategyId) {
+    const idx = ordered.findIndex(s => s.id === ctx.preferredStrategyId);
+    if (idx > 0) {
+      const [pref] = ordered.splice(idx, 1);
+      ordered.unshift(pref);
+    }
+  }
+
+  for (const s of ordered) {
     try {
       const ok = await s.tryLogin(ctx);
       if (ok) return { ok: true, strategyId: s.id };
