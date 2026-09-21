@@ -16,7 +16,7 @@ import { Icon } from '../src/ui/Icon';
 import { C, R, S, T } from '../src/ui/theme';
 import { isLanHost } from '../src/utils/host';
 import { detectDriver } from '../src/drivers/registry';
-import { getRouter, saveRouter, deleteRouter } from '../src/store/routers';
+import { getRouter, saveRouter, updateRouter, SavedRouter } from '../src/store/routers';
 
 export default function AddRouterScreen() {
   const nav = useRouter();
@@ -83,19 +83,24 @@ export default function AddRouterScreen() {
       const dId = dAny.id ?? 'unknown';
       const dName = dAny.name ?? dId;
 
+      const payload = {
+        name: name.trim() || dName || 'راوتر',
+        host: h,
+        username: u,
+        driverId: dId,
+        driverName: dName,
+      };
+
+      let saved: SavedRouter | null;
       if (editId) {
-        await deleteRouter(editId);
+        saved = await updateRouter(editId, payload, password);
+        if (!saved) {
+          Alert.alert('خطأ', 'ما لقينا الراوتر المحفوظ');
+          return;
+        }
+      } else {
+        saved = await saveRouter(payload, password);
       }
-      const saved = await saveRouter(
-        {
-          name: name.trim() || dName || 'راوتر',
-          host: h,
-          username: u,
-          driverId: dId,
-          driverName: dName,
-        },
-        password,
-      );
       nav.replace('/router/' + saved.id);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);

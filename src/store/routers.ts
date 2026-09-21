@@ -42,6 +42,34 @@ export async function saveRouter(
   return r;
 }
 
+/**
+ * تحديث راوتر محفوظ بنفس الـ id (يحافظ على createdAt).
+ * كلمة المرور تُحدَّث فقط لو أُرسلت قيمة غير فارغة.
+ */
+export async function updateRouter(
+  id: string,
+  data: Omit<SavedRouter, 'id' | 'createdAt'>,
+  password?: string,
+): Promise<SavedRouter | null> {
+  const all = await listRouters();
+  const idx = all.findIndex(r => r.id === id);
+  if (idx === -1) return null;
+  const prev = all[idx];
+  const updated: SavedRouter = {
+    ...prev,
+    ...data,
+    id: prev.id,
+    createdAt: prev.createdAt,
+  };
+  const next = [...all];
+  next[idx] = updated;
+  await AsyncStorage.setItem(KEY, JSON.stringify(next));
+  if (password && password.length > 0) {
+    await SecureStore.setItemAsync(pwKey(id), password);
+  }
+  return updated;
+}
+
 export async function deleteRouter(id: string) {
   const all = await listRouters();
   await AsyncStorage.setItem(KEY, JSON.stringify(all.filter(r => r.id !== id)));

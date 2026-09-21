@@ -6,23 +6,26 @@ import {
   Usage, DeviceDetails, CellTower, BandConfig, ActiveLock, Carrier,
 } from '../types';
 import { http } from '../http';
+import { parsePci, decodeBandMask, encodeBandMask } from '../../utils/normalize';
 
 const sha256Upper = (s: string) => bytesToHex(sha256(utf8ToBytes(s))).toUpperCase();
 const md5Hex = (s: string) => bytesToHex(md5(utf8ToBytes(s)));
 
-/** PCI عند ZTE بالست عشري (f = 15) — نحوله لعشري مثل هواوي */
+/**
+ * PCI/cell_id عند ZTE بالست عشري (f = 15) — نحوّله لعشري.
+ * نعتمد parsePci لتفادي اختلافات الصيغ، ونسقط للنص الأصلي لو رجع undefined.
+ */
 const pciDec = (v?: string): string | undefined => {
-  if (!v) return undefined;
-  const s = v.trim();
-  if (!/^[0-9a-f]+$/i.test(s)) return s;
-  const n = parseInt(s, 16);
-  return Number.isFinite(n) ? String(n) : s;
+  if (v === undefined || v === '') return undefined;
+  const n = parsePci(v);
+  return n === undefined ? v.trim() : String(n);
 };
 
 /** رقم التردد 4G من EARFCN */
 const LTE_EARFCN: [number, number, number][] = [
   [1, 0, 599], [3, 1200, 1949], [7, 2750, 3449], [8, 3450, 3799], [20, 6150, 6449],
-  [28, 9210, 9659], [38, 37750, 38249], [40, 38650, 39649], [41, 39650, 41589], [42, 41590, 43589],
+  [28, 9210, 9659], [38, 37750, 38249], [40, 38650, 39649], [41, 39650, 41589],
+  [42, 41590, 43589],
 ];
 const lteBandOf = (earfcn?: number) =>
   earfcn === undefined ? undefined : LTE_EARFCN.find(([, a, b]) => earfcn >= a && earfcn <= b)?.[0];
@@ -31,16 +34,9 @@ const lteBandOf = (earfcn?: number) =>
 const DEFAULT_LTE = [1, 3, 7, 8, 20, 28, 40, 41];
 const DEFAULT_NR = [40, 41, 78];
 
-const bandsFromMask = (hex?: string): number[] => {
-  if (!hex) return [];
-  let m: bigint;
-  try { m = BigInt(hex.startsWith('0x') || hex.startsWith('0X') ? hex : '0x' + hex); } catch { return []; }
-  const out: number[] = [];
-  for (let i = 0; i < 64; i++) if ((m >> BigInt(i)) & 1n) out.push(i + 1);
-  return out;
-};
-const maskFromBands = (bands: number[]) =>
-  '0x' + bands.reduce((m, b) => m | (1n << BigInt(b - 1)), 0n).toString(16);
+const bandsFromMask = (hex?: string): number[] => (hex ? decodeBandMask(hex) : []);
+const maskFromBands = (bands: number[]) => encodeBandMask(bands);
+
 const nrList = (v?: string) =>
   (v ?? '').split(',').map(x => parseInt(x, 10)).filter(n => Number.isFinite(n) && n > 0);
 
@@ -67,7 +63,8 @@ const bandNum = (v?: string): number | undefined => {
  */
 function caBandString(r: Record<string, string>): string | undefined {
   const earfcn = r.wan_active_channel || r.lte_ca_pcell_freq || '';
-  const pb = bandNum(r.lte_band) ?? bandNum(r.lte_ca_pcell_band) ?? bandNum(r.wan_active_band) ?? lteBandOf(num(earfcn));
+  const pb = bandNum(r.lte_band) ?? bandNum(r.lte_ca_pcell_band)
+    ?? bandNum(r.wan_active_band) ?? lteBandOf(num(earfcn));
   if (!pb) return undefined;
   const bw = num(r.lte_ca_pcell_bandwidth);
   const parts = [(bw ? bw + 'MHz' : '') + (earfcn ? '@' + earfcn : '') + '(B' + pb + ')'];
@@ -89,7 +86,6 @@ export class ZteDriver implements RouterDriver {
   id = 'zte';
   name = 'ZTE';
   capabilities: Capability[] = ['signal', 'devices', 'traffic', 'usage', 'reboot', 'cells', 'bandLock'];
-
   private host = '';
   private password = '';
 
@@ -175,31 +171,22 @@ export class ZteDriver implements RouterDriver {
   async login(host: string, _username: string, password: string): Promise<void> {
     this.host = host;
     this.password = password;
-
     let ld = '';
     try { ld = (await this.get(['LD'])).LD || ''; } catch {}
-
     const attempts: string[] = [];
     if (ld) attempts.push(sha256Upper(sha256Upper(password) + ld.toUpperCase()));
     attempts.push(sha256Upper(password));
     try { attempts.push(btoa(password)); } catch {}
     attempts.push(password);
-
     let lastResult = '';
     let busy = false;
-
     for (const pw of attempts) {
       for (let round = 0; round < 2; round++) {
         let out = '';
         try { out = await this.post({ goformId: 'LOGIN', password: pw }); } catch { break; }
         lastResult = out;
-
         if (/"result"\s*:\s*"?0"?/.test(out)) break;
-
-        // 1 = كلمة مرور خاطئة صراحةً — نوقف فوراً ولا نجرب بقية الصيغ
         if (/"result"\s*:\s*"?1"?/.test(out)) throw new Error('كلمة المرور غير صحيحة');
-
-        // 3 = فيه جلسة ثانية مفتوحة — نفكّها ونعيد المحاولة مرة وحدة
         if (/"result"\s*:\s*"?3"?/.test(out) && round === 0) {
           busy = true;
           await this.freeSession();
@@ -209,7 +196,6 @@ export class ZteDriver implements RouterDriver {
       }
       if (await this.verifyLogin()) return;
     }
-
     if (await this.verifyLogin()) return;
     if (/"result"\s*:\s*"?1"?/.test(lastResult)) throw new Error('كلمة المرور غير صحيحة');
     if (busy || /"result"\s*:\s*"?3"?/.test(lastResult)) {
@@ -229,7 +215,6 @@ export class ZteDriver implements RouterDriver {
   /** الحقول المحمية ترجع فاضية إذا ما كان فيه جلسة — نستخدمها للتأكد */
   private async verifyLogin(): Promise<boolean> {
     try {
-      // loginfo = "ok" بس لو جلستنا هي الشغالة (الراوتر يسمح بجلسة وحدة)
       const li = (await this.get(['loginfo'])).loginfo;
       if (li) return li === 'ok';
       const r = await this.get(['modem_main_state', 'network_type', 'rssi', 'wan_ipaddr']);
@@ -239,10 +224,6 @@ export class ZteDriver implements RouterDriver {
     }
   }
 
-  /**
-   * ينفذ أمر ولو رفضه الراوتر (غالباً لأن جلسة ثانية طردتنا — مثل صفحة الراوتر في المتصفح)
-   * نعيد الدخول ونجرب مرة ثانية
-   */
   private async act(body: Record<string, string>): Promise<string> {
     let out = await this.post(body);
     if (/success/i.test(out) || !this.password) return out;
@@ -282,7 +263,6 @@ export class ZteDriver implements RouterDriver {
       'Z5g_rsrp', 'Z5g_rsrq', 'Z5g_SINR', 'Z5g_dlEarfcn', 'nr5g_pci',
       'nr5g_action_band', 'nr5g_action_channel', 'nr5g_cell_id',
     ]);
-
     const nrOn = !!r.Z5g_rsrp;
     const nsa = /ENDC|NSA/i.test(r.network_type || '');
     return {
@@ -298,7 +278,6 @@ export class ZteDriver implements RouterDriver {
       sinr: num(pick(r, 'lte_snr')),
       rssi: num(pick(r, 'lte_rssi', 'rssi')),
       nrBand: nrOn ? pick(r, 'nr5g_action_band') : undefined,
-      // الراوتر يخلي PCI حق 5G القديم حتى لو 5G نايم — نعرضه بس لو فيه قراءة
       nrPci: r.Z5g_rsrp ? pciDec(pick(r, 'nr5g_pci')) : undefined,
       nrArfcn: pick(r, 'Z5g_dlEarfcn', 'nr5g_action_channel'),
       nrRsrp: num(pick(r, 'Z5g_rsrp')),
@@ -376,7 +355,6 @@ export class ZteDriver implements RouterDriver {
     await this.ensure();
     const s = await this.getSignal();
     const out: CellTower[] = [];
-
     if (s.rsrp !== undefined || s.pci) {
       out.push({
         kind: 'serving', tech: 'LTE', pci: s.pci, cellId: s.cellId,
@@ -390,7 +368,6 @@ export class ZteDriver implements RouterDriver {
         band: bandNum(s.nrBand), rsrp: s.nrRsrp, rsrq: s.nrRsrq, sinr: s.nrSinr,
       });
     }
-
     // الأبراج المجاورة (MU5001): "earfcn,pci,rsrq,rsrp,rssi;..." — PCI هنا عشري،
     // وأول سطر غالباً هو البرج الحالي نفسه فنتخطاه
     try {
@@ -407,12 +384,10 @@ export class ZteDriver implements RouterDriver {
         });
       }
     } catch {}
-
     return out;
   }
 
   // ─── الترددات ───
-
   private async readLocks() {
     const r = await this.get(['lte_band_lock', 'nr5g_nsa_band_lock', 'nr5g_sa_band_lock', 'nr5g_band_lock']);
     const lte = bandsFromMask(r.lte_band_lock);
@@ -423,7 +398,6 @@ export class ZteDriver implements RouterDriver {
   async getBandConfig(): Promise<BandConfig> {
     await this.ensure();
     const { lte, nr } = await this.readLocks();
-    // القناع الحالي لو فيه كل المعروف = تلقائي
     const supported = [...new Set([...DEFAULT_LTE, ...lte])].sort((a, b) => a - b);
     const nrSupported = [...new Set([...DEFAULT_NR, ...nr])].sort((a, b) => a - b);
     const locked = lte.length === 0 || supported.every(b => lte.includes(b)) ? [] : lte;
@@ -482,7 +456,10 @@ export class ZteDriver implements RouterDriver {
         if (f.length < 5) continue;
         const b = bandNum(f[3]) ?? lteBandOf(num(f[4]));
         if (!b) continue;
-        out.push({ tech: 'LTE', role: 'SCC', band: b, arfcn: f[4] || undefined, pci: f[1] || undefined, bandwidth: num(f[5]) });
+        out.push({
+          tech: 'LTE', role: 'SCC', band: b, arfcn: f[4] || undefined,
+          pci: pciDec(f[1]), bandwidth: num(f[5]),
+        });
       }
     }
     const nb = bandNum(r.nr5g_action_band);
