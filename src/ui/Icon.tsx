@@ -6,7 +6,7 @@ export type IconName =
   | 'settings' | 'chevron' | 'down' | 'up' | 'phone' | 'tv' | 'refresh'
   | 'spark' | 'bulb' | 'lock' | 'sms' | 'speed' | 'chart' | 'user' | 'power'
   | 'eye' | 'eye-off'
-  | 'antenna' | 'layers' | 'pin' | 'clock';
+  | 'antenna' | 'layers' | 'pin' | 'clock' | 'bell' | 'share';
 
 export function Icon({
   name, size = 20, color = C.sub, stroke = 1.9,
@@ -42,6 +42,8 @@ export function Icon({
       {name === 'layers' && <><Path d="M12 3 2 8l10 5 10-5z" {...p} /><Path d="M2 13l10 5 10-5" {...p} /></>}
       {name === 'pin' && <><Path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z" {...p} /><Circle cx={12} cy={10} r={2.5} {...p} /></>}
       {name === 'clock' && <><Circle cx={12} cy={12} r={9} {...p} /><Path d="M12 7v5l3 2" {...p} /></>}
+      {name === 'bell' && <><Path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" {...p} /><Path d="M13.7 21a2 2 0 0 1-3.4 0" {...p} /></>}
+      {name === 'share' && <><Circle cx={18} cy={5} r={3} {...p} /><Circle cx={6} cy={12} r={3} {...p} /><Circle cx={18} cy={19} r={3} {...p} /><Path d="M8.6 10.5l6.8-4M8.6 13.5l6.8 4" {...p} /></>}
     </Svg>
   );
 }

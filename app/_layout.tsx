@@ -13,6 +13,10 @@ import {
 } from '@expo-google-fonts/ibm-plex-sans-arabic';
 import { applyGlobalFont, FONT } from '../src/ui/fonts';
 import { C } from '../src/ui/theme';
+import { initNotificationHandler } from '../src/utils/notify';
+import '../src/tasks/monitor'; // يسجّل تعريف مهمة المراقبة الخلفية عند الإقلاع
+
+initNotificationHandler();
 
 const SCREENS: [string, string][] = [
   ['index', 'راوتراتي'],
@@ -38,6 +42,7 @@ const SCREENS: [string, string][] = [
   ['calab/[id]', 'مختبر الدمج'],
   ['anchor/[id]', 'مرساة 5G'],
   ['trials/[id]', 'وش نجح عندي'],
+  ['monitor', 'المراقبة والتنبيهات'],
 ];
 
 export default function RootLayout() {

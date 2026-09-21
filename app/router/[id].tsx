@@ -623,6 +623,8 @@ export default function RouterDashboard() {
                 onPress={() => router.push(`/places/${info.id}` as Href)} />
               <ToolTile icon="report" color="#64748b" title="التقرير" sub="شارك حالتك"
                 onPress={() => router.push(`/report/${info.id}` as Href)} />
+              <ToolTile icon="bell" color="#f43f5e" title="المراقبة" sub="تنبيهات تلقائية"
+                onPress={() => router.push('/monitor' as Href)} />
             </TileGrid>
 
             <Text style={s.grp}>الإعدادات</Text>

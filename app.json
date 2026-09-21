@@ -12,6 +12,7 @@
       "bundleIdentifier": "com.hasan.bandly",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": ["fetch", "processing"],
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         }
@@ -52,7 +53,8 @@
             "usesCleartextTraffic": true
           }
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true
