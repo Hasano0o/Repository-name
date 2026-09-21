@@ -266,10 +266,29 @@ export class ZteDriver implements RouterDriver {
       'lte_rsrp', 'rsrp', 'lte_rsrq', 'rsrq', 'lte_snr', 'rssi', 'lte_rssi',
       'wan_lte_ca', 'lte_ca_pcell_bandwidth', 'lte_ca_pcell_freq', 'wan_active_channel',
       'lte_multi_ca_scell_info', 'lte_ca_pcell_band',
-      'Z5g_rsrp', 'Z5g_rsrq', 'Z5g_SINR', 'Z5g_dlEarfcn', 'nr5g_pci',
-      'nr5g_action_band', 'nr5g_action_channel', 'nr5g_cell_id',
+      // 5G NSA (الوضع القديم)
+      'Z5g_rsrp', 'Z5g_rsrq', 'Z5g_SINR', 'Z5g_dlEarfcn',
+      'nr5g_pci', 'nr5g_action_band', 'nr5g_action_channel', 'nr5g_cell_id',
+      // 5G SA (بدائل — MU5001 في وضع Standalone)
+      'Z5g_snr', 'Z5g_CQI',
+      'nr5g_rsrp', 'nr5g_rsrq', 'nr5g_sinr', 'nr5g_snr',
+      'nr5g_band', 'nr5g_sa_band', 'nr_band',
+      'nr5g_sa_pci', 'nr_pci', 'nr5g_cell_pci',
+      'nr5g_dlEarfcn', 'nr5g_dl_earfcn', 'nr5g_sa_arfcn', 'nr5g_arfcn',
+      'nr5g_sa_cell_id', 'nr_cell_id',
+      'nr5g_dlbandwidth', 'nr5g_bandwidth', 'nr5g_sa_bandwidth', 'nr5g_dl_bandwidth',
     ]);
-    const nrOn = !!r.Z5g_rsrp;
+    // نأخذ أول قيمة غير فاضية من قائمة بدائل (5G SA يسمي الحقول بشكل مختلف)
+    const pickAny = (...keys: string[]): string | undefined => pick(r, ...keys);
+    const nrRsrpVal = pickAny('Z5g_rsrp', 'nr5g_rsrp', 'nr5g_sa_rsrp');
+    const nrSinrVal = pickAny('Z5g_SINR', 'nr5g_sinr', 'nr5g_sa_sinr', 'Z5g_snr', 'nr5g_snr');
+    const nrRsrqVal = pickAny('Z5g_rsrq', 'nr5g_rsrq', 'nr5g_sa_rsrq');
+    const nrBandVal = pickAny('nr5g_action_band', 'nr5g_band', 'nr5g_sa_band', 'nr_band');
+    const nrPciVal = pickAny('nr5g_pci', 'nr5g_sa_pci', 'nr_pci', 'nr5g_cell_pci');
+    const nrArfcnVal = pickAny('Z5g_dlEarfcn', 'nr5g_action_channel', 'nr5g_dlEarfcn', 'nr5g_dl_earfcn', 'nr5g_sa_arfcn', 'nr5g_arfcn');
+    const nrCellIdVal = pickAny('nr5g_cell_id', 'nr5g_sa_cell_id', 'nr_cell_id');
+    const nrBwVal = pickAny('nr5g_dlbandwidth', 'nr5g_bandwidth', 'nr5g_sa_bandwidth', 'nr5g_dl_bandwidth');
+    const nrOn = !!(nrRsrpVal || nrBandVal);
     const nsa = /ENDC|NSA/i.test(r.network_type || '');
     return {
       network: pick(r, 'network_type'),
@@ -283,12 +302,13 @@ export class ZteDriver implements RouterDriver {
       rsrq: num(pick(r, 'lte_rsrq', 'rsrq')),
       sinr: num(pick(r, 'lte_snr')),
       rssi: num(pick(r, 'lte_rssi', 'rssi')),
-      nrBand: nrOn ? pick(r, 'nr5g_action_band') : undefined,
-      nrPci: r.Z5g_rsrp ? pciDec(pick(r, 'nr5g_pci')) : undefined,
-      nrArfcn: pick(r, 'Z5g_dlEarfcn', 'nr5g_action_channel'),
-      nrRsrp: num(pick(r, 'Z5g_rsrp')),
-      nrRsrq: num(pick(r, 'Z5g_rsrq')),
-      nrSinr: num(pick(r, 'Z5g_SINR')),
+      nrBand: nrOn ? nrBandVal : undefined,
+      nrPci: nrOn ? pciDec(nrPciVal) : undefined,
+      nrArfcn: nrArfcnVal,
+      nrDlBandwidth: nrBwVal,
+      nrRsrp: num(nrRsrpVal),
+      nrRsrq: num(nrRsrqVal),
+      nrSinr: num(nrSinrVal),
     };
   }
 
@@ -463,7 +483,11 @@ export class ZteDriver implements RouterDriver {
     const r = await this.get([
       'lte_band', 'wan_active_channel', 'lte_pci', 'lte_rsrp', 'lte_rsrq', 'lte_snr',
       'lte_ca_pcell_bandwidth', 'wan_lte_ca', 'lte_multi_ca_scell_info',
-      'nr5g_action_band', 'nr5g_action_channel', 'nr5g_pci', 'Z5g_rsrp', 'Z5g_rsrq', 'Z5g_SINR', 'nr5g_bandwidth',
+      'nr5g_action_band', 'nr5g_action_channel', 'nr5g_pci',
+      'Z5g_rsrp', 'Z5g_rsrq', 'Z5g_SINR', 'nr5g_bandwidth',
+      'nr5g_band', 'nr5g_sa_band', 'nr5g_sa_pci', 'nr5g_dlEarfcn',
+      'nr5g_dl_earfcn', 'nr5g_sa_arfcn', 'nr5g_rsrp', 'nr5g_sinr',
+      'nr5g_rsrq', 'nr5g_dlbandwidth', 'nr5g_sa_bandwidth',
     ]);
     const out: Carrier[] = [];
     const earfcn = num(r.wan_active_channel);
@@ -486,11 +510,18 @@ export class ZteDriver implements RouterDriver {
         });
       }
     }
-    const nb = bandNum(r.nr5g_action_band);
-    if (nb && r.Z5g_rsrp) {
+    const nrBand = pick(r, 'nr5g_action_band', 'nr5g_band', 'nr5g_sa_band');
+    const nrRsrpV = pick(r, 'Z5g_rsrp', 'nr5g_rsrp');
+    const nb = bandNum(nrBand);
+    if (nb && nrRsrpV) {
       out.push({
-        tech: 'NR', role: 'SCC', band: nb, arfcn: r.nr5g_action_channel || undefined, pci: pciDec(r.nr5g_pci),
-        bandwidth: num(r.nr5g_bandwidth), rsrp: num(r.Z5g_rsrp), rsrq: num(r.Z5g_rsrq), sinr: num(r.Z5g_SINR),
+        tech: 'NR', role: out.length ? 'SCC' : 'PCC', band: nb,
+        arfcn: pick(r, 'Z5g_dlEarfcn', 'nr5g_action_channel', 'nr5g_dlEarfcn', 'nr5g_sa_arfcn') || undefined,
+        pci: pciDec(pick(r, 'nr5g_pci', 'nr5g_sa_pci')),
+        bandwidth: num(pick(r, 'nr5g_bandwidth', 'nr5g_dlbandwidth', 'nr5g_sa_bandwidth')),
+        rsrp: num(nrRsrpV),
+        rsrq: num(pick(r, 'Z5g_rsrq', 'nr5g_rsrq')),
+        sinr: num(pick(r, 'Z5g_SINR', 'nr5g_sinr')),
       });
     }
     return out;
