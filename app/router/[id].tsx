@@ -646,6 +646,17 @@ export default function RouterDashboard() {
         )}
 
         {!loading && info && (
+          <Pressable
+            onPress={() => router.push(`/add-router?id=${info.id}` as Href)}
+            style={s.editBtn}
+            accessibilityRole="button"
+            accessibilityLabel="تعديل الراوتر"
+          >
+            <Icon name="user" size={16} color={C.blue} />
+            <Text style={s.editBtnText}>تعديل الراوتر</Text>
+          </Pressable>
+        )}
+        {!loading && info && (
           <Pressable onPress={onDelete}>
             <Text style={s.deleteText}>حذف الراوتر من التطبيق</Text>
           </Pressable>
@@ -810,6 +821,19 @@ const s = StyleSheet.create({
   blockedMac: { color: C.sub, fontSize: 11, textAlign: 'right' },
   unblockBtn: { borderColor: C.green, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
   unblockText: { color: C.green, fontWeight: '800', fontSize: 12 },
+  editBtn: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: C.blueSoft,
+    backgroundColor: C.card,
+    marginTop: 6,
+  },
+  editBtnText: { color: C.blue, fontWeight: '800', fontSize: 14 },
   deleteText: { color: C.red, textAlign: 'center', paddingVertical: 10, opacity: 0.85 },
   fabs: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   fab: {
