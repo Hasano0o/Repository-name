@@ -1,171 +1,333 @@
-import { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  ScrollView, View, Text, TextInput, Pressable, ActivityIndicator,
-  KeyboardAvoidingView, Platform, StyleSheet,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
-import { router, Href } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { detectDriver } from '../src/drivers/registry';
-import { saveRouter } from '../src/store/routers';
-import { C, R, S, T } from '../src/ui/theme';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Icon } from '../src/ui/Icon';
+import { C, R, S, T } from '../src/ui/theme';
 import { isLanHost } from '../src/utils/host';
+import { detectDriver } from '../src/drivers/registry';
+import { getRouter, saveRouter, deleteRouter } from '../src/store/routers';
 
-export default function AddRouter() {
-  const insets = useSafeAreaInsets();
+export default function AddRouterScreen() {
+  const nav = useRouter();
+  const params = useLocalSearchParams<{ id?: string }>();
+  const editId =
+    typeof params.id === 'string' && params.id.length > 0 ? params.id : undefined;
+
   const [name, setName] = useState('');
   const [host, setHost] = useState('192.168.8.1');
-  const [user, setUser] = useState('admin');
-  const [pass, setPass] = useState('');
-  const [show, setShow] = useState(false);
+  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState('');
-  const [error, setError] = useState('');
+  const [loading, setLoading] = useState<boolean>(Boolean(editId));
 
-  const onAdd = async () => {
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!editId) return;
+      try {
+        const r = await getRouter(editId);
+        if (!alive || !r) return;
+        setName(r.name ?? '');
+        setHost(r.host ?? '192.168.8.1');
+        setUsername(r.username ?? 'admin');
+      } catch {
+        // نتجاهل: النموذج يبقى فارغاً
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [editId]);
+
+  async function onSave() {
     const h = host.trim();
-    const u = user.trim();
-    if (!h || !pass) { setError('اكتب عنوان الراوتر وكلمة المرور'); return; }
+    const u = username.trim() || 'admin';
     if (!isLanHost(h)) {
-      setError('عنوان الراوتر لازم يكون داخل شبكتك المحلية (مثل 192.168.8.1)');
+      Alert.alert('عنوان غير صالح', 'أدخل عنواناً محلياً، مثال: 192.168.8.1');
+      return;
+    }
+    if (!password) {
+      Alert.alert('كلمة المرور مطلوبة', 'أدخل كلمة مرور الراوتر للمتابعة');
       return;
     }
     setBusy(true);
-    setError('');
     try {
-      setStatus('نتعرف على نوع الراوتر...');
       const driver = await detectDriver(h);
       if (!driver) {
-        throw new Error('ما قدرنا نتعرف على الراوتر — تأكد إنك متصل بشبكته، أو إن ماركته غير مدعومة حالياً');
+        Alert.alert('تعذّر التعرف', 'ما تعرفنا على نوع الراوتر على هذا العنوان');
+        return;
       }
-      setStatus(`تم التعرف: ${driver.name} — نتحقق من الدخول...`);
-      await driver.login(h, u, pass);
+
+      try {
+        await driver.login(h, u, password);
+      } catch {
+        Alert.alert('فشل الدخول', 'تحقق من اسم المستخدم وكلمة المرور');
+        return;
+      }
+
+      const dAny = driver as unknown as { id?: string; name?: string };
+      const dId = dAny.id ?? 'unknown';
+      const dName = dAny.name ?? dId;
+
+      if (editId) {
+        await deleteRouter(editId);
+      }
       const saved = await saveRouter(
-        { name: name.trim() || driver.name, host: h, username: u, driverId: driver.id, driverName: driver.name },
-        pass,
+        {
+          name: name.trim() || dName || 'راوتر',
+          host: h,
+          username: u,
+          driverId: dId,
+          driverName: dName,
+        },
+        password,
       );
-      router.replace(`/router/${saved.id}` as Href);
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
-      setStatus('');
+      nav.replace('/router/' + saved.id);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert('خطأ', msg);
+    } finally {
       setBusy(false);
     }
-  };
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator color={C.blue} />
+      </View>
+    );
+  }
+
+  const isEdit = Boolean(editId);
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
     >
       <ScrollView
-        contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 120 }]}
+        style={styles.flex}
+        contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={s.note}>تأكد إن جوالك متصل بواي فاي الراوتر قبل الإضافة</Text>
+        <View style={styles.card}>
+          <Text style={styles.title}>
+            {isEdit ? 'تعديل الراوتر' : 'إضافة راوتر'}
+          </Text>
+          <Text style={styles.subtitle}>
+            أدخل بيانات الدخول — تُحفظ كلمة المرور في التخزين الآمن على جهازك فقط،
+            ولا تُرسل لأي جهة خارجية.
+          </Text>
 
-        <View style={s.card}>
-          <Text style={s.label}>اسم الراوتر (اختياري)</Text>
-          <TextInput
-            style={s.input}
-            value={name}
-            onChangeText={setName}
-            placeholder="مثلاً: راوتر البيت"
-            placeholderTextColor={C.muted}
-            returnKeyType="next"
-          />
-
-          <Text style={s.label}>عنوان الراوتر</Text>
-          <TextInput
-            style={s.input}
-            value={host}
-            onChangeText={setHost}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            returnKeyType="next"
-          />
-
-          <Text style={s.label}>اسم المستخدم</Text>
-          <TextInput
-            style={s.input}
-            value={user}
-            onChangeText={setUser}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="username"
-            textContentType="username"
-            returnKeyType="next"
-          />
-
-          <Text style={s.label}>كلمة مرور لوحة الراوتر</Text>
-          <View style={s.passWrap}>
+          <Field label="الاسم (اختياري)">
             <TextInput
-              style={[s.input, s.passInput]}
-              value={pass}
-              onChangeText={setPass}
-              secureTextEntry={!show}
+              value={name}
+              onChangeText={setName}
+              placeholder="مثال: راوتر الصالة"
+              placeholderTextColor={C.muted}
+              style={styles.input}
+              returnKeyType="next"
+            />
+          </Field>
+
+          <Field label="عنوان الراوتر">
+            <TextInput
+              value={host}
+              onChangeText={setHost}
+              placeholder="192.168.8.1"
+              placeholderTextColor={C.muted}
+              style={styles.input}
               autoCapitalize="none"
               autoCorrect={false}
-              autoComplete="password"
-              textContentType="password"
-              returnKeyType="done"
-              onSubmitEditing={onAdd}
+              autoComplete="off"
+              keyboardType="numbers-and-punctuation"
+              returnKeyType="next"
             />
-            <Pressable
-              style={s.eye}
-              onPress={() => setShow(v => !v)}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={show ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
-            >
-              <Icon name={show ? 'eye' : 'eye-off'} size={17} color={show ? C.blue : C.muted} />
-            </Pressable>
-          </View>
-          <Text style={s.hint}>
-            تُحفظ كلمة المرور على جوالك فقط، ونستخدمها للدخول على الراوتر مباشرة — ما ترسل لأي خادم.
-          </Text>
+          </Field>
+
+          <Field label="اسم المستخدم">
+            <TextInput
+              value={username}
+              onChangeText={setUsername}
+              placeholder="admin"
+              placeholderTextColor={C.muted}
+              style={styles.input}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="username"
+              returnKeyType="next"
+            />
+          </Field>
+
+          <Field label="كلمة المرور">
+            <View style={styles.passwordRow}>
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                placeholder="••••••••"
+                placeholderTextColor={C.muted}
+                style={[styles.input, styles.passwordInput]}
+                autoCapitalize="none"
+                autoCorrect={false}
+                secureTextEntry={!showPass}
+                autoComplete="password"
+                textContentType="password"
+                returnKeyType="done"
+                onSubmitEditing={onSave}
+              />
+              <Pressable
+                onPress={() => setShowPass((v) => !v)}
+                hitSlop={10}
+                style={styles.eye}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  showPass ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'
+                }
+              >
+                <Icon
+                  name={showPass ? 'eye-off' : 'eye'}
+                  size={20}
+                  color={C.sub}
+                />
+              </Pressable>
+            </View>
+          </Field>
+
+          <Pressable
+            onPress={onSave}
+            disabled={busy}
+            style={({ pressed }) => [
+              styles.primaryBtn,
+              (busy || pressed) && styles.primaryBtnPressed,
+            ]}
+          >
+            {busy ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.primaryBtnText}>
+                {isEdit ? 'حفظ التعديلات' : 'إضافة الراوتر'}
+              </Text>
+            )}
+          </Pressable>
+
+          <Pressable
+            onPress={() => nav.back()}
+            disabled={busy}
+            style={styles.ghostBtn}
+          >
+            <Text style={styles.ghostBtnText}>إلغاء</Text>
+          </Pressable>
         </View>
-
-        {!!status && (
-          <View style={s.statusRow}>
-            <Text style={s.status}>{status}</Text>
-            <ActivityIndicator color={C.blue} />
-          </View>
-        )}
-        {!!error && <Text style={s.error}>{error}</Text>}
-
-        <Pressable style={[s.btn, busy && { opacity: 0.6 }]} onPress={onAdd} disabled={busy}>
-          <Text style={s.btnText}>{busy ? 'جاري الإضافة...' : 'إضافة'}</Text>
-        </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const s = StyleSheet.create({
-  page: { padding: S.lg, gap: S.md },
-  note: { color: C.sub, textAlign: 'right' },
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.label}>{label}</Text>
+      {children}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  flex: { flex: 1, backgroundColor: C.bg },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.bg,
+  },
+  content: {
+    padding: S.lg,
+    paddingBottom: 200,
+  },
   card: {
-    backgroundColor: C.card, borderWidth: 1, borderColor: C.line,
-    borderRadius: R.lg, padding: S.lg, gap: 6,
+    backgroundColor: C.card,
+    borderRadius: R.lg,
+    padding: S.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.cardBorder,
+    shadowColor: C.shadow,
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
-  label: { color: C.sub, fontWeight: '700', textAlign: 'right', marginTop: S.sm },
+  title: {
+    fontSize: T.h1,
+    fontWeight: '700',
+    color: C.text,
+    marginBottom: S.xs,
+  },
+  subtitle: {
+    fontSize: T.body,
+    color: C.sub,
+    marginBottom: S.lg,
+    lineHeight: 20,
+  },
+  field: { marginBottom: S.md },
+  label: { fontSize: T.label, color: C.sub, marginBottom: S.xs },
   input: {
-    backgroundColor: C.rowBg, borderRadius: R.md, padding: 12,
-    borderWidth: 1, borderColor: C.line, color: C.text, textAlign: 'right',
+    backgroundColor: C.rowBg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.blueSoft,
+    borderRadius: R.md,
+    paddingHorizontal: S.md,
+    paddingVertical: S.sm,
+    color: C.text,
+    fontSize: T.body,
+    minHeight: 48,
   },
-  passWrap: { position: 'relative', justifyContent: 'center' },
-  passInput: { paddingLeft: 44 },
+  passwordRow: { position: 'relative', justifyContent: 'center' },
+  passwordInput: { paddingRight: 44 },
   eye: {
-    position: 'absolute', left: 8, height: 34, width: 34,
-    alignItems: 'center', justifyContent: 'center',
+    position: 'absolute',
+    right: S.sm,
+    top: 0,
+    bottom: 0,
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  hint: { color: C.muted, fontSize: T.label, textAlign: 'right', lineHeight: 18, marginTop: 6 },
-  statusRow: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: S.sm },
-  status: { color: C.blue, fontWeight: '700', textAlign: 'right', flexShrink: 1 },
-  error: { color: C.red, fontWeight: '700', textAlign: 'right' },
-  btn: { backgroundColor: C.blue, borderRadius: R.lg, padding: 15, alignItems: 'center' },
-  btnText: { color: C.onAccent, fontWeight: '800', fontSize: 16 },
+  primaryBtn: {
+    marginTop: S.lg,
+    backgroundColor: C.blue,
+    borderRadius: R.md,
+    paddingVertical: S.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+  },
+  primaryBtnPressed: { opacity: 0.85 },
+  primaryBtnText: { fontSize: T.body, color: '#ffffff', fontWeight: '600' },
+  ghostBtn: { marginTop: S.sm, paddingVertical: S.sm, alignItems: 'center' },
+  ghostBtnText: { fontSize: T.body, color: C.sub },
 });

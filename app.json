@@ -12,7 +12,10 @@
       "bundleIdentifier": "com.hasan.bandly",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "UIBackgroundModes": ["fetch", "processing"],
+        "UIBackgroundModes": [
+          "fetch",
+          "processing"
+        ],
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         }
@@ -26,7 +29,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.hasan.bandly"
+      "package": "com.hasan.bandly",
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
       "bundler": "metro",
