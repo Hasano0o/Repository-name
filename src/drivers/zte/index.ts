@@ -240,56 +240,76 @@ export class ZteDriver implements RouterDriver {
   async login(host: string, _username: string, password: string): Promise<void> {
     this.host = host;
     this.password = password;
-    // MU5001 يقبل مستخدم واحد فقط — نفكّ أي جلسة عالقة أول
+
+    // ═══ MU5001 يقبل مستخدم واحد فقط — نفكّ أي جلسة عالقة أول ═══
     try { await this.post({ goformId: 'LOGOUT' }); } catch {}
     try { await this.post({ goformId: 'GOFORM_LOGOUT' }); } catch {}
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise(r => setTimeout(r, 800));
+
+    // ═══ اجلب LD طازج (يتغيّر بعد LOGOUT) ═══
     let ld = '';
     try { ld = (await this.get(['LD'])).LD || ''; } catch {}
     this.log('login: LD =', ld ? (ld.slice(0, 16) + '...') : '(فاضي)');
-    const attempts: string[] = [];
-    if (ld) attempts.push(sha256Upper(sha256Upper(password) + ld.toUpperCase()));
-    attempts.push(sha256Upper(password));
-    try { attempts.push(btoa(password)); } catch {}
-    attempts.push(password);
-    let lastResult = '';
-    let busy = false;
-    for (let i = 0; i < attempts.length; i++) {
-      const pw = attempts[i];
-      for (let round = 0; round < 2; round++) {
-        let out = '';
-        try {
-          out = await this.post({ goformId: 'LOGIN', password: pw });
-        } catch (e) {
-          this.log('login: attempt#' + i + ' r' + round + ' THREW', (e as any)?.message ?? String(e));
-          break;
-        }
-        lastResult = out;
-        this.log('login: attempt#' + i + ' r' + round + ' →', out.slice(0, 120));
-        if (/"result"\s*:\s*"?0"?/.test(out)) {
-          this.log('login: attempt#' + i + ' returned success');
-          break;
-        }
-        if (/"result"\s*:\s*"?1"?/.test(out)) throw new Error('كلمة المرور غير صحيحة');
-        if (/"result"\s*:\s*"?3"?/.test(out) && round === 0) {
-          busy = true;
-          await this.freeSession();
-          continue;
-        }
-        break;
-      }
-      if (await this.verifyLogin()) {
-        this.log('login: verified with attempt#' + i);
-        return;
-      }
-      this.log('login: attempt#' + i + ' did not verify');
+
+    // ═══ صيغ الهاش — كلها موثّقة من فيرمويرات ZTE مختلفة ═══
+    const candidates: Array<{ name: string; val: string }> = [];
+    if (ld) {
+      candidates.push({
+        name: 'sha2(pw)+LD.upper',
+        val: sha256Upper(sha256Upper(password) + ld.toUpperCase()),
+      });
+      candidates.push({
+        name: 'sha2(pw+LD.upper)',
+        val: sha256Upper(sha256Upper(password + ld.toUpperCase())),
+      });
     }
-    if (await this.verifyLogin()) return;
-    if (/"result"\s*:\s*"?1"?/.test(lastResult)) throw new Error('كلمة المرور غير صحيحة');
-    if (busy || /"result"\s*:\s*"?3"?/.test(lastResult)) {
-      throw new Error('الراوتر فيه جلسة عالقة. اقفل صفحة الراوتر من أي متصفح، أو انتظر ٥ دقايق، أو أعد تشغيل الراوتر وجرّب.');
+    candidates.push({ name: 'sha2(pw)', val: sha256Upper(password) });
+    try { candidates.push({ name: 'base64(pw)', val: btoa(password) }); } catch {}
+
+    let sawBusy = false;
+    let sawWrong = false;
+    let sawSuccessReply = false;
+
+    for (const c of candidates) {
+      let out = '';
+      try {
+        out = await this.post({ goformId: 'LOGIN', password: c.val });
+      } catch (e) {
+        this.log('login:', c.name, 'THREW', (e as any)?.message ?? String(e));
+        continue;
+      }
+      this.log('login:', c.name, '→', out.slice(0, 120));
+
+      if (/"result"\s*:\s*"?0"?/.test(out)) {
+        sawSuccessReply = true;
+        await new Promise(r => setTimeout(r, 400));
+        if (await this.verifyLogin()) {
+          this.log('login: ✓ نجح بـ', c.name);
+          return;
+        }
+        this.log('login: result=0 لكن verify فشل — نكمل');
+        continue;
+      }
+      if (/"result"\s*:\s*"?1"?/.test(out)) { sawWrong = true; continue; }
+      if (/"result"\s*:\s*"?3"?/.test(out)) { sawBusy = true; continue; }
     }
-    throw new Error('تعذّر تسجيل الدخول في راوتر ZTE — آخر رد: ' + ((lastResult || '').slice(0, 80) || 'لا يوجد'));
+
+    // ═══ لو كل شي فشل، نأكد عدم وجود جلسة قديمة قبل ما نرمي ═══
+    if (await this.verifyLogin()) {
+      this.log('login: موجودين داخلين أصلاً (جلسة سابقة)');
+      return;
+    }
+
+    if (sawSuccessReply) {
+      throw new Error('الراوتر قبل الدخول لكن loginfo ما رجع "ok" — جرّب مرة ثانية');
+    }
+    if (sawBusy) {
+      throw new Error('الراوتر فيه جلسة عالقة ولا يقبل دخول جديد. جرّب: أعد تشغيل الراوتر، أو اقفل صفحته من أي متصفح، أو انتظر 5 دقائق.');
+    }
+    if (sawWrong) {
+      throw new Error('كلمة المرور غير صحيحة');
+    }
+    throw new Error('تعذّر تسجيل الدخول في راوتر ZTE');
   }
 
   /** يفكّ الجلسة العالقة في الفيرموير اللي يسمح بمستخدم واحد */
@@ -300,14 +320,18 @@ export class ZteDriver implements RouterDriver {
     await new Promise(r => setTimeout(r, 1500));
   }
 
-  /** الحقول المحمية ترجع فاضية إذا ما كان فيه جلسة — نستخدمها للتأكد */
+  /**
+   * فحص الجلسة: الراوتر يرجع loginfo = "ok" فقط لو جلستنا هي المسيطرة.
+   * أي شي ثاني (فاضي، logout) = غير مسجّل.
+   */
   private async verifyLogin(): Promise<boolean> {
     try {
-      const li = (await this.get(['loginfo'])).loginfo;
-      if (li) return li === 'ok';
-      const r = await this.get(['modem_main_state', 'network_type', 'rssi', 'wan_ipaddr']);
-      return !!(r.modem_main_state || r.network_type || r.rssi || r.wan_ipaddr);
-    } catch {
+      const r = await this.get(['loginfo']);
+      const li = r.loginfo;
+      this.log('verifyLogin: loginfo =', JSON.stringify(li ?? ''));
+      return li === 'ok';
+    } catch (e) {
+      this.log('verifyLogin: error', (e as any)?.message ?? String(e));
       return false;
     }
   }
