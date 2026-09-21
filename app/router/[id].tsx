@@ -615,6 +615,8 @@ export default function RouterDashboard() {
                 onPress={() => router.push(`/speed/${info.id}` as Href)} />
               <ToolTile icon="clock" color="#0ea5e9" title="السجل" sub="الإشارة عبر الوقت"
                 onPress={() => router.push(`/history/${info.id}` as Href)} />
+              <ToolTile icon="spark" color="#f59e0b" title="وش نجح" sub="تجاربك السابقة"
+                onPress={() => router.push(`/trials/${info.id}` as Href)} />
               <ToolTile icon="phone" color="#ec4899" title="الأجهزة" sub="المتصلين والاستهلاك"
                 onPress={() => router.push(`/device/${info.id}` as Href)} />
               <ToolTile icon="pin" color="#0ea5a4" title="الأماكن" sub="وين أحط الراوتر؟"

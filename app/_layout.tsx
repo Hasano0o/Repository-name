@@ -37,6 +37,7 @@ const SCREENS: [string, string][] = [
   ['finder/[id]', 'أفضل تردد'],
   ['calab/[id]', 'مختبر الدمج'],
   ['anchor/[id]', 'مرساة 5G'],
+  ['trials/[id]', 'وش نجح عندي'],
 ];
 
 export default function RootLayout() {
