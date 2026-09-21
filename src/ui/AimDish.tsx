@@ -11,7 +11,6 @@ interface Props {
   active?: boolean;
 }
 
-/** لون المرحلة: ضعيف أحمر → مقبول برتقالي → جيد أخضر → ممتاز ذهبي */
 function colorFor(v: number): string {
   if (v >= 0.72) return '#fbbf24';
   if (v >= 0.45) return '#22c55e';
@@ -24,7 +23,6 @@ export function AimDish({ score, label, sub, size = 220, active = true }: Props)
   const [angle, setAngle] = useState(0);
   const dirRef = useRef(1);
 
-  // قوي: يستقر في المنتصف (±3°) — ضعيف: يبحث بعرض (±22°)
   const range = 3 + (1 - val) * 19;
   const step = 1.1;
 
@@ -48,7 +46,6 @@ export function AimDish({ score, label, sub, size = 220, active = true }: Props)
 
   return (
     <View style={[s.wrap, { width: size }]}>
-      {/* هالة الخلفية */}
       <View
         style={{
           position: 'absolute',
@@ -61,60 +58,33 @@ export function AimDish({ score, label, sub, size = 220, active = true }: Props)
           alignSelf: 'center',
         }}
       />
-
       <View style={{ width: size, height: size }}>
         <Svg width="100%" height="100%" viewBox="0 0 100 100">
           <G rotation={angle} origin="50, 55">
-            {/* القاعدة */}
             <Rect x={47} y={82} width={6} height={10} fill={col} opacity={0.75} />
             <Rect x={40} y={90} width={20} height={3} rx={1.5} fill={col} opacity={0.75} />
             <Rect x={48} y={72} width={4} height={20} fill={col} opacity={0.75} />
-
-            {/* صحن الطبق — D مفتوح للأعلى */}
             <Path d="M 22 55 Q 50 92 78 55 Z" fill={col} opacity={0.9} />
-            {/* انعكاس داخلي */}
             <Path d="M 32 55 Q 50 82 68 55 Z" fill="#ffffff" opacity={0.2} />
-
-            {/* أذرع دعم LNB */}
             <Path d="M 50 43 L 22 55" stroke={col} strokeWidth={1.3} opacity={0.7} />
             <Path d="M 50 43 L 78 55" stroke={col} strokeWidth={1.3} opacity={0.7} />
-
-            {/* رأس الالتقاط LNB */}
             <Circle cx={50} cy={38} r={5} fill={col} />
             <Circle cx={50} cy={38} r={2.2} fill="#0d2350" opacity={0.5} />
-
-            {/* موجات الإشارة */}
             {showWaves && (
               <>
-                <Path
-                  d="M 44 30 A 8 8 0 0 0 56 30"
-                  stroke={col} strokeWidth={2} fill="none" strokeLinecap="round"
-                  opacity={val > 0.72 ? 1 : 0.7}
-                />
-                <Path
-                  d="M 40 26 A 14 14 0 0 0 60 26"
-                  stroke={col} strokeWidth={2} fill="none" strokeLinecap="round"
-                  opacity={val > 0.72 ? 1 : 0.5}
-                />
+                <Path d="M 44 30 A 8 8 0 0 0 56 30" stroke={col} strokeWidth={2} fill="none" strokeLinecap="round" opacity={val > 0.72 ? 1 : 0.7} />
+                <Path d="M 40 26 A 14 14 0 0 0 60 26" stroke={col} strokeWidth={2} fill="none" strokeLinecap="round" opacity={val > 0.72 ? 1 : 0.5} />
                 {val > 0.6 && (
-                  <Path
-                    d="M 36 22 A 20 20 0 0 0 64 22"
-                    stroke={col} strokeWidth={2} fill="none" strokeLinecap="round"
-                    opacity={0.75}
-                  />
+                  <Path d="M 36 22 A 20 20 0 0 0 64 22" stroke={col} strokeWidth={2} fill="none" strokeLinecap="round" opacity={0.75} />
                 )}
               </>
             )}
           </G>
         </Svg>
       </View>
-
-      {/* النص أسفل الصحن */}
       <View style={s.textBox}>
         <View style={{ flexDirection: 'row-reverse', alignItems: 'flex-start' }}>
-          <Text style={[s.pct, { color: col, fontSize: size * 0.22 }]}>
-            {Math.round(val * 100)}
-          </Text>
+          <Text style={[s.pct, { color: col, fontSize: size * 0.22 }]}>{Math.round(val * 100)}</Text>
           <Text style={[s.pctSign, { fontSize: size * 0.10, marginTop: size * 0.03 }]}>٪</Text>
         </View>
         <Text style={[s.label, { color: col, fontSize: size * 0.11 }]}>{label}</Text>
