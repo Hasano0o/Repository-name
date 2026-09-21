@@ -1,5 +1,6 @@
 export type Capability =
-  'signal' | 'devices' | 'reboot' | 'bandLock' | 'sms' | 'usage' | 'block' | 'traffic' | 'cells';
+  'signal' | 'devices' | 'reboot' | 'bandLock' | 'sms' | 'usage'
+  | 'block' | 'traffic' | 'cells';
 
 export interface Signal {
   network?: string; band?: string; cellId?: string; pci?: string; earfcn?: string;
@@ -21,7 +22,6 @@ export interface Traffic { downBytesPerSec: number; upBytesPerSec: number; conne
 export interface ConnectedDevice { mac: string; ip?: string; name?: string; blocked?: boolean; }
 export interface Usage { downloadBytes: number; uploadBytes: number; }
 export interface NetworkModeOption { value: string; label: string; }
-
 export interface DeviceDetails {
   model?: string; imei?: string; software?: string; hardware?: string;
   wanIp?: string; dns?: string; operator?: string; simStatus?: string;
@@ -45,26 +45,22 @@ export interface DataPlan {
   limitBytes: number;
   monthThreshold: number;
 }
-
 export interface CellLockTarget {
   tech: 'LTE' | 'NR';
   band?: number;
   arfcn?: string;
   pci: string;
 }
-
 export interface ActiveLock {
   bands: number[];
   nrBands: number[];
   pci?: string;
 }
-
 export interface CellLockState {
   pci?: string;
   band?: number;
   arfcn?: string;
 }
-
 export interface BandConfig {
   supported: number[];
   locked: number[];
@@ -73,7 +69,6 @@ export interface BandConfig {
   mode: string;
   modes: NetworkModeOption[];
 }
-
 export interface SmsMessage { index: string; phone: string; content: string; date: string; unread: boolean; }
 
 /** ملف اتصال APN */
@@ -104,6 +99,65 @@ export interface Carrier {
 /** إعداد DNS للشبكة المحلية */
 export interface DnsConfig { manual: boolean; primary?: string; secondary?: string; }
 
+/* ============================================================
+ * SignalSnapshot — واجهة موحّدة للإشارة عبر كل الدرايفرات
+ * ============================================================ */
+
+export interface SignalSnapshotLte {
+  pci?: string;
+  cellId?: string;
+  earfcn?: string;
+  band?: number;
+  bandwidth?: number;
+  rsrp?: number;
+  rsrq?: number;
+  sinr?: number;
+  rssi?: number;
+  cqi?: number;
+  dlMcs?: number;
+  ulMcs?: number;
+  txPower?: number;
+  dlStreams?: number;
+  enodebId?: string;
+}
+export interface SignalSnapshotNr {
+  pci?: string;
+  arfcn?: string;
+  band?: number;
+  bandwidth?: number;
+  rsrp?: number;
+  rsrq?: number;
+  sinr?: number;
+  cqi?: number;
+  dlMcs?: number;
+  txPower?: number;
+  rank?: number;
+  /** قوة تغطية 5G المتاحة (0–5) */
+  available?: number;
+}
+export interface SignalSnapshotHealth {
+  /** 0–100 */
+  score?: number;
+  quality?: 'ممتاز' | 'جيد' | 'متوسط' | 'ضعيف';
+  cqi?: number;
+  dlMcs?: number;
+  ulMcs?: number;
+}
+export interface SignalSnapshotSource {
+  driverId: string;
+  driverName: string;
+  tech?: string;
+  at: number;
+}
+export interface SignalSnapshot {
+  lte?: SignalSnapshotLte;
+  nr?: SignalSnapshotNr;
+  ca?: Carrier[];
+  neighbors?: CellTower[];
+  health?: SignalSnapshotHealth;
+  source: SignalSnapshotSource;
+}
+
 export interface RouterDriver {
   readonly id: string;
   readonly name: string;
@@ -112,6 +166,7 @@ export interface RouterDriver {
   login(host: string, username: string, password: string): Promise<void>;
   logout(): Promise<void>;
   getSignal?(): Promise<Signal>;
+  getSnapshot?(): Promise<SignalSnapshot>;
   getNetworkInfo?(): Promise<NetworkInfo>;
   getDeviceDetails?(): Promise<DeviceDetails>;
   getCells?(): Promise<CellTower[]>;

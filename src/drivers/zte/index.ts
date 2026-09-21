@@ -4,11 +4,13 @@ import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import {
   RouterDriver, Capability, Signal, NetworkInfo, Traffic, ConnectedDevice,
   Usage, DeviceDetails, CellTower, BandConfig, ActiveLock, Carrier,
+  SignalSnapshot,
 } from '../types';
 import { http } from '../http';
 import {
   parsePci, decodeBandMask, encodeBandMask, parseZteCa, bandLabel,
 } from '../../utils/normalize';
+import { buildSnapshot } from '../../utils/snapshot';
 
 const sha256Upper = (s: string) => bytesToHex(sha256(utf8ToBytes(s))).toUpperCase();
 const md5Hex = (s: string) => bytesToHex(md5(utf8ToBytes(s)));
@@ -62,7 +64,6 @@ const bandNum = (v?: string): number | undefined => {
 /**
  * نص الترددات بنفس صيغة هواوي عشان الواجهة تعرض الدمج:
  * "20MHz@500(B1) + 20MHz@1450(B3) + 20MHz@9310(B28)"
- * نستخدم bandLabel حتى يبقى التسمية موحدة عبر الدرايفرات.
  */
 function caBandString(r: Record<string, string>): string | undefined {
   const earfcn = r.wan_active_channel || r.lte_ca_pcell_freq || '';
@@ -291,6 +292,13 @@ export class ZteDriver implements RouterDriver {
     };
   }
 
+  async getSnapshot(): Promise<SignalSnapshot> {
+    const sig = await this.getSignal();
+    const ca = await this.getCarriers().catch(() => [] as Carrier[]);
+    const cells = await this.getCells().catch(() => [] as CellTower[]);
+    return buildSnapshot(sig, ca, cells, { driverId: this.id, driverName: this.name });
+  }
+
   async getNetworkInfo(): Promise<NetworkInfo> {
     await this.ensure();
     const r = await this.get(['network_provider', 'network_type', 'ppp_status', 'modem_main_state']);
@@ -466,7 +474,6 @@ export class ZteDriver implements RouterDriver {
         bandwidth: num(r.lte_ca_pcell_bandwidth), rsrp: num(r.lte_rsrp), rsrq: num(r.lte_rsrq), sinr: num(r.lte_snr),
       });
     }
-    // الدمج: "index,pci,?,band,earfcn,bandwidth;..." مثل 1,15,2,3,1450,20.0
     if (/activ/i.test(r.wan_lte_ca || '') && !/deactiv|inactiv/i.test(r.wan_lte_ca || '')) {
       for (const row of (r.lte_multi_ca_scell_info || '').split(';')) {
         const f = row.split(',').map(x => x.trim());
