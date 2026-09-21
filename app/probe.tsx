@@ -7,7 +7,9 @@ import { isLanHost } from '../src/utils/host';
 import {
   runProbe, reportText, ProbeReport, probeFields, ZTE_CANDIDATES, FieldHit,
   harvestCommands, signalish, Harvest,
+  deepCommandHarvest, DeepHarvest,
 } from '../src/utils/probe';
+import { guessApiStyle } from '../src/store/discovery';
 import { ZteDriver } from '../src/drivers/zte';
 
 export default function ProbeScreen() {
@@ -23,6 +25,8 @@ export default function ProbeScreen() {
   const [pw, setPw] = useState('');
   const [hits, setHits] = useState<FieldHit[] | null>(null);
   const [harv, setHarv] = useState<Harvest | null>(null);
+  const [deepH, setDeepH] = useState<DeepHarvest | null>(null);
+  const [deepApi, setDeepApi] = useState<string>('');
 
   const harvest = async () => {
     if (!isLanHost(host)) { setErr('العنوان لازم يكون داخل شبكتك المحلية'); return; }
@@ -61,6 +65,48 @@ export default function ProbeScreen() {
       '',
       'أوامر لها علاقة بالإشارة (' + signalish(harv.cmds).length + '):',
       signalish(harv.cmds).join(', '),
+    ].join('\n');
+    try { await Share.share({ message: txt }); } catch {}
+  };
+
+  const deepAll = async () => {
+    if (!isLanHost(host)) { setErr('العنوان لازم يكون داخل شبكتك المحلية'); return; }
+    setErr(''); setDeepH(null); setDeepApi(''); setBusy(true);
+    try {
+      const h = await deepCommandHarvest(host.trim(), (done, total, label) => setProg({ done, total, label }));
+      setDeepH(h);
+      setDeepApi(guessApiStyle({ paths: h.strings.paths, commands: h.cmds, goforms: h.goforms }));
+    } catch (e: any) {
+      setErr(e?.message || 'تعذر الحصاد العميق');
+    } finally { setBusy(false); }
+  };
+
+  const shareDeep = async () => {
+    if (!deepH) return;
+    const txt = [
+      '=== حصاد عميق شامل ===',
+      'apiStyle المقترح: ' + (deepApi || 'غير معروف'),
+      '',
+      'ملفات مقروءة (' + deepH.scripts.length + '):',
+      deepH.scripts.slice(0, 20).join('\n'),
+      '',
+      'chunks (' + deepH.chunkUrls.length + '):',
+      deepH.chunkUrls.slice(0, 20).join('\n'),
+      '',
+      'source maps (' + deepH.sourceMaps.length + '):',
+      deepH.sourceMaps.slice(0, 10).join('\n'),
+      '',
+      'goformId (' + deepH.goforms.length + '):',
+      deepH.goforms.join(', '),
+      '',
+      'أوامر (' + deepH.cmds.length + '):',
+      deepH.cmds.slice(0, 80).join(', '),
+      '',
+      'حقول/سلاسل إشارة (' + deepH.strings.signal.length + '):',
+      deepH.strings.signal.slice(0, 80).join(', '),
+      '',
+      'مسارات (' + deepH.strings.paths.length + '):',
+      deepH.strings.paths.slice(0, 60).join('\n'),
     ].join('\n');
     try { await Share.share({ message: txt }); } catch {}
   };
@@ -131,7 +177,6 @@ export default function ProbeScreen() {
         <TextInput style={s.input} value={model} onChangeText={setModel} placeholder="مثال: ZTE MU5001" placeholderTextColor={C.muted} />
         <Text style={s.lbl}>ملاحظات (اختياري)</Text>
         <TextInput style={[s.input, s.multi]} value={notes} onChangeText={setNotes} multiline placeholder="مثال: الشركة موبايلي، الجهاز 5G" placeholderTextColor={C.muted} />
-
         <Pressable style={[s.btn, (!agree || busy) && s.btnOff]} disabled={!agree || busy} onPress={start}>
           {busy ? <ActivityIndicator color={C.onAccent} /> : <Text style={s.btnTxt}>ابدأ الاستكشاف</Text>}
         </Pressable>
@@ -176,6 +221,79 @@ export default function ProbeScreen() {
               <Text style={s.btnTxt}>جرّبها على الراوتر</Text>
             </Pressable>
             <Pressable style={s.btn} onPress={shareHarvest}><Text style={s.btnTxt}>أرسل قائمة الأوامر</Text></Pressable>
+          </View>
+        )}
+      </GlassCard>
+
+      <GlassCard title="حصاد عميق شامل" subtitle="Deep harvest · Webpack + Source maps" icon="🛰️" tint={C.violet} collapsible={false}>
+        <Text style={s.p}>
+          يقرأ كل ملفات JS الظاهرة، يمشي على webpack chunks، ويجرّب source maps — ويجمع أوامر ومسارات وسلاسل إشارة منظّفة.
+        </Text>
+        <Pressable style={[s.btn, busy && s.btnOff]} disabled={busy} onPress={deepAll}>
+          {busy ? <ActivityIndicator color={C.onAccent} /> : <Text style={s.btnTxt}>ابدأ الحصاد العميق</Text>}
+        </Pressable>
+        {deepH && (
+          <View style={{ marginTop: 12, gap: 8 }}>
+            <View style={s.statRow}>
+              <View style={s.statBox}>
+                <Text style={s.statNum}>{deepH.scripts.length}</Text>
+                <Text style={s.statLbl}>ملفات</Text>
+              </View>
+              <View style={s.statBox}>
+                <Text style={s.statNum}>{deepH.chunkUrls.length}</Text>
+                <Text style={s.statLbl}>chunks</Text>
+              </View>
+              <View style={s.statBox}>
+                <Text style={s.statNum}>{deepH.sourceMaps.length}</Text>
+                <Text style={s.statLbl}>source maps</Text>
+              </View>
+            </View>
+            <View style={s.statRow}>
+              <View style={s.statBox}>
+                <Text style={s.statNum}>{deepH.cmds.length}</Text>
+                <Text style={s.statLbl}>أوامر</Text>
+              </View>
+              <View style={s.statBox}>
+                <Text style={s.statNum}>{deepH.goforms.length}</Text>
+                <Text style={s.statLbl}>goformId</Text>
+              </View>
+              <View style={s.statBox}>
+                <Text style={s.statNum}>{deepH.strings.signal.length}</Text>
+                <Text style={s.statLbl}>حقول إشارة</Text>
+              </View>
+            </View>
+            <View style={s.apiRow}>
+              <Text style={s.apiLbl}>apiStyle المقترح</Text>
+              <Text style={s.apiVal}>{deepApi || 'غير معروف'}</Text>
+            </View>
+            {deepH.strings.signal.length > 0 && (
+              <View>
+                <Text style={s.sectionTitle}>أبرز حقول الإشارة</Text>
+                <Text style={s.sectionBody}>
+                  {deepH.strings.signal.slice(0, 60).join('، ')}
+                </Text>
+              </View>
+            )}
+            {deepH.chunkUrls.length > 0 && (
+              <View>
+                <Text style={s.sectionTitle}>chunks مكتشفة</Text>
+                <Text style={s.sectionBody}>
+                  {deepH.chunkUrls.slice(0, 12).join('\n')}
+                </Text>
+              </View>
+            )}
+            {deepH.sourceMaps.length > 0 && (
+              <View>
+                <Text style={s.sectionTitle}>source maps متاحة</Text>
+                <Text style={s.sectionBody}>
+                  {deepH.sourceMaps.slice(0, 8).join('\n')}
+                </Text>
+              </View>
+            )}
+            <Pressable style={s.btn} onPress={shareDeep}><Text style={s.btnTxt}>أرسل التقرير الكامل</Text></Pressable>
+            <Text style={s.note}>
+              يُحفظ في الذاكرة المحلية تلقائياً — البصمة ونمط الـ API فقط، بدون أي بيانات حساسة.
+            </Text>
           </View>
         )}
       </GlassCard>
@@ -232,4 +350,13 @@ const s = StyleSheet.create({
   rowTitle: { color: C.text, fontWeight: '700', fontSize: 13, textAlign: 'right' },
   rowSub: { color: C.muted, fontSize: 11, textAlign: 'right' },
   note: { color: C.muted, fontSize: 11, textAlign: 'center', marginTop: 8 },
+  statRow: { flexDirection: 'row-reverse', gap: 8 },
+  statBox: { flex: 1, backgroundColor: C.rowBg, borderRadius: 12, borderWidth: 1, borderColor: C.cardBorder, paddingVertical: 8, alignItems: 'center' },
+  statNum: { color: C.text, fontWeight: '800', fontSize: 18 },
+  statLbl: { color: C.muted, fontSize: 11, marginTop: 2 },
+  apiRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.rowBg, borderRadius: 12, borderWidth: 1, borderColor: C.cardBorder, paddingHorizontal: 12, paddingVertical: 10 },
+  apiLbl: { color: C.sub, fontSize: 12.5 },
+  apiVal: { color: C.violet, fontWeight: '800', fontSize: 14 },
+  sectionTitle: { color: C.text, fontWeight: '800', fontSize: 12.5, textAlign: 'right', marginTop: 6, marginBottom: 4 },
+  sectionBody: { color: C.sub, fontSize: 11.5, textAlign: 'right', lineHeight: 18 },
 });
