@@ -1,5 +1,7 @@
 // وضع الاستكشاف: يبصم أي راوتر ويطلع تقرير منظّف من أي بيانات حساسة.
 
+import { saveDiscovery, fingerprintFrom, guessApiStyle } from '../store/discovery';
+
 export interface ProbeStep {
   label: string; path: string; status: number | 'ERR'; ms: number;
   type: string; title: string; size: number; sample: string;
@@ -522,6 +524,24 @@ export async function deepCommandHarvest(
     }
   }
   onStep?.(total + 1, total + 1, 'تم');
+
+  // حفظ بصمة الاستكشاف في الذاكرة — أسماء فقط، لا أسرار
+  try {
+    const discovery = {
+      paths: [...pathSet],
+      commands: [...cmds],
+      goforms: [...goforms],
+    };
+    const fingerprint = fingerprintFrom(discovery);
+    const apiStyle = guessApiStyle(discovery);
+    await saveDiscovery({
+      host: base,
+      fingerprint,
+      apiStyle,
+      signalFields: [...signalSet],
+      commands: [...cmds, ...goforms],
+    });
+  } catch { /* فشل التخزين لا يكسر الحصاد */ }
 
   const junk = /^(true|false|null|undefined|function|return|isTest|multi_data)$/i;
   const safe = (s: string) => sanitize(s).slice(0, 200);
