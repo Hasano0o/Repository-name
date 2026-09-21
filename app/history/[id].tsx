@@ -10,6 +10,7 @@ import { fmtRate, fmtTime } from '../../src/utils/format';
 import { C } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { TimeChart, Series } from '../../src/ui/TimeChart';
+import { SignalRadar } from '../../src/ui/SignalRadar';
 
 type Range = 1 | 6 | 24;
 
@@ -99,6 +100,12 @@ export default function HistoryScreen() {
               <Stat label="متوسط RSRP" value={sum.rsrpAvg} unit="dBm" color={LEVEL_COLOR[rsrpLevel(sum.rsrpAvg)]} />
               <Stat label="متوسط SINR" value={sum.sinrAvg} unit="dB" color={LEVEL_COLOR[sinrLevel(sum.sinrAvg)]} />
             </View>
+          </GlassCard>
+        )}
+
+        {!loading && list.length >= 3 && (
+          <GlassCard title="نبضة الإشارة" subtitle="LAST 20 READINGS" icon="🎯" tint={C.blueSoft} collapsible={false}>
+            <SignalRadar history={list.slice(-20).map(x => ({ rsrp: x.rsrp, sinr: x.sinr }))} />
           </GlassCard>
         )}
 
