@@ -6,12 +6,13 @@ import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils';
 import {
   RouterDriver, Capability, Signal, ConnectedDevice, Usage, NetworkInfo, Traffic,
   BandConfig, SmsMessage, DeviceDetails, CellTower, CellLockTarget, CellLockState, DataPlan, ActiveLock,
-  ApnProfile, DnsConfig, Carrier,
+  ApnProfile, DnsConfig, Carrier, SignalSnapshot,
 } from '../types';
 import { http } from '../http';
 import { getApnProfiles, setApn, selectApn, getDns, setDns } from './apn-dns';
 import { carriersFrom } from './carriers';
 import { parseTxPower, parseDlMcs, parseUlMcs } from '../../utils/linkHealth';
+import { buildSnapshot } from '../../utils/snapshot';
 
 const tag = (xml: string, t: string) =>
   xml.match(new RegExp(`<${t}>([\\s\\S]*?)</${t}>`))?.[1];
@@ -26,8 +27,8 @@ const num = (v?: string) => {
   const n = parseFloat(v ?? '');
   return Number.isFinite(n) ? n : undefined;
 };
-
 const ALL_LTE = '7FFFFFFFFFFFFFFF';
+
 function parseDataLimit(v?: string): number {
   if (!v) return 0;
   const m = v.trim().match(/^([\d.]+)\s*([KMGT]?B)?$/i);
@@ -38,13 +39,11 @@ function parseDataLimit(v?: string): number {
   const mult: Record<string, number> = { B: 1, KB: 1e3, MB: 1e6, GB: 1e9, TB: 1e12 };
   return Math.round(n * (mult[unit] ?? 1e6));
 }
-
 function formatDataLimit(bytes: number): string {
   if (bytes <= 0) return '0MB';
   if (bytes >= 1e9) return (bytes / 1e9).toFixed(bytes % 1e9 === 0 ? 0 : 2) + 'GB';
   return Math.round(bytes / 1e6) + 'MB';
 }
-
 function arfcnOf(v?: string): string {
   if (!v) return '';
   const dl = v.match(/DL[:\s]*(\d+)/i);
@@ -52,13 +51,11 @@ function arfcnOf(v?: string): string {
   const n = v.match(/\d+/);
   return n ? n[0] : '';
 }
-
 const DEFAULT_NR_BANDS = [1, 3, 5, 20, 28, 40, 41, 77, 78, 79];
 
 function big(hex: string): bigint {
   try { return BigInt('0x' + hex.trim().replace(/^0x/i, '')); } catch { return 0n; }
 }
-
 function bandsFromMask(mask: bigint): number[] {
   const out: number[] = [];
   let m = mask;
@@ -70,7 +67,6 @@ function bandsFromMask(mask: bigint): number[] {
   }
   return out;
 }
-
 function maskFromBands(bands: number[]): string {
   let m = 0n;
   for (const b of bands) if (b > 0) m |= 1n << BigInt(b - 1);
@@ -109,7 +105,6 @@ export class HuaweiError extends Error {
     super(ERRORS[code] ?? `خطأ من الراوتر (${code})`);
   }
 }
-
 const isTokenError = (e: unknown) =>
   e instanceof HuaweiError && (e.code === '125002' || e.code === '125003');
 
@@ -117,7 +112,6 @@ export class HuaweiDriver implements RouterDriver {
   id = 'huawei-lte';
   name = 'Huawei LTE/5G';
   capabilities: Capability[] = ['signal', 'devices', 'reboot', 'bandLock', 'sms', 'usage', 'block', 'traffic', 'cells'];
-
   private host = '';
   private queue: string[] = [];
   private allLte = ALL_LTE;
@@ -127,11 +121,9 @@ export class HuaweiDriver implements RouterDriver {
   private log(...a: unknown[]) {
     if (__DEV__) console.log('[huawei]', ...a);
   }
-
   private url(p: string) {
     return `http://${this.host}/api/${p}`;
   }
-
   private headers(extra: Record<string, string> = {}) {
     return {
       'X-Requested-With': 'XMLHttpRequest',
@@ -139,7 +131,6 @@ export class HuaweiDriver implements RouterDriver {
       ...extra,
     };
   }
-
   private captureTokens(r: Response) {
     const one = r.headers.get('__requestverificationtokenone');
     const two = r.headers.get('__requestverificationtokentwo');
@@ -147,7 +138,6 @@ export class HuaweiDriver implements RouterDriver {
     if (one) this.queue = two ? [one, two] : [one];
     else if (single) this.queue = single.split('#').filter(Boolean);
   }
-
   private async freshToken(): Promise<string> {
     try {
       const r = await http(this.url('webserver/token'), { headers: this.headers() });
@@ -157,7 +147,6 @@ export class HuaweiDriver implements RouterDriver {
     const r = await http(this.url('webserver/SesTokInfo'), { headers: this.headers() });
     return tag(await r.text(), 'TokInfo') ?? '';
   }
-
   private async get(p: string) {
     const r = await http(this.url(p), { headers: this.headers() });
     const xml = await r.text();
@@ -168,7 +157,6 @@ export class HuaweiDriver implements RouterDriver {
     }
     return xml;
   }
-
   private async post(p: string, body: string, token?: string, retry = true): Promise<string> {
     const tok = token ?? (this.queue.shift() || await this.freshToken());
     const r = await http(this.url(p), {
@@ -192,22 +180,18 @@ export class HuaweiDriver implements RouterDriver {
     }
     return xml;
   }
-
   async detect(host: string) {
     const r = await http(`http://${host}/api/webserver/SesTokInfo`, {}, 3000);
     return (await r.text()).includes('<TokInfo>');
   }
-
   async login(host: string, username: string, password: string) {
     this.host = host;
     this.queue = [];
     try { await http(`http://${host}/html/home.html`, { headers: this.headers() }); } catch {}
-
     const state = await this.get('user/state-login');
     const type = tag(state, 'password_type');
     this.log('state', tag(state, 'State'), 'password_type', type);
     if (tag(state, 'State') === '0') return;
-
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         if (type === '4') await this.loginSha256(username, password);
@@ -223,12 +207,10 @@ export class HuaweiDriver implements RouterDriver {
     await this.loginScram(username, password);
     this.log('login ok (SCRAM)');
   }
-
   private async loginBase64(username: string, password: string) {
     await this.post('user/login',
       `<Username>${esc(username)}</Username><Password>${btoa(password)}</Password><password_type>0</password_type>`);
   }
-
   private async loginSha256(username: string, password: string) {
     const token = await this.freshToken();
     const hashed = btoa(sha256Hex(username + btoa(sha256Hex(password)) + token));
@@ -236,7 +218,6 @@ export class HuaweiDriver implements RouterDriver {
       `<Username>${esc(username)}</Username><Password>${hashed}</Password><password_type>4</password_type>`,
       token);
   }
-
   private async loginScram(username: string, password: string) {
     const firstNonce = bytesToHex(Crypto.getRandomBytes(32));
     const ch = await this.post('user/challenge_login',
@@ -254,12 +235,10 @@ export class HuaweiDriver implements RouterDriver {
     await this.post('user/authentication_login',
       `<clientproof>${bytesToHex(proof)}</clientproof><finalnonce>${serverNonce}</finalnonce>`);
   }
-
   async logout() {
     try { await this.post('user/logout', '<Logout>1</Logout>'); } catch {}
     this.queue = [];
   }
-
   async getSignal(): Promise<Signal> {
     const xml = await this.get('device/signal');
     let network: string | undefined;
@@ -304,7 +283,6 @@ export class HuaweiDriver implements RouterDriver {
       enodebId: (tag(xml, 'enodeb_id') ?? '').replace(/^0+(?=\d)/, '') || undefined,
     };
   }
-
   async getCarriers(): Promise<Carrier[]> {
     const xml = await this.get('device/signal');
     const sig = await this.getSignal();
@@ -313,12 +291,16 @@ export class HuaweiDriver implements RouterDriver {
     try { sec = await this.get('device/seccellinfo'); } catch {}
     return carriersFrom(xml, sig, sec);
   }
-
+  async getSnapshot(): Promise<SignalSnapshot> {
+    const signal = await this.getSignal().catch(() => null);
+    const carriers = await this.getCarriers().catch(() => [] as Carrier[]);
+    const cells = await this.getCells().catch(() => [] as CellTower[]);
+    return buildSnapshot(signal, carriers, cells, { driverId: this.id, driverName: this.name });
+  }
   async isConnected() {
     const st = await this.get('monitoring/status');
     return tag(st, 'ConnectionStatus') === '901';
   }
-
   async getNetworkInfo(): Promise<NetworkInfo> {
     let operator: string | undefined;
     try {
@@ -331,7 +313,6 @@ export class HuaweiDriver implements RouterDriver {
     try { mode = tag(await this.get('net/net-mode'), 'NetworkMode'); } catch {}
     return { operator, connected, mode };
   }
-
   async getTraffic(): Promise<Traffic> {
     const xml = await this.get('monitoring/traffic-statistics');
     return {
@@ -340,7 +321,6 @@ export class HuaweiDriver implements RouterDriver {
       connectedSecs: num(tag(xml, 'CurrentConnectTime')) ?? 0,
     };
   }
-
   async getDevices(): Promise<ConnectedDevice[]> {
     try {
       const xml = await this.get('wlan/host-list');
@@ -360,7 +340,6 @@ export class HuaweiDriver implements RouterDriver {
         })).filter(d => d.mac);
     }
   }
-
   private async readMacFilter() {
     const xml = await this.get('wlan/multi-macfilter-settings');
     const ssids = tagsAll(xml, 'Ssid');
@@ -377,13 +356,11 @@ export class HuaweiDriver implements RouterDriver {
       entries,
     };
   }
-
   async getBlockedDevices(): Promise<ConnectedDevice[]> {
     const f = await this.readMacFilter();
     if (f.status !== '2') return [];
     return f.entries.map(e => ({ mac: e.mac, name: e.name, blocked: true }));
   }
-
   async blockDevice(mac: string, block: boolean, name = '') {
     const f = await this.readMacFilter();
     if (f.status === '1') {
@@ -404,7 +381,6 @@ export class HuaweiDriver implements RouterDriver {
       .join('');
     await this.post('wlan/multi-macfilter-settings', `<Ssids>${body}</Ssids>`);
   }
-
   async getUsage(): Promise<Usage> {
     const xml = await this.get('monitoring/month_statistics');
     return {
@@ -412,7 +388,6 @@ export class HuaweiDriver implements RouterDriver {
       uploadBytes: num(tag(xml, 'CurrentMonthUpload')) ?? 0,
     };
   }
-
   async getDataPlan(): Promise<DataPlan> {
     const xml = await this.get('monitoring/start_date');
     return {
@@ -421,7 +396,6 @@ export class HuaweiDriver implements RouterDriver {
       monthThreshold: num(tag(xml, 'MonthThreshold')) ?? 90,
     };
   }
-
   async setDataPlan(plan: DataPlan) {
     const cur = await this.get('monitoring/start_date');
     const inner = cur.match(/<response>([\s\S]*?)<\/response>/)?.[1] ?? '';
@@ -444,11 +418,9 @@ export class HuaweiDriver implements RouterDriver {
       throw new Error('الراوتر ما حفظ حجم الباقة');
     }
   }
-
   async reboot() {
     await this.post('device/control', '<Control>1</Control>');
   }
-
   async getBandConfig(): Promise<BandConfig> {
     const cur = await this.get('net/net-mode');
     let supported: number[] = [];
@@ -471,7 +443,6 @@ export class HuaweiDriver implements RouterDriver {
     }
     if (!supported.length) supported = [1, 3, 7, 8, 20, 28, 38, 40, 41];
     if (!modes.length) modes = ['00', '03', '02'];
-
     try {
       const fsw = await this.get('net/net-feature-switch');
       this.lockFreq = (num(tag(fsw, 'lock_freq_switch')) ?? 0) > 0;
@@ -479,7 +450,6 @@ export class HuaweiDriver implements RouterDriver {
     } catch {
       this.lockFreq = false;
     }
-
     let locked: number[] = [];
     let nrLocked: number[] = [];
     if (this.lockFreq) {
@@ -492,7 +462,6 @@ export class HuaweiDriver implements RouterDriver {
       locked = opt === '0' || active.length === 0 || active.length >= supported.length ? [] : active;
     }
     this.log('bands supported', supported.join(','), 'locked', locked.join(',') || 'auto', 'lockFreq', this.lockFreq);
-
     return {
       supported,
       locked,
@@ -502,13 +471,11 @@ export class HuaweiDriver implements RouterDriver {
       modes: modes.map(v => ({ value: v, label: modeLabel(v) })),
     };
   }
-
   private async readNetModeFields(): Promise<[string, string][]> {
     const cur = await this.get('net/net-mode');
     const inner = cur.match(/<response>([\s\S]*?)<\/response>/)?.[1] ?? '';
     return [...inner.matchAll(/<(\w+)>([\s\S]*?)<\/\1>/g)].map(m => [m[1], m[2]] as [string, string]);
   }
-
   private async writeNetMode(patch: { mode?: string; bands?: number[] }) {
     const fields = await this.readNetModeFields();
     const has = (k: string) => fields.some(f => f[0] === k);
@@ -516,7 +483,6 @@ export class HuaweiDriver implements RouterDriver {
       const x = fields.find(f => f[0] === k);
       if (x) x[1] = v; else fields.push([k, v]);
     };
-
     if (patch.mode !== undefined) {
       setF('NetworkMode', patch.mode);
     }
@@ -528,16 +494,13 @@ export class HuaweiDriver implements RouterDriver {
         setF('NetworkMode', '03');
       }
     }
-
     const body = fields.map(([k, v]) => `<${k}>${v}</${k}>`).join('');
     this.log('net-mode sending', body);
     await this.post('net/net-mode', body);
-
     await new Promise(r => setTimeout(r, 1500));
     const after = await this.readNetModeFields();
     const getA = (k: string) => after.find(f => f[0] === k)?.[1];
     this.log('net-mode readback', after.map(([k, v]) => `${k}=${v}`).join(' '));
-
     if (patch.mode !== undefined && getA('NetworkMode') !== patch.mode) {
       throw new Error('الراوتر قبل الطلب لكن ما غيّر نوع الشبكة');
     }
@@ -547,7 +510,6 @@ export class HuaweiDriver implements RouterDriver {
         : 'الراوتر قبل الطلب لكن ما غيّر التردد');
     }
   }
-
   private async readLockFreq(): Promise<{ lte: number[]; nr: number[] }> {
     const parse = (section: string) => {
       if (!section || (tag(section, 'lock_mode') ?? '0') === '0') return [];
@@ -564,11 +526,9 @@ export class HuaweiDriver implements RouterDriver {
       return { lte: [], nr: [] };
     }
   }
-
   private async readLockedBands(): Promise<number[]> {
     return (await this.readLockFreq()).lte;
   }
-
   private async lockFreqBands(bands: number[], nrBands: number[]) {
     const section = (name: string, list: number[]) => {
       const lock = list.length > 0;
@@ -589,7 +549,6 @@ export class HuaweiDriver implements RouterDriver {
     if (!bands.length && after.lte.length) throw new Error('ما قدرنا نرجع الوضع التلقائي');
     if (!nrBands.length && after.nr.length) throw new Error('ما قدرنا نرجع وضع 5G للتلقائي');
   }
-
   async setBand(bands: number[], nrBands?: number[]) {
     if (this.lockFreq === null) {
       try {
@@ -605,12 +564,10 @@ export class HuaweiDriver implements RouterDriver {
     }
     await this.writeNetMode({ bands });
   }
-
   private sectionXml(name: string, mode: string, entries: string[], allBands: string) {
     return '<' + name + '><lock_mode>' + mode + '</lock_mode><freq_infos>' +
       entries.join('') + '</freq_infos><all_bands>' + allBands + '</all_bands></' + name + '>';
   }
-
   private async readCellLockRaw(): Promise<{ lte: string; nr: string }> {
     try {
       const xml = await this.get('net/lock-freq');
@@ -619,7 +576,6 @@ export class HuaweiDriver implements RouterDriver {
       return { lte: '', nr: '' };
     }
   }
-
   async getCellLock(): Promise<CellLockState | null> {
     const raw = await this.readCellLockRaw();
     for (const sec of [raw.lte, raw.nr]) {
@@ -631,14 +587,12 @@ export class HuaweiDriver implements RouterDriver {
     }
     return null;
   }
-
   async getActiveLock(): Promise<ActiveLock | null> {
     const lf = await this.readLockFreq();
     const cell = await this.getCellLock();
     if (!lf.lte.length && !lf.nr.length && !cell) return null;
     return { bands: lf.lte, nrBands: lf.nr, pci: cell?.pci };
   }
-
   async lockCell(target: CellLockTarget) {
     const pci = (target.pci ?? '').trim();
     if (!pci) throw new Error('ما عندنا رقم الخلية (PCI) لهذا البرج');
@@ -647,11 +601,9 @@ export class HuaweiDriver implements RouterDriver {
     const isNr = target.tech === 'NR';
     const name = isNr ? 'nr_info' : 'lte_info';
     const other = isNr ? 'lte_info' : 'nr_info';
-
     const entry = '<freq_info>' +
       (band ? '<band>' + band + '</band>' : '<band></band>') +
       '<freq>' + arfcn + '</freq><pci>' + pci + '</pci></freq_info>';
-
     const candidates = this.cellLockMode ? [this.cellLockMode] : ['2', '4', '1', '5'];
     let lastErr: unknown;
     for (const mode of candidates) {
@@ -676,20 +628,16 @@ export class HuaweiDriver implements RouterDriver {
     if (lastErr) throw lastErr;
     throw new Error('الراوتر ما قبل قفل الخلية على هذا البرج');
   }
-
   async unlockCell() {
     const body = this.sectionXml('lte_info', '0', [], '') + this.sectionXml('nr_info', '0', [], '');
     this.log('cell-lock clearing');
     await this.post('net/lock-freq', body);
     await new Promise(r => setTimeout(r, 2000));
   }
-
   async setNetworkMode(mode: string) {
     await this.writeNetMode({ mode });
   }
-
   // ───── APN و DNS (منفصلة في apn-dns.ts) ─────
-
   private io() {
     return {
       get: (p: string) => this.get(p),
@@ -697,7 +645,6 @@ export class HuaweiDriver implements RouterDriver {
       log: (...a: unknown[]) => this.log(...a),
     };
   }
-
   getApnProfiles() { return getApnProfiles(this.io()); }
   setApn(p: { index: string; name: string; apn: string; username?: string; password?: string; authMode?: string }) {
     return setApn(this.io(), p);
@@ -705,7 +652,6 @@ export class HuaweiDriver implements RouterDriver {
   selectApn(index: string) { return selectApn(this.io(), index); }
   getDns() { return getDns(this.io()); }
   setDns(cfg: DnsConfig) { return setDns(this.io(), cfg); }
-
   async getDeviceDetails(): Promise<DeviceDetails> {
     const out: DeviceDetails = {};
     try {
@@ -736,7 +682,6 @@ export class HuaweiDriver implements RouterDriver {
     }
     return out;
   }
-
   private parseCellList(raw: string, tech: 'LTE' | 'NR', kind: 'neighbor' | 'secondary'): CellTower[] {
     const out: CellTower[] = [];
     for (const rec of raw.split(';')) {
@@ -760,7 +705,6 @@ export class HuaweiDriver implements RouterDriver {
     }
     return out;
   }
-
   private scanCellXml(xml: string, kind: 'neighbor' | 'secondary'): CellTower[] {
     const out: CellTower[] = [];
     for (const m of xml.matchAll(/<(\w+)>([^<]*)<\/\1>/g)) {
@@ -772,7 +716,6 @@ export class HuaweiDriver implements RouterDriver {
     }
     return out;
   }
-
   async getCells(): Promise<CellTower[]> {
     const out: CellTower[] = [];
     try {
@@ -806,7 +749,6 @@ export class HuaweiDriver implements RouterDriver {
     } catch (e) {
       this.log('serving cell failed');
     }
-
     const sources: [string, 'secondary' | 'neighbor'][] = [
       ['device/seccellinfo', 'secondary'],
       ['device/nbrcellinfo', 'neighbor'],
@@ -822,7 +764,6 @@ export class HuaweiDriver implements RouterDriver {
     }
     return out;
   }
-
   async listSms(box: 'inbox' | 'sent' = 'inbox'): Promise<SmsMessage[]> {
     const xml = await this.post('sms/sms-list',
       `<PageIndex>1</PageIndex><ReadCount>50</ReadCount><BoxType>${box === 'inbox' ? 1 : 2}</BoxType>` +
@@ -835,15 +776,12 @@ export class HuaweiDriver implements RouterDriver {
       unread: tag(m, 'Smstat') === '0',
     })).filter(m => m.index);
   }
-
   async markSmsRead(index: string) {
     await this.post('sms/set-read', `<Index>${esc(index)}</Index>`);
   }
-
   async deleteSms(index: string) {
     await this.post('sms/delete-sms', `<Index>${esc(index)}</Index>`);
   }
-
   async sendSms(phone: string, text: string) {
     const d = new Date();
     const p = (n: number) => String(n).padStart(2, '0');
