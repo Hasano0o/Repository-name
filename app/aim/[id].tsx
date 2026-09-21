@@ -15,14 +15,14 @@ const Haptics = {
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { Signal, CellTower, CellLockTarget } from '../../src/drivers/types';
-import { LEVEL_COLOR, LEVEL_LABEL, overallLevel, signalScore, parseBands, parseNrBands } from '../../src/utils/signal';
+import { LEVEL_LABEL, overallLevel, signalScore, parseBands, parseNrBands } from '../../src/utils/signal';
 import { C } from '../../src/ui/theme';
 import { linkHealth } from '../../src/utils/linkHealth';
 import { LinkHealthChips } from '../../src/ui/LinkHealth';
 import { trafficBurst } from '../../src/utils/nrprobe';
 import { AimBeeper } from '../../src/utils/aimSound';
 import { GlassCard } from '../../src/ui/GlassCard';
-import { SignalRing } from '../../src/ui/SignalRing';
+import { AimDish } from '../../src/ui/AimDish';
 import { TimeChart, Series } from '../../src/ui/TimeChart';
 
 type Tech = 'LTE' | 'NR';
@@ -460,12 +460,12 @@ export default function AimScreen() {
             ) : (
               <>
                 <View style={{ alignItems: 'center' }}>
-                  <SignalRing
+                  <AimDish
                     score={current?.score ?? 0}
-                    color={LEVEL_COLOR[level]}
-                    label={LEVEL_LABEL[level]}
-                    sub={shown !== undefined ? `${shown} dBm` : '—'}
-                    note={current?.sinr !== undefined ? `SINR ${current.sinr} dB` : undefined}
+                    label={LEVEL_LABEL[level] ?? '—'}
+                    sub={shown !== undefined
+                      ? `${shown} dBm${current?.sinr !== undefined ? `  ·  SINR ${current.sinr}` : ''}`
+                      : 'نقيس...'}
                   />
                 </View>
                 <Text style={s.cellNow}>على {cellName(current?.cell)}</Text>
