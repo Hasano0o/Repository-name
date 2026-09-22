@@ -723,15 +723,15 @@ export default function BandsScreen() {
                       const live = active.includes(b);
                       const known = live || seen.includes(b);
                       return (
-                        <Pressable key={b} style={[s.band2, on && s.band2On, locked && { opacity: 0.6 }]} onPress={() => toggle(b)}>
-                          {live && <View style={s.bandLiveDot} />}
-                          <View style={[s.check, on && s.checkOn]}>
+                        <Pressable key={b} style={[s.bandCard, on && s.bandCardOn, locked && { opacity: 0.6 }]} onPress={() => toggle(b)}>
+                          <View style={[s.miniCheck, on && s.miniCheckOn]}>
                             {on && <Text style={s.checkMark}>✓</Text>}
                           </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={[s.bandName, on && { color: C.onAccent }]}>B{b}</Text>
-                            <Text style={[s.bandFreq, on && { color: C.onAccentSoft }]}>{bandFreq(b) || ' '}</Text>
+                          <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                            <Text style={[s.bandNameSm, on && { color: C.onAccent }]}>B{b}</Text>
+                            <Text style={[s.bandFreqSm, on && { color: C.onAccentSoft }]}>{bandFreq(b)?.replace(' MHz', '') || '—'}</Text>
                           </View>
+                          {live && <View style={s.bandLiveDotSm} />}
                         </Pressable>
                       );
                     })}
@@ -888,12 +888,52 @@ const s = StyleSheet.create({
   chip: { borderWidth: 1, borderColor: C.line, backgroundColor: C.rowBg, borderRadius: R.md, paddingHorizontal: S.md, paddingVertical: 8 },
   chipOn: { backgroundColor: C.blue, borderColor: C.blue },
   chipText: { color: C.text, fontWeight: '700', fontSize: T.label + 0.5 },
-  grid: { flexDirection: 'column', gap: 8 },
+  grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
   band: {
     flexBasis: '22%', flexGrow: 1, alignItems: 'center', paddingVertical: 9, borderRadius: R.md,
     backgroundColor: C.rowBg, borderWidth: 1, borderColor: C.line,
   },
   bandOn: { backgroundColor: C.blue, borderColor: C.blue },
+  bandCard: {
+    flexBasis: '31%',
+    flexGrow: 1,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    borderRadius: R.md,
+    backgroundColor: C.rowBg,
+    borderWidth: 1.5,
+    borderColor: C.line,
+  },
+  bandCardOn: { backgroundColor: C.blue, borderColor: C.blue },
+  bandCardNrOn: { backgroundColor: C.violet, borderColor: C.violet },
+  miniCheck: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    borderWidth: 1.8,
+    borderColor: C.line,
+    backgroundColor: C.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  miniCheckOn: { borderColor: C.card },
+  miniCheckNrOn: { borderColor: C.card },
+  checkMark: { color: C.blue, fontWeight: '900', fontSize: 12, lineHeight: 13 },
+  checkMarkNr: { color: C.violet, fontWeight: '900', fontSize: 12, lineHeight: 13 },
+  bandNameSm: { color: C.text, fontWeight: '800', fontSize: 14, lineHeight: 15 },
+  bandFreqSm: { color: C.muted, fontSize: 10.5, marginTop: 1 },
+  bandLiveDotSm: {
+    position: 'absolute',
+    top: 5,
+    left: 5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: C.green,
+  },
   band2: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
