@@ -400,6 +400,15 @@ export interface Harvest { scripts: string[]; cmds: string[]; goforms: string[] 
 const EXTRA_SCRIPTS = [
   '/js/app.js', '/js/main.js', '/js/config/config.js', '/js/index.js',
   '/js/lib/app.js', '/js/common.js', '/js/status.js', '/js/lang/lang_ar.js',
+  // مسارات Huawei محدّثة (H138 وما بعده)
+  '/html/index.html', '/html/home.html',
+  '/lib/emui-jquery.js', '/../lib/emui-jquery.js',
+  '/core.js', '/base64x.js',
+  '/js/jquery.js', '/js/jquery.min.js',
+  '/api/device/information', '/api/device/signal',
+  '/api/monitoring/status', '/api/monitoring/traffic-statistics',
+  '/api/net/current-plmn', '/api/net/net-mode',
+  '/api/user/state-login', '/api/webserver/SesTokInfo',
 ];
 
 /** يسحب ملفات الواجهة ويستخرج منها أسماء الأوامر الحقيقية */

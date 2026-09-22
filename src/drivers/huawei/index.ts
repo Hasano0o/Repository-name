@@ -82,7 +82,20 @@ function modeLabel(v: string): string {
 }
 
 const NET_TYPES: Record<string, string> = {
-  '19': '4G LTE', '101': '4G LTE', '1011': '4G+', '111': '5G NR', '112': '5G NR',
+  // 4G LTE
+  '19': '4G LTE', '101': '4G LTE',
+  // 4G+ (CA نشط)
+  '1011': '4G+',
+  // 4G+ مع 5G NSA (بعض فيرمويرات H138/H155)
+  '1111': '4G+', '1112': '4G+',
+  // 5G NSA
+  '111': '5G NSA',
+  // 5G SA
+  '112': '5G SA',
+  // 5G NSA + 4G CA
+  '1021': '5G NSA', '1022': '5G SA',
+  // قديم
+  '2': '2G', '3': '3G', '4': '3G+', '41': '3G+',
 };
 
 const ERRORS: Record<string, string> = {
@@ -111,6 +124,7 @@ const isTokenError = (e: unknown) =>
 
 export class HuaweiDriver implements RouterDriver {
   id = 'huawei-lte';
+  // بعض الموديلات (H138/H155/H165) 5G-capable — نكشفها ديناميكياً
   name = 'Huawei LTE/5G';
   capabilities: Capability[] = ['signal', 'devices', 'reboot', 'bandLock', 'sms', 'usage', 'block', 'traffic', 'cells'];
   private host = '';
@@ -252,9 +266,16 @@ export class HuaweiDriver implements RouterDriver {
       // 🔍 تشخيص مؤقت: نسجّل القيم الفعلية عشان نعرف أكواد الفيرموير
       this.log('hw-status: NTEx=', JSON.stringify(ntEx), 'NT=', JSON.stringify(nt), 'NrIcon=', tag(st, 'SignalIconNr'));
       network = NET_TYPES[ntEx] ?? NET_TYPES[nt];
-      // 111 = 5G NSA، 112 = 5G SA — يعني 5G نشط فعلاً
-      // 1011 = 4G+ (ليس 5G) — نتركه undefined
-      if (ntEx === '111' || ntEx === '112') nrActiveFromStatus = true;
+      // كشف 5G من CurrentNetworkTypeEx (أكواد متعددة عبر الفيرمويرات)
+      // 111 = 5G NSA | 112 = 5G SA | 1021/1022 = 5G جديد
+      const nrActiveCodes = ['111', '112', '1021', '1022'];
+      if (nrActiveCodes.includes(ntEx)) nrActiveFromStatus = true;
+      // بعض فيرمويرات H138 ترجع 1111/1112 لما 4G+ CA نشط مع إمكانية 5G
+      // — نتأكد من حقل NR منفصل
+      try {
+        const nrType = tag(st, 'CurrentNrNetworkType');
+        if (nrType && (nrType === '1' || nrType === '2')) nrActiveFromStatus = true;
+      } catch {}
       const icon = num(tag(st, 'SignalIconNr'));
       if (icon !== undefined && icon > 0) nrAvailable = icon;
     } catch {}
