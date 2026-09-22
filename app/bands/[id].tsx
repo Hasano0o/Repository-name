@@ -451,8 +451,16 @@ export default function BandsScreen() {
 
   // ---------- المشتقّات ----------
   const [showAll, setShowAll] = useState(false);
+  const [showAllNr, setShowAllNr] = useState(false);
   const active = bandNums(signal?.band);
   const knownBands = new Set<number>([...active, ...seen]);
+  const knownNrBands = new Set<number>([
+    ...(signal?.nrBand ? [parseInt((signal.nrBand.match(/(\d+)/) || ['0','0'])[1], 10)].filter(n => n > 0) : []),
+    ...(cfg?.nrLocked ?? []),
+  ]);
+  const displayedNr = showAllNr
+    ? (cfg?.nrSupported ?? [])
+    : (cfg?.nrSupported ?? []).filter(b => knownNrBands.has(b));
   const displayedBands = showAll
     ? (cfg?.supported ?? [])
     : (cfg?.supported ?? []).filter(b => knownBands.has(b));
@@ -757,12 +765,19 @@ export default function BandsScreen() {
                 {/* ترددات 5G */}
                 {cfg.nrSupported.length > 0 && (
                   <MetricCard>
-                    <Text style={s.blockTitle}>ترددات 5G</Text>
+                    <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={s.blockTitle}>ترددات 5G</Text>
+                      <Pressable onPress={() => setShowAllNr(v => !v)} hitSlop={8}>
+                        <Text style={{ color: C.violet, fontSize: 12, fontWeight: '800' }}>
+                          {showAllNr ? 'عرض الفعّالة فقط' : 'عرض الكل'}
+                        </Text>
+                      </Pressable>
+                    </View>
                     <Text style={s.hint}>
                       تثبيت مستقل عن 4G. التثبيت على تردد ما فيه تغطية يوقف 5G تماماً — تأكد من الفحص أولاً.
                     </Text>
                     <View style={s.grid}>
-                      {cfg.nrSupported.map(b => {
+                      {displayedNr.map(b => {
                         const on = nrSelected.includes(b);
                         return (
                           <Pressable
@@ -896,7 +911,6 @@ const s = StyleSheet.create({
   bandOn: { backgroundColor: C.blue, borderColor: C.blue },
   bandCard: {
     flexBasis: '31%',
-    flexGrow: 1,
     flexDirection: 'row-reverse',
     alignItems: 'center',
     gap: 6,
@@ -921,7 +935,6 @@ const s = StyleSheet.create({
   },
   miniCheckOn: { borderColor: C.card },
   miniCheckNrOn: { borderColor: C.card },
-  checkMark: { color: C.blue, fontWeight: '900', fontSize: 12, lineHeight: 13 },
   checkMarkNr: { color: C.violet, fontWeight: '900', fontSize: 12, lineHeight: 13 },
   bandNameSm: { color: C.text, fontWeight: '800', fontSize: 14, lineHeight: 15 },
   bandFreqSm: { color: C.muted, fontSize: 10.5, marginTop: 1 },
