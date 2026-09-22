@@ -9,6 +9,7 @@ import {
   ApnProfile, DnsConfig, Carrier, SignalSnapshot,
 } from '../types';
 import { http } from '../http';
+import { trafficBurst } from '../../utils/nrprobe';
 import { getApnProfiles, setApn, selectApn, getDns, setDns } from './apn-dns';
 import { carriersFrom } from './carriers';
 import { parseTxPower, parseDlMcs, parseUlMcs } from '../../utils/linkHealth';
@@ -243,9 +244,14 @@ export class HuaweiDriver implements RouterDriver {
     const xml = await this.get('device/signal');
     let network: string | undefined;
     let nrAvailable: number | undefined;
+    let nrActiveFromStatus: boolean | undefined;
     try {
       const st = await this.get('monitoring/status');
-      network = NET_TYPES[tag(st, 'CurrentNetworkTypeEx') ?? ''] ?? NET_TYPES[tag(st, 'CurrentNetworkType') ?? ''];
+      const ntEx = tag(st, 'CurrentNetworkTypeEx') ?? '';
+      const nt = tag(st, 'CurrentNetworkType') ?? '';
+      network = NET_TYPES[ntEx] ?? NET_TYPES[nt];
+      // 111 = 5G NSA، 112 = 5G SA — يعني 5G نشط فعلاً
+      if (ntEx === '111' || ntEx === '112') nrActiveFromStatus = true;
       const icon = num(tag(st, 'SignalIconNr'));
       if (icon !== undefined && icon > 0) nrAvailable = icon;
     } catch {}
@@ -271,6 +277,7 @@ export class HuaweiDriver implements RouterDriver {
       nrRsrq: num(tag(xml, 'nrrsrq')),
       nrSinr: num(tag(xml, 'nrsinr')),
       nrAvailable,
+      nrActiveFromStatus,
       cqi: num(tag(xml, 'cqi0')),
       dlMcs: parseDlMcs(tag(xml, 'dl_mcs')).mcs,
       dlStreams: parseDlMcs(tag(xml, 'dl_mcs')).streams,
@@ -292,7 +299,32 @@ export class HuaweiDriver implements RouterDriver {
     return carriersFrom(xml, sig, sec);
   }
   async getSnapshot(): Promise<SignalSnapshot> {
-    const signal = await this.getSignal().catch(() => null);
+    let signal = await this.getSignal().catch(() => null);
+
+    // ═══ لو الراوتر يقول 5G نشط لكن nrRsrp فاضي: نحمّل 3 ثواني ونقرأ مرة ثانية ═══
+    // هواوي يكشف 5G في device/signal فقط وقت النشاط الفعلي (NSA)
+    if (signal && signal.nrActiveFromStatus && signal.nrRsrp === undefined) {
+      try {
+        const burst = trafficBurst(3000, 8_000_000, () => false);
+        await new Promise(r => setTimeout(r, 1500));
+        const fresh = await this.getSignal().catch(() => null);
+        await burst.catch(() => 0);
+        if (fresh && fresh.nrRsrp !== undefined) {
+          // دمج: ناخذ قيم 5G من القراءة الجديدة، والباقي من الأصلية
+          signal = {
+            ...signal,
+            nrRsrp: fresh.nrRsrp,
+            nrRsrq: fresh.nrRsrq ?? signal.nrRsrq,
+            nrSinr: fresh.nrSinr ?? signal.nrSinr,
+            nrBand: fresh.nrBand ?? signal.nrBand,
+            nrPci: fresh.nrPci ?? signal.nrPci,
+            nrArfcn: fresh.nrArfcn ?? signal.nrArfcn,
+            nrDlBandwidth: fresh.nrDlBandwidth ?? signal.nrDlBandwidth,
+          };
+        }
+      } catch { /* ما نجحنا نجيب قيم 5G — نكمل بالبيانات الحالية */ }
+    }
+
     const carriers = await this.getCarriers().catch(() => [] as Carrier[]);
     const cells = await this.getCells().catch(() => [] as CellTower[]);
     return buildSnapshot(signal, carriers, cells, { driverId: this.id, driverName: this.name });

@@ -10,6 +10,8 @@ export interface Signal {
   nrRsrp?: number; nrRsrq?: number; nrSinr?: number;
   /** قوة تغطية 5G المتاحة (0–5) حتى لو الوصلة خاملة */
   nrAvailable?: number;
+  /** الراوتر يقول 5G نشط (NSA/SA) حسب CurrentNetworkTypeEx — حتى لو nrRsrp فاضي */
+  nrActiveFromStatus?: boolean;
   /** صحة الوصلة: CQI (0–15) وسرعة الترميز MCS وقوة الإرسال وعدد المسارات */
   cqi?: number; dlMcs?: number; ulMcs?: number; txPower?: number; dlStreams?: number;
   nrCqi?: number; nrDlMcs?: number; nrTxPower?: number; nrRank?: number;
