@@ -82,73 +82,89 @@ function estimateDistance(rsrp?: number): string {
   return `${(m / 1000).toFixed(1)} كم`;
 }
 
-// ═══ Gauge دائري ═══
-function ScoreGauge({ value, color }: { value: number; color: string }) {
-  const size = 160;
-  const stroke = 12;
-  const r = (size - stroke) / 2;
-  const cx = size / 2;
-  const cy = size / 2;
-  const C = 2 * Math.PI * r;
-  const v = Math.max(0, Math.min(1, value));
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={size} height={size} style={{ position: 'absolute' }}>
-        <Circle cx={cx} cy={cy} r={r} stroke="#E5EDF9" strokeWidth={stroke} fill="none" />
-        <Circle
-          cx={cx} cy={cy} r={r}
-          stroke={color} strokeWidth={stroke} fill="none"
-          strokeDasharray={`${C * v} ${C}`}
-          strokeLinecap="round"
-          transform={`rotate(-90 ${cx} ${cy})`}
-        />
-      </Svg>
-      <Icon name="antenna" size={18} color={color} />
-      <Text style={a.gaugeVal}>{Math.round(v * 100)}</Text>
-      <Text style={a.gaugePct}>%</Text>
-      <Text style={a.gaugeLbl}>قوة الإشارة</Text>
-    </View>
-  );
-}
 
-// ═══ بوصلة ═══
-function Compass({ value, color, size = 150 }: { value: number; color: string; size?: number }) {
-  const cx = size / 2;
-  const cy = size / 2;
-  const r = size / 2 - 6;
-  const angle = -135 + value * 270;
+
+// ═══ مؤشر الإشارة (Hero) ═══
+function SignalHero({
+  value, baseline, history, color,
+}: {
+  value?: number;
+  baseline: number | null;
+  history: number[];
+  color: string;
+}) {
+  const delta = value !== undefined && baseline !== null ? value - baseline : undefined;
+  const prev = history.length >= 2 ? history[history.length - 2] : undefined;
+  const trend: 'up' | 'down' | 'flat' =
+    value !== undefined && prev !== undefined
+      ? value > prev + 0.5 ? 'up' : value < prev - 0.5 ? 'down' : 'flat'
+      : 'flat';
+  const arrow = trend === 'up' ? '↑' : trend === 'down' ? '↓' : '•';
+  const trendColor = trend === 'up' ? SUCCESS : trend === 'down' ? DANGER : MUTED;
+
+  // شريط القوة (12 شرطة) — من -120 dBm إلى -70 dBm
+  const strength = value !== undefined
+    ? Math.max(0, Math.min(1, (value + 120) / 50))
+    : 0;
+  const segs = 12;
+  const lit = Math.round(strength * segs);
+
   return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={size} height={size} style={{ position: 'absolute' }}>
-        <Circle cx={cx} cy={cy} r={r + 3} fill="#F4F8FF" stroke={BORDER} strokeWidth={1} />
-        <Circle cx={cx} cy={cy} r={r} fill="#FFFFFF" stroke="#E8EFF8" strokeWidth={2} />
-        {Array.from({ length: 12 }, (_, i) => {
-          const ang = (i / 12) * 2 * Math.PI - Math.PI / 2;
-          const isMajor = i % 3 === 0;
-          const r1 = r - (isMajor ? 9 : 5);
-          const r2 = r - 2;
-          return (
-            <Line key={i}
-              x1={cx + Math.cos(ang) * r1} y1={cy + Math.sin(ang) * r1}
-              x2={cx + Math.cos(ang) * r2} y2={cy + Math.sin(ang) * r2}
-              stroke={isMajor ? '#94A3B8' : '#CBD5E1'}
-              strokeWidth={isMajor ? 2 : 1}
-              strokeLinecap="round"
-            />
-          );
-        })}
-        <G rotation={angle} origin={`${cx}, ${cy}`}>
-          <Path
-            d={`M ${cx} ${cy - r + 14} L ${cx - 7} ${cy + 6} L ${cx} ${cy + 1} L ${cx + 7} ${cy + 6} Z`}
-            fill={color}
-          />
-        </G>
-        <Circle cx={cx} cy={cy} r={4} fill="#14264A" />
-      </Svg>
-      <View style={{ position: 'absolute', bottom: 2, alignItems: 'center' }}>
-        <Text style={a.compassDeg}>{Math.round(value * 360)}°</Text>
-        <Text style={a.compassSub}>من الشمال</Text>
+    <View style={h.wrap}>
+      {/* سهم كبير للاتجاه */}
+      <Text style={[h.arrow, { color: trendColor }]}>{arrow}</Text>
+
+      {/* RSRP ضخم */}
+      <View style={h.rsrpRow}>
+        <Text style={[h.rsrp, { color }]}>{value ?? '—'}</Text>
+        <Text style={h.unit}>dBm</Text>
       </View>
+      <Text style={h.label}>RSRP · قوة الإشارة</Text>
+
+      {/* شريط القوة الأفقي */}
+      <View style={h.barRow}>
+        {Array.from({ length: segs }, (_, i) => (
+          <View
+            key={i}
+            style={[
+              h.barSeg,
+              { backgroundColor: i < lit ? color : '#E5EDF9' },
+            ]}
+          />
+        ))}
+      </View>
+
+      {/* Delta chip */}
+      {delta !== undefined && (
+        <View
+          style={[
+            h.delta,
+            {
+              backgroundColor:
+                delta > 0.5 ? SUCCESS + '18'
+                : delta < -0.5 ? DANGER + '18'
+                : '#EEF2F9',
+            },
+          ]}
+        >
+          <Text
+            style={[
+              h.deltaTxt,
+              {
+                color:
+                  delta > 0.5 ? SUCCESS
+                  : delta < -0.5 ? DANGER
+                  : MUTED,
+              },
+            ]}
+          >
+            {delta > 0.5 ? `↑ +${Math.round(delta)} dB`
+              : delta < -0.5 ? `↓ ${Math.round(delta)} dB`
+              : '• بدون تغير'}
+            {'  '}من البداية
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -538,12 +554,12 @@ export default function AimScreen() {
           <>
             {/* ═══ Hero Card ═══ */}
             <View style={a.heroCard}>
-              <View style={a.heroVisual}>
-                {/* البوصلة — يمين */}
-                <Compass value={pct} color={lvlColor} size={150} />
-                {/* Gauge — يسار */}
-                <ScoreGauge value={pct} color={lvlColor} />
-              </View>
+              <SignalHero
+                value={shown}
+                baseline={baseline}
+                history={readings.map(r => r.smooth ?? r.rsrp ?? -110)}
+                color={lvlColor}
+              />
 
               {/* 4 Metrics */}
               <View style={a.metricsRow}>
@@ -775,6 +791,25 @@ export default function AimScreen() {
   );
 }
 
+const h = StyleSheet.create({
+  wrap: { alignItems: 'center', gap: 4, width: '100%' },
+  arrow: { fontSize: 44, fontWeight: '900', lineHeight: 48 },
+  rsrpRow: { flexDirection: 'row-reverse', alignItems: 'baseline', gap: 4, marginTop: -4 },
+  rsrp: { fontSize: 56, fontWeight: '900', letterSpacing: -2, lineHeight: 60 },
+  unit: { color: MUTED, fontSize: 16, fontWeight: '800' },
+  label: { color: MUTED, fontSize: 11.5, fontWeight: '700', textAlign: 'center', marginTop: 2 },
+  barRow: {
+    flexDirection: 'row-reverse', gap: 4, marginTop: 12,
+    paddingHorizontal: 8, alignSelf: 'stretch', justifyContent: 'center',
+  },
+  barSeg: { flex: 1, height: 8, borderRadius: 4, maxWidth: 22 },
+  delta: {
+    marginTop: 12, paddingVertical: 6, paddingHorizontal: 14,
+    borderRadius: 999,
+  },
+  deltaTxt: { fontSize: 12.5, fontWeight: '800', textAlign: 'center' },
+});
+
 const a = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   content: { paddingHorizontal: 16, paddingTop: 14, gap: 12 },
@@ -794,15 +829,11 @@ const a = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 }, elevation: 2,
   },
   heroVisual: {
-    height: 220, borderRadius: 20, backgroundColor: '#EEF5FF',
-    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-around',
-    paddingHorizontal: 4, overflow: 'hidden',
+    backgroundColor: '#F7FAFF', borderRadius: 20,
+    paddingVertical: 18, paddingHorizontal: 16,
+    alignItems: 'center', gap: 4,
+    borderWidth: 1, borderColor: '#E5EDF9',
   },
-  gaugeVal: { color: TEXT, fontSize: 42, fontWeight: '900', letterSpacing: -1, lineHeight: 46 },
-  gaugePct: { color: MUTED, fontSize: 12, fontWeight: '800', marginTop: -4 },
-  gaugeLbl: { color: MUTED, fontSize: 10.5, marginTop: 1, fontWeight: '700' },
-  compassDeg: { color: TEXT, fontSize: 13, fontWeight: '900' },
-  compassSub: { color: MUTED, fontSize: 9, marginTop: -1 },
 
   metricsRow: { flexDirection: 'row-reverse', gap: 6 },
   metric: {
