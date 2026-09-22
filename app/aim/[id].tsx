@@ -1,17 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ScrollView, View, Text, Pressable, ActivityIndicator, Alert,
-  StyleSheet, Dimensions,
-} from 'react-native';
+import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
-import Svg, {
-  Circle, Path, Line, Defs, LinearGradient as SvgLinearGradient, Stop, G,
-} from 'react-native-svg';
-import { Icon, IconName } from '../../src/ui/Icon';
-
-// ═══ Haptics (اختياري) ═══
+// HAPTICS_SAFE: الاهتزاز اختياري — لو المكتبة ناقصة تشتغل الشاشة بدونه
 let HapticsMod: any = null;
 try { HapticsMod = require('expo-haptics'); } catch { HapticsMod = null; }
 const Haptics = {
@@ -20,44 +12,46 @@ const Haptics = {
   impactAsync: (s: any) => (HapticsMod?.impactAsync ? HapticsMod.impactAsync(s) : Promise.resolve()),
   notificationAsync: (s: any) => (HapticsMod?.notificationAsync ? HapticsMod.notificationAsync(s) : Promise.resolve()),
 };
-
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { Signal, CellTower, CellLockTarget } from '../../src/drivers/types';
-import { LEVEL_LABEL, overallLevel, signalScore, parseBands, parseNrBands } from '../../src/utils/signal';
+import { LEVEL_COLOR, LEVEL_LABEL, overallLevel, signalScore, parseBands, parseNrBands } from '../../src/utils/signal';
+import { C } from '../../src/ui/theme';
+import { linkHealth } from '../../src/utils/linkHealth';
+import { LinkHealthChips } from '../../src/ui/LinkHealth';
 import { trafficBurst } from '../../src/utils/nrprobe';
 import { AimBeeper } from '../../src/utils/aimSound';
-
-const { width: SCREEN_W } = Dimensions.get('window');
-
-// ═══ Design tokens (نفس المرجع البصري) ═══
-const BLUE = '#3567F5';
-const PURPLE = '#7655F5';
-const TEXT = '#14264A';
-const MUTED = '#71809A';
-const BG = '#F4F8FF';
-const SUCCESS = '#13B783';
-const WARN = '#F59E0B';
-const DANGER = '#DC2626';
-const CARD = '#FFFFFF';
-const BORDER = '#E6ECF5';
+import { GlassCard } from '../../src/ui/GlassCard';
+import { ArcGauge } from '../../src/ui/ArcGauge';
+import { Icon, IconName } from '../../src/ui/Icon';
+import { TimeChart, Series } from '../../src/ui/TimeChart';
 
 type Tech = 'LTE' | 'NR';
-type Mode = 'guide' | 'watch';
 
+/** خلية محددة: تقنية + تردد + PCI — عشان نعرف القراءة من أي برج */
 interface CellId { tech: Tech; band?: number; pci?: string; arfcn?: string; }
+
 interface Reading {
-  t: number; rsrp?: number; sinr?: number; smooth?: number; score: number; cell: CellId;
+  t: number;
+  rsrp?: number;
+  sinr?: number;
+  /** متوسط آخر ٣ قراءات على نفس الخلية — أثبت من القراءة اللحظية */
+  smooth?: number;
+  score: number;
+  cell: CellId;
 }
 
 const MAX_POINTS = 90;
 const SMOOTH_N = 3;
+
 const cellKey = (c?: CellId | null) => (c ? `${c.tech}:${c.band ?? '?'}:${c.pci ?? '?'}` : '');
 const cellName = (c?: CellId | null) => {
   if (!c) return '—';
   const b = c.band ? (c.tech === 'NR' ? `n${c.band}` : `B${c.band}`) : c.tech === 'NR' ? '5G' : '4G';
   return c.pci ? `${b} · PCI ${c.pci}` : b;
 };
+
+/** يستخرج قراءة التقنية المختارة من إشارة الراوتر — بدون خلط 4G و5G */
 function readOf(sig: Signal, tech: Tech): { rsrp?: number; sinr?: number; cell: CellId } | null {
   if (tech === 'NR') {
     if (sig.nrRsrp === undefined) return null;
@@ -74,227 +68,29 @@ function readOf(sig: Signal, tech: Tech): { rsrp?: number; sinr?: number; cell: 
     cell: { tech: 'LTE', band: b ? parseInt(b.slice(1), 10) : undefined, pci: sig.pci, arfcn: sig.earfcn },
   };
 }
-function levelColor(level: string): string {
-  if (level === 'excellent') return '#16A34A';
-  if (level === 'good') return SUCCESS;
-  if (level === 'fair') return WARN;
-  return DANGER;
-}
-/** تقدير المسافة للبرج من RSRP (خشن لكن معقول) */
-function estimateDistance(rsrp?: number): string {
-  if (rsrp === undefined) return '—';
-  const clamped = Math.max(-125, Math.min(-60, rsrp));
-  // -60 dBm ≈ 150م | -80 ≈ 800م | -100 ≈ 3 كم | -125 ≈ 8 كم
-  const m = 150 * Math.pow(10, (-60 - clamped) / 25);
-  if (m < 1000) return `${Math.round(m / 50) * 50} م`;
-  return `${(m / 1000).toFixed(1)} كم`;
-}
 
-// ═══ صورة أنتنا واقعية (SVG) ═══
-function AntennaVisual({ color, active }: { color: string; active: boolean }) {
-  return (
-    <View style={a.wrap}>
-      <Svg width={160} height={220} viewBox="0 0 160 220">
-        {/* سماء + جبال */}
-        <Defs>
-          <SvgLinearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0%" stopColor="#B8DAFF" />
-            <Stop offset="100%" stopColor="#E5F1FF" />
-          </SvgLinearGradient>
-        </Defs>
-        <Path d="M 0 0 L 160 0 L 160 220 L 0 220 Z" fill="url(#sky)" />
-        {/* جبل خلفي */}
-        <Path d="M 0 170 L 40 140 L 70 160 L 110 130 L 160 160 L 160 220 L 0 220 Z" fill="#C8D9EC" opacity={0.6} />
-        {/* موجات الرادار */}
-        {active && (
-          <>
-            <Path d="M 90 90 Q 130 90 130 110" stroke={color} strokeWidth={3.5} fill="none" opacity={0.55} strokeLinecap="round" />
-            <Path d="M 92 78 Q 145 78 145 110" stroke={color} strokeWidth={3} fill="none" opacity={0.35} strokeLinecap="round" />
-            <Path d="M 94 66 Q 160 66 160 110" stroke={color} strokeWidth={2.5} fill="none" opacity={0.2} strokeLinecap="round" />
-          </>
-        )}
-        {/* عمود الدعم */}
-        <Line x1={72} y1={140} x2={72} y2={205} stroke="#94A3B8" strokeWidth={5} strokeLinecap="round" />
-        {/* قاعدة */}
-        <Line x1={52} y1={210} x2={92} y2={210} stroke="#64748B" strokeWidth={4} strokeLinecap="round" />
-        {/* مشبك */}
-        <Path d="M 70 130 L 80 130 L 80 145 L 70 145 Z" fill="#64748B" />
-        {/* صندوق الأنتنا */}
-        <Path
-          d="M 30 40 Q 30 32 40 32 L 82 32 Q 92 32 92 40 L 92 128 Q 92 136 82 136 L 40 136 Q 30 136 30 128 Z"
-          fill="#F9FBFF" stroke="#CBD5E1" strokeWidth={2.5}
-        />
-        {/* خطوط داخلية */}
-        <Line x1={40} y1={55} x2={82} y2={55} stroke="#E2E8F0" strokeWidth={2} />
-        <Line x1={40} y1={70} x2={82} y2={70} stroke="#E2E8F0" strokeWidth={2} />
-        {/* سهم للأعلى */}
-        <Path d="M 61 115 L 61 85 M 50 98 L 61 82 L 72 98" stroke="#94A3B8" strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        {/* نقطة الإشارة */}
-        <Circle cx={100} cy={55} r={5} fill={color} />
-        <Circle cx={100} cy={55} r={10} fill={color} opacity={0.28} />
-      </Svg>
-    </View>
-  );
-}
-
-// ═══ Gauge دائري (نفس المرجع) ═══
-function ScoreGauge({ value, color }: { value: number; color: string }) {
-  const size = 168;
-  const stroke = 12;
-  const r = (size - stroke) / 2;
-  const cx = size / 2;
-  const cy = size / 2;
-  const C = 2 * Math.PI * r;
-  const v = Math.max(0, Math.min(1, value));
-  const dash = C * v;
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={size} height={size} style={{ position: 'absolute' }}>
-        <Circle cx={cx} cy={cy} r={r} stroke="#E5EDF9" strokeWidth={stroke} fill="none" />
-        <Circle
-          cx={cx} cy={cy} r={r}
-          stroke={color} strokeWidth={stroke} fill="none"
-          strokeDasharray={`${dash} ${C}`}
-          strokeLinecap="round"
-          transform={`rotate(-90 ${cx} ${cy})`}
-        />
-      </Svg>
-      <View style={{ alignItems: 'center' }}>
-        <Icon name="antenna" size={20} color={color} />
-        <Text style={a.gaugeVal}>{Math.round(v * 100)}</Text>
-        <Text style={a.gaugePct}>%</Text>
-        <Text style={a.gaugeLbl}>قوة الإشارة</Text>
-      </View>
-    </View>
-  );
-}
-
-// ═══ بوصلة (SVG) ═══
-function Compass({ value, color }: { value: number; color: string }) {
-  const size = 130;
-  const cx = size / 2;
-  const cy = size / 2;
-  const r = size / 2 - 8;
-  const angle = -135 + value * 270;
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={size} height={size} style={{ position: 'absolute' }}>
-        <Circle cx={cx} cy={cy} r={r + 4} fill="#F4F8FF" stroke={BORDER} strokeWidth={1} />
-        <Circle cx={cx} cy={cy} r={r} fill="#FFFFFF" stroke="#E8EFF8" strokeWidth={2} />
-        {Array.from({ length: 16 }, (_, i) => {
-          const ang = (i / 16) * 2 * Math.PI - Math.PI / 2;
-          const isMajor = i % 4 === 0;
-          const r1 = r - (isMajor ? 10 : 5);
-          const r2 = r - 2;
-          return (
-            <Line
-              key={i}
-              x1={cx + Math.cos(ang) * r1}
-              y1={cy + Math.sin(ang) * r1}
-              x2={cx + Math.cos(ang) * r2}
-              y2={cy + Math.sin(ang) * r2}
-              stroke={isMajor ? '#94A3B8' : '#CBD5E1'}
-              strokeWidth={isMajor ? 2 : 1}
-              strokeLinecap="round"
-            />
-          );
-        })}
-        <G rotation={angle} origin={`${cx}, ${cy}`}>
-          <Path
-            d={`M ${cx} ${cy - r + 16} L ${cx - 8} ${cy + 6} L ${cx} ${cy + 1} L ${cx + 8} ${cy + 6} Z`}
-            fill={color}
-          />
-        </G>
-        <Circle cx={cx} cy={cy} r={5} fill="#14264A" />
-      </Svg>
-      <View style={{ position: 'absolute', bottom: 2, alignItems: 'center' }}>
-        <Text style={a.compassDeg}>{Math.round(angle + 135)}°</Text>
-        <Text style={a.compassSub}>من الشمال</Text>
-      </View>
-    </View>
-  );
-}
-
-// ═══ Chart خطي (SVG) ═══
-function LineChart({ values, min, max, color }: { values: number[]; min: number; max: number; color: string }) {
-  const W = SCREEN_W - 76;
-  const H = 120;
-  const pad = { top: 10, bottom: 22, left: 6, right: 6 };
-  if (values.length < 2) return <View style={{ height: H }} />;
-  const innerW = W - pad.left - pad.right;
-  const innerH = H - pad.top - pad.bottom;
-  const range = max - min || 1;
-  const stepX = innerW / (values.length - 1);
-  const pts = values.map((v, i) => {
-    const x = pad.left + i * stepX;
-    const y = pad.top + innerH - ((Math.max(min, Math.min(max, v)) - min) / range) * innerH;
-    return { x, y };
-  });
-  const linePath = pts.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
-  const areaPath = `${linePath} L ${pts[pts.length - 1].x} ${pad.top + innerH} L ${pts[0].x} ${pad.top + innerH} Z`;
-  const last = pts[pts.length - 1];
-  return (
-    <Svg width={W} height={H}>
-      <Defs>
-        <SvgLinearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0%" stopColor={color} stopOpacity="0.22" />
-          <Stop offset="100%" stopColor={color} stopOpacity="0" />
-        </SvgLinearGradient>
-      </Defs>
-      {[-60, -90, -120].map((v, i) => {
-        const y = pad.top + innerH - ((v - min) / range) * innerH;
-        return <Line key={i} x1={0} y1={y} x2={W} y2={y} stroke={BORDER} strokeWidth={1} />;
-      })}
-      <Path d={areaPath} fill="url(#areaGrad)" />
-      <Path d={linePath} stroke={color} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      <Circle cx={last.x} cy={last.y} r={5} fill={color} />
-      <Circle cx={last.x} cy={last.y} r={9} fill={color} opacity={0.22} />
-    </Svg>
-  );
-}
-
-// ═══ Metric صغيرة ═══
-function MetricBox({ icon, label, value, unit, iconBg, iconColor }: {
-  icon: IconName; label: string; value?: string | number; unit?: string; iconBg: string; iconColor: string;
-}) {
-  return (
-    <View style={a.metric}>
-      <View style={[a.metricIcon, { backgroundColor: iconBg }]}>
-        <Icon name={icon} size={13} color={iconColor} />
-      </View>
-      <Text style={a.metricLbl}>{label}</Text>
-      <View style={{ flexDirection: 'row-reverse', alignItems: 'baseline', gap: 2 }}>
-        <Text style={a.metricVal}>{value ?? '—'}</Text>
-        {unit ? <Text style={a.metricUnit}>{unit}</Text> : null}
-      </View>
-    </View>
-  );
-}
-
-// ═══════════════════════════════════════════════════
-// الشاشة الرئيسية
-// ═══════════════════════════════════════════════════
 export default function AimScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const [info, setInfo] = useState<SavedRouter | null>(null);
   const [signal, setSignal] = useState<Signal | null>(null);
   const [tech, setTech] = useState<Tech>('LTE');
-  const [mode, setMode] = useState<Mode>('guide');
   const [readings, setReadings] = useState<Reading[]>([]);
   const [baseline, setBaseline] = useState<number | null>(null);
   const [best, setBest] = useState<Reading | null>(null);
   const [haptics, setHaptics] = useState(true);
+  const [watch, setWatch] = useState(false); // false = وضع التوجيه، true = وضع المراقبة (سلبي)
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [nrSeen, setNrSeen] = useState(false);
   const [nrCell, setNrCell] = useState<CellTower | null>(null);
+  const [nrBest, setNrBest] = useState<number | null>(null);
   const [pinned, setPinned] = useState<CellId | null>(null);
   const [pinBusy, setPinBusy] = useState(false);
   const [canPin, setCanPin] = useState(false);
+  /** 5G ما اتصل لكن نقرأ برج 5G مجاور (يظهر وقت التحميل) */
   const [nrNb, setNrNb] = useState(false);
   const [waking, setWaking] = useState<number | null>(null);
-  const [sound, setSound] = useState(false);
   const wakeStop = useRef(false);
   useEffect(() => () => { wakeStop.current = true; }, []);
 
@@ -305,29 +101,26 @@ export default function AimScreen() {
   const bestRef = useRef<Reading | null>(null);
   const recentRef = useRef<Reading[]>([]);
   const nrRef = useRef(false);
+  const nrBestRef = useRef<number | null>(null);
   const cellTick = useRef(0);
+  const nrUsableRef = useRef(false);
+  /** تثبيت مؤقت أثناء التوجيه — يُفك تلقائياً عند الخروج */
   const tempPinRef = useRef(false);
   const infoRef = useRef<SavedRouter | null>(null);
-  const beeperRef = useRef<AimBeeper | null>(null);
 
   useEffect(() => { hapticsRef.current = haptics; }, [haptics]);
-  useEffect(() => { techRef.current = tech; }, [tech]);
 
-  // ═══ الصوت — فقط لما sound === true ═══
+  // وضع الصوت: نغمات تتقارب كل ما تحسنت الإشارة (مثل حساس الركن)
+  const [sound, setSound] = useState(false);
+  const beeperRef = useRef<AimBeeper | null>(null);
   useEffect(() => {
-    if (!sound) {
-      if (beeperRef.current) {
-        beeperRef.current.stop();
-        beeperRef.current = null;
-      }
-      return;
-    }
-    if (beeperRef.current) return;
+    if (!sound) return;
     const b = new AimBeeper();
     beeperRef.current = b;
     b.start();
     return () => { b.stop(); beeperRef.current = null; };
   }, [sound]);
+  useEffect(() => { techRef.current = tech; }, [tech]);
 
   const pulse = useCallback((score: number) => {
     if (!hapticsRef.current) return;
@@ -354,12 +147,15 @@ export default function AimScreen() {
       if (!sig) return;
       setSignal(sig);
       setError('');
+
       if (sig.nrRsrp !== undefined && !nrRef.current) {
         nrRef.current = true;
         setNrSeen(true);
         if (hapticsRef.current) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       }
+
       let rd = readOf(sig, techRef.current);
+      // 5G ما اتصل: نوجّه على أقوى برج 5G مجاور يشوفه الراوتر (يظهر وقت التحميل)
       if (!rd && techRef.current === 'NR') {
         try {
           const cells = await withSession(r, d => (d.getCells ? d.getCells() : Promise.resolve([] as CellTower[])));
@@ -375,6 +171,7 @@ export default function AimScreen() {
         setNrNb(false);
       }
       if (rd) {
+        // المتوسط على نفس الخلية فقط — لو تغيّر البرج نبدأ من جديد
         const key = cellKey(rd.cell);
         const recent = recentRef.current.filter(x => cellKey(x.cell) === key);
         const vals = [...recent.slice(-(SMOOTH_N - 1)).map(x => x.rsrp), rd.rsrp]
@@ -383,8 +180,11 @@ export default function AimScreen() {
         const score = signalScore({ rsrp: smooth ?? rd.rsrp, sinr: rd.sinr });
         const reading: Reading = { t: Date.now(), rsrp: rd.rsrp, sinr: rd.sinr, smooth, score, cell: rd.cell };
         recentRef.current = [...recent, reading].slice(-SMOOTH_N);
+
         setReadings(list => [...list, reading].slice(-MAX_POINTS));
         setBaseline(b => (b === null ? (smooth ?? rd.rsrp ?? null) : b));
+
+        // أفضل نقطة تُحسب من المتوسط وبعد ٣ قراءات على الأقل — مو من قفزة لحظية
         if (vals.length >= SMOOTH_N && (!bestRef.current || score > bestRef.current.score)) {
           bestRef.current = reading;
           setBest(reading);
@@ -392,6 +192,7 @@ export default function AimScreen() {
         pulse(score);
         beeperRef.current?.update(score);
       }
+
       if (Date.now() - cellTick.current > 3000) {
         cellTick.current = Date.now();
         try {
@@ -399,6 +200,16 @@ export default function AimScreen() {
           const nrs = cells.filter(c => c.tech === 'NR' && c.rsrp !== undefined);
           const top = nrs.sort((a, b) => (b.rsrp ?? -999) - (a.rsrp ?? -999))[0] ?? null;
           setNrCell(top);
+          if (top?.rsrp !== undefined) {
+            if (nrBestRef.current === null || top.rsrp > nrBestRef.current) {
+              nrBestRef.current = top.rsrp;
+              setNrBest(top.rsrp);
+            }
+            if (top.rsrp > -110 && !nrUsableRef.current) {
+              nrUsableRef.current = true;
+              if (hapticsRef.current) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+            }
+          }
         } catch {}
       }
     } catch (e: any) {
@@ -425,6 +236,7 @@ export default function AimScreen() {
     return () => {
       alive = false;
       if (timer) clearInterval(timer);
+      // فك التثبيت المؤقت عند الخروج
       if (tempPinRef.current && infoRef.current) {
         tempPinRef.current = false;
         withSession(infoRef.current, d => (d.unlockCell ? d.unlockCell() : Promise.resolve()), false).catch(() => {});
@@ -441,6 +253,9 @@ export default function AimScreen() {
     const rd = signal ? readOf(signal, techRef.current) : null;
     setBaseline(rd?.rsrp ?? null);
     setNrSeen(false);
+    nrBestRef.current = null;
+    nrUsableRef.current = false;
+    setNrBest(null);
   };
 
   const switchTech = (t: Tech) => {
@@ -454,6 +269,7 @@ export default function AimScreen() {
     setBaseline(null);
   };
 
+  /** ينتظر الاتصال بعد التثبيت، ولو ما رجع يفك التثبيت تلقائياً */
   const lockAndVerify = async (r: SavedRouter, target: CellLockTarget): Promise<boolean> => {
     await withSession(r, d => d.lockCell!(target), false);
     const deadline = Date.now() + 30000;
@@ -475,6 +291,7 @@ export default function AimScreen() {
   const toTarget = (c: CellId): CellLockTarget | null =>
     c.pci ? { tech: c.tech, band: c.band, arfcn: c.arfcn, pci: c.pci } : null;
 
+  /** يثبّت البرج الحالي أثناء التوجيه عشان الراوتر ما يتنقل والأرقام تصير قابلة للمقارنة */
   const pinDuringAim = async () => {
     if (!info || pinBusy) return;
     if (pinned) {
@@ -490,7 +307,7 @@ export default function AimScreen() {
     }
     const rd = signal ? readOf(signal, tech) : null;
     const target = rd ? toTarget(rd.cell) : null;
-    if (!rd || !target) { Alert.alert('غير متاح', 'ما قدرنا نعرف رقم البرج الحالي (PCI).'); return; }
+    if (!rd || !target) { Alert.alert('غير متاح', 'ما قدرنا نعرف رقم البرج الحالي (PCI) — ما نقدر نثبّت عليه.'); return; }
     setPinBusy(true);
     try {
       const ok = await lockAndVerify(info, target);
@@ -506,13 +323,14 @@ export default function AimScreen() {
     } finally { setPinBusy(false); }
   };
 
+  /** يثبّت نهائياً على برج أفضل نقطة (يبقى بعد الخروج من الشاشة) */
   const pinBest = () => {
     if (!info || !best) return;
     const target = toTarget(best.cell);
-    if (!target) { Alert.alert('غير متاح', 'ما عندنا رقم هذا البرج.'); return; }
+    if (!target) { Alert.alert('غير متاح', 'ما عندنا رقم هذا البرج (PCI) — ما نقدر نثبّت عليه.'); return; }
     Alert.alert(
       'ثبّت على برج أفضل نقطة',
-      `بنثبّت الراوتر على ${cellName(best.cell)} ويبقى مثبّت بعد ما تطلع.`,
+      `بنثبّت الراوتر على ${cellName(best.cell)} ويبقى مثبّت بعد ما تطلع من الشاشة.\n\nلو ما اتصل خلال ٣٠ ثانية نرجّعه تلقائياً. وتقدر تفك التثبيت من شاشة الأبراج.`,
       [
         { text: 'إلغاء', style: 'cancel' },
         {
@@ -522,40 +340,18 @@ export default function AimScreen() {
               const ok = await lockAndVerify(info, target);
               if (ok) {
                 setPinned(best.cell);
-                tempPinRef.current = false;
+                tempPinRef.current = false; // دائم — ما نفكه عند الخروج
                 Alert.alert('تم', `الراوتر مثبّت على ${cellName(best.cell)}`);
               } else {
-                Alert.alert('ما نجح', 'الراوتر ما اتصل على هذا البرج.');
+                Alert.alert('ما نجح التثبيت', 'الراوتر ما اتصل على هذا البرج، فرجّعناه للوضع التلقائي.');
               }
             } catch (e: any) {
-              Alert.alert('ما نجح', e?.message ?? String(e));
+              Alert.alert('ما نجح التثبيت', e?.message ?? String(e));
             } finally { setPinBusy(false); }
           },
         },
       ],
     );
-  };
-
-  const wake5g = () => {
-    if (waking !== null) { wakeStop.current = true; return; }
-    Alert.alert('صحّي 5G', 'بنحمّل لمدة دقيقة تقريباً (يستهلك حتى ١٠٠ ميقا).', [
-      { text: 'إلغاء', style: 'cancel' },
-      {
-        text: 'ابدأ', onPress: () => {
-          const SECS = 60;
-          wakeStop.current = false;
-          setWaking(SECS);
-          const t0 = Date.now();
-          const iv = setInterval(() => {
-            const left = Math.max(0, SECS - Math.round((Date.now() - t0) / 1000));
-            setWaking(w => (w === null ? null : left));
-          }, 1000);
-          trafficBurst(SECS * 1000, 100_000_000, () => wakeStop.current)
-            .catch(() => 0)
-            .finally(() => { clearInterval(iv); setWaking(null); });
-        },
-      },
-    ]);
   };
 
   const current = readings[readings.length - 1];
@@ -566,543 +362,367 @@ export default function AimScreen() {
   const nrBands = parseNrBands(signal?.nrBand);
   const nrActive = signal?.nrRsrp !== undefined;
   const bestShown = best?.smooth ?? best?.rsrp;
+  const otherCell = !!best && !!current && cellKey(best.cell) !== cellKey(current.cell);
   const waitingNr = tech === 'NR' && !nrActive && !nrNb;
-  const lvlColor = levelColor(level);
-  const pct = current?.score ?? 0;
-  const bandList = [...new Set([...bands, ...nrBands])];
-  const currentBand = current?.cell.band ? (current.cell.tech === 'NR' ? `n${current.cell.band}` : `B${current.cell.band}`) : undefined;
-  const distance = estimateDistance(shown);
-  const improvePct = delta !== undefined && delta !== 0 ? Math.round(Math.abs(delta) * 2.5) : 0;
 
-  const stability = readings.length >= 5
-    ? (() => {
-        const last = readings.slice(-5).map(r => r.smooth ?? r.rsrp).filter(n => n !== undefined);
-        if (last.length < 3) return null;
-        const maxDiff = Math.max(...last) - Math.min(...last);
-        return maxDiff <= 3 ? 'stable' : maxDiff <= 7 ? 'ok' : 'unstable';
-      })()
-    : null;
-
-  const chartValues = readings.slice(-30).map(r => r.smooth ?? r.rsrp ?? -110);
-  const chartLabels = readings.slice(-4).filter((_, i, arr) => i % Math.ceil(arr.length / 4) === 0);
-  const fmtTime = (t: number) => {
-    const d = new Date(t);
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  /** تحميل متواصل يصحّي 5G وقت التوجيه — بحد أعلى للوقت والاستهلاك */
+  const wake5g = () => {
+    if (waking !== null) { wakeStop.current = true; return; }
+    Alert.alert(
+      'صحّي 5G',
+      'بنحمّل لمدة دقيقة تقريباً عشان الراوتر يشوف أبراج 5G ويتصل عليها.\nيستهلك حتى ١٠٠ ميقا من باقتك. تقدر توقفه متى ما بغيت.',
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'ابدأ', onPress: () => {
+            const SECS = 60;
+            wakeStop.current = false;
+            setWaking(SECS);
+            const t0 = Date.now();
+            const iv = setInterval(() => {
+              const left = Math.max(0, SECS - Math.round((Date.now() - t0) / 1000));
+              setWaking(w => (w === null ? null : left));
+            }, 1000);
+            trafficBurst(SECS * 1000, 100_000_000, () => wakeStop.current)
+              .catch(() => 0)
+              .finally(() => { clearInterval(iv); setWaking(null); });
+          },
+        },
+      ],
+    );
   };
 
+  const series: Series[] = [
+    { label: 'RSRP', color: tech === 'NR' ? C.violet : C.blue, values: readings.map(r => r.smooth ?? r.rsrp), min: -125, max: -60, unit: 'dBm' },
+  ];
+
+  const pciShown = current?.cell.pci ?? signal?.pci;
+  const curBand = current?.cell.band
+    ? (current.cell.tech === 'NR' ? 'n' : 'B') + current.cell.band
+    : (bands[0] ?? nrBands[0] ?? '—');
+  const accent = tech === 'NR' ? C.violet : C.blue;
+
+  // استقرار الإشارة من تذبذب آخر القراءات
+  const recentVals = readings.slice(-8).map(r => r.smooth ?? r.rsrp).filter((n): n is number => n !== undefined);
+  const sd = (() => {
+    if (recentVals.length < 4) return undefined;
+    const m = recentVals.reduce((a, b) => a + b, 0) / recentVals.length;
+    return Math.sqrt(recentVals.reduce((a, b) => a + (b - m) ** 2, 0) / recentVals.length);
+  })();
+  const stable = sd !== undefined ? sd < 3 : (level === 'excellent' || level === 'good');
+
+  // قربك من أفضل نقطة سجّلناها (0–1)
+  const closeness = (bestShown !== undefined && shown !== undefined)
+    ? Math.max(0, Math.min(1, 1 - Math.max(0, bestShown - shown) / 12))
+    : (current?.score ?? 0);
+
+  const stats: { label: string; value: string; unit?: string; icon: IconName; color: string }[] = [
+    { label: 'PCI', value: pciShown ?? '—', icon: 'aim', color: C.violet },
+    { label: 'RSRP', value: shown !== undefined ? `${shown}` : '—', unit: 'dBm', icon: 'bands', color: C.green },
+    { label: 'SINR', value: current?.sinr !== undefined ? `${current.sinr}` : '—', unit: 'dB', icon: 'chart', color: C.blue },
+    { label: 'Band', value: curBand, icon: 'tower', color: C.violet },
+  ];
+
+  const startAiming = () => { setWatch(false); reset(); };
+
   return (
-    <View style={a.container}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[a.content, { paddingBottom: insets.bottom + 100 }]}
-      >
-        {/* ═══ Header ═══ */}
-        <View style={a.header}>
-          <Pressable style={a.headerBtn} onPress={reset}>
-            <Icon name="chevron" size={20} color={TEXT} />
-          </Pressable>
-          <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={a.headerTitle}>مساعد التوجيه</Text>
-            <Text style={a.headerSub}>اضبط اتجاه الهوائي للحصول على أفضل إشارة</Text>
+    <LinearGradient colors={[C.bgTop, C.bgBottom]} style={{ flex: 1 }}>
+      <ScrollView contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 96 }]}>
+        {loading ? (
+          <View style={s.center}>
+            <ActivityIndicator size="large" color={C.blue} />
+            <Text style={s.muted}>نبدأ القياس…</Text>
           </View>
-          <Pressable style={a.headerBtn} onPress={() => Alert.alert('مساعدة',
-            '١) اختر 4G أو 5G\n٢) حرّك الراوتر ببطء\n٣) الجوال يهتز أسرع كل ما قويت الإشارة\n٤) لما تلقى أفضل نقطة، ثبّت على البرج')}>
-            <Icon name="bulb" size={18} color={PURPLE} />
-          </Pressable>
-        </View>
-
-        {/* ═══ Mode selector ═══ */}
-        <View style={a.modeWrap}>
-          <Pressable style={a.modeHalf} onPress={() => setMode('watch')}>
-            {mode === 'watch' ? (
-              <LinearGradient colors={[BLUE, PURPLE]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={a.modeActive}>
-                <Icon name="eye" size={15} color="#FFF" />
-                <Text style={a.modeTxtOn}>وضع المراقبة</Text>
-              </LinearGradient>
-            ) : (
-              <View style={a.modeInner}>
-                <Icon name="eye" size={15} color={MUTED} />
-                <Text style={a.modeTxt}>وضع المراقبة</Text>
-              </View>
-            )}
-          </Pressable>
-          <Pressable style={a.modeHalf} onPress={() => setMode('guide')}>
-            {mode === 'guide' ? (
-              <LinearGradient colors={[BLUE, PURPLE]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={a.modeActive}>
-                <Icon name="aim" size={15} color="#FFF" />
-                <Text style={a.modeTxtOn}>وضع التوجيه</Text>
-              </LinearGradient>
-            ) : (
-              <View style={a.modeInner}>
-                <Icon name="aim" size={15} color={MUTED} />
-                <Text style={a.modeTxt}>وضع التوجيه</Text>
-              </View>
-            )}
-          </Pressable>
-        </View>
-
-        {loading && (
-          <View style={{ alignItems: 'center', gap: 10, paddingVertical: 40 }}>
-            <ActivityIndicator size="large" color={BLUE} />
-            <Text style={{ color: MUTED }}>نبدأ القياس...</Text>
-          </View>
-        )}
-
-        {!loading && (
+        ) : (
           <>
-            {/* ═══ Hero Card ═══ */}
-            <View style={a.heroCard}>
-              <View style={a.heroVisual}>
-                {/* صورة الأنتنا — يسار */}
-                <AntennaVisual color={lvlColor} active={mode === 'guide'} />
-                {/* Gauge — يمين */}
-                <ScoreGauge value={pct} color={lvlColor} />
-              </View>
+            <Text style={s.sub}>اضبط اتجاه الهوائي للحصول على أفضل إشارة</Text>
 
-              {/* 4 Metrics */}
-              <View style={a.metricsRow}>
-                <MetricBox icon="tower" label="PCI" value={current?.cell.pci ?? '—'} iconBg="#EEE8FF" iconColor="#7C3AED" />
-                <MetricBox icon="chart" label="RSRP" value={shown ?? '—'} unit="dBm" iconBg="#DFF9ED" iconColor="#16A34A" />
-                <MetricBox icon="speed" label="SINR" value={current?.sinr ?? '—'} unit="dB" iconBg="#E1F5FF" iconColor="#0891B2" />
-                <MetricBox icon="bands" label="Band" value={currentBand ?? '—'} iconBg="#FEF3C7" iconColor="#D97706" />
-              </View>
+            <View style={s.seg}>
+              <Pressable style={[s.segBtn, watch && s.segBtnWatch]} onPress={() => setWatch(true)}>
+                <Icon name="eye" size={16} color={watch ? C.onAccent : C.sub} />
+                <Text style={[s.segText, watch && { color: C.onAccent }]}>وضع المراقبة</Text>
+              </Pressable>
+              <Pressable style={[s.segBtn, !watch && s.segBtnAim]} onPress={() => setWatch(false)}>
+                <Icon name="aim" size={16} color={!watch ? C.onAccent : C.sub} />
+                <Text style={[s.segText, !watch && { color: C.onAccent }]}>وضع التوجيه</Text>
+              </Pressable>
+            </View>
 
-              {/* Status بار أخضر */}
-              {stability && (
-                <View style={[a.statusBar, {
-                  backgroundColor: stability === 'stable' ? '#ECFBF6' : stability === 'ok' ? '#FFFBEB' : '#FEF2F2',
-                  borderColor: stability === 'stable' ? '#BEEFE0' : stability === 'ok' ? '#FCD34D' : '#FECACA',
-                }]}>
-                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Text style={[a.statusTitle, {
-                      color: stability === 'stable' ? '#079B72' : stability === 'ok' ? '#92400E' : '#991B1B',
-                    }]}>
-                      {stability === 'stable' ? '✓ الإشارة مستقرة' : stability === 'ok' ? '⚠ الإشارة متغيرة قليلاً' : '⚠ الإشارة متقلبة'}
-                    </Text>
-                    <Text style={[a.statusSub, {
-                      color: stability === 'stable' ? '#67958A' : stability === 'ok' ? '#A16207' : '#B91C1C',
-                    }]}>
-                      {stability === 'stable' ? 'جودة الاتصال جيدة - يمكنك تحسينها بتحريك الهوائي'
-                        : stability === 'ok' ? 'جرّب تحريك الراوتر ببطء وانتظر ٣-٥ ثواني'
-                          : 'حرّك الراوتر ببطء — الأرقام تتغير بسرعة'}
+            <LinearGradient colors={['#eef4ff', '#e9f1ff', '#e8f8f1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.hero}>
+              {waitingNr ? (
+                <View style={s.center}>
+                  <Text style={s.waitTitle}>{waking !== null ? 'ندوّر على أبراج 5G…' : '5G غير نشط الآن'}</Text>
+                  <Text style={[s.hint, { textAlign: 'center' }]}>
+                    {waking !== null
+                      ? 'حرّك الراوتر ببطء — أول ما يظهر برج 5G نبدأ نقيسه.'
+                      : '5G ما يظهر إلا وقت التحميل. اضغط «صحّي 5G» وحرّك الراوتر.'}
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ alignItems: 'center' }}>
+                  <ArcGauge score={current?.score ?? 0} label={LEVEL_LABEL[level]} color={LEVEL_COLOR[level]} size={168} />
+                  <Text style={s.heroCell}>على {cellName(current?.cell)}</Text>
+                </View>
+              )}
+
+              <View style={s.statRow}>
+                {stats.map(st => (
+                  <View key={st.label} style={s.statTile}>
+                    <View style={s.statHead}>
+                      <Text style={s.statLbl}>{st.label}</Text>
+                      <View style={[s.statIcon, { backgroundColor: st.color + '22' }]}>
+                        <Icon name={st.icon} size={12} color={st.color} />
+                      </View>
+                    </View>
+                    <Text style={s.statVal} numberOfLines={1} adjustsFontSizeToFit>
+                      {st.value}{st.unit && st.value !== '—' ? <Text style={s.statUnit}> {st.unit}</Text> : null}
                     </Text>
                   </View>
-                  <View style={[a.statusCheck, {
-                    backgroundColor: stability === 'stable' ? SUCCESS : stability === 'ok' ? WARN : DANGER,
-                  }]}>
-                    <Text style={{ color: '#FFF', fontWeight: '900', fontSize: 15 }}>✓</Text>
+                ))}
+              </View>
+
+              {!waitingNr && (
+                <View style={[s.status, { backgroundColor: stable ? C.greenSoft : C.goldSoft, borderColor: (stable ? C.green : C.gold) + '44' }]}>
+                  <Icon name={stable ? 'spark' : 'refresh'} size={16} color={stable ? C.green : C.gold} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.statusTitle, { color: stable ? C.green : C.gold }]}>
+                      {stable ? 'الإشارة مستقرة' : 'الإشارة متذبذبة'}
+                    </Text>
+                    <Text style={s.statusSub}>
+                      {stable ? 'جودة الاتصال جيدة — يمكن تحسينها بتحريك الهوائي' : 'حرّك الراوتر ببطء وثبّته عند أعلى قراءة'}
+                    </Text>
                   </View>
                 </View>
               )}
-            </View>
+            </LinearGradient>
 
-            {/* ═══ Band selector ═══ */}
-            <View style={a.card}>
-              <View style={a.cardHead}>
-                <View style={a.cardIcon}>
-                  <Icon name="bands" size={16} color={BLUE} />
-                </View>
-                <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                  <Text style={a.cardTitle}>اختيار التردد</Text>
-                  <Text style={a.cardSub}>الترددات المتاحة على شبكتك</Text>
+            {!watch && canPin && (
+              <Pressable style={[s.pinBar, pinned && s.pinBarOn, pinBusy && { opacity: 0.6 }]} onPress={pinDuringAim} disabled={pinBusy}>
+                {pinBusy ? <ActivityIndicator color={pinned ? C.onAccent : C.blue} /> : <Icon name="pin" size={15} color={pinned ? C.onAccent : C.blue} />}
+                <Text style={[s.pinText, pinned && { color: C.onAccent }]}>
+                  {pinned ? `مثبّت على ${cellName(pinned)} — اضغط للفك` : 'ثبّت البرج الحالي أثناء التوجيه'}
+                </Text>
+              </Pressable>
+            )}
+
+            <View style={s.card}>
+              <View style={s.cardHead}>
+                <Icon name="bands" size={18} color={accent} />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.cardTitle}>اختيار الترددات</Text>
+                  <Text style={s.cardSub}>الترددات المتاحة على شبكتك</Text>
                 </View>
               </View>
-
-              <View style={a.techRow}>
-                {(['LTE', 'NR'] as Tech[]).map(t => {
-                  const on = tech === t;
-                  const disabled = t === 'NR' && !nrSeen && !nrActive;
+              <View style={s.chips}>
+                {[...bands, ...nrBands].length === 0 && <Text style={s.muted}>—</Text>}
+                {[...bands, ...nrBands].map(b => {
+                  const on = b === curBand;
+                  const isNr = b.startsWith('n');
                   return (
-                    <Pressable
-                      key={t}
-                      style={[a.techBtn, on && {
-                        backgroundColor: t === 'NR' ? PURPLE : BLUE,
-                        borderColor: t === 'NR' ? PURPLE : BLUE,
-                      }, disabled && { opacity: 0.4 }]}
-                      onPress={() => !disabled && switchTech(t)}
-                      disabled={disabled}
-                    >
-                      <Text style={[a.techTxt, on && { color: '#FFF' }]}>{t === 'NR' ? '5G' : '4G'}</Text>
-                    </Pressable>
+                    <View key={b} style={[s.chip, on && { backgroundColor: isNr ? C.violet : C.blue, borderColor: isNr ? C.violet : C.blue }]}>
+                      <Text style={[s.chipText, on ? { color: C.onAccent } : isNr ? { color: C.violet } : null]}>{b}</Text>
+                    </View>
                   );
                 })}
               </View>
-
-              {bandList.length > 0 && (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={a.chipsRow}>
-                  {bandList.map(b => {
-                    const on = currentBand === b;
-                    const isNr = b.startsWith('n');
+              {(nrSeen || nrActive) && (
+                <View style={s.techRow}>
+                  {(['LTE', 'NR'] as Tech[]).map(t => {
+                    const on = tech === t;
+                    const disabled = t === 'NR' && !nrSeen && !nrActive;
                     return (
-                      <View key={b} style={[a.chip, on && {
-                        backgroundColor: isNr ? PURPLE : BLUE,
-                        borderColor: isNr ? PURPLE : BLUE,
-                      }]}>
-                        <Text style={[a.chipTxt, on && { color: '#FFF' }]}>{b}</Text>
-                      </View>
+                      <Pressable key={t} style={[s.techBtn, on && { backgroundColor: t === 'NR' ? C.violet : C.blue }, disabled && { opacity: 0.4 }]}
+                        onPress={() => !disabled && switchTech(t)} disabled={disabled}>
+                        <Text style={[s.techText, on && { color: C.onAccent }]}>{t === 'NR' ? '5G' : '4G'}</Text>
+                      </Pressable>
                     );
                   })}
-                </ScrollView>
+                </View>
+              )}
+              {!watch && tech === 'NR' && !nrActive && (
+                <Pressable style={[s.wakeBtn, waking !== null && s.wakeBtnOn]} onPress={wake5g}>
+                  <Text style={[s.wakeText, waking !== null && { color: C.violet }]}>
+                    {waking !== null ? `⏹ إيقاف التحميل (${waking} ث)` : '⚡ صحّي 5G وابدأ التوجيه'}
+                  </Text>
+                </Pressable>
               )}
             </View>
 
-            {/* ═══ Best direction ═══ */}
-            {best && (
-              <View style={a.card}>
-                <View style={a.cardHead}>
-                  <View style={[a.cardIcon, { backgroundColor: PURPLE + '18' }]}>
-                    <Icon name="aim" size={16} color={PURPLE} />
-                  </View>
-                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Text style={a.cardTitle}>أفضل نقطة توجيه</Text>
-                    <Text style={a.cardSub}>اتجه الهوائي إلى هذه الزاوية</Text>
+            {!watch && (
+              <View style={s.card}>
+                <View style={s.cardHead}>
+                  <Icon name="aim" size={18} color={accent} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.cardTitle}>أفضل نقطة توجيه</Text>
+                    <Text style={s.cardSub}>حرّك الهوائي وثبّت عند أعلى قراءة</Text>
                   </View>
                 </View>
-
-                <View style={a.dirBody}>
-                  <Compass value={pct} color={lvlColor} />
-                  <View style={a.dirStats}>
-                    <View style={a.dirStatRow}>
-                      <Icon name="spark" size={14} color={SUCCESS} />
-                      <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                        <Text style={a.dirStatLbl}>تحسن متوقع</Text>
-                        <Text style={[a.dirStatVal, { color: SUCCESS }]}>
-                          {improvePct > 0 ? `+${improvePct}%` : '—'}
-                        </Text>
-                      </View>
+                <View style={s.aimRow}>
+                  <View style={s.dial}>
+                    <ArcGauge score={closeness} label={closeness > 0.9 ? 'ممتاز' : 'قرّب'} color={closeness > 0.9 ? C.green : accent} size={104} />
+                  </View>
+                  <View style={s.aimStats}>
+                    <View style={s.aimStat}>
+                      <Text style={[s.aimVal, { color: delta !== undefined && delta > 0 ? C.green : delta !== undefined && delta < 0 ? C.red : C.text }]}>
+                        {delta === undefined ? '—' : delta > 0 ? `+${delta}` : `${delta}`}{delta !== undefined ? <Text style={s.aimUnit}> dB</Text> : null}
+                      </Text>
+                      <Text style={s.aimLbl}>التحسّن الآن</Text>
                     </View>
-                    <View style={a.dirStatRow}>
-                      <Icon name="pin" size={14} color={BLUE} />
-                      <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                        <Text style={a.dirStatLbl}>المسافة</Text>
-                        <Text style={a.dirStatVal}>{distance}</Text>
-                      </View>
+                    <View style={s.aimSep} />
+                    <View style={s.aimStat}>
+                      <Text style={s.aimVal}>{bestShown !== undefined ? `${bestShown}` : '—'}{bestShown !== undefined ? <Text style={s.aimUnit}> dBm</Text> : null}</Text>
+                      <Text style={s.aimLbl}>أقوى قراءة</Text>
                     </View>
-                    <View style={a.dirStatRow}>
-                      <Icon name="tower" size={14} color={PURPLE} />
-                      <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                        <Text style={a.dirStatLbl}>البرج</Text>
-                        <Text style={a.dirStatVal} numberOfLines={1}>
-                          {cellName(best.cell)}
-                        </Text>
-                      </View>
+                    <View style={s.aimSep} />
+                    <View style={s.aimStat}>
+                      <Text style={s.aimVal} numberOfLines={1} adjustsFontSizeToFit>{best ? cellName(best.cell) : curBand}</Text>
+                      <Text style={s.aimLbl}>البرج</Text>
                     </View>
                   </View>
                 </View>
-
-                {canPin && best.cell.pci && cellKey(pinned) !== cellKey(best.cell) && (
-                  <Pressable style={a.pinBtn} onPress={pinBest} disabled={pinBusy}>
-                    {pinBusy ? <ActivityIndicator color="#FFF" /> : (
-                      <Text style={a.pinTxt}>📌 ثبّت على برج أفضل نقطة</Text>
-                    )}
-                  </Pressable>
-                )}
-
-                {pinned && (
-                  <Pressable style={[a.pinBtn, { backgroundColor: '#E0E7FF' }]} onPress={pinDuringAim} disabled={pinBusy}>
-                    <Text style={[a.pinTxt, { color: BLUE }]}>✓ مثبّت على {cellName(pinned)}</Text>
+                {best && canPin && best.cell.pci && cellKey(pinned) !== cellKey(best.cell) && (
+                  <Pressable style={[s.pinBest, pinBusy && { opacity: 0.5 }]} onPress={pinBest} disabled={pinBusy}>
+                    <Icon name="pin" size={15} color={C.onAccent} />
+                    <Text style={s.pinBestText}>ثبّت على برج أفضل نقطة</Text>
                   </Pressable>
                 )}
               </View>
             )}
 
-            {/* ═══ 5G Hunt ═══ */}
-            {waitingNr && (
-              <View style={a.card}>
-                <View style={a.cardHead}>
-                  <View style={[a.cardIcon, { backgroundColor: PURPLE + '18' }]}>
-                    <Icon name="antenna" size={16} color={PURPLE} />
-                  </View>
-                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Text style={a.cardTitle}>صيد إشارة 5G</Text>
-                    <Text style={a.cardSub}>
-                      {waking !== null ? 'نبحث — حرّك الراوتر ببطء' : '5G ما يظهر إلا وقت التحميل'}
-                    </Text>
-                  </View>
+            {readings.length > 1 && (
+              <View style={s.card}>
+                <View style={s.cardHead}>
+                  <Icon name="chart" size={18} color={accent} />
+                  <Text style={[s.cardTitle, { flex: 1 }]}>تاريخ قوة الإشارة</Text>
                 </View>
-                <Pressable style={[a.wakeBtn, waking !== null && a.wakeBtnOn]} onPress={wake5g}>
-                  <Text style={[a.wakeTxt, waking !== null && { color: PURPLE }]}>
-                    {waking !== null ? `⏹ إيقاف البحث (${waking}ث)` : '⚡ ابحث عن 5G'}
+                <TimeChart times={readings.map(r => r.t)} series={series} height={140} />
+              </View>
+            )}
+
+            <View style={s.card}>
+              <View style={s.cardHead}>
+                <Icon name="bulb" size={18} color={C.gold} />
+                <Text style={[s.cardTitle, { flex: 1 }]}>نصائح لتحسين الإشارة</Text>
+              </View>
+              {['احرص على رفع الهوائي لأعلى نقطة ممكنة.',
+                'ابتعد عن العوائق المعدنية والجدران السميكة.',
+                'جرّب الاتجاهات المختلفة حتى تجد أفضل إشارة.',
+                'انتظر ٣–٥ ثواني في كل مكان — الرقم متوسط آخر قراءات فيحتاج يستقر.'].map((t, i) => (
+                <View key={i} style={s.tipRow}>
+                  <Icon name="spark" size={13} color={C.green} />
+                  <Text style={s.tipText}>{t}</Text>
+                </View>
+              ))}
+            </View>
+
+            {!watch && (
+              <Pressable style={[s.soundBtn, sound && s.soundBtnOn]} onPress={() => setSound(v => !v)}>
+                <Icon name="speed" size={16} color={sound ? C.onAccent : C.blue} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.soundTitle, sound && { color: C.onAccent }]}>
+                    {sound ? 'وضع الصوت شغّال — اضغط للإيقاف' : 'وضع الصوت (للأنتنا فوق السطح)'}
                   </Text>
-                </Pressable>
-              </View>
+                  <Text style={[s.soundSub, sound && { color: C.onAccentSoft }]}>نغمات تتقارب كل ما تحسّنت الإشارة</Text>
+                </View>
+              </Pressable>
             )}
 
-            {/* ═══ Sound + Haptics — compact row ═══ */}
-            <View style={a.togglesRow}>
-              <Pressable
-                style={[a.toggleBtn, sound && { backgroundColor: PURPLE, borderColor: PURPLE }]}
-                onPress={() => setSound(v => !v)}
-              >
-                <Text style={[a.toggleIcon, sound && { color: '#FFF' }]}>{sound ? '🔊' : '🔈'}</Text>
-                <Text style={[a.toggleTxt, sound && { color: '#FFF' }]}>
-                  {sound ? 'الصوت' : 'تشغيل الصوت'}
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[a.toggleBtn, haptics && { backgroundColor: SUCCESS, borderColor: SUCCESS }]}
-                onPress={() => setHaptics(h => !h)}
-              >
-                <Text style={[a.toggleIcon, haptics && { color: '#FFF' }]}>📳</Text>
-                <Text style={[a.toggleTxt, haptics && { color: '#FFF' }]}>
-                  {haptics ? 'اهتزاز' : 'تشغيل الاهتزاز'}
-                </Text>
-              </Pressable>
-            </View>
-
-            {/* ═══ Chart ═══ */}
-            {readings.length > 3 && (
-              <View style={a.card}>
-                <View style={a.cardHead}>
-                  <View style={a.cardIcon}>
-                    <Icon name="chart" size={16} color={BLUE} />
-                  </View>
-                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Text style={a.cardTitle}>تاريخ قوة الإشارة</Text>
-                    <Text style={a.cardSub}>آخر {Math.min(30, readings.length)} قراءة</Text>
-                  </View>
-                  <View style={a.rsrpBadge}>
-                    <Text style={a.rsrpBadgeTxt}>{shown ?? '—'} dBm</Text>
-                  </View>
-                </View>
-                <View style={{ alignItems: 'center', marginTop: 8 }}>
-                  <LineChart values={chartValues} min={-125} max={-60} color={lvlColor} />
-                </View>
-                <View style={a.chartLabels}>
-                  <Text style={a.chartLbl}>قبل قليل</Text>
-                  <Text style={a.chartLbl}>الآن</Text>
-                </View>
-              </View>
-            )}
-
-            {/* ═══ Tips ═══ */}
-            <View style={a.tipsCard}>
-              <View style={a.tipsHead}>
-                <View style={[a.cardIcon, { backgroundColor: '#FEF3C7' }]}>
-                  <Icon name="bulb" size={16} color={WARN} />
-                </View>
-                <Text style={a.tipsTitle}>نصائح لتحسين الإشارة</Text>
-              </View>
-              <View style={a.tipRow}><Text style={a.tipCheck}>✓</Text><Text style={a.tipTxt}>ارفع الهوائي لأعلى نقطة ممكنة</Text></View>
-              <View style={a.tipRow}><Text style={a.tipCheck}>✓</Text><Text style={a.tipTxt}>ابتعد عن العوائق المعدنية والجدران السميكة</Text></View>
-              <View style={a.tipRow}><Text style={a.tipCheck}>✓</Text><Text style={a.tipTxt}>جرّب الاتجاهات المختلفة حتى تجد أفضل إشارة</Text></View>
-              <View style={a.tipRow}><Text style={a.tipCheck}>✓</Text><Text style={a.tipTxt}>ثبّت الهوائي عند الوصول لأفضل قراءة</Text></View>
-            </View>
-
-            {!!error && <Text style={a.err}>{error}</Text>}
+            {!!error && <Text style={s.err}>{error}</Text>}
           </>
         )}
       </ScrollView>
 
-      {/* ═══ CTA ثابت ═══ */}
-      {!loading && (
-        <View style={[a.footer, { paddingBottom: insets.bottom + 12 }]}>
-          <Pressable onPress={() => { reset(); if (!sound) setSound(true); }}>
-            <LinearGradient
-              colors={[BLUE, PURPLE]}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={a.cta}
-            >
-              <Icon name="aim" size={20} color="#FFF" />
-              <Text style={a.ctaTxt}>ابدأ التوجيه الآن</Text>
+      {!loading && !watch && (
+        <View style={[s.ctaWrap, { paddingBottom: insets.bottom + 12 }]}>
+          <Pressable onPress={startAiming}>
+            <LinearGradient colors={[accent, C.violet]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.cta}>
+              <Icon name="aim" size={18} color={C.onAccent} />
+              <Text style={s.ctaText}>ابدأ التوجيه الآن</Text>
             </LinearGradient>
           </Pressable>
         </View>
       )}
-    </View>
+    </LinearGradient>
   );
 }
 
-const a = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-  content: { paddingHorizontal: 16, paddingTop: 14, gap: 12 },
+const s = StyleSheet.create({
+  page: { padding: 16, gap: 12 },
+  center: { alignItems: 'center', gap: 10, paddingVertical: 24 },
+  muted: { color: C.sub, textAlign: 'center' },
+  sub: { color: C.sub, fontSize: 13, textAlign: 'center', marginTop: -2 },
+  hint: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 19 },
+  err: { color: C.red, fontSize: 12, textAlign: 'center' },
+  waitTitle: { color: C.violet, fontWeight: '800', fontSize: 17, textAlign: 'center' },
 
-  // Header
-  header: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
-  headerBtn: {
-    width: 44, height: 44, borderRadius: 15, backgroundColor: CARD,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: BORDER,
+  seg: {
+    flexDirection: 'row-reverse', backgroundColor: C.card, borderRadius: 16, padding: 5, gap: 5,
+    borderWidth: 1, borderColor: C.cardBorder,
   },
-  headerTitle: { fontSize: 20, fontWeight: '900', color: TEXT, textAlign: 'center' },
-  headerSub: { fontSize: 11, color: MUTED, textAlign: 'center', marginTop: 2 },
+  segBtn: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 7, borderRadius: 12, paddingVertical: 11 },
+  segBtnAim: { backgroundColor: C.blue },
+  segBtnWatch: { backgroundColor: C.violet },
+  segText: { color: C.sub, fontWeight: '800', fontSize: 13.5 },
 
-  // Mode
-  modeWrap: {
-    flexDirection: 'row-reverse', gap: 6,
-    backgroundColor: CARD, borderRadius: 18, padding: 5,
-    borderWidth: 1, borderColor: BORDER,
-  },
-  modeHalf: { flex: 1, borderRadius: 14, overflow: 'hidden' },
-  modeActive: {
-    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center',
-    gap: 8, paddingVertical: 12, borderRadius: 14,
-  },
-  modeInner: {
-    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center',
-    gap: 8, paddingVertical: 12, borderRadius: 14,
-  },
-  modeTxt: { color: MUTED, fontWeight: '800', fontSize: 13 },
-  modeTxtOn: { color: '#FFF', fontWeight: '900', fontSize: 13 },
+  hero: { borderRadius: 24, padding: 16, gap: 14, alignItems: 'stretch' },
+  heroCell: { color: C.sub, fontSize: 12.5, fontWeight: '700', textAlign: 'center', marginTop: 6 },
 
-  // Hero
-  heroCard: {
-    backgroundColor: CARD, borderRadius: 24, padding: 14, gap: 12,
-    borderWidth: 1, borderColor: BORDER,
-    shadowColor: '#0D2350', shadowOpacity: 0.05, shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 }, elevation: 2,
-  },
-  heroVisual: {
-    height: 230, borderRadius: 20, backgroundColor: '#EEF5FF',
-    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-around',
-    paddingHorizontal: 4,
-  },
+  statRow: { flexDirection: 'row-reverse', gap: 8 },
+  statTile: { flex: 1, backgroundColor: '#ffffffcc', borderRadius: 15, padding: 10, gap: 8 },
+  statHead: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
+  statLbl: { color: C.sub, fontSize: 11, fontWeight: '700' },
+  statIcon: { width: 22, height: 22, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  statVal: { color: C.text, fontSize: 17, fontWeight: '900', textAlign: 'right' },
+  statUnit: { color: C.muted, fontSize: 10.5, fontWeight: '700' },
 
-  // Antenna
-  wrap: { alignItems: 'center', justifyContent: 'center' },
+  status: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, borderRadius: 16, borderWidth: 1, padding: 12 },
+  statusTitle: { fontSize: 14, fontWeight: '800', textAlign: 'right' },
+  statusSub: { color: C.sub, fontSize: 11.5, textAlign: 'right', marginTop: 1 },
 
-  // Gauge
-  gaugeVal: { color: TEXT, fontSize: 44, fontWeight: '900', letterSpacing: -1, lineHeight: 48 },
-  gaugePct: { color: MUTED, fontSize: 13, fontWeight: '800', marginTop: -4 },
-  gaugeLbl: { color: MUTED, fontSize: 11, marginTop: 2, fontWeight: '700' },
+  pinBar: {
+    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderWidth: 1.5, borderColor: C.blue, borderRadius: 14, paddingVertical: 12, backgroundColor: C.blueSoft,
+  },
+  pinBarOn: { backgroundColor: C.blue, borderColor: C.blue },
+  pinText: { color: C.blue, fontWeight: '800', fontSize: 13.5 },
 
-  // Compass
-  compassDeg: { color: TEXT, fontSize: 15, fontWeight: '900' },
-  compassSub: { color: MUTED, fontSize: 9.5, marginTop: -1 },
-
-  // Metric
-  metricsRow: { flexDirection: 'row-reverse', gap: 8 },
-  metric: {
-    flex: 1, minHeight: 82, borderRadius: 14,
-    backgroundColor: '#FAFCFF', padding: 9,
-    borderWidth: 1, borderColor: BORDER, gap: 3,
-  },
-  metricIcon: {
-    width: 24, height: 24, borderRadius: 8,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  metricLbl: { color: MUTED, fontSize: 10, fontWeight: '700' },
-  metricVal: { color: TEXT, fontSize: 13, fontWeight: '900' },
-  metricUnit: { color: MUTED, fontSize: 8.5, fontWeight: '700' },
-
-  // Status
-  statusBar: {
-    flexDirection: 'row-reverse', alignItems: 'center', gap: 10,
-    paddingVertical: 11, paddingHorizontal: 13,
-    borderRadius: 14, borderWidth: 1,
-  },
-  statusTitle: { fontSize: 13, fontWeight: '900', textAlign: 'right' },
-  statusSub: { fontSize: 10.5, marginTop: 2, textAlign: 'right', lineHeight: 15 },
-  statusCheck: {
-    width: 28, height: 28, borderRadius: 14,
-    alignItems: 'center', justifyContent: 'center',
-  },
-
-  // Card
-  card: {
-    backgroundColor: CARD, borderRadius: 20, padding: 14, gap: 10,
-    borderWidth: 1, borderColor: BORDER,
-  },
+  card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 20, padding: 16, gap: 12 },
   cardHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
-  cardIcon: {
-    width: 30, height: 30, borderRadius: 10, backgroundColor: '#E1F5FF',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  cardTitle: { color: TEXT, fontSize: 14.5, fontWeight: '900', textAlign: 'right' },
-  cardSub: { color: MUTED, fontSize: 10.5, textAlign: 'right', marginTop: 2 },
+  cardTitle: { color: C.text, fontSize: 15.5, fontWeight: '800', textAlign: 'right' },
+  cardSub: { color: C.sub, fontSize: 11.5, textAlign: 'right', marginTop: 1 },
 
-  // Tech
+  chips: { flexDirection: 'row-reverse', gap: 8, flexWrap: 'wrap' },
+  chip: { backgroundColor: C.rowBg, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 8 },
+  chipText: { color: C.text, fontWeight: '800', fontSize: 13 },
+
   techRow: { flexDirection: 'row-reverse', gap: 8 },
-  techBtn: {
-    flex: 1, paddingVertical: 10, borderRadius: 12,
-    backgroundColor: '#FAFCFF', alignItems: 'center',
-    borderWidth: 1.5, borderColor: BORDER,
-  },
-  techTxt: { color: TEXT, fontWeight: '900', fontSize: 13.5 },
+  techBtn: { flex: 1, backgroundColor: C.rowBg, borderRadius: 11, paddingVertical: 9, alignItems: 'center', borderWidth: 1, borderColor: C.cardBorder },
+  techText: { color: C.text, fontWeight: '800', fontSize: 13 },
 
-  // Chips
-  chipsRow: { flexDirection: 'row-reverse', gap: 8, paddingVertical: 2 },
-  chip: {
-    height: 38, paddingHorizontal: 18, borderRadius: 19,
-    backgroundColor: '#FAFCFF', borderWidth: 1.5, borderColor: BORDER,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  chipTxt: { color: TEXT, fontWeight: '800', fontSize: 12.5 },
+  wakeBtn: { backgroundColor: C.violet, borderRadius: 13, paddingVertical: 12, alignItems: 'center' },
+  wakeBtnOn: { backgroundColor: C.violetSoft, borderWidth: 1, borderColor: C.violet },
+  wakeText: { color: C.onAccent, fontWeight: '800', fontSize: 13.5 },
 
-  // Direction
-  dirBody: { flexDirection: 'row-reverse', gap: 12, alignItems: 'center' },
-  dirStats: { flex: 1, gap: 8 },
-  dirStatRow: {
-    flexDirection: 'row-reverse', alignItems: 'center', gap: 10,
-    backgroundColor: '#FAFCFF', borderRadius: 12, padding: 9,
-    borderWidth: 1, borderColor: BORDER,
-  },
-  dirStatLbl: { color: MUTED, fontSize: 10, fontWeight: '700' },
-  dirStatVal: { color: TEXT, fontSize: 13.5, fontWeight: '900', marginTop: 1 },
+  aimRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
+  dial: { width: 104, alignItems: 'center', justifyContent: 'center' },
+  aimStats: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: C.rowBg, borderRadius: 15, paddingVertical: 12, paddingHorizontal: 6 },
+  aimStat: { flex: 1, alignItems: 'center', gap: 3 },
+  aimSep: { width: 1, height: 30, backgroundColor: C.line },
+  aimVal: { color: C.text, fontSize: 15, fontWeight: '900' },
+  aimUnit: { color: C.muted, fontSize: 10, fontWeight: '700' },
+  aimLbl: { color: C.sub, fontSize: 10.5, textAlign: 'center' },
+  pinBest: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: C.blue, borderRadius: 13, paddingVertical: 12 },
+  pinBestText: { color: C.onAccent, fontWeight: '800', fontSize: 13.5 },
 
-  pinBtn: {
-    backgroundColor: BLUE, borderRadius: 14,
-    paddingVertical: 11, alignItems: 'center', marginTop: 4,
-  },
-  pinTxt: { color: '#FFF', fontWeight: '900', fontSize: 13.5 },
+  tipRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 9 },
+  tipText: { color: C.sub, fontSize: 12.5, textAlign: 'right', flex: 1, lineHeight: 20 },
 
-  // Wake
-  wakeBtn: {
-    backgroundColor: PURPLE, borderRadius: 12,
-    paddingVertical: 11, alignItems: 'center',
-  },
-  wakeBtnOn: { backgroundColor: '#EEE8FF', borderWidth: 1.5, borderColor: PURPLE },
-  wakeTxt: { color: '#FFF', fontWeight: '900', fontSize: 13.5 },
+  soundBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 11, backgroundColor: C.card, borderColor: C.blue, borderWidth: 1, borderRadius: 16, padding: 14 },
+  soundBtnOn: { backgroundColor: C.blue, borderColor: C.blue },
+  soundTitle: { color: C.blue, fontWeight: '800', fontSize: 13.5, textAlign: 'right' },
+  soundSub: { color: C.sub, fontSize: 11, textAlign: 'right', marginTop: 1 },
 
-  // Toggles
-  togglesRow: { flexDirection: 'row-reverse', gap: 10 },
-  toggleBtn: {
-    flex: 1, flexDirection: 'row-reverse', alignItems: 'center',
-    justifyContent: 'center', gap: 8,
-    paddingVertical: 12, borderRadius: 14,
-    backgroundColor: CARD, borderWidth: 1.5, borderColor: BORDER,
-  },
-  toggleIcon: { fontSize: 16 },
-  toggleTxt: { color: TEXT, fontWeight: '900', fontSize: 12.5 },
-
-  // Chart
-  rsrpBadge: {
-    backgroundColor: BLUE, borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 5,
-  },
-  rsrpBadgeTxt: { color: '#FFF', fontSize: 11, fontWeight: '900' },
-  chartLabels: {
-    flexDirection: 'row-reverse', justifyContent: 'space-between',
-    marginTop: 4, paddingHorizontal: 4,
-  },
-  chartLbl: { color: MUTED, fontSize: 10, fontWeight: '700' },
-
-  // Tips
-  tipsCard: {
-    borderRadius: 20, backgroundColor: '#F7F3FF',
-    borderWidth: 1, borderColor: '#E4D9FF',
-    padding: 14, gap: 8,
-  },
-  tipsHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, marginBottom: 4 },
-  tipsTitle: { color: PURPLE, fontSize: 14.5, fontWeight: '900', flex: 1, textAlign: 'right' },
-  tipRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, paddingVertical: 3 },
-  tipCheck: { color: SUCCESS, fontSize: 14, fontWeight: '900' },
-  tipTxt: { flex: 1, textAlign: 'right', color: '#68718A', fontSize: 12.5, lineHeight: 19 },
-
-  // Footer CTA
-  footer: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    paddingHorizontal: 16, paddingTop: 12,
-    backgroundColor: BG + 'F0',
-  },
-  cta: {
-    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center',
-    gap: 10, paddingVertical: 16, borderRadius: 20,
-    shadowColor: PURPLE, shadowOpacity: 0.4,
-    shadowRadius: 16, shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
-  },
-  ctaTxt: { color: '#FFF', fontWeight: '900', fontSize: 16 },
-
-  err: { color: DANGER, fontSize: 12, textAlign: 'center' },
+  ctaWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 8, backgroundColor: 'transparent' },
+  cta: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 10, borderRadius: 18, paddingVertical: 16 },
+  ctaText: { color: C.onAccent, fontWeight: '900', fontSize: 16 },
 });
