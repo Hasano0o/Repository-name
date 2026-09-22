@@ -767,18 +767,18 @@ export default function BandsScreen() {
                         return (
                           <Pressable
                             key={'n' + b}
-                            style={[s.band2, on && s.band2NrOn, locked && { opacity: 0.6 }]}
+                            style={[s.bandCard, on && s.bandCardNrOn, locked && { opacity: 0.6 }]}
                             onPress={() => {
                               if (locked) return;
                               setNrSelected(sel => (sel.includes(b) ? sel.filter(x => x !== b) : [...sel, b].sort((x, y) => x - y)));
                             }}
                           >
-                            <View style={[s.check, on && s.checkNrOn]}>
-                              {on && <Text style={s.checkMark}>✓</Text>}
+                            <View style={[s.miniCheck, on && s.miniCheckNrOn]}>
+                              {on && <Text style={s.checkMarkNr}>✓</Text>}
                             </View>
-                            <View style={{ flex: 1 }}>
-                              <Text style={[s.bandName, on && { color: C.onAccent }]}>n{b}</Text>
-                              <Text style={[s.bandFreq, on && { color: C.onAccentSoft }]}>{nrFreq(b) || ' '}</Text>
+                            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                              <Text style={[s.bandNameSm, on && { color: C.onAccent }]}>n{b}</Text>
+                              <Text style={[s.bandFreqSm, on && { color: C.onAccentSoft }]}>{nrFreq(b)?.replace(' MHz', '') || '—'}</Text>
                             </View>
                           </Pressable>
                         );
