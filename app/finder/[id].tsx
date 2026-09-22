@@ -34,6 +34,12 @@ const GOALS: { key: string; icon: IconName; color: string; title: string; sub: s
     path: 'anchor',
   },
   {
+    key: 'nsacombo', icon: 'layers', color: '#f59e0b',
+    title: 'دمج 4G + 5G (NSA)', sub: 'أي تركيبة أسرع لك',
+    points: ['يجرب تركيبات مثل B20+n78 و B1+n41', 'يقيس السرعة الفعلية لكل تركيبة', 'يثبّت الأسرع بأمان (rollback تلقائي)'],
+    path: 'nsacombo',
+  },
+  {
     key: 'manual', icon: 'bands', color: '#2f6bff',
     title: 'فحص كامل وتحكم يدوي', sub: 'للي يبي يشوف كل شي',
     points: ['فحص سريع وفحص دقيق مع 5G', 'قفل الترددات يدوياً ووضع الشبكة', 'كل تثبيت يرجع لحاله لو صار أسوأ'],
