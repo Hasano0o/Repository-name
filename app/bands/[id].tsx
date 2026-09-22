@@ -450,7 +450,12 @@ export default function BandsScreen() {
   };
 
   // ---------- المشتقّات ----------
+  const [showAll, setShowAll] = useState(false);
   const active = bandNums(signal?.band);
+  const knownBands = new Set<number>([...active, ...seen]);
+  const displayedBands = showAll
+    ? (cfg?.supported ?? [])
+    : (cfg?.supported ?? []).filter(b => knownBands.has(b));
   const level = overallLevel(signal);
   const locked = busy || scanning;
   const dirty = cfg ? selected.join(',') !== cfg.locked.join(',') : false;
@@ -706,7 +711,7 @@ export default function BandsScreen() {
                   <Text style={s.blockTitle}>ترددات 4G</Text>
                   <Text style={s.hint}>اختيار أكثر من تردد يسمح للراوتر يجمع بينهم (4G+). النقطة الخضراء = متصل الآن.</Text>
                   <View style={s.grid}>
-                    {cfg.supported.map(b => {
+                    {displayedBands.map(b => {
                       const on = selected.includes(b);
                       const live = active.includes(b);
                       const known = live || seen.includes(b);
