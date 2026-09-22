@@ -708,7 +708,14 @@ export default function BandsScreen() {
 
                 {/* الاختيار اليدوي 4G */}
                 <MetricCard>
-                  <Text style={s.blockTitle}>ترددات 4G</Text>
+                  <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={s.blockTitle}>ترددات 4G</Text>
+                    <Pressable onPress={() => setShowAll(v => !v)} hitSlop={8}>
+                      <Text style={{ color: C.blue, fontSize: 12, fontWeight: '800' }}>
+                        {showAll ? 'عرض الفعّالة فقط' : 'عرض الكل'}
+                      </Text>
+                    </Pressable>
+                  </View>
                   <Text style={s.hint}>اختيار أكثر من تردد يسمح للراوتر يجمع بينهم (4G+). النقطة الخضراء = متصل الآن.</Text>
                   <View style={s.grid}>
                     {displayedBands.map(b => {
