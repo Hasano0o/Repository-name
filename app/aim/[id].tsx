@@ -84,88 +84,183 @@ function estimateDistance(rsrp?: number): string {
 
 
 
-// ═══ مؤشر الإشارة (Hero) ═══
+// ═══ مؤشر الإشارة (Hero) — RSRP + SINR ═══
 function SignalHero({
-  value, baseline, history, color,
+  rsrp, sinr, baselineRsrp, baselineSinr, rsrpHistory, sinrHistory, rsrpColor, sinrColor,
 }: {
-  value?: number;
-  baseline: number | null;
-  history: number[];
-  color: string;
+  rsrp?: number;
+  sinr?: number;
+  baselineRsrp: number | null;
+  baselineSinr: number | null;
+  rsrpHistory: number[];
+  sinrHistory: (number | undefined)[];
+  rsrpColor: string;
+  sinrColor: string;
 }) {
-  const delta = value !== undefined && baseline !== null ? value - baseline : undefined;
-  const prev = history.length >= 2 ? history[history.length - 2] : undefined;
-  const trend: 'up' | 'down' | 'flat' =
-    value !== undefined && prev !== undefined
-      ? value > prev + 0.5 ? 'up' : value < prev - 0.5 ? 'down' : 'flat'
+  const deltaR = rsrp !== undefined && baselineRsrp !== null ? rsrp - baselineRsrp : undefined;
+  const deltaS = sinr !== undefined && baselineSinr !== null ? sinr - baselineSinr : undefined;
+  const prevR = rsrpHistory.length >= 2 ? rsrpHistory[rsrpHistory.length - 2] : undefined;
+  const trendR: 'up' | 'down' | 'flat' =
+    rsrp !== undefined && prevR !== undefined
+      ? rsrp > prevR + 0.5 ? 'up' : rsrp < prevR - 0.5 ? 'down' : 'flat'
       : 'flat';
-  const arrow = trend === 'up' ? '↑' : trend === 'down' ? '↓' : '•';
-  const trendColor = trend === 'up' ? SUCCESS : trend === 'down' ? DANGER : MUTED;
-
-  // شريط القوة (12 شرطة) — من -120 dBm إلى -70 dBm
-  const strength = value !== undefined
-    ? Math.max(0, Math.min(1, (value + 120) / 50))
-    : 0;
-  const segs = 12;
-  const lit = Math.round(strength * segs);
+  const arrowR = trendR === 'up' ? '↑' : trendR === 'down' ? '↓' : '•';
+  const trendColorR = trendR === 'up' ? SUCCESS : trendR === 'down' ? DANGER : MUTED;
 
   return (
     <View style={h.wrap}>
-      {/* سهم كبير للاتجاه */}
-      <Text style={[h.arrow, { color: trendColor }]}>{arrow}</Text>
-
-      {/* RSRP ضخم */}
-      <View style={h.rsrpRow}>
-        <Text style={[h.rsrp, { color }]}>{value ?? '—'}</Text>
-        <Text style={h.unit}>dBm</Text>
-      </View>
-      <Text style={h.label}>RSRP · قوة الإشارة</Text>
-
-      {/* شريط القوة الأفقي */}
-      <View style={h.barRow}>
-        {Array.from({ length: segs }, (_, i) => (
-          <View
-            key={i}
-            style={[
-              h.barSeg,
-              { backgroundColor: i < lit ? color : '#E5EDF9' },
-            ]}
-          />
-        ))}
-      </View>
-
-      {/* Delta chip */}
-      {delta !== undefined && (
-        <View
-          style={[
-            h.delta,
-            {
-              backgroundColor:
-                delta > 0.5 ? SUCCESS + '18'
-                : delta < -0.5 ? DANGER + '18'
-                : '#EEF2F9',
-            },
-          ]}
-        >
-          <Text
-            style={[
-              h.deltaTxt,
-              {
-                color:
-                  delta > 0.5 ? SUCCESS
-                  : delta < -0.5 ? DANGER
-                  : MUTED,
-              },
-            ]}
-          >
-            {delta > 0.5 ? `↑ +${Math.round(delta)} dB`
-              : delta < -0.5 ? `↓ ${Math.round(delta)} dB`
-              : '• بدون تغير'}
-            {'  '}من البداية
-          </Text>
+      {/* صف القيم */}
+      <View style={h.row}>
+        {/* RSRP */}
+        <View style={h.col}>
+          <View style={h.colHead}>
+            <Text style={[h.arrow, { color: trendColorR }]}>{arrowR}</Text>
+            <Text style={h.colLbl}>RSRP</Text>
+          </View>
+          <View style={h.valueRow}>
+            <Text style={[h.value, { color: rsrpColor }]}>{rsrp ?? '—'}</Text>
+            <Text style={h.unit}>dBm</Text>
+          </View>
+          {deltaR !== undefined && (
+            <Text style={[h.delta, {
+              color: deltaR > 0.5 ? SUCCESS : deltaR < -0.5 ? DANGER : MUTED,
+            }]}>
+              {deltaR > 0.5 ? `+${Math.round(deltaR)}` : deltaR < -0.5 ? `${Math.round(deltaR)}` : '0'} dB
+            </Text>
+          )}
         </View>
-      )}
+
+        {/* فاصل */}
+        <View style={h.sep} />
+
+        {/* SINR */}
+        <View style={h.col}>
+          <View style={h.colHead}>
+            <Icon name="speed" size={16} color={sinrColor} />
+            <Text style={h.colLbl}>SINR</Text>
+          </View>
+          <View style={h.valueRow}>
+            <Text style={[h.value, { color: sinrColor }]}>{sinr ?? '—'}</Text>
+            <Text style={h.unit}>dB</Text>
+          </View>
+          {deltaS !== undefined && (
+            <Text style={[h.delta, {
+              color: deltaS > 0.5 ? SUCCESS : deltaS < -0.5 ? DANGER : MUTED,
+            }]}>
+              {deltaS > 0.5 ? `+${Math.round(deltaS)}` : deltaS < -0.5 ? `${Math.round(deltaS)}` : '0'} dB
+            </Text>
+          )}
+        </View>
+      </View>
+
+      {/* الرسم المزدوج */}
+      <View style={{ marginTop: 8 }}>
+        <DualChart
+          rsrpValues={rsrpHistory}
+          sinrValues={sinrHistory}
+          rsrpColor={rsrpColor}
+          sinrColor={sinrColor}
+          width={300}
+        />
+      </View>
+
+      {/* المفتاح */}
+      <View style={h.legend}>
+        <View style={h.legendItem}>
+          <View style={[h.legendDot, { backgroundColor: rsrpColor }]} />
+          <Text style={h.legendTxt}>RSRP</Text>
+        </View>
+        <View style={h.legendItem}>
+          <View style={[h.legendDot, { backgroundColor: sinrColor }]} />
+          <Text style={h.legendTxt}>SINR</Text>
+        </View>
+      </View>
     </View>
+  );
+}
+
+// ═══ رسم مزدوج: RSRP + SINR ═══
+function DualChart({
+  rsrpValues, sinrValues, rsrpColor, sinrColor, width,
+}: {
+  rsrpValues: number[];
+  sinrValues: (number | undefined)[];
+  rsrpColor: string;
+  sinrColor: string;
+  width: number;
+}) {
+  const H = 160;
+  const pad = { top: 12, bottom: 20, left: 4, right: 4 };
+  const innerW = width - pad.left - pad.right;
+  const innerH = H - pad.top - pad.bottom;
+
+  const rsrpMin = -125, rsrpMax = -60;
+  const sinrMin = -10, sinrMax = 30;
+
+  const n = Math.max(rsrpValues.length, 1);
+  const stepX = n > 1 ? innerW / (n - 1) : 0;
+
+  const rPts = rsrpValues.map((v, i) => ({
+    x: pad.left + i * stepX,
+    y: pad.top + innerH - ((Math.max(rsrpMin, Math.min(rsrpMax, v)) - rsrpMin) / (rsrpMax - rsrpMin)) * innerH,
+  }));
+  const sPts = sinrValues.map((v, i) => v === undefined ? null : ({
+    x: pad.left + i * stepX,
+    y: pad.top + innerH - ((Math.max(sinrMin, Math.min(sinrMax, v)) - sinrMin) / (sinrMax - sinrMin)) * innerH,
+  })).filter((p): p is { x: number; y: number } => !!p);
+
+  const rLine = rPts.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
+  const sLine = sPts.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
+
+  const lastR = rPts[rPts.length - 1];
+  const lastS = sPts[sPts.length - 1];
+
+  return (
+    <Svg width={width} height={H}>
+      <Defs>
+        <SvgLinearGradient id="rsrpGrad" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0%" stopColor={rsrpColor} stopOpacity="0.18" />
+          <Stop offset="100%" stopColor={rsrpColor} stopOpacity="0" />
+        </SvgLinearGradient>
+      </Defs>
+      {/* شبكة */}
+      {[0, 0.5, 1].map((f, i) => (
+        <Line key={i}
+          x1={0} y1={pad.top + f * innerH}
+          x2={width} y2={pad.top + f * innerH}
+          stroke="#E6ECF5" strokeWidth={1} strokeDasharray="3 3"
+        />
+      ))}
+      {/* RSRP area + line */}
+      {rPts.length >= 2 && (
+        <>
+          <Path
+            d={`${rLine} L ${lastR.x} ${pad.top + innerH} L ${rPts[0].x} ${pad.top + innerH} Z`}
+            fill="url(#rsrpGrad)"
+          />
+          <Path d={rLine} stroke={rsrpColor} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          {lastR && (
+            <>
+              <Circle cx={lastR.x} cy={lastR.y} r={4} fill={rsrpColor} />
+              <Circle cx={lastR.x} cy={lastR.y} r={8} fill={rsrpColor} opacity={0.22} />
+            </>
+          )}
+        </>
+      )}
+      {/* SINR line */}
+      {sPts.length >= 2 && (
+        <>
+          <Path d={sLine} stroke={sinrColor} strokeWidth={2} fill="none"
+            strokeLinecap="round" strokeLinejoin="round" strokeDasharray="5 4" />
+          {lastS && (
+            <>
+              <Circle cx={lastS.x} cy={lastS.y} r={3.5} fill={sinrColor} />
+              <Circle cx={lastS.x} cy={lastS.y} r={7} fill={sinrColor} opacity={0.2} />
+            </>
+          )}
+        </>
+      )}
+    </Svg>
   );
 }
 
@@ -233,6 +328,7 @@ export default function AimScreen() {
   const [tech, setTech] = useState<Tech>('LTE');
   const [readings, setReadings] = useState<Reading[]>([]);
   const [baseline, setBaseline] = useState<number | null>(null);
+  const [baselineSinr, setBaselineSinr] = useState<number | null>(null);
   const [best, setBest] = useState<Reading | null>(null);
   const [haptics, setHaptics] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -335,6 +431,7 @@ export default function AimScreen() {
         recentRef.current = [...recent, reading].slice(-SMOOTH_N);
         setReadings(list => [...list, reading].slice(-MAX_POINTS));
         setBaseline(b => (b === null ? (smooth ?? rd.rsrp ?? null) : b));
+        setBaselineSinr(b => (b === null ? (rd.sinr ?? null) : b));
         if (vals.length >= SMOOTH_N && (!bestRef.current || score > bestRef.current.score)) {
           bestRef.current = reading;
           setBest(reading);
@@ -390,6 +487,7 @@ export default function AimScreen() {
     setReadings([]);
     const rd = signal ? readOf(signal, techRef.current) : null;
     setBaseline(rd?.rsrp ?? null);
+    setBaselineSinr(rd?.sinr ?? null);
     setNrSeen(false);
   };
 
@@ -555,10 +653,14 @@ export default function AimScreen() {
             {/* ═══ Hero Card ═══ */}
             <View style={a.heroCard}>
               <SignalHero
-                value={shown}
-                baseline={baseline}
-                history={readings.map(r => r.smooth ?? r.rsrp ?? -110)}
-                color={lvlColor}
+                rsrp={shown}
+                sinr={current?.sinr}
+                baselineRsrp={baseline}
+                baselineSinr={baselineSinr}
+                rsrpHistory={readings.map(r => r.smooth ?? r.rsrp ?? -110)}
+                sinrHistory={readings.map(r => r.sinr)}
+                rsrpColor={lvlColor}
+                sinrColor={BLUE}
               />
 
               {/* 4 Metrics */}
@@ -792,22 +894,28 @@ export default function AimScreen() {
 }
 
 const h = StyleSheet.create({
-  wrap: { alignItems: 'center', gap: 4, width: '100%' },
-  arrow: { fontSize: 44, fontWeight: '900', lineHeight: 48 },
-  rsrpRow: { flexDirection: 'row-reverse', alignItems: 'baseline', gap: 4, marginTop: -4 },
-  rsrp: { fontSize: 56, fontWeight: '900', letterSpacing: -2, lineHeight: 60 },
-  unit: { color: MUTED, fontSize: 16, fontWeight: '800' },
-  label: { color: MUTED, fontSize: 11.5, fontWeight: '700', textAlign: 'center', marginTop: 2 },
-  barRow: {
-    flexDirection: 'row-reverse', gap: 4, marginTop: 12,
-    paddingHorizontal: 8, alignSelf: 'stretch', justifyContent: 'center',
+  wrap: { width: '100%', alignItems: 'center' },
+  row: {
+    flexDirection: 'row-reverse', alignSelf: 'stretch',
+    alignItems: 'center', justifyContent: 'space-around',
+    paddingVertical: 4,
   },
-  barSeg: { flex: 1, height: 8, borderRadius: 4, maxWidth: 22 },
-  delta: {
-    marginTop: 12, paddingVertical: 6, paddingHorizontal: 14,
-    borderRadius: 999,
+  col: { flex: 1, alignItems: 'center', gap: 2 },
+  colHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5 },
+  colLbl: { color: MUTED, fontSize: 12, fontWeight: '800' },
+  arrow: { fontSize: 22, fontWeight: '900' },
+  valueRow: { flexDirection: 'row-reverse', alignItems: 'baseline', gap: 3 },
+  value: { fontSize: 42, fontWeight: '900', letterSpacing: -1.5, lineHeight: 46 },
+  unit: { color: MUTED, fontSize: 12, fontWeight: '800' },
+  delta: { fontSize: 11.5, fontWeight: '800', marginTop: 1 },
+  sep: { width: 1, height: 60, backgroundColor: '#E5EDF9' },
+  legend: {
+    flexDirection: 'row-reverse', gap: 16, marginTop: 8,
+    justifyContent: 'center', alignItems: 'center',
   },
-  deltaTxt: { fontSize: 12.5, fontWeight: '800', textAlign: 'center' },
+  legendItem: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendTxt: { color: MUTED, fontSize: 11, fontWeight: '700' },
 });
 
 const a = StyleSheet.create({
