@@ -102,6 +102,20 @@ function Acc({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+function MenuItem({ icon, color, title, onPress }: {
+  icon: IconName; color: string; title: string; onPress: () => void;
+}) {
+  return (
+    <Pressable style={s.menuItem} onPress={onPress}>
+      <View style={[s.menuIcon, { backgroundColor: color + '18' }]}>
+        <Icon name={icon} size={18} color={color} />
+      </View>
+      <Text style={s.menuText}>{title}</Text>
+      <Text style={s.menuArrow}>‹</Text>
+    </Pressable>
+  );
+}
+
 export default function RouterDashboard() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
@@ -507,142 +521,49 @@ export default function RouterDashboard() {
 
         {!loading && info && (
           <TileGrid>
-            <ToolTile wide icon="aim" color="#2f6bff" title="التوجيه" sub="لقّط أقوى إشارة"
+            <ToolTile icon="aim" color="#2f6bff" title="التوجيه" sub="لقّط أقوى إشارة"
               onPress={() => router.push(`/aim/${info.id}` as Href)} />
-            <ToolTile wide icon="antenna" color="#f97316" title="الأنتنا" sub="تحتاجها؟ وأي نوع"
+            <ToolTile icon="tower" color="#12b76a" title="الأبراج" sub="النواقل والدمج"
+              onPress={() => router.push(`/towers/${info.id}` as Href)} />
+            <ToolTile icon="spark" color="#7c5cff" title="أفضل تردد" sub="أسرع نت وأقل بنق"
+              onPress={() => router.push(`/finder/${info.id}` as Href)} />
+            <ToolTile icon="antenna" color="#f97316" title="الأنتنا" sub="تحتاجها؟ وأي نوع"
               onPress={() => router.push(`/antenna/${info.id}` as Href)} />
-            {feat.bands && (
-              <ToolTile wide icon="bands" color="#7c5cff" title="أفضل تردد" sub="أسرع نت وأقل بنق"
-                onPress={() => router.push(`/finder/${info.id}` as Href)} />
-            )}
-            {feat.cells && (
-              <ToolTile wide icon="tower" color="#12b76a" title="الأبراج" sub="النواقل والدمج"
-                onPress={() => router.push(`/towers/${info.id}` as Href)} />
-            )}
+            <ToolTile icon="speed" color="#12b76a" title="السرعة" sub="تنزيل ورفع"
+              onPress={() => router.push(`/speed/${info.id}` as Href)} />
+            <ToolTile icon="game" color="#ec4899" title="البنق" sub="للألعاب"
+              onPress={() => router.push(`/ping/${info.id}` as Href)} />
+            <ToolTile icon="chart" color="#0891b2" title="التفاصيل" sub="كل الأرقام"
+              onPress={() => router.push(`/details/${info.id}` as Href)} />
+            <ToolTile icon="phone" color="#8b5cf6" title="الأجهزة" sub="المتصلين"
+              onPress={() => router.push(`/device/${info.id}` as Href)} />
+            <ToolTile icon="pin" color="#0ea5a4" title="الأماكن" sub="وين أحط الراوتر؟"
+              onPress={() => router.push(`/places/${info.id}` as Href)} />
           </TileGrid>
         )}
 
-        {!loading && signal && info && (
-          <Acc title="التفاصيل التقنية">
-            <MetricCard>
-            {(() => {
-              const rings: RingSpec[] = [
-                { label: 'قوة الإشارة', value: signal.rsrp, unit: 'dBm', level: rsrpLevel(signal.rsrp), min: -125, max: -70, mode: 'percent',
-                  delta: signal.rsrp !== undefined && prevSig?.rsrp !== undefined ? signal.rsrp - prevSig.rsrp : undefined },
-                { label: 'جودة الاتصال', value: signal.sinr, unit: 'dB', level: sinrLevel(signal.sinr), min: -10, max: 30, mode: 'percent',
-                  delta: signal.sinr !== undefined && prevSig?.sinr !== undefined ? signal.sinr - prevSig.sinr : undefined },
-                {
-                  label: 'الاستقرار',
-                  value: (() => { const st = stability(history); return st === undefined ? undefined : Math.round(st * 100); })(),
-                  unit: '%',
-                  level: (() => {
-                    const st = stability(history);
-                    return st === undefined ? 'unknown' : st > 0.75 ? 'excellent' : st > 0.55 ? 'good' : st > 0.35 ? 'fair' : 'poor';
-                  })(),
-                  min: 0, max: 100, mode: 'percent',
-                },
-              ];
-              if (hasNr) {
-                rings.push({ label: 'إشارة 5G', value: signal.nrRsrp, unit: 'dBm', level: rsrpLevel(signal.nrRsrp), min: -125, max: -70, color: C.violet, mode: 'percent',
-                  delta: signal.nrRsrp !== undefined && prevSig?.nrRsrp !== undefined ? signal.nrRsrp - prevSig.nrRsrp : undefined });
-              } else {
-                rings.push({ label: 'مستوى الاستقبال', value: signal.rssi, unit: 'dBm', level: rssiLevel(signal.rssi), min: -100, max: -55, mode: 'percent' });
-              }
-              return <MetricRings items={rings} size={62} />;
-            })()}
-            <View style={s.advanced}>
-              <MetricRow label="قوة الإشارة (RSRP)" value={signal.rsrp} unit="dBm" level={rsrpLevel(signal.rsrp)} />
-              <MetricRow label="جودة الإشارة (SINR)" value={signal.sinr} unit="dB" level={sinrLevel(signal.sinr)} />
-              <MetricRow label="RSRQ" value={signal.rsrq} unit="dB" level={rsrqLevel(signal.rsrq)} />
-              <MetricRow label="RSSI" value={signal.rssi} unit="dBm" level={rssiLevel(signal.rssi)} />
-              <InfoRow label="الباند" value={signal.band} />
-              <InfoRow label="Cell ID" value={signal.cellId} />
-              <InfoRow label="PCI" value={signal.pci} />
-              <InfoRow label="EARFCN" value={signal.earfcn} />
-              <InfoRow label="عرض النطاق" value={[signal.dlBandwidth, signal.ulBandwidth].filter(Boolean).join(' / ')} />
-              <InfoRow label="رقم البرج (eNodeB)" value={signal.enodebId} />
-              <InfoRow label="CQI" value={signal.cqi !== undefined ? String(signal.cqi) : undefined} />
-              <InfoRow label="MCS تنزيل / رفع" value={[signal.dlMcs, signal.ulMcs].filter(v => v !== undefined).join(' / ') || undefined} />
-              <InfoRow label="قوة الإرسال" value={signal.txPower !== undefined ? `${signal.txPower} dBm` : undefined} />
-              {hasNr && (
-                <View style={s.nrBlock}>
-                  <Text style={s.nrTitle}>قياسات 5G</Text>
-                  <MetricRow label="قوة إشارة 5G (RSRP)" value={signal.nrRsrp} unit="dBm" level={rsrpLevel(signal.nrRsrp)} />
-                  <MetricRow label="جودة إشارة 5G (SINR)" value={signal.nrSinr} unit="dB" level={sinrLevel(signal.nrSinr)} />
-                  <MetricRow label="RSRQ 5G" value={signal.nrRsrq} unit="dB" level={rsrqLevel(signal.nrRsrq)} />
-                  <InfoRow label="تردد 5G" value={signal.nrBand} />
-                  <InfoRow label="PCI 5G" value={signal.nrPci} />
-                  <InfoRow label="ARFCN 5G" value={signal.nrArfcn} />
-                  <InfoRow label="عرض نطاق 5G" value={signal.nrDlBandwidth} />
-                </View>
-              )}
-            </View>
-            </MetricCard>
-            <View style={{ height: 10 }} />
-            <DiagnosisCard routerId={info.id} signal={signal} downBps={traffic?.downBytesPerSec} />
-          </Acc>
-        )}
-
         {!loading && info && (
-          <Acc title="معلومات وأدوات أكثر">
-            <View style={s.statsRow}>
-              <View style={s.statItem}>
-                <View style={[s.statIcon, { backgroundColor: '#dbeafe' }]}><Icon name="down" size={16} color={C.blue} /></View>
-                <View style={s.statText}>
-                  <Text style={s.statLbl}>تنزيل</Text>
-                  <Text style={[s.statNum, { color: C.blue }]} numberOfLines={1} adjustsFontSizeToFit>{traffic ? fmtRate(traffic.downBytesPerSec) : '—'}</Text>
-                </View>
-              </View>
-              <View style={s.statItem}>
-                <View style={[s.statIcon, { backgroundColor: '#ede9fe' }]}><Icon name="up" size={16} color={C.violet} /></View>
-                <View style={s.statText}>
-                  <Text style={s.statLbl}>رفع</Text>
-                  <Text style={[s.statNum, { color: C.violet }]} numberOfLines={1} adjustsFontSizeToFit>{traffic ? fmtRate(traffic.upBytesPerSec) : '—'}</Text>
-                </View>
-              </View>
-              <View style={s.statItem}>
-                <View style={[s.statIcon, { backgroundColor: '#dcfce7' }]}><Icon name="phone" size={16} color={C.green} /></View>
-                <View style={s.statText}>
-                  <Text style={s.statLbl}>الأجهزة</Text>
-                  <Text style={[s.statNum, { color: C.green }]}>{devices.length}</Text>
-                </View>
-              </View>
-            </View>
-
-            <Text style={s.grp}>افحص وراقب</Text>
-            <TileGrid>
-              <ToolTile icon="speed" color="#12b76a" title="السرعة" sub="تنزيل ورفع وبنق"
-                onPress={() => router.push(`/speed/${info.id}` as Href)} />
-              <ToolTile icon="clock" color="#0ea5e9" title="السجل" sub="الإشارة عبر الوقت"
-                onPress={() => router.push(`/history/${info.id}` as Href)} />
-              <ToolTile icon="spark" color="#f59e0b" title="وش نجح" sub="تجاربك السابقة"
-                onPress={() => router.push(`/trials/${info.id}` as Href)} />
-              <ToolTile icon="phone" color="#ec4899" title="الأجهزة" sub="المتصلين والاستهلاك"
-                onPress={() => router.push(`/device/${info.id}` as Href)} />
-              <ToolTile icon="pin" color="#0ea5a4" title="الأماكن" sub="وين أحط الراوتر؟"
-                onPress={() => router.push(`/places/${info.id}` as Href)} />
-              <ToolTile icon="report" color="#64748b" title="التقرير" sub="شارك حالتك"
-                onPress={() => router.push(`/report/${info.id}` as Href)} />
-              <ToolTile icon="bell" color="#f43f5e" title="المراقبة" sub="تنبيهات تلقائية"
-                onPress={() => router.push('/monitor' as Href)} />
-            </TileGrid>
-
-            <Text style={s.grp}>الإعدادات</Text>
-            <TileGrid>
-              {feat.network && (
-                <ToolTile icon="settings" color="#0891b2" title="الشبكة" sub="APN و DNS"
-                  onPress={() => router.push(`/network/${info.id}` as Href)} />
-              )}
-              <ToolTile icon="folder" color="#a16207" title="ملفات التعريف" sub="احفظ واسترجع"
-                onPress={() => router.push(`/profiles/${info.id}` as Href)} />
-              {feat.sms && (
-                <ToolTile icon="sms" color="#16a34a" title="الرسائل" sub="وارد وإرسال"
-                  onPress={() => router.push(`/sms/${info.id}` as Href)} />
-              )}
-              <ToolTile icon="power" color="#e5484d" title="إعادة التشغيل" sub="يأخذ دقيقتين"
+          <View style={s.menu}>
+            <Text style={s.menuHeader}>المزيد</Text>
+            {feat.sms && (
+              <MenuItem icon="sms" color="#16a34a" title="الرسائل القصيرة"
+                onPress={() => router.push(`/sms/${info.id}` as Href)} />
+            )}
+            {feat.network && (
+              <MenuItem icon="settings" color="#0891b2" title="إعدادات الشبكة (APN + DNS)"
+                onPress={() => router.push(`/network/${info.id}` as Href)} />
+            )}
+            <MenuItem icon="folder" color="#a16207" title="ملفات التعريف"
+              onPress={() => router.push(`/profiles/${info.id}` as Href)} />
+            <MenuItem icon="report" color="#64748b" title="التقرير"
+              onPress={() => router.push(`/report/${info.id}` as Href)} />
+            <MenuItem icon="bell" color="#f43f5e" title="المراقبة"
+              onPress={() => router.push('/monitor' as Href)} />
+            {feat.reboot && (
+              <MenuItem icon="power" color="#e5484d" title="إعادة التشغيل"
                 onPress={onReboot} />
-            </TileGrid>
-          </Acc>
+            )}
+          </View>
         )}
 
         {!loading && info && (
@@ -834,6 +755,25 @@ const s = StyleSheet.create({
     marginTop: 6,
   },
   editBtnText: { color: C.blue, fontWeight: '800', fontSize: 14 },
+  menu: {
+    backgroundColor: C.card, borderRadius: 20, paddingVertical: 6, paddingHorizontal: 12,
+    borderWidth: 1, borderColor: C.cardBorder, gap: 0,
+  },
+  menuHeader: {
+    color: C.muted, fontSize: 12, fontWeight: '800', textAlign: 'right',
+    paddingVertical: 10, paddingHorizontal: 4,
+  },
+  menuItem: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 12,
+    paddingVertical: 12, paddingHorizontal: 4,
+    borderTopWidth: 1, borderTopColor: C.line,
+  },
+  menuIcon: {
+    width: 38, height: 38, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  menuText: { flex: 1, color: C.text, fontSize: 14, fontWeight: '700', textAlign: 'right' },
+  menuArrow: { color: '#94A3B8', fontSize: 22, fontWeight: '300' },
   deleteText: { color: C.red, textAlign: 'center', paddingVertical: 10, opacity: 0.85 },
   fabs: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   fab: {
