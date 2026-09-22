@@ -3,60 +3,115 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, Href } from 'expo-router';
 import { Icon, IconName } from '../../src/ui/Icon';
-import { C, R, S } from '../../src/ui/theme';
 
-interface Goal {
+const BLUE = '#3567F5';
+const PURPLE = '#7655F5';
+const TEXT = '#14264A';
+const MUTED = '#71809A';
+const BG = '#F4F8FF';
+const SUCCESS = '#13B783';
+const CARD = '#FFFFFF';
+const BORDER = '#E6ECF5';
+
+interface Item {
   key: string;
   icon: IconName;
   color: string;
   title: string;
   sub: string;
-  tag: string;
+  tag?: string;
   path: string;
 }
+interface Section {
+  key: string;
+  icon: string;
+  title: string;
+  subtitle: string;
+  items: Item[];
+}
 
-const GOALS: Goal[] = [
+const SECTIONS: Section[] = [
   {
-    key: 'speed', icon: 'spark', color: '#7c5cff',
-    title: 'أسرع إنترنت',
-    sub: 'تلقائي — تضغط وتنتظر',
-    tag: 'يقيس القوة والاستجابة',
-    path: 'optimize',
+    key: 'auto',
+    icon: '🚀',
+    title: 'الأسرع تلقائياً',
+    subtitle: 'يختار الأفضل لك بدون تعب',
+    items: [
+      {
+        key: 'speed',
+        icon: 'spark',
+        color: '#7c5cff',
+        title: 'أسرع إنترنت',
+        sub: 'اختبار تلقائي شامل — يقفل ويقيس ويثبّت',
+        tag: 'موصى به',
+        path: 'optimize',
+      },
+      {
+        key: 'anchor',
+        icon: 'antenna',
+        color: '#9333ea',
+        title: 'مرساة 5G',
+        sub: 'أي تردد 4G يفتح 5G في منطقتك',
+        path: 'anchor',
+      },
+    ],
   },
   {
-    key: 'game', icon: 'game', color: '#ec4899',
-    title: 'أقل بنق',
-    sub: 'للألعاب',
-    tag: 'البنق والتذبذب',
-    path: 'ping',
+    key: 'manual',
+    icon: '🎯',
+    title: 'تحكم يدوي',
+    subtitle: 'اختر الترددات وقفلها بنفسك',
+    items: [
+      {
+        key: 'bands',
+        icon: 'bands',
+        color: '#2f6bff',
+        title: 'قفل الترددات',
+        sub: 'اختيار يدوي كامل + وضع الشبكة',
+        path: 'bands',
+      },
+      {
+        key: 'ca',
+        icon: 'layers',
+        color: '#0ea5a4',
+        title: 'دمج 4G + 4G',
+        sub: 'جرب تركيبات مثل B1+B3 و B3+B20',
+        path: 'calab',
+      },
+      {
+        key: 'nsa',
+        icon: 'layers',
+        color: '#f59e0b',
+        title: 'دمج 4G + 5G (NSA)',
+        sub: 'تركيبات مثل B20+n78 و B1+n41',
+        tag: 'جديد',
+        path: 'nsacombo',
+      },
+    ],
   },
   {
-    key: 'ca', icon: 'layers', color: '#0ea5a4',
-    title: 'أفضل دمج',
-    sub: '4G + 4G',
-    tag: 'مثل B1+B3',
-    path: 'calab',
-  },
-  {
-    key: 'anchor', icon: 'antenna', color: '#9333ea',
-    title: 'مرساة 5G',
-    sub: 'أي 4G يفتح 5G',
-    tag: '~25 ميقا',
-    path: 'anchor',
-  },
-  {
-    key: 'nsacombo', icon: 'layers', color: '#f59e0b',
-    title: 'دمج NSA',
-    sub: '4G + 5G',
-    tag: 'مثل B20+n78',
-    path: 'nsacombo',
-  },
-  {
-    key: 'manual', icon: 'bands', color: '#2f6bff',
-    title: 'فحص وتحكم',
-    sub: 'كل شي يدوياً',
-    tag: 'قفل الترددات',
-    path: 'bands',
+    key: 'diagnose',
+    icon: '📊',
+    title: 'تشخيص',
+    subtitle: 'اعرف شبكتك وأبراجك',
+    items: [
+      {
+        key: 'towers',
+        icon: 'tower',
+        color: '#12b76a',
+        title: 'الأبراج والنواقل',
+        sub: 'كل الأبراج + PCI + الدمج',
+        path: 'towers',
+      },
+      {
+        key: 'ping',
+        icon: 'game',
+        color: '#ec4899',
+        title: 'قياس البنق',
+        sub: 'مناسب للألعاب والاتصال',
+        path: 'ping',
+      },
+    ],
   },
 ];
 
@@ -64,106 +119,96 @@ export default function Finder() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   return (
-    <LinearGradient colors={[C.bgTop, C.bgBottom]} style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 40 }]}>
-        <Text style={s.lead}>وش يهمك أكثر؟</Text>
-        <View style={s.grid}>
-          {GOALS.map(g => (
-            <Pressable
-              key={g.key}
-              style={({ pressed }) => [
-                s.card,
-                { borderColor: g.color + '40' },
-                pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] },
-              ]}
-              onPress={() => router.push(`/${g.path}/${id}` as Href)}
-            >
-              {/* أيقونة كبيرة */}
-              <View style={[s.iconWrap, { backgroundColor: g.color + '18' }]}>
-                <Icon name={g.icon} size={30} color={g.color} />
-              </View>
-
-              {/* العنوان */}
-              <Text style={s.title}>{g.title}</Text>
-
-              {/* الوصف */}
-              <Text style={[s.sub, { color: g.color }]} numberOfLines={1}>
-                {g.sub}
-              </Text>
-
-              {/* شارة صغيرة */}
-              <View style={[s.chip, { backgroundColor: g.color + '12' }]}>
-                <Text style={[s.chipTxt, { color: g.color }]} numberOfLines={1}>
-                  {g.tag}
-                </Text>
-              </View>
-            </Pressable>
-          ))}
+    <View style={{ flex: 1, backgroundColor: BG }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 40 }]}
+      >
+        <View style={s.header}>
+          <Text style={s.lead}>وش تبي تسوي؟</Text>
+          <Text style={s.sub}>3 أقسام — كل واحد فيه أدوات محددة</Text>
         </View>
+
+        {SECTIONS.map((sec) => (
+          <View key={sec.key} style={s.section}>
+            <View style={s.secHead}>
+              <Text style={s.secIcon}>{sec.icon}</Text>
+              <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                <Text style={s.secTitle}>{sec.title}</Text>
+                <Text style={s.secSub}>{sec.subtitle}</Text>
+              </View>
+            </View>
+            <View style={{ gap: 8 }}>
+              {sec.items.map((it) => (
+                <Pressable
+                  key={it.key}
+                  style={({ pressed }) => [
+                    s.card,
+                    { borderColor: it.color + '40' },
+                    pressed && { opacity: 0.75, transform: [{ scale: 0.99 }] },
+                  ]}
+                  onPress={() => router.push(`/${it.path}/${id}` as Href)}
+                >
+                  <View style={[s.iconWrap, { backgroundColor: it.color + '18' }]}>
+                    <Icon name={it.icon} size={20} color={it.color} />
+                  </View>
+                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                    <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6 }}>
+                      {!!it.tag && (
+                        <View style={[s.tag, { backgroundColor: it.color }]}>
+                          <Text style={s.tagTxt}>{it.tag}</Text>
+                        </View>
+                      )}
+                      <Text style={s.title}>{it.title}</Text>
+                    </View>
+                    <Text style={[s.itemSub, { color: it.color }]}>{it.sub}</Text>
+                  </View>
+                  <Icon name="chevron" size={18} color={it.color} />
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ))}
+
         <Text style={s.note}>
-          🛡️ أي تثبيت من هنا يمر على القفل الآمن: نقيس قبل وبعد، ولو صار الاتصال أسوأ نرجع إعدادك تلقائياً.
+          🛡️ كل أداة تمر على «القفل الآمن»: نقيس قبل وبعد، ولو صار الاتصال أسوأ نرجع إعدادك تلقائياً.
         </Text>
       </ScrollView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
-  page: { padding: S.lg, gap: S.md },
-  lead: { color: C.text, fontSize: 18, fontWeight: '800', textAlign: 'right', marginBottom: 4 },
-
-  grid: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    gap: 10,
+  page: { padding: 16, gap: 16 },
+  header: { gap: 3 },
+  lead: { color: TEXT, fontSize: 22, fontWeight: '900', textAlign: 'right' },
+  sub: { color: MUTED, fontSize: 12.5, textAlign: 'right' },
+  section: {
+    backgroundColor: CARD, borderRadius: 22, padding: 14, gap: 12,
+    borderWidth: 1, borderColor: BORDER,
   },
+  secHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
+  secIcon: { fontSize: 24 },
+  secTitle: { color: TEXT, fontSize: 16.5, fontWeight: '900', textAlign: 'right' },
+  secSub: { color: MUTED, fontSize: 11, textAlign: 'right', marginTop: 1 },
   card: {
-    flexBasis: '47%',
-    flexGrow: 1,
-    backgroundColor: C.card,
-    borderWidth: 1.5,
-    borderRadius: R.lg,
-    paddingVertical: S.md,
-    paddingHorizontal: S.sm,
-    alignItems: 'center',
-    gap: 6,
-    minHeight: 150,
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 12,
+    paddingVertical: 12, paddingHorizontal: 12,
+    backgroundColor: '#FAFCFF',
+    borderRadius: 14, borderWidth: 1.5,
   },
   iconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 2,
+    width: 42, height: 42, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center',
   },
-  title: {
-    color: C.text,
-    fontSize: 14.5,
-    fontWeight: '800',
-    textAlign: 'center',
+  title: { color: TEXT, fontSize: 14, fontWeight: '900', textAlign: 'right' },
+  itemSub: { fontSize: 11, fontWeight: '700', textAlign: 'right', marginTop: 2 },
+  tag: {
+    paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6,
   },
-  sub: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  chip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    marginTop: 2,
-    maxWidth: '100%',
-  },
-  chipTxt: {
-    fontSize: 10.5,
-    fontWeight: '800',
-  },
+  tagTxt: { color: '#FFF', fontSize: 9, fontWeight: '900' },
   note: {
-    color: C.muted,
-    fontSize: 12,
-    textAlign: 'right',
-    lineHeight: 19,
-    marginTop: 8,
+    color: MUTED, fontSize: 11.5, textAlign: 'right',
+    lineHeight: 18, paddingHorizontal: 4, marginTop: 4,
   },
 });

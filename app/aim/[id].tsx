@@ -356,7 +356,7 @@ export default function AimScreen() {
       await tick(r);
       if (!alive) return;
       setLoading(false);
-      timer = setInterval(() => tick(r), 1000);
+      timer = setInterval(() => tick(r), 2000); // كل ثانيتين لتوفير البطارية
     })();
     return () => {
       alive = false;
