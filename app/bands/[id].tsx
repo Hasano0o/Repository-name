@@ -723,11 +723,15 @@ export default function BandsScreen() {
                       const live = active.includes(b);
                       const known = live || seen.includes(b);
                       return (
-                        <Pressable key={b} style={[s.band, on && s.bandOn, locked && { opacity: 0.6 }]} onPress={() => toggle(b)}>
-                          {live && <View style={s.bandDot} />}
-                          <Text style={[s.bandName, on && { color: C.onAccent }]}>B{b}</Text>
-                          <Text style={[s.bandFreq, on && { color: C.onAccentSoft }]}>{bandFreq(b) || ' '}</Text>
-                          {!on && !known && <Text style={s.bandUnknown}>غير مجرّب</Text>}
+                        <Pressable key={b} style={[s.band2, on && s.band2On, locked && { opacity: 0.6 }]} onPress={() => toggle(b)}>
+                          {live && <View style={s.bandLiveDot} />}
+                          <View style={[s.check, on && s.checkOn]}>
+                            {on && <Text style={s.checkMark}>✓</Text>}
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[s.bandName, on && { color: C.onAccent }]}>B{b}</Text>
+                            <Text style={[s.bandFreq, on && { color: C.onAccentSoft }]}>{bandFreq(b) || ' '}</Text>
+                          </View>
                         </Pressable>
                       );
                     })}
@@ -763,14 +767,19 @@ export default function BandsScreen() {
                         return (
                           <Pressable
                             key={'n' + b}
-                            style={[s.band, on && s.bandOn, locked && { opacity: 0.6 }]}
+                            style={[s.band2, on && s.band2NrOn, locked && { opacity: 0.6 }]}
                             onPress={() => {
                               if (locked) return;
                               setNrSelected(sel => (sel.includes(b) ? sel.filter(x => x !== b) : [...sel, b].sort((x, y) => x - y)));
                             }}
                           >
-                            <Text style={[s.bandName, on && { color: C.onAccent }]}>n{b}</Text>
-                            <Text style={[s.bandFreq, on && { color: C.onAccentSoft }]}>{nrFreq(b) || ' '}</Text>
+                            <View style={[s.check, on && s.checkNrOn]}>
+                              {on && <Text style={s.checkMark}>✓</Text>}
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={[s.bandName, on && { color: C.onAccent }]}>n{b}</Text>
+                              <Text style={[s.bandFreq, on && { color: C.onAccentSoft }]}>{nrFreq(b) || ' '}</Text>
+                            </View>
                           </Pressable>
                         );
                       })}
@@ -879,12 +888,47 @@ const s = StyleSheet.create({
   chip: { borderWidth: 1, borderColor: C.line, backgroundColor: C.rowBg, borderRadius: R.md, paddingHorizontal: S.md, paddingVertical: 8 },
   chipOn: { backgroundColor: C.blue, borderColor: C.blue },
   chipText: { color: C.text, fontWeight: '700', fontSize: T.label + 0.5 },
-  grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 7 },
+  grid: { flexDirection: 'column', gap: 8 },
   band: {
     flexBasis: '22%', flexGrow: 1, alignItems: 'center', paddingVertical: 9, borderRadius: R.md,
     backgroundColor: C.rowBg, borderWidth: 1, borderColor: C.line,
   },
   bandOn: { backgroundColor: C.blue, borderColor: C.blue },
+  band2: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: R.md,
+    backgroundColor: C.rowBg,
+    borderWidth: 1.5,
+    borderColor: C.line,
+  },
+  band2On: { backgroundColor: C.blue, borderColor: C.blue },
+  band2NrOn: { backgroundColor: C.violet, borderColor: C.violet },
+  bandLiveDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: C.green,
+  },
+  check: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: C.line,
+    backgroundColor: C.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkOn: { backgroundColor: C.card, borderColor: C.card },
+  checkNrOn: { backgroundColor: C.card, borderColor: C.card },
+  checkMark: { color: C.blue, fontWeight: '900', fontSize: 16, lineHeight: 18 },
   bandName: { color: C.text, fontWeight: '800', fontSize: T.body + 1 },
   bandFreq: { color: C.muted, fontSize: T.tiny, marginTop: 1 },
   bandUnknown: { color: C.muted, fontSize: T.tiny - 1, marginTop: 1 },
