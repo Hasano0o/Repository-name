@@ -3,10 +3,10 @@ import { SavedRouter } from '../store/routers';
 import { withSession } from '../store/sessions';
 import { snapshot, waitOnline, Snapshot } from './safeLock';
 import { trafficBurst } from './nrprobe';
+import { measureLatency, LatencyResult } from './latency';
 import { loadHistory } from '../store/history';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-
 export const comboName = (bands: number[]) => bands.map(b => `B${b}`).join('+');
 
 /**
@@ -15,7 +15,6 @@ export const comboName = (bands: number[]) => bands.map(b => `B${b}`).join('+');
  */
 export function labBands(cfg: BandConfig, carriers: Carrier[], cells: CellTower[], seen: number[] = []): number[] {
   const score = new Map<number, number>();
-  // ترددات شفناها مدموجة قبل (بعض الراوترات ما تدمج وهي فاضية)
   for (const b of seen) score.set(b, -60);
   for (const c of carriers) if (c.tech === 'LTE') score.set(c.band, Math.max(score.get(c.band) ?? -999, (c.rsrp ?? -100) + 50));
   for (const c of cells) {
@@ -41,7 +40,7 @@ export async function seenBands(routerId: string): Promise<number[]> {
   return [...out];
 }
 
-/** تركيبات الدمج (٢ فأكثر) — الأكبر أول، بحد أقصى ٦ */
+/** تركيبات الدمج 4G (٢ فأكثر) — الأكبر أول، بحد أقصى ٦ */
 export function labCombos(bands: number[]): number[][] {
   const out: number[][] = [];
   const n = bands.length;
@@ -52,15 +51,66 @@ export function labCombos(bands: number[]): number[][] {
   return out.sort((a, b) => b.length - a.length).slice(0, 6);
 }
 
-export interface LabRow {
-  bands: number[];
-  status: 'pending' | 'testing' | 'done' | 'failed';
-  note?: string;
-  snap?: Snapshot | null;
+/** ═══ تركيبة موحّدة: 4G (فردي/مزدوج) + 5G (اختياري) ═══ */
+export interface Combo {
+  lte: number[];
+  nr: number[];
 }
 
 /**
- * يجرب كل تركيبة: يثبّت ← ينتظر الاتصال ← يستقر ← يقيس. وبالآخر يرجع الإعداد الأصلي دائماً.
+ * يبني كل التركيبات اللي تستاهل التجربة:
+ *  - 4G فردي (كل تردد لحاله)
+ *  - 4G مزدوج (التركيبات الأكثر منطقية)
+ *  - 4G + 5G (NSA) — الأهم لحالتك
+ */
+export function buildAllCombos(lteBands: number[], nrBands: number[]): Combo[] {
+  const out: Combo[] = [];
+  const seen = new Set<string>();
+  const push = (lte: number[], nr: number[]) => {
+    const k = lte.join('+') + '|' + nr.join('+');
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push({ lte: [...lte], nr: [...nr] });
+  };
+
+  // 4G فردي — كل واحد لحاله
+  for (const b of lteBands) push([b], []);
+
+  // 4G + 5G — كل 4G مع كل 5G
+  for (const nr of nrBands) {
+    for (const lte of lteBands) {
+      push([lte], [nr]);
+    }
+  }
+
+  // 4G مزدوج — أزواج من اللي عندنا
+  for (let i = 0; i < lteBands.length; i++) {
+    for (let j = i + 1; j < lteBands.length; j++) {
+      push([lteBands[i], lteBands[j]], []);
+    }
+  }
+
+  return out.slice(0, 12);
+}
+
+export interface LabRow {
+  /** ترددات 4G */
+  bands: number[];
+  /** ترددات 5G — فاضية = بدون 5G */
+  nrBands?: number[];
+  status: 'pending' | 'testing' | 'done' | 'failed';
+  note?: string;
+  snap?: Snapshot | null;
+  /** سرعة تنزيل فعلية Mbps */
+  speedMbps?: number;
+  /** ping (median ms) */
+  pingMs?: number;
+  /** 5G نشط فعلاً (من القياس) */
+  nrActive?: boolean;
+}
+
+/**
+ * يجرب كل تركيبة: يثبّت ← ينتظر الاتصال ← يستقر ← يقيس (إشارة + سرعة + بنق). وبالآخر يرجع الإعداد الأصلي دائماً.
  */
 export async function runCaLab(o: {
   r: SavedRouter;
@@ -68,24 +118,62 @@ export async function runCaLab(o: {
   rows: LabRow[];
   update: (i: number, p: Partial<LabRow>) => void;
   isCancelled: () => boolean;
+  /** قياس سرعة فعلية — يستهلك ~٢٠ ميقا لكل تركيبة */
+  measureSpeed?: boolean;
 }): Promise<void> {
-  const { r, cfg, rows, update, isCancelled } = o;
+  const { r, cfg, rows, update, isCancelled, measureSpeed = false } = o;
   try {
     for (let i = 0; i < rows.length; i++) {
       if (isCancelled()) break;
-      const combo = rows[i].bands;
-      update(i, { status: 'testing', note: 'نثبّت التركيبة...' });
+      const row = rows[i];
+      const lte = row.bands;
+      const nr = row.nrBands ?? [];
+      update(i, { status: 'testing', note: 'نثبّت...' });
       try {
-        await withSession(r, d => d.setBand!(combo, cfg.nrLocked), false);
+        const nrLock = nr.length ? nr : cfg.nrLocked;
+        await withSession(r, d => d.setBand!(lte, nrLock), false);
         update(i, { note: 'ننتظر الاتصال...' });
         const ok = await waitOnline(r, 40000, isCancelled);
         if (isCancelled()) { update(i, { status: 'pending', note: undefined }); break; }
         if (!ok) { update(i, { status: 'failed', note: 'ما اتصل على هالتركيبة' }); continue; }
+
+        // لو فيها 5G: نصحّي بتحميل قصير
+        if (nr.length) {
+          update(i, { note: 'نصحّي 5G...' });
+          await trafficBurst(4500, 10_000_000, isCancelled).catch(() => 0);
+        }
         update(i, { note: 'ننتظر الدمج يستقر...' });
-        await sleep(7000);
-        update(i, { note: 'نقيس...' });
-        const snap = await snapshot(r, false, 3);
-        update(i, { status: snap ? 'done' : 'failed', snap, note: snap ? undefined : 'ما قدرنا نقيس' });
+        await sleep(4000);
+
+        update(i, { note: 'نقيس الإشارة...' });
+        const snap = await snapshot(r, nr.length > 0, 3);
+        const nrActive = !!snap?.nr;
+
+        // سرعة + بنق
+        let speedMbps: number | undefined;
+        let pingMs: number | undefined;
+        if (measureSpeed && !isCancelled()) {
+          update(i, { note: 'نقيس السرعة...' });
+          try {
+            const t0 = Date.now();
+            const bytes = await trafficBurst(6500, 25_000_000, isCancelled);
+            const secs = Math.max(1, (Date.now() - t0) / 1000);
+            speedMbps = Math.round((bytes * 8) / (secs * 1_000_000) * 10) / 10;
+          } catch {}
+          if (!isCancelled()) {
+            update(i, { note: 'نقيس الاستجابة...' });
+            try {
+              const lat: LatencyResult = await measureLatency(6);
+              if (lat.samples) pingMs = lat.median;
+            } catch {}
+          }
+        }
+
+        update(i, {
+          status: snap ? 'done' : 'failed',
+          snap, speedMbps, pingMs, nrActive,
+          note: snap ? undefined : 'فشل القياس',
+        });
       } catch (e: any) {
         update(i, { status: 'failed', note: e?.message ?? 'خطأ' });
       }
@@ -97,21 +185,17 @@ export async function runCaLab(o: {
 }
 
 // ─── كاشف مرساة 5G ───
-
 export interface AnchorRow {
   band: number;
   status: 'pending' | 'testing' | 'done' | 'failed';
   note?: string;
-  /** 5G اتصل فعلاً (NSA) وهذا التردد أساسي */
   nrActive?: boolean;
-  /** شاف برج 5G على الأقل */
   nrSeen?: boolean;
   nrBand?: number;
   nrRsrp?: number;
   lteRsrp?: number;
 }
 
-/** 5G من الإشارة أو من أبراج 5G اللي يشوفها الراوتر */
 async function readNr(d: RouterDriver): Promise<{ active: boolean; band?: number; rsrp?: number; lte?: number }> {
   const sig: Signal = d.getSignal ? await d.getSignal() : ({} as Signal);
   if (sig.nrRsrp !== undefined) {
@@ -125,7 +209,6 @@ async function readNr(d: RouterDriver): Promise<{ active: boolean; band?: number
 
 /**
  * لكل تردد 4G: نثبّته لحاله (يصير هو الأساسي) ← نحمّل ١٢ ثانية عشان 5G يصحى ← نشوف هل اتصل 5G.
- * يستهلك تقريباً ٢٥ ميقا لكل تردد.
  */
 export async function runAnchorScan(o: {
   r: SavedRouter;
@@ -146,7 +229,6 @@ export async function runAnchorScan(o: {
         const ok = await waitOnline(r, 40000, isCancelled);
         if (isCancelled()) { update(i, { status: 'pending', note: undefined }); break; }
         if (!ok) { update(i, { status: 'failed', note: 'ما فيه تغطية على هالتردد' }); continue; }
-
         update(i, { note: 'نصحّي 5G بتحميل قصير...' });
         const burst = trafficBurst(12000, 30_000_000, isCancelled);
         await sleep(2500);

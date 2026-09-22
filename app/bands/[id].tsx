@@ -226,6 +226,38 @@ export default function BandsScreen() {
     }
   };
 
+  /** ═══ تثبيت 4G + 5G معاً (الأفضل لـ NSA) ═══ */
+  const applyBoth = async (lte: number[], nr: number[]) => {
+    if (!info || !cfg) return;
+    cancelRef.current = false;
+    setBusy(true);
+    setError('');
+    const prevLte = cfg.locked;
+    const prevNr = cfg.nrLocked;
+    const nrTxt = nr.length ? nr.map(b => 'n' + b).join(' + ') : 'تلقائي';
+    const lteTxt = lte.length ? names(lte) : 'تلقائي';
+    const label = `تثبيت معاً (${lteTxt} + ${nrTxt})`;
+    try {
+      const res = await safeApply({
+        r: info,
+        key: `band:both:${[...lte].sort((a, b) => a - b).join('+')}:${[...nr].sort((a, b) => a - b).join('+')}`,
+        label,
+        withNr: nr.length > 0,
+        apply: d => d.setBand!(lte, nr),
+        revert: d => d.setBand!(prevLte, prevNr),
+        onStatus: setStatus,
+        isCancelled: () => cancelRef.current,
+      });
+      const m = trialMessage(res, label);
+      Alert.alert(m.title, m.body);
+      await load(info);
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+    } finally {
+      if (mounted.current) { setBusy(false); setStatus(''); }
+    }
+  };
+
   const confirmApply = async (bands: number[]) => {
     const t = bands.length && info
       ? await lastTrial(info.id, `band:LTE:${[...bands].sort((a, b) => a - b).join('+')}`)
@@ -818,6 +850,36 @@ export default function BandsScreen() {
                   </MetricCard>
                 )}
 
+                {/* تثبيت 4G + 5G معاً */}
+                {(selected.length > 0 || nrSelected.length > 0) && (
+                  <MetricCard>
+                    <Text style={s.blockTitle}>🔗 تثبيت 4G + 5G معاً</Text>
+                    <Text style={s.hint}>
+                      بعض الراوترات (خصوصاً في وضع NSA) ترفض قفل 5G لوحده — تحتاج 4G anchor معه. هذا الزر يرسل الاثنين في نفس الطلب.
+                    </Text>
+                    <View style={{ gap: 6, marginTop: 8 }}>
+                      <View style={s.bothRow}>
+                        <Text style={s.bothLabel}>4G</Text>
+                        <Text style={s.bothVal}>
+                          {selected.length ? selected.map(b => 'B' + b).join(' + ') : 'تلقائي'}
+                        </Text>
+                      </View>
+                      <View style={s.bothRow}>
+                        <Text style={s.bothLabel}>5G</Text>
+                        <Text style={s.bothVal}>
+                          {nrSelected.length ? nrSelected.map(b => 'n' + b).join(' + ') : 'تلقائي'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Pressable
+                      style={[s.primary, { marginTop: 12 }, locked && s.off]}
+                      onPress={() => applyBoth(selected, nrSelected)}
+                      disabled={locked}
+                    >
+                      <Text style={s.primaryText}>تثبيت 4G + 5G معاً</Text>
+                    </Pressable>
+                  </MetricCard>
+                )}
                 {/* الفحص الدقيق */}
                 <MetricCard>
                   <Text style={s.blockTitle}>الفحص الدقيق</Text>
@@ -991,6 +1053,13 @@ const s = StyleSheet.create({
   hint: { color: C.muted, fontSize: T.label, textAlign: 'right', lineHeight: 18 },
   warn: { color: C.gold, fontSize: T.label, textAlign: 'center', fontWeight: '700' },
   btnRow: { flexDirection: 'row', gap: S.sm },
+  bothRow: {
+    flexDirection: 'row-reverse', justifyContent: 'space-between',
+    alignItems: 'center', backgroundColor: C.rowBg, borderRadius: 10,
+    borderWidth: 1, borderColor: C.line, paddingHorizontal: 12, paddingVertical: 8,
+  },
+  bothLabel: { color: C.muted, fontWeight: '800', fontSize: 13 },
+  bothVal: { color: C.text, fontWeight: '700', fontSize: 13 },
   primary: {
     flex: 1, backgroundColor: C.blue, borderRadius: R.md, paddingVertical: 13,
     alignItems: 'center', justifyContent: 'center', flexDirection: 'row-reverse', gap: 7,

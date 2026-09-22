@@ -246,6 +246,81 @@ export default function TowersScreen() {
     const cellLabel = `التثبيت على ${towerTitle(tower)}`;
     const bandLabel = `تثبيت التردد ${bandTxt}`;
 
+    // ═══ هل نعرض خيار 4G + 5G؟ ═══
+    // نعرضه إذا البرج 4G والراوتر يدعم 5G (حتى لو ما شفنا NR حالياً)
+    if (!isNr && cfg && cfg.nrSupported.length > 0) {
+      // ١) نبحث عن NR على نفس PCI
+      // ٢) وإلا أي NR مرصود في cells (الأقوى)
+      // ٣) وإلا نختار من nrSupported (الأولوية: 78, 41, 40)
+      let pickedBand: number | null = null;
+      let pickedRsrp: number | undefined;
+      let pickedPci: string | undefined;
+      const nrSamePci = tower.pci
+        ? cells.find(c => c.tech === 'NR' && c.pci === tower.pci && c.band)
+        : null;
+      if (nrSamePci?.band && cfg.nrSupported.includes(nrSamePci.band)) {
+        pickedBand = nrSamePci.band;
+        pickedRsrp = nrSamePci.rsrp;
+        pickedPci = nrSamePci.pci;
+      } else {
+        const anyNr = cells
+          .filter(c => c.tech === 'NR' && c.band && cfg.nrSupported.includes(c.band!))
+          .sort((a, b) => (b.rsrp ?? -999) - (a.rsrp ?? -999))[0];
+        if (anyNr?.band) {
+          pickedBand = anyNr.band;
+          pickedRsrp = anyNr.rsrp;
+          pickedPci = anyNr.pci;
+        } else {
+          // ما شفنا NR — نستخدم الأكثر شيوعاً من المدعومة
+          const prefer = [78, 41, 40, 77, 1, 3, 5, 8, 20, 28];
+          pickedBand = prefer.find(b => cfg.nrSupported.includes(b)) ?? cfg.nrSupported[0];
+        }
+      }
+
+      if (pickedBand !== null) {
+        const nrBand = pickedBand;
+        const nrBandTxt = `n${nrBand}`;
+        const nrRsrpTxt = pickedRsrp !== undefined ? `${pickedRsrp} dBm` : 'غير مقيس — سنقيسه';
+        const combinedKey = `band:LTE:${tower.band}+NR:${nrBand}`;
+        const combinedLabel = `تثبيت ${bandTxt} + ${nrBandTxt}`;
+        const cfgRef = cfg;
+
+        Alert.alert(
+          `برج ${tower.pci} — فيه 4G و 5G`,
+          `هذا البرج يدعم 4G و 5G على نفس الموقع.\n\n` +
+          `📶 4G: ${bandTxt}\n` +
+          `📡 5G: ${nrBandTxt} (${nrRsrpTxt})\n\n` +
+          `تثبيت 4G + 5G معاً = أقصى سرعة (NSA).\n` +
+          `تثبيت 4G فقط = أضمن ثبات — استخدمها إذا 5G ضعيف أو يقطع.` +
+          (notes ? `\n\n${notes}` : ''),
+          [
+            { text: 'إلغاء', style: 'cancel' },
+            {
+              text: `4G فقط (${bandTxt})`,
+              onPress: () => runSafe({
+                key: bandKey,
+                label: bandLabel,
+                withNr: false,
+                apply: d => d.setBand!([tower.band!], cfgRef.nrLocked),
+                revert: d => d.setBand!(cfgRef.locked, cfgRef.nrLocked),
+              }),
+            },
+            {
+              text: `4G + 5G (أنصح)`,
+              onPress: () => runSafe({
+                key: combinedKey,
+                label: combinedLabel,
+                withNr: true,
+                apply: d => d.setBand!([tower.band!], [nrBand]),
+                revert: d => d.setBand!(cfgRef.locked, cfgRef.nrLocked),
+              }),
+            },
+          ],
+        );
+        return;
+      }
+    }
+
     const doCell = () => runSafe({
       key: cellKey,
       label: cellLabel,
