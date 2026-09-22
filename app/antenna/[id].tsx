@@ -1,24 +1,99 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, View, Text, Pressable, RefreshControl, ActivityIndicator, StyleSheet } from 'react-native';
+import {
+  ScrollView, View, Text, Pressable, RefreshControl, ActivityIndicator,
+  StyleSheet, Dimensions,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, Href } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { Carrier, CellTower, Signal } from '../../src/drivers/types';
 import { adviseAntenna, AntennaAdvice, Need } from '../../src/utils/antenna';
-import { C, R, S } from '../../src/ui/theme';
+import { Icon } from '../../src/ui/Icon';
 
-const NEED_COLOR: Record<Need, string> = { yes: C.red, maybe: C.gold, no: C.green };
-const NEED_BG: Record<Need, string> = { yes: C.redSoft, maybe: C.goldSoft, no: C.greenSoft };
-const NEED_ICON: Record<Need, string> = { yes: '📡', maybe: '🤔', no: '✅' };
+const { width: SCREEN_W } = Dimensions.get('window');
+
+// ═══ Design tokens (هوية Bandly) ═══
+const BLUE = '#3567F5';
+const PURPLE = '#7655F5';
+const TEXT = '#14264A';
+const MUTED = '#71809A';
+const BG = '#F4F8FF';
+const SUCCESS = '#13B783';
+const WARN = '#F59E0B';
+const DANGER = '#DC2626';
+const CARD = '#FFFFFF';
+const CARD_BG = '#FAFCFF';
+const BORDER = '#E6ECF5';
+
+// ═══ Colour by need ═══
+const NEED_THEME: Record<Need, { main: string; soft: string; icon: string; headline: string }> = {
+  yes: { main: DANGER, soft: '#FEF2F2', icon: '📡', headline: 'ننصح بأنتنا خارجية' },
+  maybe: { main: WARN, soft: '#FFFBEB', icon: '🤔', headline: 'أنتنا خارجية قد تساعد' },
+  no: { main: SUCCESS, soft: '#ECFDF5', icon: '✅', headline: 'أنتنا الراوتر كافية' },
+};
+
+/** ═══ دائرة مؤشر (SVG) ═══ */
+function Ring({
+  value, color, label, valueText, unit, size = 82,
+}: {
+  value: number;      // 0..1
+  color: string;
+  label: string;
+  valueText: string;
+  unit?: string;
+  size?: number;
+}) {
+  const stroke = 8;
+  const r = (size - stroke) / 2;
+  const cx = size / 2;
+  const cy = size / 2;
+  const C = 2 * Math.PI * r;
+  const v = Math.max(0, Math.min(1, value));
+  const dash = C * v;
+  return (
+    <View style={{ alignItems: 'center', gap: 6 }}>
+      <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+        <Svg width={size} height={size} style={{ position: 'absolute' }}>
+          <Circle cx={cx} cy={cy} r={r} stroke="#E5EDF9" strokeWidth={stroke} fill="none" />
+          <Circle
+            cx={cx} cy={cy} r={r}
+            stroke={color} strokeWidth={stroke}
+            fill="none"
+            strokeDasharray={`${dash} ${C}`}
+            strokeLinecap="round"
+            transform={`rotate(-90 ${cx} ${cy})`}
+          />
+        </Svg>
+        <View style={{ alignItems: 'center' }}>
+          <Text style={g.ringNum}>{Math.round(v * 100)}</Text>
+          <Text style={g.ringPct}>%</Text>
+        </View>
+      </View>
+      <Text style={g.ringLabel} numberOfLines={2}>{label}</Text>
+      <Text style={[g.ringValue, { color }]} numberOfLines={1}>
+        {valueText}{unit ? ` ${unit}` : ''}
+      </Text>
+    </View>
+  );
+}
+
+// ═══ Helpers لحساب النسب ═══
+const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+const pctFromRsrp = (v?: number): number => (v === undefined ? 0 : clamp01((v + 120) / 55));
+const pctFromSinr = (v?: number): number => (v === undefined ? 0 : clamp01((v + 5) / 25));
+const pctFromRsrq = (v?: number): number => (v === undefined ? 0 : clamp01((v + 20) / 15));
+const pctFromRssi = (v?: number): number => (v === undefined ? 0 : clamp01((v + 100) / 45));
 
 export default function AntennaAdvisor() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const [info, setInfo] = useState<SavedRouter | null>(null);
   const [adv, setAdv] = useState<AntennaAdvice | null>(null);
+  const [sig, setSig] = useState<Signal | null>(null);
   const [hasAnt, setHasAnt] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -28,14 +103,17 @@ export default function AntennaAdvisor() {
   const load = useCallback(async (r: SavedRouter) => {
     setError('');
     try {
-      const { sig, carriers, cells } = await withSession(r, async d => {
-        const sig = d.getSignal ? await d.getSignal() : ({} as Signal);
+      const { s: sigData, carriers, cells } = await withSession(r, async d => {
+        const s = d.getSignal ? await d.getSignal() : ({} as Signal);
         const carriers = d.getCarriers ? await d.getCarriers().catch(() => [] as Carrier[]) : [];
         const cells = d.getCells ? await d.getCells().catch(() => [] as CellTower[]) : [];
-        return { sig, carriers, cells };
+        return { s, carriers, cells };
       });
-      if (sig.rsrp === undefined) throw new Error('ما قدرنا نقرأ الإشارة من الراوتر.');
-      if (alive.current) setAdv(adviseAntenna(sig, carriers, cells));
+      if (sigData.rsrp === undefined) throw new Error('ما قدرنا نقرأ الإشارة من الراوتر.');
+      if (alive.current) {
+        setSig(sigData);
+        setAdv(adviseAntenna(sigData, carriers, cells));
+      }
     } catch (e: any) {
       if (alive.current) setError(e?.message ?? String(e));
     }
@@ -68,80 +146,329 @@ export default function AntennaAdvisor() {
     setRefreshing(false);
   };
 
+  const theme = adv ? NEED_THEME[adv.need] : NEED_THEME.maybe;
+
+  // القيم الأربع للدوائر
+  const c1 = { pct: pctFromRsrp(sig?.rsrp), color: sig?.rsrp === undefined ? MUTED : (sig.rsrp >= -85 ? SUCCESS : sig.rsrp >= -95 ? '#22C55E' : sig.rsrp >= -105 ? WARN : DANGER) };
+  const c2 = { pct: pctFromRsrq(sig?.rsrq), color: sig?.rsrq === undefined ? MUTED : (sig.rsrq >= -10 ? SUCCESS : sig.rsrq >= -15 ? WARN : DANGER) };
+  const c3 = { pct: pctFromSinr(sig?.sinr), color: sig?.sinr === undefined ? MUTED : (sig.sinr >= 13 ? SUCCESS : sig.sinr >= 5 ? WARN : DANGER) };
+  const c4 = { pct: pctFromRssi(sig?.rssi), color: sig?.rssi === undefined ? MUTED : (sig.rssi >= -70 ? SUCCESS : sig.rssi >= -85 ? WARN : DANGER) };
+
   return (
-    <LinearGradient colors={[C.bgTop, C.bgBottom]} style={{ flex: 1 }}>
+    <View style={g.container}>
       <ScrollView
-        contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 40 }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.blue} colors={[C.blue]} />}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[g.content, { paddingBottom: insets.bottom + 40 }]}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BLUE} colors={[BLUE]} />
+        }
       >
+        {/* ═══ Header ═══ */}
+        <View style={g.header}>
+          <View style={g.headerIcon}>
+            <Icon name="antenna" size={20} color={PURPLE} />
+          </View>
+          <View style={{ flex: 1, alignItems: 'flex-end' }}>
+            <Text style={g.title}>مستشار الأنتنا</Text>
+            <Text style={g.subtitle}>هل تحتاج أنتنا خارجية؟ — تحليل تلقائي</Text>
+          </View>
+        </View>
+
         {loading && (
-          <View style={s.center}>
-            <ActivityIndicator size="large" color={C.blue} />
-            <Text style={s.muted}>نحلّل إشارتك...</Text>
+          <View style={{ alignItems: 'center', gap: 10, paddingVertical: 40 }}>
+            <ActivityIndicator size="large" color={PURPLE} />
+            <Text style={{ color: MUTED }}>نحلّل إشارتك...</Text>
           </View>
         )}
+        {!!error && <Text style={g.err}>{error}</Text>}
 
-        {!!error && <Text style={s.err}>{error}</Text>}
-
-        {adv && (
+        {adv && sig && (
           <>
-            <View style={[s.card, { backgroundColor: NEED_BG[adv.need], borderColor: NEED_COLOR[adv.need] }]}>
-              <Text style={s.q}>هل تحتاج أنتنا خارجية؟</Text>
-              <Text style={[s.verdict, { color: NEED_COLOR[adv.need] }]}>{NEED_ICON[adv.need]} {adv.headline}</Text>
-              {adv.reasons.map((r, i) => <Text key={i} style={s.item}>• {r}</Text>)}
-              {!!adv.otherCause && <Text style={[s.item, s.bold]}>💡 {adv.otherCause}</Text>}
+            {/* ═══ البطاقة الرئيسية: التوصية ═══ */}
+            <LinearGradient
+              colors={[theme.soft, '#FFFFFF']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={[g.mainCard, { borderColor: theme.main + '60' }]}
+            >
+              <View style={g.mainHead}>
+                <View style={[g.mainIconBox, { backgroundColor: theme.main + '20' }]}>
+                  <Text style={{ fontSize: 30 }}>{theme.icon}</Text>
+                </View>
+                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                  <Text style={g.mainQ}>هل تحتاج أنتنا خارجية؟</Text>
+                  <Text style={[g.mainHeadline, { color: theme.main }]}>{adv.headline}</Text>
+                </View>
+              </View>
+
+              {/* الأسباب */}
+              {adv.reasons.length > 0 && (
+                <View style={g.reasonsBox}>
+                  {adv.reasons.map((r, i) => (
+                    <View key={i} style={g.reasonRow}>
+                      <View style={[g.reasonDot, { backgroundColor: theme.main }]} />
+                      <Text style={g.reasonTxt}>{r}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {!!adv.otherCause && (
+                <View style={[g.otherBox, { backgroundColor: '#FFFBEB', borderColor: WARN + '50' }]}>
+                  <Text style={[g.otherTxt, { color: '#92400E' }]}>💡 {adv.otherCause}</Text>
+                </View>
+              )}
+            </LinearGradient>
+
+            {/* ═══ 4 دوائر مؤشرات ═══ */}
+            <View style={g.ringsCard}>
+              <View style={g.ringsHead}>
+                <View style={g.ringsIcon}>
+                  <Icon name="chart" size={16} color={BLUE} />
+                </View>
+                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                  <Text style={g.ringsTitle}>التفاصيل التقنية</Text>
+                  <Text style={g.ringsSub}>مؤشرات الإشارة الحالية</Text>
+                </View>
+              </View>
+              <View style={g.ringsRow}>
+                <Ring
+                  value={c1.pct}
+                  color={c1.color}
+                  label="مستوى الاستقبال"
+                  valueText={sig.rsrp !== undefined ? String(sig.rsrp) : '—'}
+                  unit="dBm"
+                  size={78}
+                />
+                <Ring
+                  value={c2.pct}
+                  color={c2.color}
+                  label="الاستقرار"
+                  valueText={sig.rsrq !== undefined ? String(sig.rsrq) : '—'}
+                  unit="dB"
+                  size={78}
+                />
+                <Ring
+                  value={c3.pct}
+                  color={c3.color}
+                  label="جودة الاتصال"
+                  valueText={sig.sinr !== undefined ? String(sig.sinr) : '—'}
+                  unit="dB"
+                  size={78}
+                />
+                <Ring
+                  value={c4.pct}
+                  color={c4.color}
+                  label="قوة الإشارة"
+                  valueText={sig.rssi !== undefined ? String(sig.rssi) : '—'}
+                  unit="dBm"
+                  size={78}
+                />
+              </View>
             </View>
 
-            <View style={s.card}>
-              <Text style={s.title}>{adv.need === 'no' ? 'لو حبيت تركّب أنتنا — هذا المناسب' : adv.type.title}</Text>
-              {adv.type.points.map((p, i) => <Text key={i} style={s.item}>• {p}</Text>)}
+            {/* ═══ نوع الأنتنا الموصى به ═══ */}
+            <View style={g.card}>
+              <View style={g.cardHead}>
+                <View style={[g.cardIcon, { backgroundColor: PURPLE + '18' }]}>
+                  <Icon name="antenna" size={16} color={PURPLE} />
+                </View>
+                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                  <Text style={g.cardTitle}>
+                    {adv.need === 'no' ? 'لو حبيت تركّب أنتنا — هذا المناسب' : adv.type.title}
+                  </Text>
+                  <Text style={g.cardSub}>الأنتنا الموصى بها لحالتك</Text>
+                </View>
+              </View>
+              <View style={{ gap: 6, marginTop: 4 }}>
+                {adv.type.points.map((p, i) => (
+                  <View key={i} style={g.bulletRow}>
+                    <Text style={g.bulletStar}>★</Text>
+                    <Text style={g.bulletTxt}>{p}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
 
-            <View style={s.card}>
-              <View style={s.head}>
-                <Text style={s.title}>فحص تركيب الأنتنا</Text>
-                <Pressable style={[s.toggle, hasAnt && s.toggleOn]} onPress={toggleAnt}>
-                  <Text style={[s.toggleText, hasAnt && { color: C.onAccent }]}>{hasAnt ? 'عندي أنتنا ✓' : 'عندي أنتنا؟'}</Text>
+            {/* ═══ فحص التركيب (لو عنده أنتنا) ═══ */}
+            <View style={g.card}>
+              <View style={g.cardHead}>
+                <View style={[g.cardIcon, { backgroundColor: BLUE + '18' }]}>
+                  <Icon name="settings" size={16} color={BLUE} />
+                </View>
+                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                  <Text style={g.cardTitle}>فحص تركيب الأنتنا</Text>
+                  <Text style={g.cardSub}>
+                    {hasAnt ? 'نراجع الكيبلات والتوجيه' : 'فعّل الزر لو ركّبت أنتنا'}
+                  </Text>
+                </View>
+                <Pressable
+                  style={[g.toggleBtn, hasAnt && g.toggleBtnOn]}
+                  onPress={toggleAnt}
+                >
+                  <Text style={[g.toggleTxt, hasAnt && { color: '#FFF' }]}>
+                    {hasAnt ? '✓ عندي أنتنا' : 'عندي أنتنا؟'}
+                  </Text>
                 </Pressable>
               </View>
+
               {hasAnt ? (
-                adv.install.length ? adv.install.map((x, i) => (
-                  <Text key={i} style={[s.item, { color: x.ok ? C.green : C.red }]}>{x.ok ? '✓' : '✗'} {x.text}</Text>
-                )) : <Text style={s.item}>ما لقينا ملاحظات على التركيب.</Text>
+                adv.install.length > 0 ? (
+                  <View style={{ gap: 6, marginTop: 6 }}>
+                    {adv.install.map((x, i) => (
+                      <View key={i} style={g.checkRow}>
+                        <View style={[g.checkDot, { backgroundColor: x.ok ? SUCCESS : DANGER }]}>
+                          <Text style={g.checkDotTxt}>{x.ok ? '✓' : '✗'}</Text>
+                        </View>
+                        <Text style={g.checkTxt}>{x.text}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={g.emptyTxt}>ما لقينا ملاحظات على التركيب — يبدو ممتاز.</Text>
+                )
               ) : (
-                <Text style={s.muted2}>لو ركّبت أنتنا خارجية، فعّل الزر ونفحص لك الكيبلات والتوجيه من بيانات الراوتر.</Text>
+                <Text style={g.hintTxt}>
+                  لو ركّبت أنتنا خارجية، فعّل الزر ونفحص لك الكيبلات والتوجيه من بيانات الراوتر.
+                </Text>
               )}
             </View>
 
+            {/* ═══ زر CTA — انتقل للتوجيه ═══ */}
             {info && (
-              <Pressable style={s.btn} onPress={() => router.push(`/aim/${info.id}` as Href)}>
-                <Text style={s.btnText}>🔊 وجّه الأنتنا بوضع الصوت</Text>
+              <Pressable onPress={() => router.push(`/aim/${info.id}` as Href)}>
+                <LinearGradient
+                  colors={[BLUE, PURPLE]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={g.cta}
+                >
+                  <Icon name="antenna" size={20} color="#FFF" />
+                  <Text style={g.ctaTxt}>🔊 وجّه الأنتنا بوضع الصوت</Text>
+                </LinearGradient>
               </Pressable>
             )}
-            <Text style={s.muted2}>اسحب لتحت عشان تعيد التحليل بعد ما تغيّر مكان أو اتجاه.</Text>
+
+            <Text style={g.footNote}>
+              اسحب لتحت لتحديث التحليل بعد ما تغيّر مكان أو اتجاه الأنتنا.
+            </Text>
           </>
         )}
       </ScrollView>
-    </LinearGradient>
+    </View>
   );
 }
 
-const s = StyleSheet.create({
-  page: { padding: S.lg, gap: S.md },
-  center: { alignItems: 'center', gap: 10, paddingVertical: 40 },
-  muted: { color: C.sub, fontSize: 13 },
-  muted2: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 18 },
-  err: { color: C.red, textAlign: 'right' },
-  card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1, borderRadius: R.lg, padding: S.lg, gap: S.sm },
-  q: { color: C.sub, fontSize: 12.5, textAlign: 'right', fontWeight: '600' },
-  verdict: { fontSize: 17, fontWeight: '800', textAlign: 'right', lineHeight: 26 },
-  title: { color: C.text, fontWeight: '800', fontSize: 15, textAlign: 'right' },
-  item: { color: C.text, fontSize: 13, lineHeight: 21, textAlign: 'right' },
-  bold: { fontWeight: '700' },
-  head: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
-  toggle: { borderWidth: 1, borderColor: C.blue, borderRadius: R.pill, paddingVertical: 5, paddingHorizontal: 12 },
-  toggleOn: { backgroundColor: C.blue },
-  toggleText: { color: C.blue, fontWeight: '700', fontSize: 12 },
-  btn: { backgroundColor: C.blue, borderRadius: R.md, paddingVertical: 13, alignItems: 'center' },
-  btnText: { color: C.onAccent, fontWeight: '800', fontSize: 14 },
+const g = StyleSheet.create({
+  container: { flex: 1, backgroundColor: BG },
+  content: { paddingHorizontal: 16, paddingTop: 14, gap: 12 },
+
+  // Header
+  header: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
+  headerIcon: {
+    width: 46, height: 46, borderRadius: 16,
+    backgroundColor: PURPLE + '15',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: PURPLE + '30',
+  },
+  title: { fontSize: 20, fontWeight: '900', color: TEXT, textAlign: 'right' },
+  subtitle: { fontSize: 12, color: MUTED, textAlign: 'right', marginTop: 3 },
+
+  err: { color: DANGER, textAlign: 'center', fontSize: 12.5 },
+
+  // Main card
+  mainCard: {
+    borderRadius: 24, padding: 16, gap: 12,
+    borderWidth: 1.5,
+    shadowColor: '#0D2350', shadowOpacity: 0.05,
+    shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  mainHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 14 },
+  mainIconBox: {
+    width: 60, height: 60, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  mainQ: { color: MUTED, fontSize: 12.5, fontWeight: '700', textAlign: 'right' },
+  mainHeadline: { fontSize: 17, fontWeight: '900', textAlign: 'right', marginTop: 3, lineHeight: 24 },
+
+  reasonsBox: { gap: 6, marginTop: 4 },
+  reasonRow: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: 8 },
+  reasonDot: { width: 6, height: 6, borderRadius: 3, marginTop: 7 },
+  reasonTxt: { flex: 1, color: TEXT, fontSize: 12.5, lineHeight: 20, textAlign: 'right' },
+
+  otherBox: {
+    borderRadius: 12, padding: 10, borderWidth: 1,
+  },
+  otherTxt: { fontSize: 12.5, lineHeight: 19, textAlign: 'right', fontWeight: '700' },
+
+  // Rings card
+  ringsCard: {
+    backgroundColor: CARD, borderRadius: 22, padding: 14, gap: 12,
+    borderWidth: 1, borderColor: BORDER,
+  },
+  ringsHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
+  ringsIcon: {
+    width: 32, height: 32, borderRadius: 10, backgroundColor: '#E1F5FF',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  ringsTitle: { color: TEXT, fontSize: 15, fontWeight: '900', textAlign: 'right' },
+  ringsSub: { color: MUTED, fontSize: 11, textAlign: 'right', marginTop: 2 },
+  ringsRow: {
+    flexDirection: 'row-reverse', justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  ringNum: { color: TEXT, fontSize: 20, fontWeight: '900', lineHeight: 22 },
+  ringPct: { color: MUTED, fontSize: 9, fontWeight: '800', marginTop: -1 },
+  ringLabel: { color: MUTED, fontSize: 10, fontWeight: '700', textAlign: 'center', lineHeight: 13 },
+  ringValue: { fontSize: 11.5, fontWeight: '900', textAlign: 'center' },
+
+  // Generic card
+  card: {
+    backgroundColor: CARD, borderRadius: 22, padding: 14, gap: 10,
+    borderWidth: 1, borderColor: BORDER,
+  },
+  cardHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
+  cardIcon: {
+    width: 32, height: 32, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  cardTitle: { color: TEXT, fontSize: 15, fontWeight: '900', textAlign: 'right' },
+  cardSub: { color: MUTED, fontSize: 11, textAlign: 'right', marginTop: 2 },
+
+  bulletRow: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: 8 },
+  bulletStar: { color: PURPLE, fontSize: 12, marginTop: 2 },
+  bulletTxt: { flex: 1, color: TEXT, fontSize: 12.5, lineHeight: 20, textAlign: 'right' },
+
+  // Toggle
+  toggleBtn: {
+    borderWidth: 1.5, borderColor: BLUE,
+    borderRadius: 999, paddingVertical: 6, paddingHorizontal: 14,
+  },
+  toggleBtnOn: { backgroundColor: BLUE },
+  toggleTxt: { color: BLUE, fontWeight: '800', fontSize: 12 },
+
+  // Check rows
+  checkRow: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: 8 },
+  checkDot: {
+    width: 20, height: 20, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center', marginTop: 1,
+  },
+  checkDotTxt: { color: '#FFF', fontSize: 11, fontWeight: '900' },
+  checkTxt: { flex: 1, color: TEXT, fontSize: 12.5, lineHeight: 20, textAlign: 'right' },
+
+  emptyTxt: { color: MUTED, fontSize: 12.5, textAlign: 'right', marginTop: 4 },
+  hintTxt: { color: MUTED, fontSize: 12, textAlign: 'right', lineHeight: 19, marginTop: 4 },
+
+  // CTA
+  cta: {
+    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center',
+    gap: 10, paddingVertical: 16, borderRadius: 20,
+    shadowColor: PURPLE, shadowOpacity: 0.4,
+    shadowRadius: 14, shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
+  },
+  ctaTxt: { color: '#FFF', fontWeight: '900', fontSize: 15 },
+
+  footNote: { color: MUTED, fontSize: 11.5, textAlign: 'center', lineHeight: 18, marginTop: 4 },
 });
