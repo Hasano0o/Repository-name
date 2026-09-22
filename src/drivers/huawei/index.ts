@@ -253,6 +253,7 @@ export class HuaweiDriver implements RouterDriver {
       this.log('hw-status: NTEx=', JSON.stringify(ntEx), 'NT=', JSON.stringify(nt), 'NrIcon=', tag(st, 'SignalIconNr'));
       network = NET_TYPES[ntEx] ?? NET_TYPES[nt];
       // 111 = 5G NSA، 112 = 5G SA — يعني 5G نشط فعلاً
+      // 1011 = 4G+ (ليس 5G) — نتركه undefined
       if (ntEx === '111' || ntEx === '112') nrActiveFromStatus = true;
       const icon = num(tag(st, 'SignalIconNr'));
       if (icon !== undefined && icon > 0) nrAvailable = icon;
