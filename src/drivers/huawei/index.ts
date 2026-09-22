@@ -518,10 +518,13 @@ export class HuaweiDriver implements RouterDriver {
       locked = opt === '0' || active.length === 0 || active.length >= supported.length ? [] : active;
     }
     this.log('bands supported', supported.join(','), 'locked', locked.join(',') || 'auto', 'lockFreq', this.lockFreq);
+    // ═══ نعرض ترددات 5G دائماً — لأن كل هواوي CPE حديث (5G CPE Pro/Pro 3) يدعمها.
+    // لو الراوتر ما يدعم 5G فعلاً، الراوتر نفسه سيرفض الأمر بدون أي ضرر.
+    const nrSupported = DEFAULT_NR_BANDS;
     return {
       supported,
       locked,
-      nrSupported: this.lockFreq ? DEFAULT_NR_BANDS : [],
+      nrSupported,
       nrLocked,
       mode: tag(cur, 'NetworkMode') ?? '00',
       modes: modes.map(v => ({ value: v, label: modeLabel(v) })),
