@@ -7,7 +7,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import Svg, { Circle, Path, Line, Defs, LinearGradient as SvgLinearGradient, Stop, G } from 'react-native-svg';
 import { Icon, IconName } from '../../src/ui/Icon';
-import { AntennaHero } from '../../src/ui/AntennaHero';
 
 // ═══ Haptics ═══
 let HapticsMod: any = null;
@@ -113,8 +112,7 @@ function ScoreGauge({ value, color }: { value: number; color: string }) {
 }
 
 // ═══ بوصلة ═══
-function Compass({ value, color }: { value: number; color: string }) {
-  const size = 120;
+function Compass({ value, color, size = 150 }: { value: number; color: string; size?: number }) {
   const cx = size / 2;
   const cy = size / 2;
   const r = size / 2 - 6;
@@ -541,11 +539,9 @@ export default function AimScreen() {
             {/* ═══ Hero Card ═══ */}
             <View style={a.heroCard}>
               <View style={a.heroVisual}>
-                {/* الأنتنا — يسار (نستخدم AntennaHero مع flip للاتجاه) */}
-                <View style={{ transform: [{ scaleX: -1 }] }}>
-                  <AntennaHero color={lvlColor} active={sound || true} width={150} height={210} />
-                </View>
-                {/* Gauge — يمين */}
+                {/* البوصلة — يمين */}
+                <Compass value={pct} color={lvlColor} size={150} />
+                {/* Gauge — يسار */}
                 <ScoreGauge value={pct} color={lvlColor} />
               </View>
 
@@ -643,31 +639,22 @@ export default function AimScreen() {
                 </View>
 
                 <View style={a.dirBody}>
-                  <Compass value={pct} color={lvlColor} />
-                  <View style={a.dirStats}>
-                    <View style={a.dirStatRow}>
-                      <Icon name="spark" size={14} color={SUCCESS} />
-                      <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                        <Text style={a.dirStatLbl}>تحسن متوقع</Text>
-                        <Text style={[a.dirStatVal, { color: SUCCESS }]}>
-                          {improvePct > 0 ? `+${improvePct}%` : '—'}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={a.dirStatRow}>
-                      <Icon name="pin" size={14} color={BLUE} />
-                      <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                        <Text style={a.dirStatLbl}>المسافة</Text>
-                        <Text style={a.dirStatVal}>{distance}</Text>
-                      </View>
-                    </View>
-                    <View style={a.dirStatRow}>
-                      <Icon name="tower" size={14} color={PURPLE} />
-                      <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                        <Text style={a.dirStatLbl}>البرج</Text>
-                        <Text style={a.dirStatVal} numberOfLines={1}>{cellName(best.cell)}</Text>
-                      </View>
-                    </View>
+                  <View style={a.dirStatCol}>
+                    <Icon name="spark" size={18} color={SUCCESS} />
+                    <Text style={a.dirStatLbl}>تحسن متوقع</Text>
+                    <Text style={[a.dirStatVal, { color: SUCCESS }]}>
+                      {improvePct > 0 ? `+${improvePct}%` : '—'}
+                    </Text>
+                  </View>
+                  <View style={a.dirStatCol}>
+                    <Icon name="pin" size={18} color={BLUE} />
+                    <Text style={a.dirStatLbl}>المسافة</Text>
+                    <Text style={a.dirStatVal} numberOfLines={1}>{distance}</Text>
+                  </View>
+                  <View style={a.dirStatCol}>
+                    <Icon name="tower" size={18} color={PURPLE} />
+                    <Text style={a.dirStatLbl}>البرج</Text>
+                    <Text style={a.dirStatVal} numberOfLines={1}>{cellName(best.cell)}</Text>
                   </View>
                 </View>
 
@@ -868,15 +855,14 @@ const a = StyleSheet.create({
   },
   chipTxt: { color: TEXT, fontWeight: '800', fontSize: 12 },
 
-  dirBody: { flexDirection: 'row-reverse', gap: 12, alignItems: 'center' },
-  dirStats: { flex: 1, gap: 6 },
-  dirStatRow: {
-    flexDirection: 'row-reverse', alignItems: 'center', gap: 10,
-    backgroundColor: '#FAFCFF', borderRadius: 12, padding: 8,
+  dirBody: { flexDirection: 'row-reverse', gap: 8 },
+  dirStatCol: {
+    flex: 1, alignItems: 'center', gap: 5,
+    backgroundColor: '#FAFCFF', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 6,
     borderWidth: 1, borderColor: BORDER,
   },
-  dirStatLbl: { color: MUTED, fontSize: 9.5, fontWeight: '700' },
-  dirStatVal: { color: TEXT, fontSize: 13, fontWeight: '900', marginTop: 1 },
+  dirStatLbl: { color: MUTED, fontSize: 10.5, fontWeight: '700', textAlign: 'center' },
+  dirStatVal: { color: TEXT, fontSize: 14, fontWeight: '900', textAlign: 'center' },
 
   pinBtn: { backgroundColor: BLUE, borderRadius: 13, paddingVertical: 11, alignItems: 'center', marginTop: 4 },
   pinTxt: { color: '#FFF', fontWeight: '900', fontSize: 13 },
