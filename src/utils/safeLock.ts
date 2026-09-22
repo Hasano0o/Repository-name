@@ -1,3 +1,4 @@
+import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Carrier, RouterDriver, Signal } from '../drivers/types';
 import { SavedRouter } from '../store/routers';
@@ -125,6 +126,8 @@ export interface TrialResult {
   restoreFailed?: boolean;
   /** تغيّر البرج الأساسي أثناء القياس — المقارنة صارت تقديرية */
   towerChanged?: boolean;
+  /** ثبتنا الجديد بناءً على طلب المستخدم رغم أنه أسوأ */
+  userKeptAnyway?: boolean;
 }
 
 export interface Trial {
@@ -200,18 +203,84 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
   if (!after) verdict = 'noconn';
   else if (change !== undefined && change <= WORSE) verdict = 'worse';
   else if (change !== undefined && change >= BETTER) verdict = 'better';
-
-  const kept = verdict === 'better' || verdict === 'same';
+  let kept = verdict === 'better' || verdict === 'same';
+  let userKeptAnyway = false;
   let restoreFailed = false;
+
+  // لو الجديد أسوأ — نسأل المستخدم: يثبت الجديد أم نرجع للسابق؟
+  if (verdict === 'worse') {
+    say('الجديد أضعف — ننتظر قرارك...');
+    const decision = await askUserOnWorse({
+      before, after, change, label: o.label,
+    });
+    if (decision === 'keep') {
+      userKeptAnyway = true;
+      kept = true;
+      say('ثبّتنا الجديد بناءً على طلبك.');
+    }
+  }
+
   if (!kept) {
-    say('صار أسوأ — نرجع الإعداد السابق...');
+    say('نرجع الإعداد السابق...');
     try { await withSession(o.r, o.revert, false); } catch {}
     const back = await waitOnline(o.r, 45000, () => false);
     restoreFailed = !back;
   }
-  const res: TrialResult = { verdict, kept, before, after, change, restoreFailed, towerChanged };
+
+  const res: TrialResult = { verdict, kept, before, after, change, restoreFailed, towerChanged, userKeptAnyway };
   await record(o.r.id, o.key, o.label, res);
   return res;
+}
+
+/** نص تفصيلي لإشارة الـ snapshot */
+function fmtSnapFull(s: Snapshot | null): string {
+  if (!s) return '—';
+  const parts: string[] = [];
+  if (s.rsrp !== undefined) parts.push(`RSRP ${Math.round(s.rsrp)} dBm`);
+  if (s.sinr !== undefined) parts.push(`SINR ${Math.round(s.sinr)} dB`);
+  parts.push(`${s.carriers} نواقل`);
+  if (s.bw) parts.push(`${Math.round(s.bw)} MHz`);
+  if (s.bands) parts.push(s.bands);
+  return parts.join(' · ');
+}
+
+/**
+ * يسأل المستخدم لما الجديد يطلع أسوأ:
+ *  - «موافق — ثبّت الجديد»  → نخليه (المستخدم يعرف مصلحته)
+ *  - «رجّعني للسابق»         → نرجع الإعداد
+ */
+function askUserOnWorse(info: {
+  before: Snapshot | null;
+  after: Snapshot | null;
+  change?: number;
+  label: string;
+}): Promise<'keep' | 'revert'> {
+  return new Promise(resolve => {
+    const pct = info.change !== undefined
+      ? `${Math.round(Math.abs(info.change) * 100)}٪`
+      : 'أضعف';
+    const msg =
+      `الجديد أضعف بـ ${pct}.\n\n` +
+      `⚪ الحالي (قبل):\n${fmtSnapFull(info.before)}\n\n` +
+      `🟣 المختار (بعد):\n${fmtSnapFull(info.after)}\n\n` +
+      `وش تبي نسوي؟`;
+    Alert.alert(
+      `⚠️ ${info.label}`,
+      msg,
+      [
+        {
+          text: 'رجّعني للسابق',
+          style: 'cancel',
+          onPress: () => resolve('revert'),
+        },
+        {
+          text: 'موافق — ثبّت الجديد',
+          onPress: () => resolve('keep'),
+        },
+      ],
+      { cancelable: false },
+    );
+  });
 }
 
 // ─── ذاكرة التجارب: نتعلم من اللي جربناه قبل ───
@@ -272,6 +341,12 @@ export function trialMessage(res: TrialResult, label: string): { title: string; 
         body: `${label} ما غيّر شي واضح${res.change !== undefined ? ` (${res.change >= 0 ? '+' : '−'}${pct(res.change)})` : ''} — خليناه، وتقدر تلغيه متى ما بغيت.\n\n${b}`,
       };
     case 'worse':
+      if (res.userKeptAnyway) {
+        return {
+          title: '⚠️ ثبّتنا الجديد (بناءً على طلبك)',
+          body: `${label} كان أضعف بـ ${pct(res.change!)} — بس ثبتّناه بأمرك.\n\n${b}${tower}\n\n💡 إذا تبي ترجع للسابق، اذهب لشاشة الأبراج → «رجوع للتلقائي».`,
+        };
+      }
       return {
         title: '↩️ رجعنا الإعداد السابق',
         body: `${warn}${label} خلّى الاتصال أسوأ بـ ${pct(res.change!)}${res.before && res.after && res.after.carriers < res.before.carriers ? ' — غالباً لأنه أوقف دمج الترددات' : ''}، فرجعنا إعدادك تلقائياً.\n\n${b}${tower}`,
