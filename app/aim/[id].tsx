@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, Dimensions,
+  ScrollView, View, Text, Pressable, ActivityIndicator, Alert,
+  StyleSheet, Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,15 +30,16 @@ import { AimBeeper } from '../../src/utils/aimSound';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-// ═══ Design tokens (هوية Bandly) ═══
+// ═══ Design tokens (نفس المرجع البصري) ═══
 const BLUE = '#3567F5';
 const PURPLE = '#7655F5';
 const TEXT = '#14264A';
 const MUTED = '#71809A';
 const BG = '#F4F8FF';
 const SUCCESS = '#13B783';
+const WARN = '#F59E0B';
+const DANGER = '#DC2626';
 const CARD = '#FFFFFF';
-const CARD_BG = '#FAFCFF';
 const BORDER = '#E6ECF5';
 
 type Tech = 'LTE' | 'NR';
@@ -75,14 +77,70 @@ function readOf(sig: Signal, tech: Tech): { rsrp?: number; sinr?: number; cell: 
 function levelColor(level: string): string {
   if (level === 'excellent') return '#16A34A';
   if (level === 'good') return SUCCESS;
-  if (level === 'fair') return '#F59E0B';
-  return '#DC2626';
+  if (level === 'fair') return WARN;
+  return DANGER;
+}
+/** تقدير المسافة للبرج من RSRP (خشن لكن معقول) */
+function estimateDistance(rsrp?: number): string {
+  if (rsrp === undefined) return '—';
+  const clamped = Math.max(-125, Math.min(-60, rsrp));
+  // -60 dBm ≈ 150م | -80 ≈ 800م | -100 ≈ 3 كم | -125 ≈ 8 كم
+  const m = 150 * Math.pow(10, (-60 - clamped) / 25);
+  if (m < 1000) return `${Math.round(m / 50) * 50} م`;
+  return `${(m / 1000).toFixed(1)} كم`;
 }
 
-/** ═══ Gauge دائري حديث (SVG) ═══ */
-function SignalGauge({ value, color }: { value: number; color: string }) {
-  const size = 190;
-  const stroke = 14;
+// ═══ صورة أنتنا واقعية (SVG) ═══
+function AntennaVisual({ color, active }: { color: string; active: boolean }) {
+  return (
+    <View style={a.wrap}>
+      <Svg width={160} height={220} viewBox="0 0 160 220">
+        {/* سماء + جبال */}
+        <Defs>
+          <SvgLinearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0%" stopColor="#B8DAFF" />
+            <Stop offset="100%" stopColor="#E5F1FF" />
+          </SvgLinearGradient>
+        </Defs>
+        <Path d="M 0 0 L 160 0 L 160 220 L 0 220 Z" fill="url(#sky)" />
+        {/* جبل خلفي */}
+        <Path d="M 0 170 L 40 140 L 70 160 L 110 130 L 160 160 L 160 220 L 0 220 Z" fill="#C8D9EC" opacity={0.6} />
+        {/* موجات الرادار */}
+        {active && (
+          <>
+            <Path d="M 90 90 Q 130 90 130 110" stroke={color} strokeWidth={3.5} fill="none" opacity={0.55} strokeLinecap="round" />
+            <Path d="M 92 78 Q 145 78 145 110" stroke={color} strokeWidth={3} fill="none" opacity={0.35} strokeLinecap="round" />
+            <Path d="M 94 66 Q 160 66 160 110" stroke={color} strokeWidth={2.5} fill="none" opacity={0.2} strokeLinecap="round" />
+          </>
+        )}
+        {/* عمود الدعم */}
+        <Line x1={72} y1={140} x2={72} y2={205} stroke="#94A3B8" strokeWidth={5} strokeLinecap="round" />
+        {/* قاعدة */}
+        <Line x1={52} y1={210} x2={92} y2={210} stroke="#64748B" strokeWidth={4} strokeLinecap="round" />
+        {/* مشبك */}
+        <Path d="M 70 130 L 80 130 L 80 145 L 70 145 Z" fill="#64748B" />
+        {/* صندوق الأنتنا */}
+        <Path
+          d="M 30 40 Q 30 32 40 32 L 82 32 Q 92 32 92 40 L 92 128 Q 92 136 82 136 L 40 136 Q 30 136 30 128 Z"
+          fill="#F9FBFF" stroke="#CBD5E1" strokeWidth={2.5}
+        />
+        {/* خطوط داخلية */}
+        <Line x1={40} y1={55} x2={82} y2={55} stroke="#E2E8F0" strokeWidth={2} />
+        <Line x1={40} y1={70} x2={82} y2={70} stroke="#E2E8F0" strokeWidth={2} />
+        {/* سهم للأعلى */}
+        <Path d="M 61 115 L 61 85 M 50 98 L 61 82 L 72 98" stroke="#94A3B8" strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        {/* نقطة الإشارة */}
+        <Circle cx={100} cy={55} r={5} fill={color} />
+        <Circle cx={100} cy={55} r={10} fill={color} opacity={0.28} />
+      </Svg>
+    </View>
+  );
+}
+
+// ═══ Gauge دائري (نفس المرجع) ═══
+function ScoreGauge({ value, color }: { value: number; color: string }) {
+  const size = 168;
+  const stroke = 12;
   const r = (size - stroke) / 2;
   const cx = size / 2;
   const cy = size / 2;
@@ -92,7 +150,7 @@ function SignalGauge({ value, color }: { value: number; color: string }) {
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={size} height={size} style={{ position: 'absolute' }}>
-        <Circle cx={cx} cy={cy} r={r} stroke="#E8EFF8" strokeWidth={stroke} fill="none" />
+        <Circle cx={cx} cy={cy} r={r} stroke="#E5EDF9" strokeWidth={stroke} fill="none" />
         <Circle
           cx={cx} cy={cy} r={r}
           stroke={color} strokeWidth={stroke} fill="none"
@@ -100,144 +158,68 @@ function SignalGauge({ value, color }: { value: number; color: string }) {
           strokeLinecap="round"
           transform={`rotate(-90 ${cx} ${cy})`}
         />
-        <Circle cx={cx} cy={cy} r={r - stroke - 2} fill="#FFFFFF" />
       </Svg>
       <View style={{ alignItems: 'center' }}>
         <Icon name="antenna" size={20} color={color} />
-        <Text style={g.gaugeVal}>{Math.round(v * 100)}</Text>
-        <Text style={g.gaugePct}>%</Text>
-        <Text style={g.gaugeLbl}>قوة الإشارة</Text>
+        <Text style={a.gaugeVal}>{Math.round(v * 100)}</Text>
+        <Text style={a.gaugePct}>%</Text>
+        <Text style={a.gaugeLbl}>قوة الإشارة</Text>
       </View>
     </View>
   );
 }
 
-/** ═══ رسم أنتنا + موجات ═══ */
-function AntennaVisual({ color }: { color: string }) {
-  return (
-    <View style={g.antWrap}>
-      <Svg width={130} height={190} viewBox="0 0 130 190">
-        {/* العمود */}
-        <Circle cx={65} cy={170} r={4} fill="#A4B0C4" />
-        <Line x1={65} y1={100} x2={65} y2={170} stroke="#A4B0C4" strokeWidth={6} strokeLinecap="round" />
-        <Line x1={45} y1={182} x2={85} y2={182} stroke="#94A3B8" strokeWidth={4} strokeLinecap="round" />
-        {/* جسم الأنتنا */}
-        <Path
-          d="M 30 30 Q 30 20 40 20 L 90 20 Q 100 20 100 30 L 100 100 Q 100 110 90 110 L 40 110 Q 30 110 30 100 Z"
-          fill="#F9FBFF" stroke="#DCE6F5" strokeWidth={2}
-        />
-        <Path d="M 40 35 L 90 35" stroke="#E2E8F0" strokeWidth={3} strokeLinecap="round" />
-        <Path d="M 40 50 L 90 50" stroke="#E2E8F0" strokeWidth={3} strokeLinecap="round" />
-        {/* سهم */}
-        <Path d="M 65 90 L 65 60 M 55 70 L 65 58 L 75 70" stroke="#94A3B8" strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        {/* موجات الإشارة */}
-        <Path d="M 105 60 Q 130 60 130 90" stroke={color} strokeWidth={3} fill="none" opacity={0.4} strokeLinecap="round" />
-        <Path d="M 110 45 Q 145 45 145 90" stroke={color} strokeWidth={3} fill="none" opacity={0.25} strokeLinecap="round" />
-      </Svg>
-    </View>
-  );
-}
-
-/** ═══ بطاقة Metric ═══ */
-function MetricBox({ icon, label, value, unit, iconBg, iconColor }: {
-  icon: IconName; label: string; value?: string | number; unit?: string; iconBg: string; iconColor: string;
-}) {
-  return (
-    <View style={g.metric}>
-      <View style={[g.metricIcon, { backgroundColor: iconBg }]}>
-        <Icon name={icon} size={14} color={iconColor} />
-      </View>
-      <Text style={g.metricLbl}>{label}</Text>
-      <View style={{ flexDirection: 'row-reverse', alignItems: 'baseline', gap: 2, marginTop: 2 }}>
-        <Text style={g.metricVal}>{value ?? '—'}</Text>
-        {unit ? <Text style={g.metricUnit}>{unit}</Text> : null}
-      </View>
-    </View>
-  );
-}
-
-/** ═══ بطاقة قسم ═══ */
-function SectionCard({ children }: { children: React.ReactNode }) {
-  return <View style={g.section}>{children}</View>;
-}
-
-/** ═══ صف معلومة ═══ */
-function InfoRow({ icon, label, value, color }: { icon: IconName; label: string; value: string; color?: string }) {
-  return (
-    <View style={g.infoRow}>
-      <View style={g.infoIcon}>
-        <Icon name={icon} size={14} color={BLUE} />
-      </View>
-      <View style={{ flex: 1, alignItems: 'flex-end' }}>
-        <Text style={g.infoLbl}>{label}</Text>
-        <Text style={[g.infoVal, color && { color }]}>{value}</Text>
-      </View>
-    </View>
-  );
-}
-
-/** ═══ صف نصيحة ═══ */
-function TipRow({ text }: { text: string }) {
-  return (
-    <View style={g.tipRow}>
-      <Text style={g.tipCheck}>✓</Text>
-      <Text style={g.tipTxt}>{text}</Text>
-    </View>
-  );
-}
-
-/** ═══ بوصلة/مؤشر ═══ */
-function CompassIndicator({ value, color }: { value: number; color: string }) {
+// ═══ بوصلة (SVG) ═══
+function Compass({ value, color }: { value: number; color: string }) {
   const size = 130;
   const cx = size / 2;
   const cy = size / 2;
-  const r = size / 2 - 10;
-  const angle = -45 + value * 90; // -45° للضعيف، +45° للقوي
-  const pct = Math.round(value * 100);
+  const r = size / 2 - 8;
+  const angle = -135 + value * 270;
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={size} height={size} style={{ position: 'absolute' }}>
-        <Circle cx={cx} cy={cy} r={r + 6} fill="#F4F8FF" stroke={BORDER} strokeWidth={1} />
-        <Circle cx={cx} cy={cy} r={r} fill="#FFFFFF" stroke={BORDER} strokeWidth={2} />
-        {/* علامات */}
-        {Array.from({ length: 12 }, (_, i) => {
-          const a = (i / 12) * 2 * Math.PI;
-          const r1 = r - 3;
-          const r2 = i % 3 === 0 ? r - 12 : r - 7;
+        <Circle cx={cx} cy={cy} r={r + 4} fill="#F4F8FF" stroke={BORDER} strokeWidth={1} />
+        <Circle cx={cx} cy={cy} r={r} fill="#FFFFFF" stroke="#E8EFF8" strokeWidth={2} />
+        {Array.from({ length: 16 }, (_, i) => {
+          const ang = (i / 16) * 2 * Math.PI - Math.PI / 2;
+          const isMajor = i % 4 === 0;
+          const r1 = r - (isMajor ? 10 : 5);
+          const r2 = r - 2;
           return (
             <Line
               key={i}
-              x1={cx + Math.cos(a) * r1}
-              y1={cy + Math.sin(a) * r1}
-              x2={cx + Math.cos(a) * r2}
-              y2={cy + Math.sin(a) * r2}
-              stroke={i % 3 === 0 ? '#94A3B8' : '#CBD5E1'}
-              strokeWidth={i % 3 === 0 ? 2 : 1}
+              x1={cx + Math.cos(ang) * r1}
+              y1={cy + Math.sin(ang) * r1}
+              x2={cx + Math.cos(ang) * r2}
+              y2={cy + Math.sin(ang) * r2}
+              stroke={isMajor ? '#94A3B8' : '#CBD5E1'}
+              strokeWidth={isMajor ? 2 : 1}
               strokeLinecap="round"
             />
           );
         })}
-        {/* العقرب */}
         <G rotation={angle} origin={`${cx}, ${cy}`}>
           <Path
-            d={`M ${cx} ${cy - r + 8} L ${cx - 8} ${cy + 8} L ${cx} ${cy + 3} L ${cx + 8} ${cy + 8} Z`}
+            d={`M ${cx} ${cy - r + 16} L ${cx - 8} ${cy + 6} L ${cx} ${cy + 1} L ${cx + 8} ${cy + 6} Z`}
             fill={color}
           />
         </G>
         <Circle cx={cx} cy={cy} r={5} fill="#14264A" />
       </Svg>
-      <View style={{ position: 'absolute', bottom: 6, alignItems: 'center' }}>
-        <Text style={{ color: TEXT, fontSize: 13, fontWeight: '900' }}>{pct}%</Text>
+      <View style={{ position: 'absolute', bottom: 2, alignItems: 'center' }}>
+        <Text style={a.compassDeg}>{Math.round(angle + 135)}°</Text>
+        <Text style={a.compassSub}>من الشمال</Text>
       </View>
     </View>
   );
 }
 
-/** ═══ خط بياني (SVG) ═══ */
+// ═══ Chart خطي (SVG) ═══
 function LineChart({ values, min, max, color }: { values: number[]; min: number; max: number; color: string }) {
-  const W = SCREEN_W - 80;
-  const H = 110;
-  const pad = { top: 8, bottom: 20, left: 0, right: 6 };
+  const W = SCREEN_W - 76;
+  const H = 120;
+  const pad = { top: 10, bottom: 22, left: 6, right: 6 };
   if (values.length < 2) return <View style={{ height: H }} />;
   const innerW = W - pad.left - pad.right;
   const innerH = H - pad.top - pad.bottom;
@@ -255,19 +237,37 @@ function LineChart({ values, min, max, color }: { values: number[]; min: number;
     <Svg width={W} height={H}>
       <Defs>
         <SvgLinearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0%" stopColor={color} stopOpacity="0.25" />
+          <Stop offset="0%" stopColor={color} stopOpacity="0.22" />
           <Stop offset="100%" stopColor={color} stopOpacity="0" />
         </SvgLinearGradient>
       </Defs>
-      {/* خطوط أفقية */}
-      {[0, 0.33, 0.66, 1].map((f, i) => (
-        <Line key={i} x1={0} y1={pad.top + f * innerH} x2={W} y2={pad.top + f * innerH} stroke={BORDER} strokeWidth={1} />
-      ))}
+      {[-60, -90, -120].map((v, i) => {
+        const y = pad.top + innerH - ((v - min) / range) * innerH;
+        return <Line key={i} x1={0} y1={y} x2={W} y2={y} stroke={BORDER} strokeWidth={1} />;
+      })}
       <Path d={areaPath} fill="url(#areaGrad)" />
       <Path d={linePath} stroke={color} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
       <Circle cx={last.x} cy={last.y} r={5} fill={color} />
-      <Circle cx={last.x} cy={last.y} r={9} fill={color} opacity={0.25} />
+      <Circle cx={last.x} cy={last.y} r={9} fill={color} opacity={0.22} />
     </Svg>
+  );
+}
+
+// ═══ Metric صغيرة ═══
+function MetricBox({ icon, label, value, unit, iconBg, iconColor }: {
+  icon: IconName; label: string; value?: string | number; unit?: string; iconBg: string; iconColor: string;
+}) {
+  return (
+    <View style={a.metric}>
+      <View style={[a.metricIcon, { backgroundColor: iconBg }]}>
+        <Icon name={icon} size={13} color={iconColor} />
+      </View>
+      <Text style={a.metricLbl}>{label}</Text>
+      <View style={{ flexDirection: 'row-reverse', alignItems: 'baseline', gap: 2 }}>
+        <Text style={a.metricVal}>{value ?? '—'}</Text>
+        {unit ? <Text style={a.metricUnit}>{unit}</Text> : null}
+      </View>
+    </View>
   );
 }
 
@@ -313,7 +313,7 @@ export default function AimScreen() {
   useEffect(() => { hapticsRef.current = haptics; }, [haptics]);
   useEffect(() => { techRef.current = tech; }, [tech]);
 
-  // ═══ الصوت: يعمل فقط لما المستخدم يشغّله ═══
+  // ═══ الصوت — فقط لما sound === true ═══
   useEffect(() => {
     if (!sound) {
       if (beeperRef.current) {
@@ -571,6 +571,8 @@ export default function AimScreen() {
   const pct = current?.score ?? 0;
   const bandList = [...new Set([...bands, ...nrBands])];
   const currentBand = current?.cell.band ? (current.cell.tech === 'NR' ? `n${current.cell.band}` : `B${current.cell.band}`) : undefined;
+  const distance = estimateDistance(shown);
+  const improvePct = delta !== undefined && delta !== 0 ? Math.round(Math.abs(delta) * 2.5) : 0;
 
   const stability = readings.length >= 5
     ? (() => {
@@ -582,64 +584,58 @@ export default function AimScreen() {
     : null;
 
   const chartValues = readings.slice(-30).map(r => r.smooth ?? r.rsrp ?? -110);
+  const chartLabels = readings.slice(-4).filter((_, i, arr) => i % Math.ceil(arr.length / 4) === 0);
+  const fmtTime = (t: number) => {
+    const d = new Date(t);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
 
   return (
-    <View style={g.container}>
+    <View style={a.container}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[g.content, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[a.content, { paddingBottom: insets.bottom + 100 }]}
       >
         {/* ═══ Header ═══ */}
-        <View style={g.header}>
-          <Pressable style={g.iconBtn} onPress={() => reset()}>
-            <Icon name="refresh" size={18} color={TEXT} />
+        <View style={a.header}>
+          <Pressable style={a.headerBtn} onPress={reset}>
+            <Icon name="chevron" size={20} color={TEXT} />
           </Pressable>
           <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={g.title}>مساعد التوجيه</Text>
-            <Text style={g.subtitle}>اضبط اتجاه الهوائي للحصول على أفضل إشارة</Text>
+            <Text style={a.headerTitle}>مساعد التوجيه</Text>
+            <Text style={a.headerSub}>اضبط اتجاه الهوائي للحصول على أفضل إشارة</Text>
           </View>
-          <Pressable
-            style={g.iconBtn}
-            onPress={() => Alert.alert('كيف تستخدم الشاشة؟',
-              '١) اختر 4G أو 5G\n٢) حرّك الراوتر ببطء\n٣) الجوال يهتز أسرع كل ما قويت الإشارة\n٤) لما تلقى أفضل نقطة، ثبّت على البرج')}
-          >
+          <Pressable style={a.headerBtn} onPress={() => Alert.alert('مساعدة',
+            '١) اختر 4G أو 5G\n٢) حرّك الراوتر ببطء\n٣) الجوال يهتز أسرع كل ما قويت الإشارة\n٤) لما تلقى أفضل نقطة، ثبّت على البرج')}>
             <Icon name="bulb" size={18} color={PURPLE} />
           </Pressable>
         </View>
 
         {/* ═══ Mode selector ═══ */}
-        <View style={g.modeWrap}>
-          <Pressable style={g.modeBtn} onPress={() => setMode('guide')}>
-            {mode === 'guide' ? (
-              <LinearGradient
-                colors={[BLUE, PURPLE]}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                style={g.modeGrad}
-              >
-                <Text style={g.modeTxtOn}>وضع التوجيه</Text>
-                <Icon name="aim" size={15} color="#FFF" />
+        <View style={a.modeWrap}>
+          <Pressable style={a.modeHalf} onPress={() => setMode('watch')}>
+            {mode === 'watch' ? (
+              <LinearGradient colors={[BLUE, PURPLE]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={a.modeActive}>
+                <Icon name="eye" size={15} color="#FFF" />
+                <Text style={a.modeTxtOn}>وضع المراقبة</Text>
               </LinearGradient>
             ) : (
-              <View style={g.modeInner}>
-                <Text style={g.modeTxt}>وضع التوجيه</Text>
-                <Icon name="aim" size={15} color={MUTED} />
+              <View style={a.modeInner}>
+                <Icon name="eye" size={15} color={MUTED} />
+                <Text style={a.modeTxt}>وضع المراقبة</Text>
               </View>
             )}
           </Pressable>
-          <Pressable style={g.modeBtn} onPress={() => setMode('watch')}>
-            {mode === 'watch' ? (
-              <LinearGradient
-                colors={[BLUE, PURPLE]}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                style={g.modeGrad}
-              >
-                <Text style={g.modeTxtOn}>وضع المراقبة</Text>
-                <Icon name="eye" size={15} color="#FFF" />
+          <Pressable style={a.modeHalf} onPress={() => setMode('guide')}>
+            {mode === 'guide' ? (
+              <LinearGradient colors={[BLUE, PURPLE]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={a.modeActive}>
+                <Icon name="aim" size={15} color="#FFF" />
+                <Text style={a.modeTxtOn}>وضع التوجيه</Text>
               </LinearGradient>
             ) : (
-              <View style={g.modeInner}>
-                <Text style={g.modeTxt}>وضع المراقبة</Text>
-                <Icon name="eye" size={15} color={MUTED} />
+              <View style={a.modeInner}>
+                <Icon name="aim" size={15} color={MUTED} />
+                <Text style={a.modeTxt}>وضع التوجيه</Text>
               </View>
             )}
           </Pressable>
@@ -654,57 +650,45 @@ export default function AimScreen() {
 
         {!loading && (
           <>
-            {/* ═══ Hero card ═══ */}
-            <View style={g.heroCard}>
-              <View style={g.heroVisual}>
-                <AntennaVisual color={lvlColor} />
-                <SignalGauge value={pct} color={lvlColor} />
+            {/* ═══ Hero Card ═══ */}
+            <View style={a.heroCard}>
+              <View style={a.heroVisual}>
+                {/* صورة الأنتنا — يسار */}
+                <AntennaVisual color={lvlColor} active={mode === 'guide'} />
+                {/* Gauge — يمين */}
+                <ScoreGauge value={pct} color={lvlColor} />
               </View>
 
-              {/* Metrics row */}
-              <View style={g.metricsRow}>
-                <MetricBox
-                  icon="tower" label="PCI" value={current?.cell.pci ?? '—'}
-                  iconBg="#EEE8FF" iconColor="#7C3AED"
-                />
-                <MetricBox
-                  icon="chart" label="RSRP" value={shown ?? '—'} unit="dBm"
-                  iconBg="#DFF9ED" iconColor="#16A34A"
-                />
-                <MetricBox
-                  icon="speed" label="SINR" value={current?.sinr ?? '—'} unit="dB"
-                  iconBg="#E1F5FF" iconColor="#0891B2"
-                />
-                <MetricBox
-                  icon="bands" label="Band" value={currentBand ?? '—'}
-                  iconBg="#FEF3C7" iconColor="#D97706"
-                />
+              {/* 4 Metrics */}
+              <View style={a.metricsRow}>
+                <MetricBox icon="tower" label="PCI" value={current?.cell.pci ?? '—'} iconBg="#EEE8FF" iconColor="#7C3AED" />
+                <MetricBox icon="chart" label="RSRP" value={shown ?? '—'} unit="dBm" iconBg="#DFF9ED" iconColor="#16A34A" />
+                <MetricBox icon="speed" label="SINR" value={current?.sinr ?? '—'} unit="dB" iconBg="#E1F5FF" iconColor="#0891B2" />
+                <MetricBox icon="bands" label="Band" value={currentBand ?? '—'} iconBg="#FEF3C7" iconColor="#D97706" />
               </View>
 
-              {/* Stability status */}
+              {/* Status بار أخضر */}
               {stability && (
-                <View style={[g.stableBox, {
+                <View style={[a.statusBar, {
                   backgroundColor: stability === 'stable' ? '#ECFBF6' : stability === 'ok' ? '#FFFBEB' : '#FEF2F2',
                   borderColor: stability === 'stable' ? '#BEEFE0' : stability === 'ok' ? '#FCD34D' : '#FECACA',
                 }]}>
                   <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Text style={[g.stableTitle, {
+                    <Text style={[a.statusTitle, {
                       color: stability === 'stable' ? '#079B72' : stability === 'ok' ? '#92400E' : '#991B1B',
                     }]}>
                       {stability === 'stable' ? '✓ الإشارة مستقرة' : stability === 'ok' ? '⚠ الإشارة متغيرة قليلاً' : '⚠ الإشارة متقلبة'}
                     </Text>
-                    <Text style={[g.stableSub, {
+                    <Text style={[a.statusSub, {
                       color: stability === 'stable' ? '#67958A' : stability === 'ok' ? '#A16207' : '#B91C1C',
                     }]}>
-                      {stability === 'stable'
-                        ? 'جودة الاتصال جيدة — جرّب تحسينها بتحريك الهوائي'
-                        : stability === 'ok'
-                          ? 'جرّب تحريك الراوتر ببطء وانتظر ٣-٥ ثواني'
+                      {stability === 'stable' ? 'جودة الاتصال جيدة - يمكنك تحسينها بتحريك الهوائي'
+                        : stability === 'ok' ? 'جرّب تحريك الراوتر ببطء وانتظر ٣-٥ ثواني'
                           : 'حرّك الراوتر ببطء — الأرقام تتغير بسرعة'}
                     </Text>
                   </View>
-                  <View style={[g.stableCheck, {
-                    backgroundColor: stability === 'stable' ? SUCCESS : stability === 'ok' ? '#F59E0B' : '#DC2626',
+                  <View style={[a.statusCheck, {
+                    backgroundColor: stability === 'stable' ? SUCCESS : stability === 'ok' ? WARN : DANGER,
                   }]}>
                     <Text style={{ color: '#FFF', fontWeight: '900', fontSize: 15 }}>✓</Text>
                   </View>
@@ -712,227 +696,215 @@ export default function AimScreen() {
               )}
             </View>
 
-            {/* ═══ Band / Tech selector ═══ */}
-            <SectionCard>
-              <View style={g.sectionHead}>
-                <View style={g.sectionIcon}>
+            {/* ═══ Band selector ═══ */}
+            <View style={a.card}>
+              <View style={a.cardHead}>
+                <View style={a.cardIcon}>
                   <Icon name="bands" size={16} color={BLUE} />
                 </View>
                 <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                  <Text style={g.sectionTitle}>اختيار التردد</Text>
-                  <Text style={g.sectionSub}>التقنية والترددات المتاحة</Text>
+                  <Text style={a.cardTitle}>اختيار التردد</Text>
+                  <Text style={a.cardSub}>الترددات المتاحة على شبكتك</Text>
                 </View>
               </View>
 
-              {/* Tech toggle */}
-              <View style={g.techRow}>
+              <View style={a.techRow}>
                 {(['LTE', 'NR'] as Tech[]).map(t => {
                   const on = tech === t;
                   const disabled = t === 'NR' && !nrSeen && !nrActive;
                   return (
                     <Pressable
                       key={t}
-                      style={[g.techBtn, on && {
+                      style={[a.techBtn, on && {
                         backgroundColor: t === 'NR' ? PURPLE : BLUE,
                         borderColor: t === 'NR' ? PURPLE : BLUE,
                       }, disabled && { opacity: 0.4 }]}
                       onPress={() => !disabled && switchTech(t)}
                       disabled={disabled}
                     >
-                      <Text style={[g.techTxt, on && { color: '#FFF' }]}>
-                        {t === 'NR' ? '5G' : '4G'}
-                      </Text>
+                      <Text style={[a.techTxt, on && { color: '#FFF' }]}>{t === 'NR' ? '5G' : '4G'}</Text>
                     </Pressable>
                   );
                 })}
               </View>
 
-              {/* Band chips */}
               {bandList.length > 0 && (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={g.chipsRow}
-                >
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={a.chipsRow}>
                   {bandList.map(b => {
                     const on = currentBand === b;
                     const isNr = b.startsWith('n');
                     return (
-                      <View
-                        key={b}
-                        style={[g.chip, on && {
-                          backgroundColor: isNr ? PURPLE : BLUE,
-                          borderColor: isNr ? PURPLE : BLUE,
-                        }]}
-                      >
-                        <Text style={[g.chipTxt, on && { color: '#FFF' }]}>{b}</Text>
+                      <View key={b} style={[a.chip, on && {
+                        backgroundColor: isNr ? PURPLE : BLUE,
+                        borderColor: isNr ? PURPLE : BLUE,
+                      }]}>
+                        <Text style={[a.chipTxt, on && { color: '#FFF' }]}>{b}</Text>
                       </View>
                     );
                   })}
                 </ScrollView>
               )}
-            </SectionCard>
+            </View>
 
             {/* ═══ Best direction ═══ */}
             {best && (
-              <SectionCard>
-                <View style={g.sectionHead}>
-                  <View style={[g.sectionIcon, { backgroundColor: '#EEE8FF' }]}>
+              <View style={a.card}>
+                <View style={a.cardHead}>
+                  <View style={[a.cardIcon, { backgroundColor: PURPLE + '18' }]}>
                     <Icon name="aim" size={16} color={PURPLE} />
                   </View>
                   <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Text style={g.sectionTitle}>أفضل نقطة وصلت لها</Text>
-                    <Text style={g.sectionSub}>مؤشر جودة التوجيه الحالي</Text>
+                    <Text style={a.cardTitle}>أفضل نقطة توجيه</Text>
+                    <Text style={a.cardSub}>اتجه الهوائي إلى هذه الزاوية</Text>
                   </View>
                 </View>
 
-                <View style={g.directionBody}>
-                  <CompassIndicator value={pct} color={lvlColor} />
-                  <View style={g.directionInfo}>
-                    <InfoRow
-                      icon="tower" label="البرج"
-                      value={cellName(best.cell)}
-                    />
-                    <InfoRow
-                      icon="chart" label="أفضل RSRP"
-                      value={bestShown !== undefined ? `${bestShown} dBm` : '—'}
-                    />
-                    <InfoRow
-                      icon="spark" label="الفرق عن البداية"
-                      value={
-                        delta !== undefined
-                          ? `${delta > 0 ? '+' : ''}${delta} dB`
-                          : '—'
-                      }
-                      color={delta !== undefined && delta > 0 ? SUCCESS : delta !== undefined && delta < 0 ? '#DC2626' : MUTED}
-                    />
+                <View style={a.dirBody}>
+                  <Compass value={pct} color={lvlColor} />
+                  <View style={a.dirStats}>
+                    <View style={a.dirStatRow}>
+                      <Icon name="spark" size={14} color={SUCCESS} />
+                      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                        <Text style={a.dirStatLbl}>تحسن متوقع</Text>
+                        <Text style={[a.dirStatVal, { color: SUCCESS }]}>
+                          {improvePct > 0 ? `+${improvePct}%` : '—'}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={a.dirStatRow}>
+                      <Icon name="pin" size={14} color={BLUE} />
+                      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                        <Text style={a.dirStatLbl}>المسافة</Text>
+                        <Text style={a.dirStatVal}>{distance}</Text>
+                      </View>
+                    </View>
+                    <View style={a.dirStatRow}>
+                      <Icon name="tower" size={14} color={PURPLE} />
+                      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                        <Text style={a.dirStatLbl}>البرج</Text>
+                        <Text style={a.dirStatVal} numberOfLines={1}>
+                          {cellName(best.cell)}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
                 </View>
 
                 {canPin && best.cell.pci && cellKey(pinned) !== cellKey(best.cell) && (
-                  <Pressable style={g.ctaSmall} onPress={pinBest} disabled={pinBusy}>
-                    {pinBusy ? (
-                      <ActivityIndicator color="#FFF" />
-                    ) : (
-                      <Text style={g.ctaSmallTxt}>📌 ثبّت على برج أفضل نقطة</Text>
+                  <Pressable style={a.pinBtn} onPress={pinBest} disabled={pinBusy}>
+                    {pinBusy ? <ActivityIndicator color="#FFF" /> : (
+                      <Text style={a.pinTxt}>📌 ثبّت على برج أفضل نقطة</Text>
                     )}
                   </Pressable>
                 )}
 
                 {pinned && (
-                  <Pressable style={[g.ctaSmall, { backgroundColor: '#E0E7FF' }]} onPress={pinDuringAim} disabled={pinBusy}>
-                    <Text style={[g.ctaSmallTxt, { color: BLUE }]}>
-                      ✓ مثبّت على {cellName(pinned)} — اضغط للفك
-                    </Text>
+                  <Pressable style={[a.pinBtn, { backgroundColor: '#E0E7FF' }]} onPress={pinDuringAim} disabled={pinBusy}>
+                    <Text style={[a.pinTxt, { color: BLUE }]}>✓ مثبّت على {cellName(pinned)}</Text>
                   </Pressable>
                 )}
-              </SectionCard>
+              </View>
             )}
 
-            {/* ═══ 5G hunt ═══ */}
+            {/* ═══ 5G Hunt ═══ */}
             {waitingNr && (
-              <SectionCard>
-                <View style={g.sectionHead}>
-                  <View style={[g.sectionIcon, { backgroundColor: '#EEE8FF' }]}>
+              <View style={a.card}>
+                <View style={a.cardHead}>
+                  <View style={[a.cardIcon, { backgroundColor: PURPLE + '18' }]}>
                     <Icon name="antenna" size={16} color={PURPLE} />
                   </View>
                   <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Text style={g.sectionTitle}>صيد إشارة 5G</Text>
-                    <Text style={g.sectionSub}>
+                    <Text style={a.cardTitle}>صيد إشارة 5G</Text>
+                    <Text style={a.cardSub}>
                       {waking !== null ? 'نبحث — حرّك الراوتر ببطء' : '5G ما يظهر إلا وقت التحميل'}
                     </Text>
                   </View>
                 </View>
-                <Pressable
-                  style={[g.wakeBtn, waking !== null && g.wakeBtnOn]}
-                  onPress={wake5g}
-                >
-                  <Text style={[g.wakeTxt, waking !== null && { color: PURPLE }]}>
+                <Pressable style={[a.wakeBtn, waking !== null && a.wakeBtnOn]} onPress={wake5g}>
+                  <Text style={[a.wakeTxt, waking !== null && { color: PURPLE }]}>
                     {waking !== null ? `⏹ إيقاف البحث (${waking}ث)` : '⚡ ابحث عن 5G'}
                   </Text>
                 </Pressable>
-              </SectionCard>
+              </View>
             )}
 
-            {/* ═══ Sound + haptics ═══ */}
-            <View style={g.togglesRow}>
+            {/* ═══ Sound + Haptics — compact row ═══ */}
+            <View style={a.togglesRow}>
               <Pressable
-                style={[g.toggleBtn, sound && { backgroundColor: PURPLE, borderColor: PURPLE }]}
+                style={[a.toggleBtn, sound && { backgroundColor: PURPLE, borderColor: PURPLE }]}
                 onPress={() => setSound(v => !v)}
               >
-                <Text style={[g.toggleIcon, sound && { color: '#FFF' }]}>
-                  {sound ? '🔊' : '🔈'}
-                </Text>
-                <Text style={[g.toggleTxt, sound && { color: '#FFF' }]}>
-                  {sound ? 'الصوت مفعّل' : 'تفعيل الصوت'}
+                <Text style={[a.toggleIcon, sound && { color: '#FFF' }]}>{sound ? '🔊' : '🔈'}</Text>
+                <Text style={[a.toggleTxt, sound && { color: '#FFF' }]}>
+                  {sound ? 'الصوت' : 'تشغيل الصوت'}
                 </Text>
               </Pressable>
               <Pressable
-                style={[g.toggleBtn, haptics && { backgroundColor: SUCCESS, borderColor: SUCCESS }]}
+                style={[a.toggleBtn, haptics && { backgroundColor: SUCCESS, borderColor: SUCCESS }]}
                 onPress={() => setHaptics(h => !h)}
               >
-                <Text style={[g.toggleIcon, haptics && { color: '#FFF' }]}>📳</Text>
-                <Text style={[g.toggleTxt, haptics && { color: '#FFF' }]}>
-                  {haptics ? 'اهتزاز مفعّل' : 'تشغيل الاهتزاز'}
+                <Text style={[a.toggleIcon, haptics && { color: '#FFF' }]}>📳</Text>
+                <Text style={[a.toggleTxt, haptics && { color: '#FFF' }]}>
+                  {haptics ? 'اهتزاز' : 'تشغيل الاهتزاز'}
                 </Text>
               </Pressable>
             </View>
 
             {/* ═══ Chart ═══ */}
             {readings.length > 3 && (
-              <SectionCard>
-                <View style={g.sectionHead}>
-                  <View style={g.sectionIcon}>
+              <View style={a.card}>
+                <View style={a.cardHead}>
+                  <View style={a.cardIcon}>
                     <Icon name="chart" size={16} color={BLUE} />
                   </View>
                   <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Text style={g.sectionTitle}>تاريخ قوة الإشارة</Text>
-                    <Text style={g.sectionSub}>آخر {Math.min(30, readings.length)} قراءة</Text>
+                    <Text style={a.cardTitle}>تاريخ قوة الإشارة</Text>
+                    <Text style={a.cardSub}>آخر {Math.min(30, readings.length)} قراءة</Text>
                   </View>
-                  <View style={g.rsrpBadge}>
-                    <Text style={g.rsrpBadgeTxt}>{shown ?? '—'} dBm</Text>
+                  <View style={a.rsrpBadge}>
+                    <Text style={a.rsrpBadgeTxt}>{shown ?? '—'} dBm</Text>
                   </View>
                 </View>
-                <View style={{ marginTop: 8, alignItems: 'center' }}>
+                <View style={{ alignItems: 'center', marginTop: 8 }}>
                   <LineChart values={chartValues} min={-125} max={-60} color={lvlColor} />
                 </View>
-                <View style={g.chartLabels}>
-                  <Text style={g.chartLbl}>الآن</Text>
-                  <Text style={g.chartLbl}>قبل قليل</Text>
+                <View style={a.chartLabels}>
+                  <Text style={a.chartLbl}>قبل قليل</Text>
+                  <Text style={a.chartLbl}>الآن</Text>
                 </View>
-              </SectionCard>
+              </View>
             )}
 
             {/* ═══ Tips ═══ */}
-            <View style={g.tipsCard}>
-              <View style={g.tipsHead}>
-                <View style={[g.sectionIcon, { backgroundColor: '#FEF3C7' }]}>
-                  <Icon name="bulb" size={16} color="#D97706" />
+            <View style={a.tipsCard}>
+              <View style={a.tipsHead}>
+                <View style={[a.cardIcon, { backgroundColor: '#FEF3C7' }]}>
+                  <Icon name="bulb" size={16} color={WARN} />
                 </View>
-                <Text style={g.tipsTitle}>نصائح لتحسين الإشارة</Text>
+                <Text style={a.tipsTitle}>نصائح لتحسين الإشارة</Text>
               </View>
-              <TipRow text="ارفع الهوائي لأعلى نقطة ممكنة" />
-              <TipRow text="ابتعد عن العوائق المعدنية والجدران السميكة" />
-              <TipRow text="جرّب الاتجاهات المختلفة حتى تجد أفضل إشارة" />
-              <TipRow text="ثبّت الهوائي عند الوصول لأفضل قراءة" />
+              <View style={a.tipRow}><Text style={a.tipCheck}>✓</Text><Text style={a.tipTxt}>ارفع الهوائي لأعلى نقطة ممكنة</Text></View>
+              <View style={a.tipRow}><Text style={a.tipCheck}>✓</Text><Text style={a.tipTxt}>ابتعد عن العوائق المعدنية والجدران السميكة</Text></View>
+              <View style={a.tipRow}><Text style={a.tipCheck}>✓</Text><Text style={a.tipTxt}>جرّب الاتجاهات المختلفة حتى تجد أفضل إشارة</Text></View>
+              <View style={a.tipRow}><Text style={a.tipCheck}>✓</Text><Text style={a.tipTxt}>ثبّت الهوائي عند الوصول لأفضل قراءة</Text></View>
             </View>
 
-            {!!error && <Text style={g.err}>{error}</Text>}
+            {!!error && <Text style={a.err}>{error}</Text>}
           </>
         )}
       </ScrollView>
 
-      {/* ═══ CTA أسفل ثابت ═══ */}
+      {/* ═══ CTA ثابت ═══ */}
       {!loading && (
-        <View style={[g.footer, { paddingBottom: insets.bottom + 12 }]}>
+        <View style={[a.footer, { paddingBottom: insets.bottom + 12 }]}>
           <Pressable onPress={() => { reset(); if (!sound) setSound(true); }}>
             <LinearGradient
               colors={[BLUE, PURPLE]}
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={g.ctaGrad}
+              style={a.cta}
             >
-              <Icon name="antenna" size={20} color="#FFF" />
-              <Text style={g.ctaTxt}>ابدأ التوجيه الآن</Text>
+              <Icon name="aim" size={20} color="#FFF" />
+              <Text style={a.ctaTxt}>ابدأ التوجيه الآن</Text>
             </LinearGradient>
           </Pressable>
         </View>
@@ -941,107 +913,109 @@ export default function AimScreen() {
   );
 }
 
-// ═══ Styles ═══
-const g = StyleSheet.create({
+const a = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
-  content: { paddingHorizontal: 16, paddingTop: 14, gap: 14 },
+  content: { paddingHorizontal: 16, paddingTop: 14, gap: 12 },
 
   // Header
   header: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
-  iconBtn: {
-    width: 46, height: 46, borderRadius: 16, backgroundColor: CARD,
+  headerBtn: {
+    width: 44, height: 44, borderRadius: 15, backgroundColor: CARD,
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: BORDER,
   },
-  title: { fontSize: 22, fontWeight: '900', color: TEXT, textAlign: 'center' },
-  subtitle: { fontSize: 12, color: MUTED, textAlign: 'center', marginTop: 3 },
+  headerTitle: { fontSize: 20, fontWeight: '900', color: TEXT, textAlign: 'center' },
+  headerSub: { fontSize: 11, color: MUTED, textAlign: 'center', marginTop: 2 },
 
   // Mode
   modeWrap: {
     flexDirection: 'row-reverse', gap: 6,
-    backgroundColor: CARD, borderRadius: 20, padding: 5,
+    backgroundColor: CARD, borderRadius: 18, padding: 5,
     borderWidth: 1, borderColor: BORDER,
   },
-  modeBtn: { flex: 1, borderRadius: 16, overflow: 'hidden' },
-  modeGrad: {
+  modeHalf: { flex: 1, borderRadius: 14, overflow: 'hidden' },
+  modeActive: {
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center',
-    gap: 8, paddingVertical: 12, borderRadius: 16,
+    gap: 8, paddingVertical: 12, borderRadius: 14,
   },
   modeInner: {
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center',
-    gap: 8, paddingVertical: 12, borderRadius: 16,
+    gap: 8, paddingVertical: 12, borderRadius: 14,
   },
   modeTxt: { color: MUTED, fontWeight: '800', fontSize: 13 },
   modeTxtOn: { color: '#FFF', fontWeight: '900', fontSize: 13 },
 
   // Hero
   heroCard: {
-    backgroundColor: CARD, borderRadius: 26, padding: 14,
-    borderWidth: 1, borderColor: BORDER, gap: 12,
+    backgroundColor: CARD, borderRadius: 24, padding: 14, gap: 12,
+    borderWidth: 1, borderColor: BORDER,
     shadowColor: '#0D2350', shadowOpacity: 0.05, shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 }, elevation: 2,
   },
   heroVisual: {
-    height: 240, borderRadius: 22, backgroundColor: '#EEF5FF',
+    height: 230, borderRadius: 20, backgroundColor: '#EEF5FF',
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-around',
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
   },
 
-  // Antenna visual
-  antWrap: { alignItems: 'center', justifyContent: 'center' },
+  // Antenna
+  wrap: { alignItems: 'center', justifyContent: 'center' },
 
   // Gauge
-  gaugeVal: { color: TEXT, fontSize: 52, fontWeight: '900', letterSpacing: -1, lineHeight: 58 },
-  gaugePct: { color: MUTED, fontSize: 14, fontWeight: '800', marginTop: -6 },
+  gaugeVal: { color: TEXT, fontSize: 44, fontWeight: '900', letterSpacing: -1, lineHeight: 48 },
+  gaugePct: { color: MUTED, fontSize: 13, fontWeight: '800', marginTop: -4 },
   gaugeLbl: { color: MUTED, fontSize: 11, marginTop: 2, fontWeight: '700' },
 
-  // Metrics
+  // Compass
+  compassDeg: { color: TEXT, fontSize: 15, fontWeight: '900' },
+  compassSub: { color: MUTED, fontSize: 9.5, marginTop: -1 },
+
+  // Metric
   metricsRow: { flexDirection: 'row-reverse', gap: 8 },
   metric: {
-    flex: 1, minHeight: 88, borderRadius: 16,
-    backgroundColor: CARD_BG, padding: 9,
-    borderWidth: 1, borderColor: BORDER,
+    flex: 1, minHeight: 82, borderRadius: 14,
+    backgroundColor: '#FAFCFF', padding: 9,
+    borderWidth: 1, borderColor: BORDER, gap: 3,
   },
   metricIcon: {
-    width: 26, height: 26, borderRadius: 9,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 6,
+    width: 24, height: 24, borderRadius: 8,
+    alignItems: 'center', justifyContent: 'center',
   },
-  metricLbl: { color: MUTED, fontSize: 10.5, fontWeight: '700' },
-  metricVal: { color: TEXT, fontSize: 13.5, fontWeight: '900' },
-  metricUnit: { color: MUTED, fontSize: 9, fontWeight: '700' },
+  metricLbl: { color: MUTED, fontSize: 10, fontWeight: '700' },
+  metricVal: { color: TEXT, fontSize: 13, fontWeight: '900' },
+  metricUnit: { color: MUTED, fontSize: 8.5, fontWeight: '700' },
 
-  // Stability
-  stableBox: {
+  // Status
+  statusBar: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 10,
-    paddingVertical: 12, paddingHorizontal: 14,
-    borderRadius: 16, borderWidth: 1,
+    paddingVertical: 11, paddingHorizontal: 13,
+    borderRadius: 14, borderWidth: 1,
   },
-  stableTitle: { fontSize: 14, fontWeight: '900', textAlign: 'right' },
-  stableSub: { fontSize: 11, marginTop: 3, textAlign: 'right', lineHeight: 16 },
-  stableCheck: {
-    width: 30, height: 30, borderRadius: 15,
+  statusTitle: { fontSize: 13, fontWeight: '900', textAlign: 'right' },
+  statusSub: { fontSize: 10.5, marginTop: 2, textAlign: 'right', lineHeight: 15 },
+  statusCheck: {
+    width: 28, height: 28, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center',
   },
 
-  // Section
-  section: {
-    backgroundColor: CARD, borderRadius: 22, padding: 14, gap: 12,
+  // Card
+  card: {
+    backgroundColor: CARD, borderRadius: 20, padding: 14, gap: 10,
     borderWidth: 1, borderColor: BORDER,
   },
-  sectionHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
-  sectionIcon: {
-    width: 32, height: 32, borderRadius: 10,
-    backgroundColor: '#E1F5FF',
+  cardHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
+  cardIcon: {
+    width: 30, height: 30, borderRadius: 10, backgroundColor: '#E1F5FF',
     alignItems: 'center', justifyContent: 'center',
   },
-  sectionTitle: { color: TEXT, fontSize: 15.5, fontWeight: '900', textAlign: 'right' },
-  sectionSub: { color: MUTED, fontSize: 11, textAlign: 'right', marginTop: 2 },
+  cardTitle: { color: TEXT, fontSize: 14.5, fontWeight: '900', textAlign: 'right' },
+  cardSub: { color: MUTED, fontSize: 10.5, textAlign: 'right', marginTop: 2 },
 
   // Tech
   techRow: { flexDirection: 'row-reverse', gap: 8 },
   techBtn: {
     flex: 1, paddingVertical: 10, borderRadius: 12,
-    backgroundColor: CARD_BG, alignItems: 'center',
+    backgroundColor: '#FAFCFF', alignItems: 'center',
     borderWidth: 1.5, borderColor: BORDER,
   },
   techTxt: { color: TEXT, fontWeight: '900', fontSize: 13.5 },
@@ -1049,39 +1023,33 @@ const g = StyleSheet.create({
   // Chips
   chipsRow: { flexDirection: 'row-reverse', gap: 8, paddingVertical: 2 },
   chip: {
-    height: 40, paddingHorizontal: 18, borderRadius: 20,
-    backgroundColor: CARD_BG, borderWidth: 1.5, borderColor: BORDER,
+    height: 38, paddingHorizontal: 18, borderRadius: 19,
+    backgroundColor: '#FAFCFF', borderWidth: 1.5, borderColor: BORDER,
     alignItems: 'center', justifyContent: 'center',
   },
-  chipTxt: { color: TEXT, fontWeight: '800', fontSize: 13 },
+  chipTxt: { color: TEXT, fontWeight: '800', fontSize: 12.5 },
 
   // Direction
-  directionBody: { flexDirection: 'row-reverse', gap: 12, alignItems: 'center' },
-  directionInfo: { flex: 1, gap: 8 },
-  infoRow: {
+  dirBody: { flexDirection: 'row-reverse', gap: 12, alignItems: 'center' },
+  dirStats: { flex: 1, gap: 8 },
+  dirStatRow: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 10,
-    backgroundColor: CARD_BG, borderRadius: 12, padding: 10,
+    backgroundColor: '#FAFCFF', borderRadius: 12, padding: 9,
     borderWidth: 1, borderColor: BORDER,
   },
-  infoIcon: {
-    width: 32, height: 32, borderRadius: 10,
-    backgroundColor: '#EEF3FF',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  infoLbl: { color: MUTED, fontSize: 10.5, fontWeight: '700' },
-  infoVal: { color: TEXT, fontSize: 13.5, fontWeight: '900', marginTop: 2 },
+  dirStatLbl: { color: MUTED, fontSize: 10, fontWeight: '700' },
+  dirStatVal: { color: TEXT, fontSize: 13.5, fontWeight: '900', marginTop: 1 },
 
-  // CTA small
-  ctaSmall: {
+  pinBtn: {
     backgroundColor: BLUE, borderRadius: 14,
-    paddingVertical: 12, alignItems: 'center',
+    paddingVertical: 11, alignItems: 'center', marginTop: 4,
   },
-  ctaSmallTxt: { color: '#FFF', fontWeight: '900', fontSize: 13.5 },
+  pinTxt: { color: '#FFF', fontWeight: '900', fontSize: 13.5 },
 
-  // Wake 5G
+  // Wake
   wakeBtn: {
-    backgroundColor: PURPLE, borderRadius: 14,
-    paddingVertical: 12, alignItems: 'center',
+    backgroundColor: PURPLE, borderRadius: 12,
+    paddingVertical: 11, alignItems: 'center',
   },
   wakeBtnOn: { backgroundColor: '#EEE8FF', borderWidth: 1.5, borderColor: PURPLE },
   wakeTxt: { color: '#FFF', fontWeight: '900', fontSize: 13.5 },
@@ -1091,11 +1059,11 @@ const g = StyleSheet.create({
   toggleBtn: {
     flex: 1, flexDirection: 'row-reverse', alignItems: 'center',
     justifyContent: 'center', gap: 8,
-    paddingVertical: 14, borderRadius: 16,
+    paddingVertical: 12, borderRadius: 14,
     backgroundColor: CARD, borderWidth: 1.5, borderColor: BORDER,
   },
-  toggleIcon: { fontSize: 18 },
-  toggleTxt: { color: TEXT, fontWeight: '900', fontSize: 13 },
+  toggleIcon: { fontSize: 16 },
+  toggleTxt: { color: TEXT, fontWeight: '900', fontSize: 12.5 },
 
   // Chart
   rsrpBadge: {
@@ -1111,15 +1079,12 @@ const g = StyleSheet.create({
 
   // Tips
   tipsCard: {
-    borderRadius: 22, backgroundColor: '#F7F3FF',
+    borderRadius: 20, backgroundColor: '#F7F3FF',
     borderWidth: 1, borderColor: '#E4D9FF',
-    padding: 16, gap: 8,
+    padding: 14, gap: 8,
   },
-  tipsHead: {
-    flexDirection: 'row-reverse', alignItems: 'center', gap: 10,
-    marginBottom: 4,
-  },
-  tipsTitle: { color: PURPLE, fontSize: 15.5, fontWeight: '900', flex: 1, textAlign: 'right' },
+  tipsHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, marginBottom: 4 },
+  tipsTitle: { color: PURPLE, fontSize: 14.5, fontWeight: '900', flex: 1, textAlign: 'right' },
   tipRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, paddingVertical: 3 },
   tipCheck: { color: SUCCESS, fontSize: 14, fontWeight: '900' },
   tipTxt: { flex: 1, textAlign: 'right', color: '#68718A', fontSize: 12.5, lineHeight: 19 },
@@ -1130,15 +1095,14 @@ const g = StyleSheet.create({
     paddingHorizontal: 16, paddingTop: 12,
     backgroundColor: BG + 'F0',
   },
-  ctaGrad: {
+  cta: {
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center',
-    gap: 10, paddingVertical: 17, borderRadius: 22,
-    shadowColor: '#7655F5', shadowOpacity: 0.4,
+    gap: 10, paddingVertical: 16, borderRadius: 20,
+    shadowColor: PURPLE, shadowOpacity: 0.4,
     shadowRadius: 16, shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
   ctaTxt: { color: '#FFF', fontWeight: '900', fontSize: 16 },
 
-  // Error
-  err: { color: '#DC2626', fontSize: 12, textAlign: 'center' },
+  err: { color: DANGER, fontSize: 12, textAlign: 'center' },
 });
