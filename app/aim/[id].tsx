@@ -84,7 +84,7 @@ function estimateDistance(rsrp?: number): string {
 
 
 
-// ═══ مؤشر الإشارة (Hero) — بطاقتين ═══
+// ═══ مؤشر الإشارة (Hero) — فوق بعض ═══
 function SignalHero({
   rsrp, sinr, baselineRsrp, baselineSinr, rsrpHistory, sinrHistory, rsrpColor, sinrColor,
 }: {
@@ -119,50 +119,54 @@ function SignalHero({
 
   return (
     <View style={h.wrap}>
-      {/* بطاقة RSRP */}
+      {/* بطاقة RSRP — عريضة */}
       <View style={[h.card, { borderColor: rsrpColor + '33' }]}>
-        <View style={h.cardHead}>
-          <Text style={[h.arrow, { color: trendColorR }]}>{arrowR}</Text>
-          <Text style={h.cardLbl}>RSRP</Text>
-        </View>
-        <View style={h.valueRow}>
-          <Text style={[h.value, { color: rsrpColor }]}>{rsrp ?? '—'}</Text>
-          <Text style={h.unit}>dBm</Text>
+        <View style={h.cardLeft}>
+          <View style={h.cardHead}>
+            <Text style={[h.arrow, { color: trendColorR }]}>{arrowR}</Text>
+            <Text style={h.cardLbl}>RSRP</Text>
+          </View>
+          <View style={h.valueRow}>
+            <Text style={[h.value, { color: rsrpColor }]}>{rsrp ?? '—'}</Text>
+            <Text style={h.unit}>dBm</Text>
+          </View>
+          {deltaR !== undefined && (
+            <Text style={[h.delta, {
+              color: deltaR > 0.5 ? SUCCESS : deltaR < -0.5 ? DANGER : MUTED,
+            }]}>
+              {deltaR > 0.5 ? `↑ +${Math.round(deltaR)}`
+                : deltaR < -0.5 ? `↓ ${Math.round(deltaR)}` : '• 0'} dB من البداية
+            </Text>
+          )}
         </View>
         <View style={h.sparkWrap}>
-          <MiniSpark values={rsrpHistory} min={-125} max={-60} color={rsrpColor} width={130} height={42} />
+          <MiniSpark values={rsrpHistory} min={-125} max={-60} color={rsrpColor} width={150} height={56} />
         </View>
-        {deltaR !== undefined && (
-          <Text style={[h.delta, {
-            color: deltaR > 0.5 ? SUCCESS : deltaR < -0.5 ? DANGER : MUTED,
-          }]}>
-            {deltaR > 0.5 ? `↑ +${Math.round(deltaR)}`
-              : deltaR < -0.5 ? `↓ ${Math.round(deltaR)}` : '• 0'} dB
-          </Text>
-        )}
       </View>
 
-      {/* بطاقة SINR */}
+      {/* بطاقة SINR — عريضة */}
       <View style={[h.card, { borderColor: sinrColor + '33' }]}>
-        <View style={h.cardHead}>
-          <Text style={[h.arrow, { color: trendColorS }]}>{arrowS}</Text>
-          <Text style={h.cardLbl}>SINR</Text>
-        </View>
-        <View style={h.valueRow}>
-          <Text style={[h.value, { color: sinrColor }]}>{sinr ?? '—'}</Text>
-          <Text style={h.unit}>dB</Text>
+        <View style={h.cardLeft}>
+          <View style={h.cardHead}>
+            <Text style={[h.arrow, { color: trendColorS }]}>{arrowS}</Text>
+            <Text style={h.cardLbl}>SINR</Text>
+          </View>
+          <View style={h.valueRow}>
+            <Text style={[h.value, { color: sinrColor }]}>{sinr ?? '—'}</Text>
+            <Text style={h.unit}>dB</Text>
+          </View>
+          {deltaS !== undefined && (
+            <Text style={[h.delta, {
+              color: deltaS > 0.5 ? SUCCESS : deltaS < -0.5 ? DANGER : MUTED,
+            }]}>
+              {deltaS > 0.5 ? `↑ +${Math.round(deltaS)}`
+                : deltaS < -0.5 ? `↓ ${Math.round(deltaS)}` : '• 0'} dB من البداية
+            </Text>
+          )}
         </View>
         <View style={h.sparkWrap}>
-          <MiniSpark values={sinrClean.length ? sinrClean : [0]} min={-10} max={30} color={sinrColor} width={130} height={42} />
+          <MiniSpark values={sinrClean.length ? sinrClean : [0]} min={-10} max={30} color={sinrColor} width={150} height={56} />
         </View>
-        {deltaS !== undefined && (
-          <Text style={[h.delta, {
-            color: deltaS > 0.5 ? SUCCESS : deltaS < -0.5 ? DANGER : MUTED,
-          }]}>
-            {deltaS > 0.5 ? `↑ +${Math.round(deltaS)}`
-              : deltaS < -0.5 ? `↓ ${Math.round(deltaS)}` : '• 0'} dB
-          </Text>
-        )}
       </View>
     </View>
   );
@@ -841,24 +845,28 @@ export default function AimScreen() {
 
 const h = StyleSheet.create({
   wrap: {
-    flexDirection: 'row-reverse', gap: 10, width: '100%',
+    width: '100%', gap: 10,
   },
   card: {
-    flex: 1, alignItems: 'center', gap: 4,
+    flexDirection: 'row-reverse', alignItems: 'center',
     backgroundColor: '#FFFFFF', borderRadius: 16,
-    paddingVertical: 12, paddingHorizontal: 8,
-    borderWidth: 1.5,
+    paddingVertical: 12, paddingHorizontal: 14,
+    borderWidth: 1.5, gap: 12,
+    justifyContent: 'space-between',
+  },
+  cardLeft: {
+    alignItems: 'flex-end', gap: 3,
   },
   cardHead: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 5,
   },
-  cardLbl: { color: MUTED, fontSize: 12, fontWeight: '800' },
-  arrow: { fontSize: 20, fontWeight: '900' },
+  cardLbl: { color: MUTED, fontSize: 13, fontWeight: '800' },
+  arrow: { fontSize: 22, fontWeight: '900' },
   valueRow: { flexDirection: 'row-reverse', alignItems: 'baseline', gap: 3 },
-  value: { fontSize: 34, fontWeight: '900', letterSpacing: -1, lineHeight: 38 },
-  unit: { color: MUTED, fontSize: 11, fontWeight: '800' },
-  sparkWrap: { marginTop: 4, alignItems: 'center' },
-  delta: { fontSize: 11, fontWeight: '800', marginTop: 2 },
+  value: { fontSize: 38, fontWeight: '900', letterSpacing: -1, lineHeight: 42 },
+  unit: { color: MUTED, fontSize: 12, fontWeight: '800' },
+  sparkWrap: { alignItems: 'center', justifyContent: 'center' },
+  delta: { fontSize: 11, fontWeight: '800', marginTop: 1 },
 });
 
 const a = StyleSheet.create({
