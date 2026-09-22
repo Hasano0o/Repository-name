@@ -24,6 +24,7 @@ import { AimBeeper } from '../../src/utils/aimSound';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { ArcGauge } from '../../src/ui/ArcGauge';
 import { Icon, IconName } from '../../src/ui/Icon';
+import { AntennaHero } from '../../src/ui/AntennaHero';
 import { TimeChart, Series } from '../../src/ui/TimeChart';
 
 type Tech = 'LTE' | 'NR';
