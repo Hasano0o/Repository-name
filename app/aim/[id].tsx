@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import {
+  ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, Dimensions,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
-import Svg, { Circle, Path, Rect, G, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
-import { Icon } from '../../src/ui/Icon';
+import Svg, {
+  Circle, Path, Line, Defs, LinearGradient as SvgLinearGradient, Stop, G,
+} from 'react-native-svg';
+import { Icon, IconName } from '../../src/ui/Icon';
 
-// HAPTICS_SAFE
+// ═══ Haptics (اختياري) ═══
 let HapticsMod: any = null;
 try { HapticsMod = require('expo-haptics'); } catch { HapticsMod = null; }
 const Haptics = {
@@ -20,24 +24,31 @@ import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { Signal, CellTower, CellLockTarget } from '../../src/drivers/types';
 import { LEVEL_LABEL, overallLevel, signalScore, parseBands, parseNrBands } from '../../src/utils/signal';
-import { C, R, S, T } from '../../src/ui/theme';
 import { trafficBurst } from '../../src/utils/nrprobe';
 import { AimBeeper } from '../../src/utils/aimSound';
+
+const { width: SCREEN_W } = Dimensions.get('window');
+
+// ═══ Design tokens (هوية Bandly) ═══
+const BLUE = '#3567F5';
+const PURPLE = '#7655F5';
+const TEXT = '#14264A';
+const MUTED = '#71809A';
+const BG = '#F4F8FF';
+const SUCCESS = '#13B783';
+const CARD = '#FFFFFF';
+const CARD_BG = '#FAFCFF';
+const BORDER = '#E6ECF5';
 
 type Tech = 'LTE' | 'NR';
 type Mode = 'guide' | 'watch';
 
 interface CellId { tech: Tech; band?: number; pci?: string; arfcn?: string; }
 interface Reading {
-  t: number;
-  rsrp?: number;
-  sinr?: number;
-  smooth?: number;
-  score: number;
-  cell: CellId;
+  t: number; rsrp?: number; sinr?: number; smooth?: number; score: number; cell: CellId;
 }
 
-const MAX_POINTS = 120;
+const MAX_POINTS = 90;
 const SMOOTH_N = 3;
 const cellKey = (c?: CellId | null) => (c ? `${c.tech}:${c.band ?? '?'}:${c.pci ?? '?'}` : '');
 const cellName = (c?: CellId | null) => {
@@ -61,162 +72,208 @@ function readOf(sig: Signal, tech: Tech): { rsrp?: number; sinr?: number; cell: 
     cell: { tech: 'LTE', band: b ? parseInt(b.slice(1), 10) : undefined, pci: sig.pci, arfcn: sig.earfcn },
   };
 }
+function levelColor(level: string): string {
+  if (level === 'excellent') return '#16A34A';
+  if (level === 'good') return SUCCESS;
+  if (level === 'fair') return '#F59E0B';
+  return '#DC2626';
+}
 
-/** ═══ دائرة النسبة (SVG) ═══ */
-function ScoreRing({ value, color, size = 130 }: { value: number; color: string; size?: number }) {
-  const stroke = 12;
+/** ═══ Gauge دائري حديث (SVG) ═══ */
+function SignalGauge({ value, color }: { value: number; color: string }) {
+  const size = 190;
+  const stroke = 14;
   const r = (size - stroke) / 2;
   const cx = size / 2;
   const cy = size / 2;
-  const circumference = 2 * Math.PI * r;
-  const dash = circumference * Math.max(0, Math.min(1, value));
+  const C = 2 * Math.PI * r;
+  const v = Math.max(0, Math.min(1, value));
+  const dash = C * v;
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={size} height={size} style={{ position: 'absolute' }}>
-        {/* الخلفية */}
-        <Circle cx={cx} cy={cy} r={r} stroke="#e5e7eb" strokeWidth={stroke} fill="none" />
-        {/* القوس */}
+        <Circle cx={cx} cy={cy} r={r} stroke="#E8EFF8" strokeWidth={stroke} fill="none" />
         <Circle
           cx={cx} cy={cy} r={r}
-          stroke={color} strokeWidth={stroke}
-          fill="none"
-          strokeDasharray={`${dash} ${circumference}`}
+          stroke={color} strokeWidth={stroke} fill="none"
+          strokeDasharray={`${dash} ${C}`}
           strokeLinecap="round"
           transform={`rotate(-90 ${cx} ${cy})`}
         />
+        <Circle cx={cx} cy={cy} r={r - stroke - 2} fill="#FFFFFF" />
       </Svg>
-      <Icon name="tower" size={20} color={color} />
-      <Text style={{ color: C.text, fontSize: 30, fontWeight: '900', letterSpacing: -1, marginTop: 2 }}>
-        {Math.round(value * 100)}
-      </Text>
-      <Text style={{ color: C.muted, fontSize: 9, fontWeight: '800' }}>%</Text>
+      <View style={{ alignItems: 'center' }}>
+        <Icon name="antenna" size={20} color={color} />
+        <Text style={g.gaugeVal}>{Math.round(v * 100)}</Text>
+        <Text style={g.gaugePct}>%</Text>
+        <Text style={g.gaugeLbl}>قوة الإشارة</Text>
+      </View>
     </View>
   );
 }
 
-/** ═══ رسم أنتنا واقعي (SVG) ═══ */
-function AntennaIllustration({ width = 180, height = 140 }: { width?: number; height?: number }) {
+/** ═══ رسم أنتنا + موجات ═══ */
+function AntennaVisual({ color }: { color: string }) {
   return (
-    <View style={{ width, height, borderRadius: 14, overflow: 'hidden' }}>
-      <LinearGradient
-        colors={['#a5d8ff', '#d0ebff', '#e7f5ff']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={{ flex: 1 }}
-      >
-        <Svg width={width} height={height} viewBox="0 0 180 140">
-          {/* سحاب في الخلفية */}
-          <Circle cx={30} cy={30} r={12} fill="#ffffff" opacity={0.5} />
-          <Circle cx={45} cy={32} r={10} fill="#ffffff" opacity={0.5} />
-          <Circle cx={140} cy={25} r={8} fill="#ffffff" opacity={0.4} />
-
-          {/* موجات الرادار */}
-          <Circle cx={65} cy={55} r={45} stroke="#10b981" strokeWidth={1.5} fill="none" opacity={0.25} />
-          <Circle cx={65} cy={55} r={35} stroke="#10b981" strokeWidth={1.5} fill="none" opacity={0.4} />
-          <Circle cx={65} cy={55} r={25} stroke="#10b981" strokeWidth={1.5} fill="none" opacity={0.6} />
-
-          {/* عمود الدعم */}
-          <Rect x={88} y={70} width={4} height={70} fill="#adb5bd" />
-          {/* قاعدة */}
-          <Rect x={60} y={130} width={60} height={6} rx={2} fill="#868e96" />
-
-          {/* صندوق الأنتنا */}
-          <Rect x={38} y={40} width={54} height={50} rx={6} fill="#ffffff" stroke="#adb5bd" strokeWidth={2} />
-          {/* لمعة داخلية */}
-          <Rect x={42} y={44} width={46} height={20} rx={4} fill="#dee2e6" opacity={0.6} />
-          {/* سهم للأعلى */}
-          <Path d="M 65 78 L 65 62 M 58 68 L 65 60 L 72 68" stroke="#adb5bd" strokeWidth={2} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-
-          {/* مشبك */}
-          <Rect x={86} y={60} width={8} height={12} rx={2} fill="#868e96" />
-
-          {/* نقطة الإشارة */}
-          <Circle cx={114} cy={40} r={4} fill="#16a34a" />
-          <Circle cx={114} cy={40} r={8} fill="#16a34a" opacity={0.25} />
-        </Svg>
-      </LinearGradient>
+    <View style={g.antWrap}>
+      <Svg width={130} height={190} viewBox="0 0 130 190">
+        {/* العمود */}
+        <Circle cx={65} cy={170} r={4} fill="#A4B0C4" />
+        <Line x1={65} y1={100} x2={65} y2={170} stroke="#A4B0C4" strokeWidth={6} strokeLinecap="round" />
+        <Line x1={45} y1={182} x2={85} y2={182} stroke="#94A3B8" strokeWidth={4} strokeLinecap="round" />
+        {/* جسم الأنتنا */}
+        <Path
+          d="M 30 30 Q 30 20 40 20 L 90 20 Q 100 20 100 30 L 100 100 Q 100 110 90 110 L 40 110 Q 30 110 30 100 Z"
+          fill="#F9FBFF" stroke="#DCE6F5" strokeWidth={2}
+        />
+        <Path d="M 40 35 L 90 35" stroke="#E2E8F0" strokeWidth={3} strokeLinecap="round" />
+        <Path d="M 40 50 L 90 50" stroke="#E2E8F0" strokeWidth={3} strokeLinecap="round" />
+        {/* سهم */}
+        <Path d="M 65 90 L 65 60 M 55 70 L 65 58 L 75 70" stroke="#94A3B8" strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        {/* موجات الإشارة */}
+        <Path d="M 105 60 Q 130 60 130 90" stroke={color} strokeWidth={3} fill="none" opacity={0.4} strokeLinecap="round" />
+        <Path d="M 110 45 Q 145 45 145 90" stroke={color} strokeWidth={3} fill="none" opacity={0.25} strokeLinecap="round" />
+      </Svg>
     </View>
   );
 }
 
-/** ═══ رسم بياني (SVG) ═══ */
-function LineChart({ values, min, max, color }: { values: number[]; min: number; max: number; color: string }) {
-  const width = 320;
-  const height = 90;
-  const padding = { top: 6, bottom: 6, left: 4, right: 4 };
-  const innerW = width - padding.left - padding.right;
-  const innerH = height - padding.top - padding.bottom;
-  if (values.length < 2) return <View style={{ height }} />;
-  const range = max - min || 1;
-  const step = innerW / (values.length - 1);
-  const points = values.map((v, i) => {
-    const x = padding.left + i * step;
-    const y = padding.top + innerH - ((Math.max(min, Math.min(max, v)) - min) / range) * innerH;
-    return { x, y };
-  });
-  const linePath = points.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
-  const areaPath = `${linePath} L ${points[points.length - 1].x} ${height - padding.bottom} L ${points[0].x} ${height - padding.bottom} Z`;
+/** ═══ بطاقة Metric ═══ */
+function MetricBox({ icon, label, value, unit, iconBg, iconColor }: {
+  icon: IconName; label: string; value?: string | number; unit?: string; iconBg: string; iconColor: string;
+}) {
   return (
-    <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-      <Defs>
-        <SvgLinearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0%" stopColor={color} stopOpacity="0.25" />
-          <Stop offset="100%" stopColor={color} stopOpacity="0.02" />
-        </SvgLinearGradient>
-      </Defs>
-      {/* خطوط شبكة */}
-      {[0, 0.5, 1].map((f, i) => (
-        <Path key={i} d={`M 0 ${padding.top + f * innerH} L ${width} ${padding.top + f * innerH}`} stroke="#f1f5f9" strokeWidth={1} />
-      ))}
-      <Path d={areaPath} fill="url(#areaFill)" />
-      <Path d={linePath} stroke={color} strokeWidth={2} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      {/* نقطة أخيرة */}
-      <Circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r={4} fill={color} />
-      <Circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r={7} fill={color} opacity={0.3} />
-    </Svg>
+    <View style={g.metric}>
+      <View style={[g.metricIcon, { backgroundColor: iconBg }]}>
+        <Icon name={icon} size={14} color={iconColor} />
+      </View>
+      <Text style={g.metricLbl}>{label}</Text>
+      <View style={{ flexDirection: 'row-reverse', alignItems: 'baseline', gap: 2, marginTop: 2 }}>
+        <Text style={g.metricVal}>{value ?? '—'}</Text>
+        {unit ? <Text style={g.metricUnit}>{unit}</Text> : null}
+      </View>
+    </View>
   );
 }
 
-/** ═══ بوصلة (SVG) ═══ */
-function Compass({ angle, size = 110 }: { angle: number; size?: number }) {
+/** ═══ بطاقة قسم ═══ */
+function SectionCard({ children }: { children: React.ReactNode }) {
+  return <View style={g.section}>{children}</View>;
+}
+
+/** ═══ صف معلومة ═══ */
+function InfoRow({ icon, label, value, color }: { icon: IconName; label: string; value: string; color?: string }) {
+  return (
+    <View style={g.infoRow}>
+      <View style={g.infoIcon}>
+        <Icon name={icon} size={14} color={BLUE} />
+      </View>
+      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+        <Text style={g.infoLbl}>{label}</Text>
+        <Text style={[g.infoVal, color && { color }]}>{value}</Text>
+      </View>
+    </View>
+  );
+}
+
+/** ═══ صف نصيحة ═══ */
+function TipRow({ text }: { text: string }) {
+  return (
+    <View style={g.tipRow}>
+      <Text style={g.tipCheck}>✓</Text>
+      <Text style={g.tipTxt}>{text}</Text>
+    </View>
+  );
+}
+
+/** ═══ بوصلة/مؤشر ═══ */
+function CompassIndicator({ value, color }: { value: number; color: string }) {
+  const size = 130;
   const cx = size / 2;
   const cy = size / 2;
-  const r = size / 2 - 4;
+  const r = size / 2 - 10;
+  const angle = -45 + value * 90; // -45° للضعيف، +45° للقوي
+  const pct = Math.round(value * 100);
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={size} height={size} style={{ position: 'absolute' }}>
-        {/* الحلقة */}
-        <Circle cx={cx} cy={cy} r={r} fill="#ffffff" stroke="#e5e7eb" strokeWidth={2} />
+        <Circle cx={cx} cy={cy} r={r + 6} fill="#F4F8FF" stroke={BORDER} strokeWidth={1} />
+        <Circle cx={cx} cy={cy} r={r} fill="#FFFFFF" stroke={BORDER} strokeWidth={2} />
         {/* علامات */}
-        {Array.from({ length: 16 }, (_, i) => {
-          const a = (i / 16) * 2 * Math.PI - Math.PI / 2;
-          const isMajor = i % 4 === 0;
-          const r1 = r - (isMajor ? 8 : 4);
-          const r2 = r - 2;
+        {Array.from({ length: 12 }, (_, i) => {
+          const a = (i / 12) * 2 * Math.PI;
+          const r1 = r - 3;
+          const r2 = i % 3 === 0 ? r - 12 : r - 7;
           return (
-            <Path
+            <Line
               key={i}
-              d={`M ${cx + Math.cos(a) * r1} ${cy + Math.sin(a) * r1} L ${cx + Math.cos(a) * r2} ${cy + Math.sin(a) * r2}`}
-              stroke={isMajor ? '#64748b' : '#cbd5e1'}
-              strokeWidth={isMajor ? 2 : 1}
+              x1={cx + Math.cos(a) * r1}
+              y1={cy + Math.sin(a) * r1}
+              x2={cx + Math.cos(a) * r2}
+              y2={cy + Math.sin(a) * r2}
+              stroke={i % 3 === 0 ? '#94A3B8' : '#CBD5E1'}
+              strokeWidth={i % 3 === 0 ? 2 : 1}
               strokeLinecap="round"
             />
           );
         })}
-        {/* سهم أخضر */}
+        {/* العقرب */}
         <G rotation={angle} origin={`${cx}, ${cy}`}>
-          <Path d={`M ${cx} ${cy - r + 14} L ${cx - 7} ${cy - 4} L ${cx + 7} ${cy - 4} Z`} fill="#16a34a" />
-          <Path d={`M ${cx} ${cy - r + 14} L ${cx - 7} ${cy - 4} L ${cx + 7} ${cy - 4} Z`} fill="#16a34a" />
+          <Path
+            d={`M ${cx} ${cy - r + 8} L ${cx - 8} ${cy + 8} L ${cx} ${cy + 3} L ${cx + 8} ${cy + 8} Z`}
+            fill={color}
+          />
         </G>
-        {/* مركز */}
-        <Circle cx={cx} cy={cy} r={4} fill="#334155" />
+        <Circle cx={cx} cy={cy} r={5} fill="#14264A" />
       </Svg>
-      <Text style={{ color: C.text, fontSize: 18, fontWeight: '900', marginTop: 30 }}>{Math.round(angle)}°</Text>
-      <Text style={{ color: C.muted, fontSize: 10, marginTop: -2 }}>من الشمال</Text>
+      <View style={{ position: 'absolute', bottom: 6, alignItems: 'center' }}>
+        <Text style={{ color: TEXT, fontSize: 13, fontWeight: '900' }}>{pct}%</Text>
+      </View>
     </View>
   );
 }
 
+/** ═══ خط بياني (SVG) ═══ */
+function LineChart({ values, min, max, color }: { values: number[]; min: number; max: number; color: string }) {
+  const W = SCREEN_W - 80;
+  const H = 110;
+  const pad = { top: 8, bottom: 20, left: 0, right: 6 };
+  if (values.length < 2) return <View style={{ height: H }} />;
+  const innerW = W - pad.left - pad.right;
+  const innerH = H - pad.top - pad.bottom;
+  const range = max - min || 1;
+  const stepX = innerW / (values.length - 1);
+  const pts = values.map((v, i) => {
+    const x = pad.left + i * stepX;
+    const y = pad.top + innerH - ((Math.max(min, Math.min(max, v)) - min) / range) * innerH;
+    return { x, y };
+  });
+  const linePath = pts.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
+  const areaPath = `${linePath} L ${pts[pts.length - 1].x} ${pad.top + innerH} L ${pts[0].x} ${pad.top + innerH} Z`;
+  const last = pts[pts.length - 1];
+  return (
+    <Svg width={W} height={H}>
+      <Defs>
+        <SvgLinearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0%" stopColor={color} stopOpacity="0.25" />
+          <Stop offset="100%" stopColor={color} stopOpacity="0" />
+        </SvgLinearGradient>
+      </Defs>
+      {/* خطوط أفقية */}
+      {[0, 0.33, 0.66, 1].map((f, i) => (
+        <Line key={i} x1={0} y1={pad.top + f * innerH} x2={W} y2={pad.top + f * innerH} stroke={BORDER} strokeWidth={1} />
+      ))}
+      <Path d={areaPath} fill="url(#areaGrad)" />
+      <Path d={linePath} stroke={color} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <Circle cx={last.x} cy={last.y} r={5} fill={color} />
+      <Circle cx={last.x} cy={last.y} r={9} fill={color} opacity={0.25} />
+    </Svg>
+  );
+}
+
+// ═══════════════════════════════════════════════════
+// الشاشة الرئيسية
+// ═══════════════════════════════════════════════════
 export default function AimScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
@@ -256,7 +313,7 @@ export default function AimScreen() {
   useEffect(() => { hapticsRef.current = haptics; }, [haptics]);
   useEffect(() => { techRef.current = tech; }, [tech]);
 
-  // ═══ الصوت: يشتغل فقط لما sound === true ═══
+  // ═══ الصوت: يعمل فقط لما المستخدم يشغّله ═══
   useEffect(() => {
     if (!sound) {
       if (beeperRef.current) {
@@ -269,10 +326,7 @@ export default function AimScreen() {
     const b = new AimBeeper();
     beeperRef.current = b;
     b.start();
-    return () => {
-      b.stop();
-      beeperRef.current = null;
-    };
+    return () => { b.stop(); beeperRef.current = null; };
   }, [sound]);
 
   const pulse = useCallback((score: number) => {
@@ -303,6 +357,7 @@ export default function AimScreen() {
       if (sig.nrRsrp !== undefined && !nrRef.current) {
         nrRef.current = true;
         setNrSeen(true);
+        if (hapticsRef.current) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       }
       let rd = readOf(sig, techRef.current);
       if (!rd && techRef.current === 'NR') {
@@ -512,12 +567,11 @@ export default function AimScreen() {
   const nrActive = signal?.nrRsrp !== undefined;
   const bestShown = best?.smooth ?? best?.rsrp;
   const waitingNr = tech === 'NR' && !nrActive && !nrNb;
-  const lvlColor = level === 'excellent' ? '#16a34a' : level === 'good' ? '#22c55e' : level === 'fair' ? '#f59e0b' : '#dc2626';
+  const lvlColor = levelColor(level);
   const pct = current?.score ?? 0;
   const bandList = [...new Set([...bands, ...nrBands])];
   const currentBand = current?.cell.band ? (current.cell.tech === 'NR' ? `n${current.cell.band}` : `B${current.cell.band}`) : undefined;
 
-  // حالة الاستقرار
   const stability = readings.length >= 5
     ? (() => {
         const last = readings.slice(-5).map(r => r.smooth ?? r.rsrp).filter(n => n !== undefined);
@@ -527,509 +581,564 @@ export default function AimScreen() {
       })()
     : null;
 
-  // رسم بياني
   const chartValues = readings.slice(-30).map(r => r.smooth ?? r.rsrp ?? -110);
 
   return (
-    <LinearGradient colors={[C.bgTop, C.bgBottom]} style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 100 }]}>
-        {/* ═══ Header مركزي ═══ */}
-        <View style={s.header}>
-          <Pressable onPress={() => { reset(); }} hitSlop={10} style={s.backBtn}>
-            <Icon name="refresh" size={18} color={C.text} />
+    <View style={g.container}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[g.content, { paddingBottom: insets.bottom + 100 }]}
+      >
+        {/* ═══ Header ═══ */}
+        <View style={g.header}>
+          <Pressable style={g.iconBtn} onPress={() => reset()}>
+            <Icon name="refresh" size={18} color={TEXT} />
           </Pressable>
           <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={s.headerTitle}>مساعد التوجيه</Text>
-            <Text style={s.headerSub}>اضبط اتجاه الهوائي للحصول على أفضل إشارة</Text>
+            <Text style={g.title}>مساعد التوجيه</Text>
+            <Text style={g.subtitle}>اضبط اتجاه الهوائي للحصول على أفضل إشارة</Text>
           </View>
-          <View style={s.headerIcon}>
-            <Icon name="aim" size={20} color={C.blue} />
-          </View>
+          <Pressable
+            style={g.iconBtn}
+            onPress={() => Alert.alert('كيف تستخدم الشاشة؟',
+              '١) اختر 4G أو 5G\n٢) حرّك الراوتر ببطء\n٣) الجوال يهتز أسرع كل ما قويت الإشارة\n٤) لما تلقى أفضل نقطة، ثبّت على البرج')}
+          >
+            <Icon name="bulb" size={18} color={PURPLE} />
+          </Pressable>
         </View>
 
-        {/* ═══ Mode toggle ═══ */}
-        <View style={s.modeToggle}>
-          <Pressable
-            style={[s.modeBtn, mode === 'guide' && s.modeBtnOn]}
-            onPress={() => setMode('guide')}
-          >
-            <Icon name="aim" size={15} color={mode === 'guide' ? '#fff' : C.text} />
-            <Text style={[s.modeTxt, mode === 'guide' && s.modeTxtOn]}>وضع التوجيه</Text>
+        {/* ═══ Mode selector ═══ */}
+        <View style={g.modeWrap}>
+          <Pressable style={g.modeBtn} onPress={() => setMode('guide')}>
+            {mode === 'guide' ? (
+              <LinearGradient
+                colors={[BLUE, PURPLE]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                style={g.modeGrad}
+              >
+                <Text style={g.modeTxtOn}>وضع التوجيه</Text>
+                <Icon name="aim" size={15} color="#FFF" />
+              </LinearGradient>
+            ) : (
+              <View style={g.modeInner}>
+                <Text style={g.modeTxt}>وضع التوجيه</Text>
+                <Icon name="aim" size={15} color={MUTED} />
+              </View>
+            )}
           </Pressable>
-          <Pressable
-            style={[s.modeBtn, mode === 'watch' && s.modeBtnOn]}
-            onPress={() => setMode('watch')}
-          >
-            <Icon name="eye" size={15} color={mode === 'watch' ? '#fff' : C.text} />
-            <Text style={[s.modeTxt, mode === 'watch' && s.modeTxtOn]}>وضع المراقبة</Text>
+          <Pressable style={g.modeBtn} onPress={() => setMode('watch')}>
+            {mode === 'watch' ? (
+              <LinearGradient
+                colors={[BLUE, PURPLE]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                style={g.modeGrad}
+              >
+                <Text style={g.modeTxtOn}>وضع المراقبة</Text>
+                <Icon name="eye" size={15} color="#FFF" />
+              </LinearGradient>
+            ) : (
+              <View style={g.modeInner}>
+                <Text style={g.modeTxt}>وضع المراقبة</Text>
+                <Icon name="eye" size={15} color={MUTED} />
+              </View>
+            )}
           </Pressable>
         </View>
 
         {loading && (
-          <View style={s.center}>
-            <ActivityIndicator size="large" color={C.blue} />
-            <Text style={s.muted}>نبدأ القياس...</Text>
+          <View style={{ alignItems: 'center', gap: 10, paddingVertical: 40 }}>
+            <ActivityIndicator size="large" color={BLUE} />
+            <Text style={{ color: MUTED }}>نبدأ القياس...</Text>
           </View>
         )}
 
         {!loading && (
           <>
-            {/* ═══ Hero: صورة الأنتنا + الدائرة ═══ */}
-            <View style={s.hero}>
-              <AntennaIllustration width={170} height={140} />
-              <ScoreRing value={pct} color={lvlColor} size={130} />
-            </View>
+            {/* ═══ Hero card ═══ */}
+            <View style={g.heroCard}>
+              <View style={g.heroVisual}>
+                <AntennaVisual color={lvlColor} />
+                <SignalGauge value={pct} color={lvlColor} />
+              </View>
 
-            {/* ═══ 4 إحصائيات ═══ */}
-            <View style={s.statsRow}>
-              <View style={s.statBox}>
-                <View style={[s.statIconWrap, { backgroundColor: '#f3e8ff' }]}>
-                  <Icon name="tower" size={14} color="#7c3aed" />
-                </View>
-                <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                  <Text style={s.statLbl}>PCI</Text>
-                  <Text style={s.statVal}>{current?.cell.pci ?? '—'}</Text>
-                </View>
+              {/* Metrics row */}
+              <View style={g.metricsRow}>
+                <MetricBox
+                  icon="tower" label="PCI" value={current?.cell.pci ?? '—'}
+                  iconBg="#EEE8FF" iconColor="#7C3AED"
+                />
+                <MetricBox
+                  icon="chart" label="RSRP" value={shown ?? '—'} unit="dBm"
+                  iconBg="#DFF9ED" iconColor="#16A34A"
+                />
+                <MetricBox
+                  icon="speed" label="SINR" value={current?.sinr ?? '—'} unit="dB"
+                  iconBg="#E1F5FF" iconColor="#0891B2"
+                />
+                <MetricBox
+                  icon="bands" label="Band" value={currentBand ?? '—'}
+                  iconBg="#FEF3C7" iconColor="#D97706"
+                />
               </View>
-              <View style={s.statBox}>
-                <View style={[s.statIconWrap, { backgroundColor: '#dcfce7' }]}>
-                  <Icon name="chart" size={14} color="#16a34a" />
-                </View>
-                <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                  <Text style={s.statLbl}>RSRP</Text>
-                  <Text style={[s.statVal, { color: lvlColor }]}>
-                    {shown ?? '—'} <Text style={s.statUnit}>dBm</Text>
-                  </Text>
-                </View>
-              </View>
-              <View style={s.statBox}>
-                <View style={[s.statIconWrap, { backgroundColor: '#dbeafe' }]}>
-                  <Icon name="speed" size={14} color="#2563eb" />
-                </View>
-                <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                  <Text style={s.statLbl}>SINR</Text>
-                  <Text style={s.statVal}>
-                    {current?.sinr ?? '—'} <Text style={s.statUnit}>dB</Text>
-                  </Text>
-                </View>
-              </View>
-              <View style={s.statBox}>
-                <View style={[s.statIconWrap, { backgroundColor: '#fef3c7' }]}>
-                  <Icon name="bands" size={14} color="#d97706" />
-                </View>
-                <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                  <Text style={s.statLbl}>Band</Text>
-                  <Text style={s.statVal}>{currentBand ?? '—'}</Text>
-                </View>
-              </View>
-            </View>
 
-            {/* ═══ Stability card ═══ */}
-            {stability && (
-              <View style={[s.stabilityCard, {
-                backgroundColor: stability === 'stable' ? '#ecfdf5' : stability === 'ok' ? '#fffbeb' : '#fef2f2',
-                borderColor: stability === 'stable' ? '#a7f3d0' : stability === 'ok' ? '#fcd34d' : '#fecaca',
-              }]}>
-                <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                  <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6 }}>
-                    <View style={[s.stabilityDot, { backgroundColor: stability === 'stable' ? '#16a34a' : stability === 'ok' ? '#f59e0b' : '#dc2626' }]} />
-                    <Text style={[s.stabilityTitle, { color: stability === 'stable' ? '#065f46' : stability === 'ok' ? '#92400e' : '#991b1b' }]}>
-                      {stability === 'stable' ? 'الإشارة مستقرة' : stability === 'ok' ? 'الإشارة متغيرة قليلاً' : 'الإشارة متقلبة'}
+              {/* Stability status */}
+              {stability && (
+                <View style={[g.stableBox, {
+                  backgroundColor: stability === 'stable' ? '#ECFBF6' : stability === 'ok' ? '#FFFBEB' : '#FEF2F2',
+                  borderColor: stability === 'stable' ? '#BEEFE0' : stability === 'ok' ? '#FCD34D' : '#FECACA',
+                }]}>
+                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                    <Text style={[g.stableTitle, {
+                      color: stability === 'stable' ? '#079B72' : stability === 'ok' ? '#92400E' : '#991B1B',
+                    }]}>
+                      {stability === 'stable' ? '✓ الإشارة مستقرة' : stability === 'ok' ? '⚠ الإشارة متغيرة قليلاً' : '⚠ الإشارة متقلبة'}
+                    </Text>
+                    <Text style={[g.stableSub, {
+                      color: stability === 'stable' ? '#67958A' : stability === 'ok' ? '#A16207' : '#B91C1C',
+                    }]}>
+                      {stability === 'stable'
+                        ? 'جودة الاتصال جيدة — جرّب تحسينها بتحريك الهوائي'
+                        : stability === 'ok'
+                          ? 'جرّب تحريك الراوتر ببطء وانتظر ٣-٥ ثواني'
+                          : 'حرّك الراوتر ببطء — الأرقام تتغير بسرعة'}
                     </Text>
                   </View>
-                  <Text style={[s.stabilitySub, { color: stability === 'stable' ? '#047857' : stability === 'ok' ? '#a16207' : '#b91c1c' }]}>
-                    {stability === 'stable' ? 'جودة الاتصال جيدة - يمكنك تحسينها بتحريك الهوائي' : stability === 'ok' ? 'جرّب تحريك الراوتر قليلاً' : 'حرّك الراوتر ببطء وانتظر 5 ثواني'}
-                  </Text>
+                  <View style={[g.stableCheck, {
+                    backgroundColor: stability === 'stable' ? SUCCESS : stability === 'ok' ? '#F59E0B' : '#DC2626',
+                  }]}>
+                    <Text style={{ color: '#FFF', fontWeight: '900', fontSize: 15 }}>✓</Text>
+                  </View>
                 </View>
-                <View style={[s.stabilityCheck, { backgroundColor: stability === 'stable' ? '#16a34a' : stability === 'ok' ? '#f59e0b' : '#dc2626' }]}>
-                  <Text style={{ color: '#fff', fontWeight: '900', fontSize: 16 }}>✓</Text>
-                </View>
-              </View>
-            )}
+              )}
+            </View>
 
-            {/* ═══ اختيار الترددات ═══ */}
-            <View style={s.card}>
-              <View style={s.cardHead}>
-                <View style={s.cardIconWrap}>
-                  <Icon name="bands" size={16} color={C.blue} />
+            {/* ═══ Band / Tech selector ═══ */}
+            <SectionCard>
+              <View style={g.sectionHead}>
+                <View style={g.sectionIcon}>
+                  <Icon name="bands" size={16} color={BLUE} />
                 </View>
                 <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                  <Text style={s.cardTitle}>اختيار الترددات</Text>
-                  <Text style={s.cardSub}>الترددات المتاحة على شبكتك</Text>
+                  <Text style={g.sectionTitle}>اختيار التردد</Text>
+                  <Text style={g.sectionSub}>التقنية والترددات المتاحة</Text>
                 </View>
               </View>
-              <View style={s.techRow}>
+
+              {/* Tech toggle */}
+              <View style={g.techRow}>
                 {(['LTE', 'NR'] as Tech[]).map(t => {
                   const on = tech === t;
                   const disabled = t === 'NR' && !nrSeen && !nrActive;
                   return (
                     <Pressable
                       key={t}
-                      style={[s.techBtn, on && { backgroundColor: t === 'NR' ? C.violet : C.blue }, disabled && { opacity: 0.4 }]}
+                      style={[g.techBtn, on && {
+                        backgroundColor: t === 'NR' ? PURPLE : BLUE,
+                        borderColor: t === 'NR' ? PURPLE : BLUE,
+                      }, disabled && { opacity: 0.4 }]}
                       onPress={() => !disabled && switchTech(t)}
                       disabled={disabled}
                     >
-                      <Text style={[s.techTxt, on && { color: '#fff' }]}>{t === 'NR' ? '5G' : '4G'}</Text>
+                      <Text style={[g.techTxt, on && { color: '#FFF' }]}>
+                        {t === 'NR' ? '5G' : '4G'}
+                      </Text>
                     </Pressable>
                   );
                 })}
               </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chipsRow}>
-                {bandList.map(b => {
-                  const on = currentBand === b;
-                  const isNr = b.startsWith('n');
-                  return (
-                    <View
-                      key={b}
-                      style={[s.chip, on && { backgroundColor: isNr ? C.violet : C.blue, borderColor: 'transparent' }]}
-                    >
-                      <Text style={[s.chipTxt, on && { color: '#fff' }]}>{b}</Text>
-                    </View>
-                  );
-                })}
-              </ScrollView>
-            </View>
 
-            {/* ═══ أفضل نقطة توجيه ═══ */}
+              {/* Band chips */}
+              {bandList.length > 0 && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={g.chipsRow}
+                >
+                  {bandList.map(b => {
+                    const on = currentBand === b;
+                    const isNr = b.startsWith('n');
+                    return (
+                      <View
+                        key={b}
+                        style={[g.chip, on && {
+                          backgroundColor: isNr ? PURPLE : BLUE,
+                          borderColor: isNr ? PURPLE : BLUE,
+                        }]}
+                      >
+                        <Text style={[g.chipTxt, on && { color: '#FFF' }]}>{b}</Text>
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+              )}
+            </SectionCard>
+
+            {/* ═══ Best direction ═══ */}
             {best && (
-              <View style={s.card}>
-                <View style={s.cardHead}>
-                  <View style={s.cardIconWrap}>
-                    <Icon name="aim" size={16} color={C.blue} />
+              <SectionCard>
+                <View style={g.sectionHead}>
+                  <View style={[g.sectionIcon, { backgroundColor: '#EEE8FF' }]}>
+                    <Icon name="aim" size={16} color={PURPLE} />
                   </View>
                   <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Text style={s.cardTitle}>أفضل نقطة توجيه</Text>
-                    <Text style={s.cardSub}>اتجه الهوائي إلى هذه الزاوية</Text>
+                    <Text style={g.sectionTitle}>أفضل نقطة وصلت لها</Text>
+                    <Text style={g.sectionSub}>مؤشر جودة التوجيه الحالي</Text>
                   </View>
                 </View>
-                <View style={s.bestBody}>
-                  <Compass angle={(pct * 360)} size={115} />
-                  <View style={s.bestStats}>
-                    <View style={s.bestStatBox}>
-                      <Text style={[s.bestStatVal, { color: '#16a34a' }]}>
-                        {delta !== undefined ? `${delta > 0 ? '+' : ''}${Math.round(delta * 5)}%` : '+0%'}
-                      </Text>
-                      <Text style={s.bestStatLbl}>تحسن متوقع</Text>
-                    </View>
-                    <View style={s.bestStatBox}>
-                      <Text style={s.bestStatVal}>{bestShown ?? '—'} dBm</Text>
-                      <Text style={s.bestStatLbl}>RSRP الأفضل</Text>
-                    </View>
-                    <View style={s.bestStatBox}>
-                      <Text style={s.bestStatVal}>PCI {best.cell.pci ?? '—'}</Text>
-                      <Text style={s.bestStatLbl}>البرج</Text>
-                    </View>
+
+                <View style={g.directionBody}>
+                  <CompassIndicator value={pct} color={lvlColor} />
+                  <View style={g.directionInfo}>
+                    <InfoRow
+                      icon="tower" label="البرج"
+                      value={cellName(best.cell)}
+                    />
+                    <InfoRow
+                      icon="chart" label="أفضل RSRP"
+                      value={bestShown !== undefined ? `${bestShown} dBm` : '—'}
+                    />
+                    <InfoRow
+                      icon="spark" label="الفرق عن البداية"
+                      value={
+                        delta !== undefined
+                          ? `${delta > 0 ? '+' : ''}${delta} dB`
+                          : '—'
+                      }
+                      color={delta !== undefined && delta > 0 ? SUCCESS : delta !== undefined && delta < 0 ? '#DC2626' : MUTED}
+                    />
                   </View>
                 </View>
+
                 {canPin && best.cell.pci && cellKey(pinned) !== cellKey(best.cell) && (
-                  <Pressable style={s.bestPinBtn} onPress={pinBest} disabled={pinBusy}>
-                    <Text style={s.bestPinTxt}>📌 ثبّت على برج أفضل نقطة</Text>
+                  <Pressable style={g.ctaSmall} onPress={pinBest} disabled={pinBusy}>
+                    {pinBusy ? (
+                      <ActivityIndicator color="#FFF" />
+                    ) : (
+                      <Text style={g.ctaSmallTxt}>📌 ثبّت على برج أفضل نقطة</Text>
+                    )}
                   </Pressable>
                 )}
-              </View>
+
+                {pinned && (
+                  <Pressable style={[g.ctaSmall, { backgroundColor: '#E0E7FF' }]} onPress={pinDuringAim} disabled={pinBusy}>
+                    <Text style={[g.ctaSmallTxt, { color: BLUE }]}>
+                      ✓ مثبّت على {cellName(pinned)} — اضغط للفك
+                    </Text>
+                  </Pressable>
+                )}
+              </SectionCard>
             )}
 
-            {/* ═══ الصوت والاهتزاز ═══ */}
-            <View style={s.soundRow}>
+            {/* ═══ 5G hunt ═══ */}
+            {waitingNr && (
+              <SectionCard>
+                <View style={g.sectionHead}>
+                  <View style={[g.sectionIcon, { backgroundColor: '#EEE8FF' }]}>
+                    <Icon name="antenna" size={16} color={PURPLE} />
+                  </View>
+                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                    <Text style={g.sectionTitle}>صيد إشارة 5G</Text>
+                    <Text style={g.sectionSub}>
+                      {waking !== null ? 'نبحث — حرّك الراوتر ببطء' : '5G ما يظهر إلا وقت التحميل'}
+                    </Text>
+                  </View>
+                </View>
+                <Pressable
+                  style={[g.wakeBtn, waking !== null && g.wakeBtnOn]}
+                  onPress={wake5g}
+                >
+                  <Text style={[g.wakeTxt, waking !== null && { color: PURPLE }]}>
+                    {waking !== null ? `⏹ إيقاف البحث (${waking}ث)` : '⚡ ابحث عن 5G'}
+                  </Text>
+                </Pressable>
+              </SectionCard>
+            )}
+
+            {/* ═══ Sound + haptics ═══ */}
+            <View style={g.togglesRow}>
               <Pressable
-                style={[s.soundBtn, sound && s.soundBtnOn]}
+                style={[g.toggleBtn, sound && { backgroundColor: PURPLE, borderColor: PURPLE }]}
                 onPress={() => setSound(v => !v)}
               >
-                <Text style={[s.soundIcon, sound && { color: '#fff' }]}>{sound ? '🔊' : '🔈'}</Text>
-                <Text style={[s.soundTxt, sound && { color: '#fff' }]}>
+                <Text style={[g.toggleIcon, sound && { color: '#FFF' }]}>
+                  {sound ? '🔊' : '🔈'}
+                </Text>
+                <Text style={[g.toggleTxt, sound && { color: '#FFF' }]}>
                   {sound ? 'الصوت مفعّل' : 'تفعيل الصوت'}
                 </Text>
               </Pressable>
               <Pressable
-                style={[s.soundBtn, haptics && s.hapticBtnOn]}
+                style={[g.toggleBtn, haptics && { backgroundColor: SUCCESS, borderColor: SUCCESS }]}
                 onPress={() => setHaptics(h => !h)}
               >
-                <Text style={[s.soundIcon, haptics && { color: '#fff' }]}>📳</Text>
-                <Text style={[s.soundTxt, haptics && { color: '#fff' }]}>
+                <Text style={[g.toggleIcon, haptics && { color: '#FFF' }]}>📳</Text>
+                <Text style={[g.toggleTxt, haptics && { color: '#FFF' }]}>
                   {haptics ? 'اهتزاز مفعّل' : 'تشغيل الاهتزاز'}
                 </Text>
               </Pressable>
             </View>
 
-            {/* ═══ 5G Hunt ═══ */}
-            {waitingNr && (
-              <View style={s.card}>
-                <Text style={s.cardTitle}>🛰️ صيد إشارة 5G</Text>
-                <Text style={s.hint}>
-                  {waking !== null ? 'نبحث عن أبراج 5G — حرّك الراوتر ببطء' : '5G ما يظهر إلا وقت التحميل.'}
-                </Text>
-                <Pressable style={[s.wakeBtn, waking !== null && s.wakeBtnOn]} onPress={wake5g}>
-                  <Text style={[s.wakeTxt, waking !== null && { color: C.violet }]}>
-                    {waking !== null ? `⏹ إيقاف (${waking}ث)` : '⚡ ابحث عن 5G'}
-                  </Text>
-                </Pressable>
-              </View>
-            )}
-
-            {/* ═══ تاريخ الإشارة ═══ */}
+            {/* ═══ Chart ═══ */}
             {readings.length > 3 && (
-              <View style={s.card}>
-                <View style={s.cardHead}>
-                  <View style={s.cardIconWrap}>
-                    <Icon name="chart" size={16} color={C.blue} />
+              <SectionCard>
+                <View style={g.sectionHead}>
+                  <View style={g.sectionIcon}>
+                    <Icon name="chart" size={16} color={BLUE} />
                   </View>
                   <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Text style={s.cardTitle}>تاريخ قوة الإشارة</Text>
+                    <Text style={g.sectionTitle}>تاريخ قوة الإشارة</Text>
+                    <Text style={g.sectionSub}>آخر {Math.min(30, readings.length)} قراءة</Text>
                   </View>
-                  <View style={s.rsrpBadge}>
-                    <Text style={s.rsrpBadgeTxt}>RSRP {shown ?? '—'} dBm</Text>
+                  <View style={g.rsrpBadge}>
+                    <Text style={g.rsrpBadgeTxt}>{shown ?? '—'} dBm</Text>
                   </View>
                 </View>
-                <View style={s.chartWrap}>
+                <View style={{ marginTop: 8, alignItems: 'center' }}>
                   <LineChart values={chartValues} min={-125} max={-60} color={lvlColor} />
                 </View>
-                <View style={s.chartLabels}>
-                  <Text style={s.chartLbl}>الآن</Text>
-                  <Text style={s.chartLbl}>قبل دقيقة</Text>
+                <View style={g.chartLabels}>
+                  <Text style={g.chartLbl}>الآن</Text>
+                  <Text style={g.chartLbl}>قبل قليل</Text>
                 </View>
-              </View>
+              </SectionCard>
             )}
 
-            {/* ═══ نصائح ═══ */}
-            <View style={s.card}>
-              <View style={s.cardHead}>
-                <View style={[s.cardIconWrap, { backgroundColor: '#fef3c7' }]}>
-                  <Icon name="bulb" size={16} color="#d97706" />
+            {/* ═══ Tips ═══ */}
+            <View style={g.tipsCard}>
+              <View style={g.tipsHead}>
+                <View style={[g.sectionIcon, { backgroundColor: '#FEF3C7' }]}>
+                  <Icon name="bulb" size={16} color="#D97706" />
                 </View>
-                <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                  <Text style={s.cardTitle}>نصائح لتحسين الإشارة</Text>
-                </View>
+                <Text style={g.tipsTitle}>نصائح لتحسين الإشارة</Text>
               </View>
-              <View style={s.tipRow}>
-                <Text style={s.tipCheck}>✓</Text>
-                <Text style={s.tip}>احرص على رفع الهوائي لأعلى نقطة ممكنة.</Text>
-              </View>
-              <View style={s.tipRow}>
-                <Text style={s.tipCheck}>✓</Text>
-                <Text style={s.tip}>ابتعد عن العوائق المعدنية والجدران السميكة.</Text>
-              </View>
-              <View style={s.tipRow}>
-                <Text style={s.tipCheck}>✓</Text>
-                <Text style={s.tip}>جرّب الاتجاهات المختلفة حتى تجد أفضل إشارة.</Text>
-              </View>
+              <TipRow text="ارفع الهوائي لأعلى نقطة ممكنة" />
+              <TipRow text="ابتعد عن العوائق المعدنية والجدران السميكة" />
+              <TipRow text="جرّب الاتجاهات المختلفة حتى تجد أفضل إشارة" />
+              <TipRow text="ثبّت الهوائي عند الوصول لأفضل قراءة" />
             </View>
 
-            {!!error && <Text style={s.err}>{error}</Text>}
+            {!!error && <Text style={g.err}>{error}</Text>}
           </>
         )}
       </ScrollView>
 
       {/* ═══ CTA أسفل ثابت ═══ */}
       {!loading && (
-        <View style={[s.footer, { paddingBottom: insets.bottom + 12 }]}>
-          <Pressable
-            style={s.cta}
-            onPress={() => {
-              reset();
-              if (!sound) setSound(true);
-            }}
-          >
+        <View style={[g.footer, { paddingBottom: insets.bottom + 12 }]}>
+          <Pressable onPress={() => { reset(); if (!sound) setSound(true); }}>
             <LinearGradient
-              colors={['#3b82f6', '#7c3aed']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={s.ctaInner}
+              colors={[BLUE, PURPLE]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              style={g.ctaGrad}
             >
-              <Text style={s.ctaTxt}>▶ ابدأ التوجيه الآن</Text>
-              <Icon name="aim" size={18} color="#fff" />
+              <Icon name="antenna" size={20} color="#FFF" />
+              <Text style={g.ctaTxt}>ابدأ التوجيه الآن</Text>
             </LinearGradient>
           </Pressable>
         </View>
       )}
-    </LinearGradient>
+    </View>
   );
 }
 
-const s = StyleSheet.create({
-  page: { padding: 16, gap: 12 },
+// ═══ Styles ═══
+const g = StyleSheet.create({
+  container: { flex: 1, backgroundColor: BG },
+  content: { paddingHorizontal: 16, paddingTop: 14, gap: 14 },
 
   // Header
-  header: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, marginBottom: 4 },
-  backBtn: {
-    width: 40, height: 40, borderRadius: 12,
-    backgroundColor: C.card, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: C.line,
+  header: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
+  iconBtn: {
+    width: 46, height: 46, borderRadius: 16, backgroundColor: CARD,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: BORDER,
   },
-  headerIcon: {
-    width: 40, height: 40, borderRadius: 12,
-    backgroundColor: C.blueSoft, alignItems: 'center', justifyContent: 'center',
-  },
-  headerTitle: { color: C.text, fontSize: 18, fontWeight: '900', textAlign: 'center' },
-  headerSub: { color: C.muted, fontSize: 11, textAlign: 'center', marginTop: 1 },
+  title: { fontSize: 22, fontWeight: '900', color: TEXT, textAlign: 'center' },
+  subtitle: { fontSize: 12, color: MUTED, textAlign: 'center', marginTop: 3 },
 
   // Mode
-  modeToggle: {
-    flexDirection: 'row-reverse', gap: 8,
-    backgroundColor: C.card, borderRadius: 14, padding: 4,
-    borderWidth: 1, borderColor: C.line,
+  modeWrap: {
+    flexDirection: 'row-reverse', gap: 6,
+    backgroundColor: CARD, borderRadius: 20, padding: 5,
+    borderWidth: 1, borderColor: BORDER,
   },
-  modeBtn: {
-    flex: 1, flexDirection: 'row-reverse', alignItems: 'center',
-    justifyContent: 'center', gap: 6,
-    paddingVertical: 11, borderRadius: 10,
+  modeBtn: { flex: 1, borderRadius: 16, overflow: 'hidden' },
+  modeGrad: {
+    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center',
+    gap: 8, paddingVertical: 12, borderRadius: 16,
   },
-  modeBtnOn: { backgroundColor: C.blue },
-  modeTxt: { color: C.text, fontWeight: '800', fontSize: 13 },
-  modeTxtOn: { color: '#fff' },
-
-  center: { alignItems: 'center', gap: 10, paddingVertical: 40 },
-  muted: { color: C.sub, textAlign: 'center' },
-  err: { color: C.red, fontSize: 12, textAlign: 'center' },
-  hint: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 18 },
+  modeInner: {
+    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center',
+    gap: 8, paddingVertical: 12, borderRadius: 16,
+  },
+  modeTxt: { color: MUTED, fontWeight: '800', fontSize: 13 },
+  modeTxtOn: { color: '#FFF', fontWeight: '900', fontSize: 13 },
 
   // Hero
-  hero: {
-    flexDirection: 'row-reverse', alignItems: 'center',
-    gap: 10, backgroundColor: C.card, borderRadius: 20,
-    borderWidth: 1, borderColor: C.line,
-    padding: 12, minHeight: 170,
-    shadowColor: C.shadow, shadowOpacity: 0.06, shadowRadius: 12,
+  heroCard: {
+    backgroundColor: CARD, borderRadius: 26, padding: 14,
+    borderWidth: 1, borderColor: BORDER, gap: 12,
+    shadowColor: '#0D2350', shadowOpacity: 0.05, shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 }, elevation: 2,
   },
+  heroVisual: {
+    height: 240, borderRadius: 22, backgroundColor: '#EEF5FF',
+    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-around',
+    paddingHorizontal: 6,
+  },
 
-  // Stats
-  statsRow: { flexDirection: 'row-reverse', gap: 8 },
-  statBox: {
-    flex: 1, backgroundColor: C.card,
-    borderRadius: 14, paddingVertical: 10, paddingHorizontal: 8,
-    borderWidth: 1, borderColor: C.line,
-    flexDirection: 'row-reverse', alignItems: 'center', gap: 6,
+  // Antenna visual
+  antWrap: { alignItems: 'center', justifyContent: 'center' },
+
+  // Gauge
+  gaugeVal: { color: TEXT, fontSize: 52, fontWeight: '900', letterSpacing: -1, lineHeight: 58 },
+  gaugePct: { color: MUTED, fontSize: 14, fontWeight: '800', marginTop: -6 },
+  gaugeLbl: { color: MUTED, fontSize: 11, marginTop: 2, fontWeight: '700' },
+
+  // Metrics
+  metricsRow: { flexDirection: 'row-reverse', gap: 8 },
+  metric: {
+    flex: 1, minHeight: 88, borderRadius: 16,
+    backgroundColor: CARD_BG, padding: 9,
+    borderWidth: 1, borderColor: BORDER,
   },
-  statIconWrap: {
-    width: 24, height: 24, borderRadius: 8,
-    alignItems: 'center', justifyContent: 'center',
+  metricIcon: {
+    width: 26, height: 26, borderRadius: 9,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 6,
   },
-  statLbl: { color: C.muted, fontSize: 9.5, fontWeight: '700' },
-  statVal: { color: C.text, fontSize: 13, fontWeight: '900' },
-  statUnit: { color: C.muted, fontSize: 8.5, fontWeight: '600' },
+  metricLbl: { color: MUTED, fontSize: 10.5, fontWeight: '700' },
+  metricVal: { color: TEXT, fontSize: 13.5, fontWeight: '900' },
+  metricUnit: { color: MUTED, fontSize: 9, fontWeight: '700' },
 
   // Stability
-  stabilityCard: {
-    flexDirection: 'row-reverse', alignItems: 'center',
-    gap: 10, paddingVertical: 12, paddingHorizontal: 14,
-    borderRadius: 14, borderWidth: 1,
+  stableBox: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 10,
+    paddingVertical: 12, paddingHorizontal: 14,
+    borderRadius: 16, borderWidth: 1,
   },
-  stabilityDot: { width: 8, height: 8, borderRadius: 4 },
-  stabilityTitle: { fontSize: 13.5, fontWeight: '900' },
-  stabilitySub: { fontSize: 11, textAlign: 'right', marginTop: 2, fontWeight: '600' },
-  stabilityCheck: {
-    width: 26, height: 26, borderRadius: 13,
+  stableTitle: { fontSize: 14, fontWeight: '900', textAlign: 'right' },
+  stableSub: { fontSize: 11, marginTop: 3, textAlign: 'right', lineHeight: 16 },
+  stableCheck: {
+    width: 30, height: 30, borderRadius: 15,
     alignItems: 'center', justifyContent: 'center',
   },
 
-  // Cards
-  card: {
-    backgroundColor: C.card, borderRadius: 18,
-    borderWidth: 1, borderColor: C.line,
-    padding: 14, gap: 10,
+  // Section
+  section: {
+    backgroundColor: CARD, borderRadius: 22, padding: 14, gap: 12,
+    borderWidth: 1, borderColor: BORDER,
   },
-  cardHead: {
-    flexDirection: 'row-reverse', alignItems: 'center', gap: 10,
-  },
-  cardIconWrap: {
+  sectionHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
+  sectionIcon: {
     width: 32, height: 32, borderRadius: 10,
-    backgroundColor: C.blueSoft,
+    backgroundColor: '#E1F5FF',
     alignItems: 'center', justifyContent: 'center',
   },
-  cardTitle: { color: C.text, fontSize: 14, fontWeight: '900', textAlign: 'right' },
-  cardSub: { color: C.muted, fontSize: 10.5, textAlign: 'right', marginTop: 1 },
+  sectionTitle: { color: TEXT, fontSize: 15.5, fontWeight: '900', textAlign: 'right' },
+  sectionSub: { color: MUTED, fontSize: 11, textAlign: 'right', marginTop: 2 },
 
   // Tech
   techRow: { flexDirection: 'row-reverse', gap: 8 },
   techBtn: {
-    flex: 1, paddingVertical: 9, borderRadius: 10,
-    backgroundColor: C.rowBg, alignItems: 'center',
+    flex: 1, paddingVertical: 10, borderRadius: 12,
+    backgroundColor: CARD_BG, alignItems: 'center',
+    borderWidth: 1.5, borderColor: BORDER,
   },
-  techTxt: { color: C.text, fontWeight: '800', fontSize: 13 },
+  techTxt: { color: TEXT, fontWeight: '900', fontSize: 13.5 },
 
   // Chips
   chipsRow: { flexDirection: 'row-reverse', gap: 8, paddingVertical: 2 },
   chip: {
-    paddingHorizontal: 18, paddingVertical: 8,
-    backgroundColor: C.rowBg, borderRadius: 999,
-    borderWidth: 1, borderColor: C.line,
+    height: 40, paddingHorizontal: 18, borderRadius: 20,
+    backgroundColor: CARD_BG, borderWidth: 1.5, borderColor: BORDER,
+    alignItems: 'center', justifyContent: 'center',
   },
-  chipTxt: { color: C.text, fontWeight: '800', fontSize: 12.5 },
+  chipTxt: { color: TEXT, fontWeight: '800', fontSize: 13 },
 
-  // Best spot
-  bestBody: { flexDirection: 'row-reverse', gap: 10, alignItems: 'center' },
-  bestStats: { flex: 1, gap: 6 },
-  bestStatBox: {
-    backgroundColor: C.rowBg, borderRadius: 10,
-    paddingVertical: 8, paddingHorizontal: 10,
-    flexDirection: 'row-reverse', justifyContent: 'space-between',
-    alignItems: 'center',
+  // Direction
+  directionBody: { flexDirection: 'row-reverse', gap: 12, alignItems: 'center' },
+  directionInfo: { flex: 1, gap: 8 },
+  infoRow: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 10,
+    backgroundColor: CARD_BG, borderRadius: 12, padding: 10,
+    borderWidth: 1, borderColor: BORDER,
   },
-  bestStatLbl: { color: C.muted, fontSize: 11, fontWeight: '700' },
-  bestStatVal: { color: C.text, fontSize: 13, fontWeight: '900' },
-  bestPinBtn: {
-    backgroundColor: C.blue, borderRadius: 12,
-    paddingVertical: 11, alignItems: 'center', marginTop: 4,
+  infoIcon: {
+    width: 32, height: 32, borderRadius: 10,
+    backgroundColor: '#EEF3FF',
+    alignItems: 'center', justifyContent: 'center',
   },
-  bestPinTxt: { color: '#fff', fontWeight: '800', fontSize: 13.5 },
+  infoLbl: { color: MUTED, fontSize: 10.5, fontWeight: '700' },
+  infoVal: { color: TEXT, fontSize: 13.5, fontWeight: '900', marginTop: 2 },
 
-  // Sound
-  soundRow: { flexDirection: 'row-reverse', gap: 8 },
-  soundBtn: {
+  // CTA small
+  ctaSmall: {
+    backgroundColor: BLUE, borderRadius: 14,
+    paddingVertical: 12, alignItems: 'center',
+  },
+  ctaSmallTxt: { color: '#FFF', fontWeight: '900', fontSize: 13.5 },
+
+  // Wake 5G
+  wakeBtn: {
+    backgroundColor: PURPLE, borderRadius: 14,
+    paddingVertical: 12, alignItems: 'center',
+  },
+  wakeBtnOn: { backgroundColor: '#EEE8FF', borderWidth: 1.5, borderColor: PURPLE },
+  wakeTxt: { color: '#FFF', fontWeight: '900', fontSize: 13.5 },
+
+  // Toggles
+  togglesRow: { flexDirection: 'row-reverse', gap: 10 },
+  toggleBtn: {
     flex: 1, flexDirection: 'row-reverse', alignItems: 'center',
     justifyContent: 'center', gap: 8,
-    paddingVertical: 13, borderRadius: 14,
-    backgroundColor: C.card, borderWidth: 1, borderColor: C.line,
+    paddingVertical: 14, borderRadius: 16,
+    backgroundColor: CARD, borderWidth: 1.5, borderColor: BORDER,
   },
-  soundBtnOn: { backgroundColor: C.violet, borderColor: C.violet },
-  hapticBtnOn: { backgroundColor: C.green, borderColor: C.green },
-  soundIcon: { fontSize: 18 },
-  soundTxt: { color: C.text, fontWeight: '800', fontSize: 13 },
-
-  // Wake
-  wakeBtn: {
-    backgroundColor: C.violet, borderRadius: 12,
-    paddingVertical: 11, alignItems: 'center',
-  },
-  wakeBtnOn: { backgroundColor: C.violetSoft, borderWidth: 1, borderColor: C.violet },
-  wakeTxt: { color: '#fff', fontWeight: '800', fontSize: 13.5 },
+  toggleIcon: { fontSize: 18 },
+  toggleTxt: { color: TEXT, fontWeight: '900', fontSize: 13 },
 
   // Chart
   rsrpBadge: {
-    backgroundColor: C.blue, borderRadius: 8,
-    paddingHorizontal: 10, paddingVertical: 4,
+    backgroundColor: BLUE, borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 5,
   },
-  rsrpBadgeTxt: { color: '#fff', fontSize: 10.5, fontWeight: '800' },
-  chartWrap: { height: 90, marginTop: 4 },
+  rsrpBadgeTxt: { color: '#FFF', fontSize: 11, fontWeight: '900' },
   chartLabels: {
     flexDirection: 'row-reverse', justifyContent: 'space-between',
-    marginTop: -4,
+    marginTop: 4, paddingHorizontal: 4,
   },
-  chartLbl: { color: C.muted, fontSize: 10 },
+  chartLbl: { color: MUTED, fontSize: 10, fontWeight: '700' },
 
   // Tips
-  tipRow: {
-    flexDirection: 'row-reverse', alignItems: 'center', gap: 8,
-    paddingVertical: 4,
+  tipsCard: {
+    borderRadius: 22, backgroundColor: '#F7F3FF',
+    borderWidth: 1, borderColor: '#E4D9FF',
+    padding: 16, gap: 8,
   },
-  tipCheck: { color: C.muted, fontSize: 13, fontWeight: '900' },
-  tip: { color: C.sub, fontSize: 12.5, textAlign: 'right', flex: 1, lineHeight: 19 },
+  tipsHead: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 10,
+    marginBottom: 4,
+  },
+  tipsTitle: { color: PURPLE, fontSize: 15.5, fontWeight: '900', flex: 1, textAlign: 'right' },
+  tipRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, paddingVertical: 3 },
+  tipCheck: { color: SUCCESS, fontSize: 14, fontWeight: '900' },
+  tipTxt: { flex: 1, textAlign: 'right', color: '#68718A', fontSize: 12.5, lineHeight: 19 },
 
   // Footer CTA
   footer: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     paddingHorizontal: 16, paddingTop: 12,
-    backgroundColor: C.bg + 'F0',
+    backgroundColor: BG + 'F0',
   },
-  cta: {
-    borderRadius: 16, overflow: 'hidden',
-    shadowColor: '#7c3aed', shadowOpacity: 0.35,
-    shadowRadius: 14, shadowOffset: { width: 0, height: 6 },
-    elevation: 5,
-  },
-  ctaInner: {
+  ctaGrad: {
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center',
-    gap: 10, paddingVertical: 16,
+    gap: 10, paddingVertical: 17, borderRadius: 22,
+    shadowColor: '#7655F5', shadowOpacity: 0.4,
+    shadowRadius: 16, shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
-  ctaTxt: { color: '#fff', fontWeight: '900', fontSize: 15.5 },
+  ctaTxt: { color: '#FFF', fontWeight: '900', fontSize: 16 },
+
+  // Error
+  err: { color: '#DC2626', fontSize: 12, textAlign: 'center' },
 });
