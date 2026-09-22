@@ -84,7 +84,7 @@ function estimateDistance(rsrp?: number): string {
 
 
 
-// ═══ مؤشر الإشارة (Hero) — RSRP + SINR ═══
+// ═══ مؤشر الإشارة (Hero) — بطاقتين ═══
 function SignalHero({
   rsrp, sinr, baselineRsrp, baselineSinr, rsrpHistory, sinrHistory, rsrpColor, sinrColor,
 }: {
@@ -99,6 +99,7 @@ function SignalHero({
 }) {
   const deltaR = rsrp !== undefined && baselineRsrp !== null ? rsrp - baselineRsrp : undefined;
   const deltaS = sinr !== undefined && baselineSinr !== null ? sinr - baselineSinr : undefined;
+
   const prevR = rsrpHistory.length >= 2 ? rsrpHistory[rsrpHistory.length - 2] : undefined;
   const trendR: 'up' | 'down' | 'flat' =
     rsrp !== undefined && prevR !== undefined
@@ -107,162 +108,107 @@ function SignalHero({
   const arrowR = trendR === 'up' ? '↑' : trendR === 'down' ? '↓' : '•';
   const trendColorR = trendR === 'up' ? SUCCESS : trendR === 'down' ? DANGER : MUTED;
 
+  const sinrClean = sinrHistory.filter((v): v is number => v !== undefined);
+  const prevS = sinrClean.length >= 2 ? sinrClean[sinrClean.length - 2] : undefined;
+  const trendS: 'up' | 'down' | 'flat' =
+    sinr !== undefined && prevS !== undefined
+      ? sinr > prevS + 0.5 ? 'up' : sinr < prevS - 0.5 ? 'down' : 'flat'
+      : 'flat';
+  const arrowS = trendS === 'up' ? '↑' : trendS === 'down' ? '↓' : '•';
+  const trendColorS = trendS === 'up' ? SUCCESS : trendS === 'down' ? DANGER : MUTED;
+
   return (
     <View style={h.wrap}>
-      {/* صف القيم */}
-      <View style={h.row}>
-        {/* RSRP */}
-        <View style={h.col}>
-          <View style={h.colHead}>
-            <Text style={[h.arrow, { color: trendColorR }]}>{arrowR}</Text>
-            <Text style={h.colLbl}>RSRP</Text>
-          </View>
-          <View style={h.valueRow}>
-            <Text style={[h.value, { color: rsrpColor }]}>{rsrp ?? '—'}</Text>
-            <Text style={h.unit}>dBm</Text>
-          </View>
-          {deltaR !== undefined && (
-            <Text style={[h.delta, {
-              color: deltaR > 0.5 ? SUCCESS : deltaR < -0.5 ? DANGER : MUTED,
-            }]}>
-              {deltaR > 0.5 ? `+${Math.round(deltaR)}` : deltaR < -0.5 ? `${Math.round(deltaR)}` : '0'} dB
-            </Text>
-          )}
+      {/* بطاقة RSRP */}
+      <View style={[h.card, { borderColor: rsrpColor + '33' }]}>
+        <View style={h.cardHead}>
+          <Text style={[h.arrow, { color: trendColorR }]}>{arrowR}</Text>
+          <Text style={h.cardLbl}>RSRP</Text>
         </View>
-
-        {/* فاصل */}
-        <View style={h.sep} />
-
-        {/* SINR */}
-        <View style={h.col}>
-          <View style={h.colHead}>
-            <Icon name="speed" size={16} color={sinrColor} />
-            <Text style={h.colLbl}>SINR</Text>
-          </View>
-          <View style={h.valueRow}>
-            <Text style={[h.value, { color: sinrColor }]}>{sinr ?? '—'}</Text>
-            <Text style={h.unit}>dB</Text>
-          </View>
-          {deltaS !== undefined && (
-            <Text style={[h.delta, {
-              color: deltaS > 0.5 ? SUCCESS : deltaS < -0.5 ? DANGER : MUTED,
-            }]}>
-              {deltaS > 0.5 ? `+${Math.round(deltaS)}` : deltaS < -0.5 ? `${Math.round(deltaS)}` : '0'} dB
-            </Text>
-          )}
+        <View style={h.valueRow}>
+          <Text style={[h.value, { color: rsrpColor }]}>{rsrp ?? '—'}</Text>
+          <Text style={h.unit}>dBm</Text>
         </View>
+        <View style={h.sparkWrap}>
+          <MiniSpark values={rsrpHistory} min={-125} max={-60} color={rsrpColor} width={130} height={42} />
+        </View>
+        {deltaR !== undefined && (
+          <Text style={[h.delta, {
+            color: deltaR > 0.5 ? SUCCESS : deltaR < -0.5 ? DANGER : MUTED,
+          }]}>
+            {deltaR > 0.5 ? `↑ +${Math.round(deltaR)}`
+              : deltaR < -0.5 ? `↓ ${Math.round(deltaR)}` : '• 0'} dB
+          </Text>
+        )}
       </View>
 
-      {/* الرسم المزدوج */}
-      <View style={{ marginTop: 8 }}>
-        <DualChart
-          rsrpValues={rsrpHistory}
-          sinrValues={sinrHistory}
-          rsrpColor={rsrpColor}
-          sinrColor={sinrColor}
-          width={300}
-        />
-      </View>
-
-      {/* المفتاح */}
-      <View style={h.legend}>
-        <View style={h.legendItem}>
-          <View style={[h.legendDot, { backgroundColor: rsrpColor }]} />
-          <Text style={h.legendTxt}>RSRP</Text>
+      {/* بطاقة SINR */}
+      <View style={[h.card, { borderColor: sinrColor + '33' }]}>
+        <View style={h.cardHead}>
+          <Text style={[h.arrow, { color: trendColorS }]}>{arrowS}</Text>
+          <Text style={h.cardLbl}>SINR</Text>
         </View>
-        <View style={h.legendItem}>
-          <View style={[h.legendDot, { backgroundColor: sinrColor }]} />
-          <Text style={h.legendTxt}>SINR</Text>
+        <View style={h.valueRow}>
+          <Text style={[h.value, { color: sinrColor }]}>{sinr ?? '—'}</Text>
+          <Text style={h.unit}>dB</Text>
         </View>
+        <View style={h.sparkWrap}>
+          <MiniSpark values={sinrClean.length ? sinrClean : [0]} min={-10} max={30} color={sinrColor} width={130} height={42} />
+        </View>
+        {deltaS !== undefined && (
+          <Text style={[h.delta, {
+            color: deltaS > 0.5 ? SUCCESS : deltaS < -0.5 ? DANGER : MUTED,
+          }]}>
+            {deltaS > 0.5 ? `↑ +${Math.round(deltaS)}`
+              : deltaS < -0.5 ? `↓ ${Math.round(deltaS)}` : '• 0'} dB
+          </Text>
+        )}
       </View>
     </View>
   );
 }
 
-// ═══ رسم مزدوج: RSRP + SINR ═══
-function DualChart({
-  rsrpValues, sinrValues, rsrpColor, sinrColor, width,
+// ═══ Sparkline صغير (لكل بطاقة) ═══
+function MiniSpark({
+  values, min, max, color, width = 130, height = 42,
 }: {
-  rsrpValues: number[];
-  sinrValues: (number | undefined)[];
-  rsrpColor: string;
-  sinrColor: string;
-  width: number;
+  values: number[];
+  min: number;
+  max: number;
+  color: string;
+  width?: number;
+  height?: number;
 }) {
-  const H = 160;
-  const pad = { top: 12, bottom: 20, left: 4, right: 4 };
+  const pad = { top: 4, bottom: 4, left: 2, right: 2 };
   const innerW = width - pad.left - pad.right;
-  const innerH = H - pad.top - pad.bottom;
-
-  const rsrpMin = -125, rsrpMax = -60;
-  const sinrMin = -10, sinrMax = 30;
-
-  const n = Math.max(rsrpValues.length, 1);
-  const stepX = n > 1 ? innerW / (n - 1) : 0;
-
-  const rPts = rsrpValues.map((v, i) => ({
+  const innerH = height - pad.top - pad.bottom;
+  if (values.length < 2) {
+    return <View style={{ width, height }} />;
+  }
+  const range = max - min || 1;
+  const stepX = innerW / (values.length - 1);
+  const pts = values.map((v, i) => ({
     x: pad.left + i * stepX,
-    y: pad.top + innerH - ((Math.max(rsrpMin, Math.min(rsrpMax, v)) - rsrpMin) / (rsrpMax - rsrpMin)) * innerH,
+    y: pad.top + innerH - ((Math.max(min, Math.min(max, v)) - min) / range) * innerH,
   }));
-  const sPts = sinrValues.map((v, i) => v === undefined ? null : ({
-    x: pad.left + i * stepX,
-    y: pad.top + innerH - ((Math.max(sinrMin, Math.min(sinrMax, v)) - sinrMin) / (sinrMax - sinrMin)) * innerH,
-  })).filter((p): p is { x: number; y: number } => !!p);
-
-  const rLine = rPts.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
-  const sLine = sPts.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
-
-  const lastR = rPts[rPts.length - 1];
-  const lastS = sPts[sPts.length - 1];
-
+  const line = pts.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
+  const area = `${line} L ${pts[pts.length - 1].x} ${pad.top + innerH} L ${pts[0].x} ${pad.top + innerH} Z`;
+  const last = pts[pts.length - 1];
   return (
-    <Svg width={width} height={H}>
+    <Svg width={width} height={height}>
       <Defs>
-        <SvgLinearGradient id="rsrpGrad" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0%" stopColor={rsrpColor} stopOpacity="0.18" />
-          <Stop offset="100%" stopColor={rsrpColor} stopOpacity="0" />
+        <SvgLinearGradient id={`sp-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0%" stopColor={color} stopOpacity="0.22" />
+          <Stop offset="100%" stopColor={color} stopOpacity="0" />
         </SvgLinearGradient>
       </Defs>
-      {/* شبكة */}
-      {[0, 0.5, 1].map((f, i) => (
-        <Line key={i}
-          x1={0} y1={pad.top + f * innerH}
-          x2={width} y2={pad.top + f * innerH}
-          stroke="#E6ECF5" strokeWidth={1} strokeDasharray="3 3"
-        />
-      ))}
-      {/* RSRP area + line */}
-      {rPts.length >= 2 && (
-        <>
-          <Path
-            d={`${rLine} L ${lastR.x} ${pad.top + innerH} L ${rPts[0].x} ${pad.top + innerH} Z`}
-            fill="url(#rsrpGrad)"
-          />
-          <Path d={rLine} stroke={rsrpColor} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-          {lastR && (
-            <>
-              <Circle cx={lastR.x} cy={lastR.y} r={4} fill={rsrpColor} />
-              <Circle cx={lastR.x} cy={lastR.y} r={8} fill={rsrpColor} opacity={0.22} />
-            </>
-          )}
-        </>
-      )}
-      {/* SINR line */}
-      {sPts.length >= 2 && (
-        <>
-          <Path d={sLine} stroke={sinrColor} strokeWidth={2} fill="none"
-            strokeLinecap="round" strokeLinejoin="round" strokeDasharray="5 4" />
-          {lastS && (
-            <>
-              <Circle cx={lastS.x} cy={lastS.y} r={3.5} fill={sinrColor} />
-              <Circle cx={lastS.x} cy={lastS.y} r={7} fill={sinrColor} opacity={0.2} />
-            </>
-          )}
-        </>
-      )}
+      <Path d={area} fill={`url(#sp-${color.replace('#', '')})`} />
+      <Path d={line} stroke={color} strokeWidth={2} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <Circle cx={last.x} cy={last.y} r={3.5} fill={color} />
     </Svg>
   );
 }
+
 
 // ═══ Chart ═══
 function LineChart({ values, min, max, color, width }: { values: number[]; min: number; max: number; color: string; width: number }) {
@@ -894,28 +840,25 @@ export default function AimScreen() {
 }
 
 const h = StyleSheet.create({
-  wrap: { width: '100%', alignItems: 'center' },
-  row: {
-    flexDirection: 'row-reverse', alignSelf: 'stretch',
-    alignItems: 'center', justifyContent: 'space-around',
-    paddingVertical: 4,
+  wrap: {
+    flexDirection: 'row-reverse', gap: 10, width: '100%',
   },
-  col: { flex: 1, alignItems: 'center', gap: 2 },
-  colHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5 },
-  colLbl: { color: MUTED, fontSize: 12, fontWeight: '800' },
-  arrow: { fontSize: 22, fontWeight: '900' },
+  card: {
+    flex: 1, alignItems: 'center', gap: 4,
+    backgroundColor: '#FFFFFF', borderRadius: 16,
+    paddingVertical: 12, paddingHorizontal: 8,
+    borderWidth: 1.5,
+  },
+  cardHead: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 5,
+  },
+  cardLbl: { color: MUTED, fontSize: 12, fontWeight: '800' },
+  arrow: { fontSize: 20, fontWeight: '900' },
   valueRow: { flexDirection: 'row-reverse', alignItems: 'baseline', gap: 3 },
-  value: { fontSize: 42, fontWeight: '900', letterSpacing: -1.5, lineHeight: 46 },
-  unit: { color: MUTED, fontSize: 12, fontWeight: '800' },
-  delta: { fontSize: 11.5, fontWeight: '800', marginTop: 1 },
-  sep: { width: 1, height: 60, backgroundColor: '#E5EDF9' },
-  legend: {
-    flexDirection: 'row-reverse', gap: 16, marginTop: 8,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  legendItem: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5 },
-  legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendTxt: { color: MUTED, fontSize: 11, fontWeight: '700' },
+  value: { fontSize: 34, fontWeight: '900', letterSpacing: -1, lineHeight: 38 },
+  unit: { color: MUTED, fontSize: 11, fontWeight: '800' },
+  sparkWrap: { marginTop: 4, alignItems: 'center' },
+  delta: { fontSize: 11, fontWeight: '800', marginTop: 2 },
 });
 
 const a = StyleSheet.create({
