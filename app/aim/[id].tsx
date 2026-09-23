@@ -126,6 +126,8 @@ function SignalHero({
           <Text style={h.cardLbl}>RSRP</Text>
         </View>
         <View style={h.bodyRow}>
+          {/* spark يمين */}
+          <VSpark value={rsrp} min={-120} max={-70} color={rsrpColor} count={12} />
           {/* قيمة يسار */}
           <View style={h.valueCol}>
             <View style={h.valueRow}>
@@ -133,8 +135,6 @@ function SignalHero({
               <Text style={h.unit}>dBm</Text>
             </View>
           </View>
-          {/* spark يمين */}
-          <VSpark value={rsrp} min={-120} max={-70} color={rsrpColor} count={12} />
         </View>
         {deltaR !== undefined && (
           <Text style={[h.delta, {
@@ -153,8 +153,6 @@ function SignalHero({
           <Text style={h.cardLbl}>SINR</Text>
         </View>
         <View style={h.bodyRow}>
-          {/* spark يسار */}
-          <VSpark value={sinr} min={-10} max={30} color={sinrColor} count={12} />
           {/* قيمة يمين */}
           <View style={h.valueCol}>
             <View style={h.valueRow}>
@@ -162,6 +160,8 @@ function SignalHero({
               <Text style={h.unit}>dB</Text>
             </View>
           </View>
+          {/* spark يسار */}
+          <VSpark value={sinr} min={-10} max={30} color={sinrColor} count={12} />
         </View>
         {deltaS !== undefined && (
           <Text style={[h.delta, {
