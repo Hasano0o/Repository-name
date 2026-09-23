@@ -34,12 +34,13 @@ const PRIVATE_V6 = [
 const LOCAL_SUFFIXES = ['.local', '.lan', '.home', '.internal'];
 
 export function hostOnly(raw: string): string {
-  return raw
-    .trim()
-    .replace(/^https?:\/\//i, '')
-    .replace(/^\/+/, '')
-    .split(/[/?#]/)[0]
-    .split(':')[0] || raw.trim().split(':')[0];
+  let s = raw.trim().replace(/^https?:\/\//i, '').replace(/^\/+/, '');
+  // IPv6 bracketed: [::1]:8080 → ::1
+  const v6 = s.match(/^\[([^\]]+)\]/);
+  if (v6) return v6[1];
+  // IPv4:port أو host:port
+  s = s.split(/[/?#]/)[0];
+  return s.split(':')[0];
 }
 
 export function isLanHost(raw: string): boolean {
