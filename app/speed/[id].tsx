@@ -24,6 +24,9 @@ function Stat({ icon, label, value, unit, color }: {
           <Text style={[s.statValue, { color }]}>{value}</Text>
         </View>
       </View>
+      <Text style={s.cloudflareNote}>
+        ملاحظة: اختبار السرعة يستخدم خادم Cloudflare (speed.cloudflare.com) لقياس سرعة الإنترنت. لا يتم إرسال أي بيانات شخصية — فقط الاتصال بالخادم لقياس معدل النقل.
+      </Text>
     </View>
   );
 }
@@ -154,6 +157,14 @@ export default function SpeedScreen() {
 }
 
 const s = StyleSheet.create({
+  cloudflareNote: {
+    color: C.muted,
+    fontSize: 11,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+    marginTop: 16,
+    lineHeight: 17,
+  },
   wrap: { flex: 1, backgroundColor: C.bg, alignItems: 'center', padding: S.lg, gap: S.md },
   dial: { width: 190, height: 190, alignItems: 'center', justifyContent: 'center', marginTop: S.md },
   dialCenter: { position: 'absolute', width: 190, height: 190, alignItems: 'center', justifyContent: 'center' },

@@ -326,6 +326,10 @@ export default function PingScreen() {
             </Text>
           </GlassCard>
         )}
+        <Text style={s.cloudflareNote}>
+          ملاحظة: قياس الاستجابة يستخدم خادم Cloudflare (speed.cloudflare.com) — لا تُرسل أي بيانات شخصية، فقط اختبار زمن الاستجابة.
+        </Text>
+
       </ScrollView>
     </LinearGradient>
   );
@@ -342,6 +346,15 @@ function Stat({ v, u, l, c }: { v: string; u: string; l: string; c: string }) {
 }
 
 const s = StyleSheet.create({
+  cloudflareNote: {
+    color: C.muted,
+    fontSize: 11,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 8,
+    lineHeight: 17,
+  },
   page: { padding: 16, gap: 14 },
   center: { alignItems: 'center', paddingVertical: 40 },
   hint: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 19 },
