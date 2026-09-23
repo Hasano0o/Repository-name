@@ -1,10 +1,10 @@
 import { useCallback, useRef, useState } from 'react';
 import {
-  View, Text, Pressable, FlatList, ActivityIndicator, RefreshControl, StyleSheet,
+  View, Text, Pressable, FlatList, ActivityIndicator, RefreshControl, StyleSheet, Alert,
 } from 'react-native';
 import { router, useFocusEffect, Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SavedRouter, listRouters, getPassword } from '../src/store/routers';
+import { SavedRouter, listRouters, getPassword, deleteRouter } from '../src/store/routers';
 import { withSession } from '../src/store/sessions';
 import { Signal } from '../src/drivers/types';
 import { C, R, S, T } from '../src/ui/theme';
@@ -95,6 +95,32 @@ export default function RoutersList() {
   const explore = () => router.push('/probe' as Href);
   const open = (id: string) => router.push(`/router/${id}` as Href);
   const edit = (id: string) => router.push(`/add-router?id=${id}` as Href);
+  const onDelete = (r: SavedRouter) => {
+    Alert.alert(
+      'حذف الراوتر',
+      `تبي تحذف "${r.name}" من التطبيق؟\n\nكلمة المرور المُحفوظة راح تنحذف أيضاً.`,
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'حذف',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteRouter(r.id);
+              setItems(prev => prev.filter(x => x.id !== r.id));
+              setStatus(prev => {
+                const next = { ...prev };
+                delete next[r.id];
+                return next;
+              });
+            } catch (e: any) {
+              Alert.alert('خطأ', e?.message ?? 'تعذر الحذف');
+            }
+          },
+        },
+      ],
+    );
+  };
 
   if (!loaded) {
     return (
@@ -241,6 +267,9 @@ export default function RoutersList() {
                 <Pressable style={s.iconBtn} onPress={() => edit(item.id)}>
                   <Icon name="settings" size={16} color={C.sub} />
                 </Pressable>
+                <Pressable style={s.deleteBtn} onPress={() => onDelete(item)}>
+                  <Icon name="trash" size={16} color={C.red} />
+                </Pressable>
               </View>
             </View>
           );
@@ -373,6 +402,16 @@ const s = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: C.cardBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: C.redSoft,
+    backgroundColor: C.redSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },

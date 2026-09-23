@@ -6,7 +6,8 @@ export type IconName =
   | 'settings' | 'chevron' | 'down' | 'up' | 'phone' | 'tv' | 'refresh'
   | 'spark' | 'bulb' | 'lock' | 'sms' | 'speed' | 'chart' | 'user' | 'power'
   | 'eye' | 'eye-off'
-  | 'antenna' | 'layers' | 'pin' | 'clock' | 'bell' | 'share';
+  | 'antenna' | 'layers' | 'pin' | 'clock' | 'bell' | 'share'
+  | 'trash';
 
 export function Icon({
   name, size = 20, color = C.sub, stroke = 1.9,
@@ -38,6 +39,7 @@ export function Icon({
       {name === 'chart' && <><Path d="M4 19V5" {...p} /><Path d="M4 19h16" {...p} /><Path d="M8 15l4-5 3 3 4-6" {...p} /></>}
       {name === 'user' && <><Circle cx={12} cy={8} r={3.5} {...p} /><Path d="M5 20a7 7 0 0 1 14 0" {...p} /></>}
       {name === 'power' && <><Path d="M12 4v8" {...p} /><Path d="M6.5 7.5a8 8 0 1 0 11 0" {...p} /></>}
+      {name === 'trash' && <><Path d="M3 6h18" {...p} /><Path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" {...p} /><Path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" {...p} /><Path d="M10 11v6" {...p} /><Path d="M14 11v6" {...p} /></>}
       {name === 'antenna' && <><Path d="M12 21V11" {...p} /><Path d="M8 21h8" {...p} /><Circle cx={12} cy={8.5} r={2} {...p} /><Path d="M7.8 12.7a6 6 0 0 1 0-8.4" {...p} /><Path d="M16.2 4.3a6 6 0 0 1 0 8.4" {...p} /></>}
       {name === 'layers' && <><Path d="M12 3 2 8l10 5 10-5z" {...p} /><Path d="M2 13l10 5 10-5" {...p} /></>}
       {name === 'pin' && <><Path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z" {...p} /><Circle cx={12} cy={10} r={2.5} {...p} /></>}
