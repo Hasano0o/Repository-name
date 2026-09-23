@@ -29,6 +29,70 @@ const CARD = '#FFFFFF';
 const CARD_BG = '#FAFCFF';
 const BORDER = '#E6ECF5';
 
+// ═══ تقييم كل مؤشر (نص + لون) ═══
+type Grade = { label: string; color: string };
+function rsrpGrade(v?: number): Grade {
+  if (v === undefined) return { label: '—', color: MUTED };
+  if (v >= -85) return { label: 'ممتاز', color: SUCCESS };
+  if (v >= -95) return { label: 'جيد', color: '#22C55E' };
+  if (v >= -105) return { label: 'مقبول', color: WARN };
+  return { label: 'ضعيف', color: DANGER };
+}
+function sinrGrade(v?: number): Grade {
+  if (v === undefined) return { label: '—', color: MUTED };
+  if (v >= 20) return { label: 'ممتاز', color: SUCCESS };
+  if (v >= 13) return { label: 'جيد', color: '#22C55E' };
+  if (v >= 5) return { label: 'مقبول', color: WARN };
+  return { label: 'ضعيف', color: DANGER };
+}
+function rsrqGrade(v?: number): Grade {
+  if (v === undefined) return { label: '—', color: MUTED };
+  if (v >= -10) return { label: 'ممتاز', color: SUCCESS };
+  if (v >= -15) return { label: 'جيد', color: '#22C55E' };
+  if (v >= -20) return { label: 'مقبول', color: WARN };
+  return { label: 'ضعيف', color: DANGER };
+}
+function rssiGrade(v?: number): Grade {
+  if (v === undefined) return { label: '—', color: MUTED };
+  if (v >= -70) return { label: 'ممتاز', color: SUCCESS };
+  if (v >= -80) return { label: 'جيد', color: '#22C55E' };
+  if (v >= -90) return { label: 'مقبول', color: WARN };
+  return { label: 'ضعيف', color: DANGER };
+}
+
+/** بطاقة مؤشر صغيرة */
+function MetricCard({
+  icon, iconBg, iconColor, name, value, unit, grade,
+}: {
+  icon: 'chart' | 'speed' | 'tower' | 'bands';
+  iconBg: string;
+  iconColor: string;
+  name: string;
+  value?: number;
+  unit: string;
+  grade: Grade;
+}) {
+  return (
+    <View style={g.metricCard}>
+      <View style={g.metricHead}>
+        <View style={[g.metricIcon, { backgroundColor: iconBg }]}>
+          <Icon name={icon} size={14} color={iconColor} />
+        </View>
+        <Text style={g.metricName}>{name}</Text>
+      </View>
+      <View style={g.metricValueRow}>
+        <Text style={[g.metricValue, { color: grade.color }]}>
+          {value ?? '—'}
+        </Text>
+        <Text style={g.metricUnit}>{unit}</Text>
+      </View>
+      <View style={[g.gradeChip, { backgroundColor: grade.color + '18' }]}>
+        <Text style={[g.gradeChipTxt, { color: grade.color }]}>{grade.label}</Text>
+      </View>
+    </View>
+  );
+}
+
 // ═══ Colour by need ═══
 const NEED_THEME: Record<Need, { main: string; soft: string; icon: string; headline: string }> = {
   yes: { main: DANGER, soft: '#FEF2F2', icon: '📡', headline: 'ننصح بأنتنا خارجية' },
@@ -36,50 +100,6 @@ const NEED_THEME: Record<Need, { main: string; soft: string; icon: string; headl
   no: { main: SUCCESS, soft: '#ECFDF5', icon: '✅', headline: 'أنتنا الراوتر كافية' },
 };
 
-/** ═══ دائرة مؤشر (SVG) ═══ */
-function Ring({
-  value, color, label, valueText, unit, size = 82,
-}: {
-  value: number;      // 0..1
-  color: string;
-  label: string;
-  valueText: string;
-  unit?: string;
-  size?: number;
-}) {
-  const stroke = 8;
-  const r = (size - stroke) / 2;
-  const cx = size / 2;
-  const cy = size / 2;
-  const C = 2 * Math.PI * r;
-  const v = Math.max(0, Math.min(1, value));
-  const dash = C * v;
-  return (
-    <View style={{ alignItems: 'center', gap: 6 }}>
-      <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-        <Svg width={size} height={size} style={{ position: 'absolute' }}>
-          <Circle cx={cx} cy={cy} r={r} stroke="#E5EDF9" strokeWidth={stroke} fill="none" />
-          <Circle
-            cx={cx} cy={cy} r={r}
-            stroke={color} strokeWidth={stroke}
-            fill="none"
-            strokeDasharray={`${dash} ${C}`}
-            strokeLinecap="round"
-            transform={`rotate(-90 ${cx} ${cy})`}
-          />
-        </Svg>
-        <View style={{ alignItems: 'center' }}>
-          <Text style={g.ringNum}>{Math.round(v * 100)}</Text>
-          <Text style={g.ringPct}>%</Text>
-        </View>
-      </View>
-      <Text style={g.ringLabel} numberOfLines={2}>{label}</Text>
-      <Text style={[g.ringValue, { color }]} numberOfLines={1}>
-        {valueText}{unit ? ` ${unit}` : ''}
-      </Text>
-    </View>
-  );
-}
 
 // ═══ Helpers لحساب النسب ═══
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
@@ -231,38 +251,42 @@ export default function AntennaAdvisor() {
                   <Text style={g.ringsSub}>مؤشرات الإشارة الحالية</Text>
                 </View>
               </View>
-              <View style={g.ringsRow}>
-                <Ring
-                  value={c1.pct}
-                  color={c1.color}
-                  label="مستوى الاستقبال"
-                  valueText={sig.rsrp !== undefined ? String(sig.rsrp) : '—'}
+              <View style={g.grid2x2}>
+                <MetricCard
+                  icon="chart"
+                  iconBg="#DFF9ED"
+                  iconColor="#16A34A"
+                  name="RSRP"
+                  value={sig.rsrp}
                   unit="dBm"
-                  size={78}
+                  grade={rsrpGrade(sig.rsrp)}
                 />
-                <Ring
-                  value={c2.pct}
-                  color={c2.color}
-                  label="الاستقرار"
-                  valueText={sig.rsrq !== undefined ? String(sig.rsrq) : '—'}
+                <MetricCard
+                  icon="speed"
+                  iconBg="#E1F5FF"
+                  iconColor="#0891B2"
+                  name="SINR"
+                  value={sig.sinr}
                   unit="dB"
-                  size={78}
+                  grade={sinrGrade(sig.sinr)}
                 />
-                <Ring
-                  value={c3.pct}
-                  color={c3.color}
-                  label="جودة الاتصال"
-                  valueText={sig.sinr !== undefined ? String(sig.sinr) : '—'}
+                <MetricCard
+                  icon="bands"
+                  iconBg="#FEF3C7"
+                  iconColor="#D97706"
+                  name="RSRQ"
+                  value={sig.rsrq}
                   unit="dB"
-                  size={78}
+                  grade={rsrqGrade(sig.rsrq)}
                 />
-                <Ring
-                  value={c4.pct}
-                  color={c4.color}
-                  label="قوة الإشارة"
-                  valueText={sig.rssi !== undefined ? String(sig.rssi) : '—'}
+                <MetricCard
+                  icon="tower"
+                  iconBg="#EEE8FF"
+                  iconColor="#7C3AED"
+                  name="RSSI"
+                  value={sig.rssi}
                   unit="dBm"
-                  size={78}
+                  grade={rssiGrade(sig.rssi)}
                 />
               </View>
             </View>
@@ -402,6 +426,35 @@ const g = StyleSheet.create({
   },
   otherTxt: { fontSize: 12.5, lineHeight: 19, textAlign: 'right', fontWeight: '700' },
 
+  // Grid 2x2 للمؤشرات
+  grid2x2: {
+    flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10,
+    marginTop: 4,
+  },
+  metricCard: {
+    flexBasis: '47%', flexGrow: 1,
+    backgroundColor: '#FAFCFF', borderRadius: 14,
+    borderWidth: 1, borderColor: BORDER,
+    paddingVertical: 12, paddingHorizontal: 10, gap: 6,
+  },
+  metricHead: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 6,
+  },
+  metricIcon: {
+    width: 26, height: 26, borderRadius: 8,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  metricName: { color: MUTED, fontSize: 11.5, fontWeight: '800' },
+  metricValueRow: {
+    flexDirection: 'row-reverse', alignItems: 'baseline', gap: 3,
+  },
+  metricValue: { fontSize: 24, fontWeight: '900', letterSpacing: -0.5, lineHeight: 28 },
+  metricUnit: { color: MUTED, fontSize: 10.5, fontWeight: '700' },
+  gradeChip: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999,
+  },
+  gradeChipTxt: { fontSize: 10.5, fontWeight: '900' },
   // Rings card
   ringsCard: {
     backgroundColor: CARD, borderRadius: 22, padding: 14, gap: 12,
@@ -414,14 +467,6 @@ const g = StyleSheet.create({
   },
   ringsTitle: { color: TEXT, fontSize: 15, fontWeight: '900', textAlign: 'right' },
   ringsSub: { color: MUTED, fontSize: 11, textAlign: 'right', marginTop: 2 },
-  ringsRow: {
-    flexDirection: 'row-reverse', justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  ringNum: { color: TEXT, fontSize: 20, fontWeight: '900', lineHeight: 22 },
-  ringPct: { color: MUTED, fontSize: 9, fontWeight: '800', marginTop: -1 },
-  ringLabel: { color: MUTED, fontSize: 10, fontWeight: '700', textAlign: 'center', lineHeight: 13 },
-  ringValue: { fontSize: 11.5, fontWeight: '900', textAlign: 'center' },
 
   // Generic card
   card: {
