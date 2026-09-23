@@ -84,7 +84,7 @@ function estimateDistance(rsrp?: number): string {
 
 
 
-// ═══ مؤشر الإشارة (Hero) — بطاقتين جنب بعض ═══
+// ═══ مؤشر الإشارة (Hero) ═══
 function SignalHero({
   rsrp, sinr, baselineRsrp, baselineSinr, rsrpHistory, sinrHistory, rsrpColor, sinrColor,
 }: {
@@ -119,18 +119,22 @@ function SignalHero({
 
   return (
     <View style={h.wrap}>
-      {/* بطاقة RSRP */}
+      {/* بطاقة RSRP — spark على اليمين */}
       <View style={[h.card, { borderColor: rsrpColor + '40' }]}>
         <View style={h.cardHead}>
           <Text style={[h.arrow, { color: trendColorR }]}>{arrowR}</Text>
           <Text style={h.cardLbl}>RSRP</Text>
         </View>
-        <View style={h.valueRow}>
-          <Text style={[h.value, { color: rsrpColor }]}>{rsrp ?? '—'}</Text>
-          <Text style={h.unit}>dBm</Text>
-        </View>
-        <View style={h.sparkWrap}>
-          <MiniSpark values={rsrpHistory} min={-125} max={-60} color={rsrpColor} width={130} height={46} />
+        <View style={h.bodyRow}>
+          {/* قيمة يسار */}
+          <View style={h.valueCol}>
+            <View style={h.valueRow}>
+              <Text style={[h.value, { color: rsrpColor }]}>{rsrp ?? '—'}</Text>
+              <Text style={h.unit}>dBm</Text>
+            </View>
+          </View>
+          {/* spark يمين */}
+          <VSpark values={rsrpHistory} min={-125} max={-60} color={rsrpColor} width={34} height={70} />
         </View>
         {deltaR !== undefined && (
           <Text style={[h.delta, {
@@ -142,18 +146,22 @@ function SignalHero({
         )}
       </View>
 
-      {/* بطاقة SINR */}
+      {/* بطاقة SINR — spark على اليسار */}
       <View style={[h.card, { borderColor: sinrColor + '40' }]}>
         <View style={h.cardHead}>
           <Text style={[h.arrow, { color: trendColorS }]}>{arrowS}</Text>
           <Text style={h.cardLbl}>SINR</Text>
         </View>
-        <View style={h.valueRow}>
-          <Text style={[h.value, { color: sinrColor }]}>{sinr ?? '—'}</Text>
-          <Text style={h.unit}>dB</Text>
-        </View>
-        <View style={h.sparkWrap}>
-          <MiniSpark values={sinrClean.length ? sinrClean : [0]} min={-10} max={30} color={sinrColor} width={130} height={46} />
+        <View style={h.bodyRow}>
+          {/* spark يسار */}
+          <VSpark values={sinrClean.length ? sinrClean : [0]} min={-10} max={30} color={sinrColor} width={34} height={70} />
+          {/* قيمة يمين */}
+          <View style={h.valueCol}>
+            <View style={h.valueRow}>
+              <Text style={[h.value, { color: sinrColor }]}>{sinr ?? '—'}</Text>
+              <Text style={h.unit}>dB</Text>
+            </View>
+          </View>
         </View>
         {deltaS !== undefined && (
           <Text style={[h.delta, {
@@ -168,9 +176,9 @@ function SignalHero({
   );
 }
 
-// ═══ Sparkline أفقي ═══
-function MiniSpark({
-  values, min, max, color, width = 130, height = 42,
+// ═══ Sparkline عمودي متقطع ═══
+function VSpark({
+  values, min, max, color, width = 34, height = 68,
 }: {
   values: number[];
   min: number;
@@ -179,36 +187,40 @@ function MiniSpark({
   width?: number;
   height?: number;
 }) {
-  const pad = { top: 4, bottom: 4, left: 2, right: 2 };
+  const pad = { top: 4, bottom: 4, left: 4, right: 4 };
   const innerW = width - pad.left - pad.right;
   const innerH = height - pad.top - pad.bottom;
-  if (values.length < 2) {
-    return <View style={{ width, height }} />;
-  }
+  if (values.length < 2) return <View style={{ width, height }} />;
   const range = max - min || 1;
-  const stepX = innerW / (values.length - 1);
+  const n = values.length;
+  const stepY = innerH / (n - 1);
+  // Y = الزمن (فوق = الأقدم) | X = القيمة (يسار = ضعيف، يمين = قوي)
   const pts = values.map((v, i) => ({
-    x: pad.left + i * stepX,
-    y: pad.top + innerH - ((Math.max(min, Math.min(max, v)) - min) / range) * innerH,
+    x: pad.left + ((Math.max(min, Math.min(max, v)) - min) / range) * innerW,
+    y: pad.top + i * stepY,
   }));
   const line = pts.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
-  const area = `${line} L ${pts[pts.length - 1].x} ${pad.top + innerH} L ${pts[0].x} ${pad.top + innerH} Z`;
   const last = pts[pts.length - 1];
-  const gradId = 'sp' + color.replace('#', '');
   return (
     <Svg width={width} height={height}>
-      <Defs>
-        <SvgLinearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0%" stopColor={color} stopOpacity="0.22" />
-          <Stop offset="100%" stopColor={color} stopOpacity="0" />
-        </SvgLinearGradient>
-      </Defs>
-      <Path d={area} fill={`url(#${gradId})`} />
-      <Path d={line} stroke={color} strokeWidth={2} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      {/* نقطة البداية */}
+      <Circle cx={pts[0].x} cy={pts[0].y} r={2} fill={color} opacity={0.4} />
+      {/* الخط المتقطع */}
+      <Path
+        d={line}
+        stroke={color}
+        strokeWidth={2}
+        fill="none"
+        strokeLinecap="round"
+        strokeDasharray="3 3"
+      />
+      {/* نقطة النهاية */}
       <Circle cx={last.x} cy={last.y} r={3.5} fill={color} />
+      <Circle cx={last.x} cy={last.y} r={6} fill={color} opacity={0.22} />
     </Svg>
   );
 }
+
 
 
 
@@ -847,21 +859,25 @@ const h = StyleSheet.create({
     flexDirection: 'row-reverse', gap: 10, width: '100%',
   },
   card: {
-    flex: 1, alignItems: 'center', gap: 4,
-    backgroundColor: '#FFFFFF', borderRadius: 16,
-    paddingVertical: 12, paddingHorizontal: 8,
-    borderWidth: 1.5,
+    flex: 1, backgroundColor: '#FFFFFF', borderRadius: 16,
+    paddingVertical: 12, paddingHorizontal: 10,
+    borderWidth: 1.5, gap: 6,
+    alignItems: 'center',
   },
   cardHead: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 5,
   },
   cardLbl: { color: MUTED, fontSize: 12, fontWeight: '800' },
-  arrow: { fontSize: 20, fontWeight: '900' },
-  valueRow: { flexDirection: 'row-reverse', alignItems: 'baseline', gap: 3 },
-  value: { fontSize: 32, fontWeight: '900', letterSpacing: -1, lineHeight: 36 },
-  unit: { color: MUTED, fontSize: 11, fontWeight: '800' },
-  sparkWrap: { marginTop: 4, alignItems: 'center' },
-  delta: { fontSize: 11, fontWeight: '800', marginTop: 2 },
+  arrow: { fontSize: 18, fontWeight: '900' },
+  bodyRow: {
+    flexDirection: 'row-reverse', alignItems: 'center',
+    gap: 6, width: '100%', justifyContent: 'space-between',
+  },
+  valueCol: { flex: 1, alignItems: 'center' },
+  valueRow: { flexDirection: 'row-reverse', alignItems: 'baseline', gap: 2 },
+  value: { fontSize: 26, fontWeight: '900', letterSpacing: -1, lineHeight: 30 },
+  unit: { color: MUTED, fontSize: 10, fontWeight: '800' },
+  delta: { fontSize: 10.5, fontWeight: '800' },
 });
 
 const a = StyleSheet.create({
