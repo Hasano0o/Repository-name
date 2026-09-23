@@ -89,30 +89,7 @@ const SECTIONS: Section[] = [
       },
     ],
   },
-  {
-    key: 'diagnose',
-    icon: '📊',
-    title: 'تشخيص',
-    subtitle: 'اعرف شبكتك وأبراجك',
-    items: [
-      {
-        key: 'towers',
-        icon: 'tower',
-        color: '#12b76a',
-        title: 'الأبراج والنواقل',
-        sub: 'كل الأبراج + PCI + الدمج',
-        path: 'towers',
-      },
-      {
-        key: 'ping',
-        icon: 'game',
-        color: '#ec4899',
-        title: 'قياس البنق',
-        sub: 'مناسب للألعاب والاتصال',
-        path: 'ping',
-      },
-    ],
-  },
+
 ];
 
 export default function Finder() {
@@ -126,7 +103,7 @@ export default function Finder() {
       >
         <View style={s.header}>
           <Text style={s.lead}>وش تبي تسوي؟</Text>
-          <Text style={s.sub}>3 أقسام — كل واحد فيه أدوات محددة</Text>
+          <Text style={s.sub}>أدوات الترددات والدمج</Text>
         </View>
 
         {SECTIONS.map((sec) => (
