@@ -38,7 +38,9 @@ export type EvidenceSource =
   | 'screenshot'
   | 'user'
   | 'fingerprint'
-  | 'static';
+  | 'static'
+  | 'script'
+  | 'field_probe';
 
 /**
  * مستوى الثقة في المعلومة:
@@ -58,6 +60,8 @@ export type EvidenceConfidence =
  * T يجب أن يكون نوعًا قابلًا للتسلسل JSON (string | number | boolean | null
  * | كائن مسطح). لا دوال، لا class instances.
  */
+export type EvidenceVolatility = 'static' | 'slow' | 'dynamic';
+
 export interface Evidence<T> {
   /** القيمة — null فقط عند confidence = UNKNOWN */
   value: T | null;
@@ -65,6 +69,8 @@ export interface Evidence<T> {
   confidence: EvidenceConfidence;
   /** وقت الالتقاط (ms since epoch) */
   at: number;
+  /** تقلب المعلومة — يُحدَّد صراحة من كل collector */
+  volatility?: EvidenceVolatility;
   /** ملاحظة قصيرة اختيارية (بالإنجليزية، بدون قيم حساسة) */
   notes?: string;
 }
@@ -276,6 +282,7 @@ export interface RouterDiagnosticPackage {
   };
   endpoints: DiscoveredEndpoint[];
   capabilities: CapabilityEvidence;
+  capabilitiesV2?: CapabilityEvidenceV2;
   signalFields: FieldEvidence;
   bandFields: FieldEvidence;
   cellFields: FieldEvidence;
@@ -351,4 +358,36 @@ export interface PolicyInput {
   method: string;
   url: string;
   context?: PolicyContext;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PHASE 4A — Capability State (Discovery-only)
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * حالة القدرة كما تستطيع Discovery إثباتها:
+ *   CONFIRMED_READ : endpoint محدد + status 200 + حقول صالحة
+ *   PARTIAL_READ   : endpoint فقط، أو حقول فقط
+ *   UNKNOWN        : لا دليل
+ *
+ * Discovery لا يستطيع إثبات الكتابة/التحكم — تبقى UNKNOWN.
+ */
+export type CapabilityState = 'CONFIRMED_READ' | 'PARTIAL_READ' | 'UNKNOWN';
+
+export interface CapabilityEvidenceV2 {
+  signal: Evidence<CapabilityState>;
+  lte: Evidence<CapabilityState>;
+  nr: Evidence<CapabilityState>;
+  bands: Evidence<CapabilityState>;
+  cells: Evidence<CapabilityState>;
+  neighborCells: Evidence<CapabilityState>;
+  carrierAggregation: Evidence<CapabilityState>;
+  deviceInfo: Evidence<CapabilityState>;
+  traffic: Evidence<CapabilityState>;
+  usage: Evidence<CapabilityState>;
+  sms: Evidence<CapabilityState>;
+  bandLock: Evidence<CapabilityState>;
+  cellLock: Evidence<CapabilityState>;
+  reboot: Evidence<CapabilityState>;
+  block: Evidence<CapabilityState>;
 }
