@@ -58,6 +58,8 @@ export interface RouterMonState {
   online?: boolean;
   usageBucket?: number; // أعلى عتبة استهلاك تم التنبيه عنها (0/70/90/100)
   at?: number;
+  /** آخر مرة فشل الدخول للراوتر — لتجنّب محاولات متكررة في الخلفية */
+  authFailedAt?: number;
 }
 type StateMap = Record<string, RouterMonState>;
 

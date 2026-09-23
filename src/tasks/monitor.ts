@@ -30,7 +30,14 @@ export async function runMonitorCheck(): Promise<boolean> {
   const a = settings.alerts;
   let fired = false;
 
+  const AUTH_FAIL_PATTERN = /(كلمة المرور|جلسة عالقة|جلسة أخرى|محاولات كثيرة|تعذّر تسجيل الدخول|108006|108007|108001|108002)/;
+  const AUTH_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 ساعات
   for (const r of routers) {
+    // ═══ تخطى الراوتر لو فشل الدخول آخر 6 ساعات — يمنع قفل الحساب ═══
+    const prev0 = states[r.id] ?? {};
+    if (prev0.authFailedAt && Date.now() - prev0.authFailedAt < AUTH_COOLDOWN_MS) {
+      continue;
+    }
     try {
       const [sig, net, usage, plan] = (await withSession(r, async d => Promise.all([
         d.getSignal ? d.getSignal().catch(() => null) : Promise.resolve(null),

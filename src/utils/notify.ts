@@ -49,7 +49,7 @@ export async function hasNotifyPermission(): Promise<boolean> {
 }
 
 /** يرسل إشعاراً محلياً فوراً */
-export async function notify(title: string, body: string, routerId?: string) {
+export async function notify(title: string, body: string, _routerId?: string) {
   try {
     await ensureAndroidChannel();
     await Notifications.scheduleNotificationAsync({
@@ -57,7 +57,8 @@ export async function notify(title: string, body: string, routerId?: string) {
         title,
         body,
         sound: 'default',
-        ...(routerId ? { data: { routerId } } : {}),
+        // لا نضع routerId في data — يظهر في iOS Notification Center
+        // و Android Drawer، ولا حاجة له في الإشعار نفسه.
       },
       trigger: null,
     });
