@@ -121,7 +121,7 @@ const s = StyleSheet.create({
   grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: S.sm },
   tile: {
     flexBasis: '30%', flexGrow: 1, backgroundColor: C.card, borderRadius: R.md,
-    borderWidth: 1, borderColor: C.line, paddingVertical: 11, paddingHorizontal: 7,
+    borderWidth: 1.5, borderColor: '#DCE6F5', paddingVertical: 11, paddingHorizontal: 7,
     alignItems: 'center', gap: 3,
   },
   tileIcon: { width: 32, height: 32, borderRadius: R.sm, alignItems: 'center', justifyContent: 'center', marginBottom: 3 },

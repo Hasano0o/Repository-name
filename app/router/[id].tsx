@@ -787,10 +787,10 @@ const s = StyleSheet.create({
   moreTile: {
     flexBasis: '31%', flexGrow: 1,
     alignItems: 'center', gap: 6,
-    backgroundColor: C.rowBg,
+    backgroundColor: C.card,
     borderRadius: 14,
     paddingVertical: 12, paddingHorizontal: 6,
-    borderWidth: 1, borderColor: C.cardBorder,
+    borderWidth: 1.5, borderColor: '#DCE6F5',
   },
   moreIcon: {
     width: 36, height: 36, borderRadius: 12,
