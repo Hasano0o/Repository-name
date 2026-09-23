@@ -46,14 +46,6 @@ const SECTIONS: Section[] = [
         tag: 'موصى به',
         path: 'optimize',
       },
-      {
-        key: 'anchor',
-        icon: 'antenna',
-        color: '#9333ea',
-        title: 'مرساة 5G',
-        sub: 'أي تردد 4G يفتح 5G في منطقتك',
-        path: 'anchor',
-      },
     ],
   },
   {

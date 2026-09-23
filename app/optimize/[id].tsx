@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native';
-import { useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { safeApply, trialMessage } from '../../src/utils/safeLock';
@@ -277,9 +277,17 @@ export default function OptimizeScreen() {
             {!!status && <Text style={s.status}>{status}</Text>}
           </>
         ) : (
-          <Pressable style={[s.btn, !canRun && s.btnOff]} disabled={!canRun} onPress={run}>
-            <Text style={s.btnTxt}>ابدأ التحسين</Text>
-          </Pressable>
+          <>
+            <Pressable style={[s.btn, !canRun && s.btnOff]} disabled={!canRun} onPress={run}>
+              <Text style={s.btnTxt}>ابدأ التحسين</Text>
+            </Pressable>
+            <Pressable
+              style={[s.btn, { backgroundColor: '#9333ea', marginTop: 8 }]}
+              onPress={() => router.push(`/anchor/${id}` as Href)}
+            >
+              <Text style={s.btnTxt}>🔍 مرساة 5G — أي تردد يفتح 5G؟</Text>
+            </Pressable>
+          </>
         )}
       </GlassCard>
 
