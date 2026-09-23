@@ -134,7 +134,7 @@ function SignalHero({
             </View>
           </View>
           {/* spark يمين */}
-          <VSpark values={rsrpHistory} min={-125} max={-60} color={rsrpColor} width={34} height={70} />
+          <VSpark value={rsrp} min={-120} max={-70} color={rsrpColor} count={12} />
         </View>
         {deltaR !== undefined && (
           <Text style={[h.delta, {
@@ -154,7 +154,7 @@ function SignalHero({
         </View>
         <View style={h.bodyRow}>
           {/* spark يسار */}
-          <VSpark values={sinrClean.length ? sinrClean : [0]} min={-10} max={30} color={sinrColor} width={34} height={70} />
+          <VSpark value={sinr} min={-10} max={30} color={sinrColor} count={12} />
           {/* قيمة يمين */}
           <View style={h.valueCol}>
             <View style={h.valueRow}>
@@ -176,50 +176,53 @@ function SignalHero({
   );
 }
 
-// ═══ Sparkline عمودي متقطع ═══
+// ═══ شريط قوة عمودي (12 نقطة) ═══
 function VSpark({
-  values, min, max, color, width = 34, height = 68,
+  value, min, max, color, count = 12,
 }: {
-  values: number[];
+  value?: number;
   min: number;
   max: number;
   color: string;
-  width?: number;
-  height?: number;
+  count?: number;
 }) {
-  const pad = { top: 4, bottom: 4, left: 4, right: 4 };
-  const innerW = width - pad.left - pad.right;
-  const innerH = height - pad.top - pad.bottom;
-  if (values.length < 2) return <View style={{ width, height }} />;
-  const range = max - min || 1;
-  const n = values.length;
-  const stepY = innerH / (n - 1);
-  // Y = الزمن (فوق = الأقدم) | X = القيمة (يسار = ضعيف، يمين = قوي)
-  const pts = values.map((v, i) => ({
-    x: pad.left + ((Math.max(min, Math.min(max, v)) - min) / range) * innerW,
-    y: pad.top + i * stepY,
-  }));
-  const line = pts.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
-  const last = pts[pts.length - 1];
+  const strength = value !== undefined
+    ? Math.max(0, Math.min(1, (value - min) / (max - min)))
+    : 0;
+  const lit = Math.round(strength * count);
   return (
-    <Svg width={width} height={height}>
-      {/* نقطة البداية */}
-      <Circle cx={pts[0].x} cy={pts[0].y} r={2} fill={color} opacity={0.4} />
-      {/* الخط المتقطع */}
-      <Path
-        d={line}
-        stroke={color}
-        strokeWidth={2}
-        fill="none"
-        strokeLinecap="round"
-        strokeDasharray="3 3"
-      />
-      {/* نقطة النهاية */}
-      <Circle cx={last.x} cy={last.y} r={3.5} fill={color} />
-      <Circle cx={last.x} cy={last.y} r={6} fill={color} opacity={0.22} />
-    </Svg>
+    <View style={dot.wrap}>
+      {Array.from({ length: count }, (_, i) => {
+        // من الأعلى للأسفل: الأعلى = أقوى
+        const idx = count - i - 1;
+        const on = idx < lit;
+        const size = on ? 5 : 4;
+        return (
+          <View
+            key={i}
+            style={[
+              dot.dot,
+              {
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+                backgroundColor: on ? color : '#E0E8F3',
+              },
+            ]}
+          />
+        );
+      })}
+    </View>
   );
 }
+
+const dot = StyleSheet.create({
+  wrap: {
+    alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 2, gap: 2,
+  },
+  dot: {},
+});
 
 
 
