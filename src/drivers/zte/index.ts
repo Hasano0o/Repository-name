@@ -133,11 +133,20 @@ export class ZteDriver implements RouterDriver {
     }
   }
 
-  private async getRaw(field: string): Promise<any> {
+  private async getRaw(field: string): Promise<Record<string, unknown> | null> {
     const url = this.base() + '/goform/goform_get_cmd_process?isTest=false&cmd=' +
       encodeURIComponent(field) + '&_=' + Date.now();
     const res = await http(url, { headers: this.headers() });
-    try { return JSON.parse(await res.text()); } catch { return null; }
+    try {
+      const parsed: unknown = JSON.parse(await res.text());
+      // نتحقق أنه كائن فعلاً — الراوتر قد يرسل مصفوفة أو قيمة واحدة
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -488,14 +497,28 @@ export class ZteDriver implements RouterDriver {
   async getDevices(): Promise<ConnectedDevice[]> {
     await this.ensure();
     const raw = await this.getRaw('station_list');
-    const list = raw && (raw.station_list ?? raw.lan_station_list);
+    if (!raw) return [];
+    const list: unknown = raw.station_list ?? raw.lan_station_list;
     if (!Array.isArray(list)) return [];
-    return list.map((d: any) => ({
-      mac: String(d.mac_addr || d.mac || ''),
-      ip: d.ip_addr || d.ip || undefined,
-      name: d.hostname || d.host_name || undefined,
-      blocked: false,
-    })).filter(d => d.mac);
+    const out: ConnectedDevice[] = [];
+    for (const item of list) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+      const d = item as Record<string, unknown>;
+      const macRaw = d.mac_addr ?? d.mac;
+      if (typeof macRaw !== 'string' || !macRaw) continue;
+      const mac = macRaw.toUpperCase();
+      // تحقق بسيط من شكل MAC — يمنع عرض قيم غريبة
+      if (!/^([0-9A-F]{2}[:-]){5}[0-9A-F]{2}$/.test(mac)) continue;
+      const ipRaw = d.ip_addr ?? d.ip;
+      const nameRaw = d.hostname ?? d.host_name;
+      out.push({
+        mac,
+        ip: typeof ipRaw === 'string' ? ipRaw : undefined,
+        name: typeof nameRaw === 'string' ? nameRaw : undefined,
+        blocked: false,
+      });
+    }
+    return out;
   }
 
   async getCells(): Promise<CellTower[]> {
