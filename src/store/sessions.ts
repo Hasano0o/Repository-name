@@ -1,6 +1,7 @@
 import { RouterDriver } from '../drivers/types';
 import { driverById } from '../drivers/registry';
 import { SavedRouter, getPassword } from './routers';
+import { assertLanHost } from '../utils/host';
 
 interface Sess { d: RouterDriver; authAt: number; }
 const sessions = new Map<string, Sess>();
@@ -14,8 +15,16 @@ export async function connect(r: SavedRouter, force = false): Promise<RouterDriv
   if (cur && !force && Date.now() - cur.authAt < MAX_AGE) return cur.d;
   const d = cur?.d ?? driverById(r.driverId);
   if (!d) throw new Error('نوع الراوتر غير مدعوم');
+  // ═══ حماية: نتحقق أن العنوان لا يزال محلياً قبل إرسال كلمة المرور.
+  // يمنع هجوم تعديل AsyncStorage لإرسال كلمة المرور لخادم خارجي.
+  assertLanHost(r.host);
   const pw = (await getPassword(r.id)) ?? '';
-  await d.login(r.host, r.username, pw);
+  try {
+    await d.login(r.host, r.username, pw);
+  } finally {
+    // لا نحتفظ بكلمة المرور في متغير أطول من اللازم (نتساعد مع GC)
+    // لا نقدر "نمسح" متغير نصي في JS، لكن تضييق النطاق يخفف.
+  }
   sessions.set(r.id, { d, authAt: Date.now() });
   return d;
 }

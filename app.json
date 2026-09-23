@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
+    "scheme": "bandly",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
@@ -17,7 +17,12 @@
           "processing"
         ],
         "NSAppTransportSecurity": {
-          "NSAllowsLocalNetworking": true
+          "NSAllowsLocalNetworking": true,
+          "NSExceptionDomains": {
+            "local": {
+              "NSExceptionAllowsInsecureHTTPLoads": true
+            }
+          }
         }
       }
     },
@@ -30,7 +35,14 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.hasan.bandly",
-      "softwareKeyboardLayoutMode": "pan"
+      "softwareKeyboardLayoutMode": "pan",
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_WIFI_STATE",
+        "android.permission.POST_NOTIFICATIONS"
+      ],
+      "allowBackup": false
     },
     "web": {
       "bundler": "metro",
@@ -54,11 +66,12 @@
         "expo-build-properties",
         {
           "android": {
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": false
           }
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "./plugins/withNetworkSecurity"
     ],
     "experiments": {
       "typedRoutes": true
