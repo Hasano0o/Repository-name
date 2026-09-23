@@ -301,10 +301,54 @@ export type PolicyDecision =
   | 'DENY'
   | 'REQUIRE_USER_CONFIRMATION';
 
+/**
+ * رمز داخلي منظّم لقرار السياسة — للتسجيل والاختبار.
+ * لا تُستخدم رسائل عربية داخل المنطق.
+ */
+export type PolicyCode =
+  | 'SAFE_READ'
+  | 'SAFE_DISCOVERY_PAGE'
+  | 'NON_GET_METHOD'
+  | 'UNSAFE_HOST'
+  | 'INVALID_URL'
+  | 'PATH_TRAVERSAL'
+  | 'DANGEROUS_PATH'
+  | 'DANGEROUS_QUERY'
+  | 'WRITE_GOFORM'
+  | 'UNKNOWN_ZTE_CMD'
+  | 'UNKNOWN_ENDPOINT'
+  | 'AUTH_CONTEXT'
+  | 'AUTH_ENDPOINT';
+
 export interface PolicyResult {
   decision: PolicyDecision;
-  /** سبب القرار — للتسجيل والعرض */
+  /** رمز داخلي منظّم */
+  code: PolicyCode;
+  /** سبب إنجليزي تقني — لا عربي */
   reason: string;
-  /** نمط الخطر إن وُجد */
-  riskPattern?: string;
+  /** اسم القاعدة التي طُبِّقت (اختياري، للتشخيص) */
+  rule?: string;
+}
+
+/**
+ * سياق اختياري للطلب — يُوسَّع لاحقًا عند الحاجة.
+ * PHASE 2 لا يستخدمه إلا لتمييز طلبات المصادقة.
+ */
+export interface PolicyContext {
+  /** هل يحمل الطلب Authorization/Cookie/Credentials؟ */
+  hasAuth?: boolean;
+  /** هل هذا الطلب نتيجة redirect؟ */
+  afterRedirect?: boolean;
+  /** العنوان الأصلي قبل redirect (للمقارنة) */
+  originalUrl?: string;
+}
+
+/**
+ * مدخل السياسة — الحد الأدنى المطلوب.
+ * method + url + سياق اختياري.
+ */
+export interface PolicyInput {
+  method: string;
+  url: string;
+  context?: PolicyContext;
 }
