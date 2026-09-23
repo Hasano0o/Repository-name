@@ -102,19 +102,6 @@ function Acc({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function MenuItem({ icon, color, title, onPress }: {
-  icon: IconName; color: string; title: string; onPress: () => void;
-}) {
-  return (
-    <Pressable style={s.menuItem} onPress={onPress}>
-      <View style={[s.menuIcon, { backgroundColor: color + '18' }]}>
-        <Icon name={icon} size={18} color={color} />
-      </View>
-      <Text style={s.menuText}>{title}</Text>
-      <Text style={s.menuArrow}>‹</Text>
-    </Pressable>
-  );
-}
 
 export default function RouterDashboard() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -543,26 +530,55 @@ export default function RouterDashboard() {
         )}
 
         {!loading && info && (
-          <View style={s.menu}>
-            <Text style={s.menuHeader}>المزيد</Text>
-            {feat.sms && (
-              <MenuItem icon="sms" color="#16a34a" title="الرسائل القصيرة"
-                onPress={() => router.push(`/sms/${info.id}` as Href)} />
-            )}
-            {feat.network && (
-              <MenuItem icon="settings" color="#0891b2" title="إعدادات الشبكة (APN + DNS)"
-                onPress={() => router.push(`/network/${info.id}` as Href)} />
-            )}
-            <MenuItem icon="folder" color="#a16207" title="ملفات التعريف"
-              onPress={() => router.push(`/profiles/${info.id}` as Href)} />
-            <MenuItem icon="report" color="#64748b" title="التقرير"
-              onPress={() => router.push(`/report/${info.id}` as Href)} />
-            <MenuItem icon="bell" color="#f43f5e" title="المراقبة"
-              onPress={() => router.push('/monitor' as Href)} />
-            {feat.reboot && (
-              <MenuItem icon="power" color="#e5484d" title="إعادة التشغيل"
-                onPress={onReboot} />
-            )}
+          <View style={s.moreCard}>
+            <View style={s.moreHead}>
+              <Icon name="layers" size={16} color={C.sub} />
+              <Text style={s.moreTitle}>المزيد</Text>
+            </View>
+            <View style={s.moreGrid}>
+              {feat.sms && (
+                <Pressable style={s.moreTile} onPress={() => router.push(`/sms/${info.id}` as Href)}>
+                  <View style={[s.moreIcon, { backgroundColor: '#16a34a18' }]}>
+                    <Icon name="sms" size={18} color="#16a34a" />
+                  </View>
+                  <Text style={s.moreLbl}>الرسائل</Text>
+                </Pressable>
+              )}
+              {feat.network && (
+                <Pressable style={s.moreTile} onPress={() => router.push(`/network/${info.id}` as Href)}>
+                  <View style={[s.moreIcon, { backgroundColor: '#0891b218' }]}>
+                    <Icon name="settings" size={18} color="#0891b2" />
+                  </View>
+                  <Text style={s.moreLbl}>الشبكة</Text>
+                </Pressable>
+              )}
+              <Pressable style={s.moreTile} onPress={() => router.push(`/profiles/${info.id}` as Href)}>
+                <View style={[s.moreIcon, { backgroundColor: '#a1620718' }]}>
+                  <Icon name="folder" size={18} color="#a16207" />
+                </View>
+                <Text style={s.moreLbl}>الملفات</Text>
+              </Pressable>
+              <Pressable style={s.moreTile} onPress={() => router.push(`/report/${info.id}` as Href)}>
+                <View style={[s.moreIcon, { backgroundColor: '#64748b18' }]}>
+                  <Icon name="report" size={18} color="#64748b" />
+                </View>
+                <Text style={s.moreLbl}>التقرير</Text>
+              </Pressable>
+              <Pressable style={s.moreTile} onPress={() => router.push('/monitor' as Href)}>
+                <View style={[s.moreIcon, { backgroundColor: '#f43f5e18' }]}>
+                  <Icon name="bell" size={18} color="#f43f5e" />
+                </View>
+                <Text style={s.moreLbl}>المراقبة</Text>
+              </Pressable>
+              {feat.reboot && (
+                <Pressable style={s.moreTile} onPress={onReboot}>
+                  <View style={[s.moreIcon, { backgroundColor: '#e5484d18' }]}>
+                    <Icon name="power" size={18} color="#e5484d" />
+                  </View>
+                  <Text style={s.moreLbl}>إعادة التشغيل</Text>
+                </Pressable>
+              )}
+            </View>
           </View>
         )}
 
@@ -755,25 +771,32 @@ const s = StyleSheet.create({
     marginTop: 6,
   },
   editBtnText: { color: C.blue, fontWeight: '800', fontSize: 14 },
-  menu: {
-    backgroundColor: C.card, borderRadius: 20, paddingVertical: 6, paddingHorizontal: 12,
-    borderWidth: 1, borderColor: C.cardBorder, gap: 0,
+  moreCard: {
+    backgroundColor: C.card, borderRadius: 20, padding: 14,
+    borderWidth: 1, borderColor: C.cardBorder, gap: 10,
   },
-  menuHeader: {
-    color: C.muted, fontSize: 12, fontWeight: '800', textAlign: 'right',
-    paddingVertical: 10, paddingHorizontal: 4,
+  moreHead: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 8,
+    paddingBottom: 6,
+    borderBottomWidth: 1, borderBottomColor: C.line,
   },
-  menuItem: {
-    flexDirection: 'row-reverse', alignItems: 'center', gap: 12,
-    paddingVertical: 12, paddingHorizontal: 4,
-    borderTopWidth: 1, borderTopColor: C.line,
+  moreTitle: { color: C.sub, fontSize: 13, fontWeight: '800' },
+  moreGrid: {
+    flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8,
   },
-  menuIcon: {
-    width: 38, height: 38, borderRadius: 12,
+  moreTile: {
+    flexBasis: '31%', flexGrow: 1,
+    alignItems: 'center', gap: 6,
+    backgroundColor: C.rowBg,
+    borderRadius: 14,
+    paddingVertical: 12, paddingHorizontal: 6,
+    borderWidth: 1, borderColor: C.cardBorder,
+  },
+  moreIcon: {
+    width: 36, height: 36, borderRadius: 12,
     alignItems: 'center', justifyContent: 'center',
   },
-  menuText: { flex: 1, color: C.text, fontSize: 14, fontWeight: '700', textAlign: 'right' },
-  menuArrow: { color: '#94A3B8', fontSize: 22, fontWeight: '300' },
+  moreLbl: { color: C.text, fontSize: 11, fontWeight: '800', textAlign: 'center' },
   deleteText: { color: C.red, textAlign: 'center', paddingVertical: 10, opacity: 0.85 },
   fabs: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   fab: {
