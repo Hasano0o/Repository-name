@@ -162,7 +162,7 @@ function luhnValid(digits: string): boolean {
   return sum % 10 === 0;
 }
 
-function isSensitiveValue(value: string): boolean {
+export function isSensitiveValue(value: string): boolean {
   if (/^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$/.test(value)) return true;
   if (/^\d{15}$/.test(value) && luhnValid(value)) return true;
   if (/^89\d{16,20}$/.test(value) && luhnValid(value)) return true;
@@ -183,7 +183,7 @@ function stripUnits(value: string, canonical: string): string | null {
   return m[1];
 }
 
-function validateValue(canonical: string, value: string): boolean {
+export function validateValue(canonical: string, value: string): boolean {
   switch (canonical) {
     case 'rsrp':
     case 'rsrq':
