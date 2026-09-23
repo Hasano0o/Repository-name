@@ -2,16 +2,15 @@ import { useCallback, useRef, useState } from 'react';
 import {
   View, Text, Pressable, FlatList, ActivityIndicator, RefreshControl, StyleSheet,
 } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
 import { router, useFocusEffect, Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SavedRouter, listRouters } from '../src/store/routers';
+import { SavedRouter, listRouters, getPassword } from '../src/store/routers';
 import { withSession } from '../src/store/sessions';
 import { Signal } from '../src/drivers/types';
 import { C, R, S, T } from '../src/ui/theme';
 import { Icon } from '../src/ui/Icon';
 import { SkeletonRouterCard, EmptyState } from '../src/ui/States';
-import { LEVEL_COLOR, LEVEL_LABEL, overallLevel, parseBands, signalScore } from '../src/utils/signal';
+import { LEVEL_COLOR, LEVEL_LABEL, overallLevel, parseBands } from '../src/utils/signal';
 import { fmtTime } from '../src/utils/format';
 
 interface Status {
@@ -21,39 +20,13 @@ interface Status {
   operator?: string;
   at?: number;
   error?: string;
-  prevRsrp?: number;
+  hasPw?: boolean;
 }
 
 function gradeLevel(level: string): { label: string; color: string } {
   const lvl = LEVEL_LABEL[level as keyof typeof LEVEL_LABEL] ?? '—';
   const col = LEVEL_COLOR[level as keyof typeof LEVEL_COLOR] ?? C.muted;
   return { label: lvl, color: col };
-}
-
-function Gauge({ score, color, size = 56 }: { score: number; color: string; size?: number }) {
-  const stroke = 5;
-  const r = (size - stroke) / 2;
-  const cx = size / 2;
-  const cy = size / 2;
-  const CC = 2 * Math.PI * r;
-  const v = Math.max(0, Math.min(1, score));
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-        <Circle cx={cx} cy={cy} r={r} stroke={C.track} strokeWidth={stroke} fill="none" />
-        <Circle
-          cx={cx} cy={cy} r={r}
-          stroke={color} strokeWidth={stroke} fill="none"
-          strokeDasharray={`${CC * v} ${CC}`}
-          strokeLinecap="round"
-          transform={`rotate(-90 ${cx} ${cy})`}
-        />
-      </Svg>
-      <Text style={{ color, fontSize: 13, fontWeight: '900', letterSpacing: -0.3 }}>
-        {Math.round(v * 100)}
-      </Text>
-    </View>
-  );
 }
 
 export default function RoutersList() {
@@ -66,31 +39,30 @@ export default function RoutersList() {
 
   const probe = useCallback(async (r: SavedRouter) => {
     setStatus(s => ({ ...s, [r.id]: { ...(s[r.id] ?? {}), loading: true } }));
+    let hasPw = false;
+    try { hasPw = !!(await getPassword(r.id)); } catch {}
     try {
       const [sig, net] = await withSession(r, async d => Promise.all([
         d.getSignal ? d.getSignal().catch(() => null) : Promise.resolve(null),
         d.getNetworkInfo ? d.getNetworkInfo().catch(() => null) : Promise.resolve(null),
       ]));
       if (!alive.current) return;
-      setStatus(s => {
-        const prev = s[r.id]?.signal?.rsrp;
-        return {
-          ...s,
-          [r.id]: {
-            loading: false,
-            signal: sig,
-            online: net?.connected ?? true,
-            operator: net?.operator,
-            at: Date.now(),
-            prevRsrp: prev,
-          },
-        };
-      });
+      setStatus(s => ({
+        ...s,
+        [r.id]: {
+          loading: false,
+          signal: sig,
+          online: net?.connected ?? true,
+          operator: net?.operator,
+          at: Date.now(),
+          hasPw,
+        },
+      }));
     } catch (e: any) {
       if (!alive.current) return;
       setStatus(s => ({
         ...s,
-        [r.id]: { loading: false, error: e?.message ?? 'تعذر الاتصال', at: Date.now() },
+        [r.id]: { loading: false, error: e?.message ?? 'تعذر الاتصال', at: Date.now(), hasPw },
       }));
     }
   }, []);
@@ -121,11 +93,12 @@ export default function RoutersList() {
 
   const add = () => router.push('/add-router' as Href);
   const explore = () => router.push('/probe' as Href);
+  const open = (id: string) => router.push(`/router/${id}` as Href);
+  const edit = (id: string) => router.push(`/add-router?id=${id}` as Href);
 
   if (!loaded) {
     return (
       <View style={[s.list, { paddingTop: S.md }]}>
-        <SkeletonRouterCard />
         <SkeletonRouterCard />
         <SkeletonRouterCard />
       </View>
@@ -149,18 +122,12 @@ export default function RoutersList() {
     );
   }
 
-  const onlineCount = items.filter(it => {
-    const st = status[it.id];
-    if (!st || st.error) return false;
-    return st.online !== false;
-  }).length;
-
   return (
     <View style={{ flex: 1 }}>
       <FlatList
         data={items}
         keyExtractor={i => i.id}
-        contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 90 }]}
         ListHeaderComponent={
           <View style={s.header}>
             <View style={{ flex: 1 }}>
@@ -168,9 +135,15 @@ export default function RoutersList() {
               <Text style={s.headerSub}>
                 {items.length === 1
                   ? 'راوتر واحد'
-                  : `${items.length} راوترات${onlineCount > 0 ? ` · ${onlineCount} متصل` : ''}`}
+                  : `${items.length} راوترات`}
               </Text>
             </View>
+            <Pressable style={s.headerExplore} onPress={explore}>
+              <Text style={s.headerExploreTxt}>🧭</Text>
+            </Pressable>
+            <Pressable style={s.headerAdd} onPress={add}>
+              <Text style={s.headerAddTxt}>+ إضافة</Text>
+            </Pressable>
           </View>
         }
         refreshControl={
@@ -182,274 +155,226 @@ export default function RoutersList() {
           />
         }
         ListFooterComponent={
-          <Pressable style={s.link} onPress={explore}>
-            <Text style={s.linkTxt}>🧭 استكشاف جهاز غير مدعوم</Text>
+          <Pressable style={s.footerExplore} onPress={explore}>
+            <Text style={s.footerExploreTxt}>🧭 استكشاف جهاز غير مدعوم</Text>
           </Pressable>
         }
         renderItem={({ item }) => {
           const st = status[item.id];
           const sig = st?.signal;
           const level = overallLevel(sig);
-          const g = gradeLevel(level);
-          const color = g.color;
-          const lteBands = parseBands(sig?.band);
-          const nrBandsRaw = sig?.nrBand ? [`n${String(sig.nrBand).replace(/^n/i, '')}`] : [];
-          const uniq = [...new Set([...lteBands, ...nrBandsRaw])].slice(0, 4);
+          const color = gradeLevel(level).color;
           const down = st?.error ? false : st?.online ?? undefined;
-          const score = sig ? signalScore({ rsrp: sig.rsrp, sinr: sig.sinr }) : 0;
-          const delta = sig?.rsrp !== undefined && st?.prevRsrp !== undefined
-            ? sig.rsrp - st.prevRsrp
-            : undefined;
+          const bandList = parseBands(sig?.band).slice(0, 1);
+          const hasPw = st?.hasPw !== false;
 
           return (
-            <Pressable
-              style={({ pressed }) => [
-                s.card,
-                pressed && { opacity: 0.85, transform: [{ scale: 0.995 }] },
-              ]}
-              onPress={() => router.push(`/router/${item.id}` as Href)}
-            >
-              <View style={[s.accent, { backgroundColor: st?.error ? C.red : color }]} />
-
-              <View style={s.head}>
-                <View style={[s.iconWrap, { backgroundColor: st?.error ? C.redSoft : color + '15' }]}>
-                  <Icon name="tower" size={22} color={st?.error ? C.red : color} />
+            <View style={s.card}>
+              {/* ─── السطر العلوي ─── */}
+              <Pressable onPress={() => open(item.id)} style={s.row}>
+                <View style={[s.icon, { backgroundColor: color + '18' }]}>
+                  <Icon name="tower" size={18} color={color} />
                 </View>
                 <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                  <Text style={s.name} numberOfLines={1}>{item.name}</Text>
-                  <Text style={s.sub} numberOfLines={1}>
-                    {st?.operator || item.driverName}
-                    {sig?.network ? '  ·  ' + sig.network : ''}
+                  <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6 }}>
+                    {st?.loading && <ActivityIndicator size="small" color={C.muted} />}
+                    {!st?.loading && (
+                      <View
+                        style={[
+                          s.dot,
+                          { backgroundColor: down === false ? C.red : down ? C.green : C.muted },
+                        ]}
+                      />
+                    )}
+                    <Text style={s.name} numberOfLines={1}>{item.name}</Text>
+                  </View>
+                  <Text style={s.subline} numberOfLines={1}>
+                    <Text style={s.ip}>{item.host}</Text>
+                    <Text style={s.dotSep}>  ·  </Text>
+                    <Text style={s.user}>👤 {item.username}</Text>
                   </Text>
                 </View>
-                {st?.loading ? (
-                  <ActivityIndicator color={C.muted} size="small" />
+                <Icon name="chevron" size={16} color={C.muted} />
+              </Pressable>
+
+              {/* ─── سطر كلمة المرور + الإشارة ─── */}
+              <View style={s.metaRow}>
+                {hasPw ? (
+                  <View style={s.pwChip}>
+                    <Text style={s.pwChipTxt}>🔒 ••••••••</Text>
+                  </View>
                 ) : (
-                  <View
-                    style={[
-                      s.dot,
-                      { backgroundColor: down === false ? C.red : down ? C.green : C.muted },
-                    ]}
-                  />
+                  <View style={[s.pwChip, { backgroundColor: C.redSoft }]}>
+                    <Text style={[s.pwChipTxt, { color: C.red }]}>⚠ بلا كلمة مرور</Text>
+                  </View>
+                )}
+                {sig && (
+                  <View style={s.sigChip}>
+                    <Text style={[s.sigChipTxt, { color }]}>
+                      {sig.rsrp ?? '—'} dBm
+                    </Text>
+                    {bandList[0] && (
+                      <>
+                        <Text style={s.dotSep}>  ·  </Text>
+                        <Text style={s.bandTxt}>{bandList[0]}</Text>
+                      </>
+                    )}
+                  </View>
                 )}
               </View>
 
-              {st?.error ? (
-                <View style={s.errBox}>
-                  <Text style={s.errTxt} numberOfLines={2}>{st.error}</Text>
-                  <Pressable hitSlop={8} onPress={() => probe(item)} style={s.retryBtn}>
-                    <Text style={s.retryTxt}>إعادة</Text>
-                  </Pressable>
-                </View>
-              ) : sig ? (
-                <>
-                  <View style={s.mainRow}>
-                    <View style={s.gaugeWrap}>
-                      <Gauge score={score} color={color} size={56} />
-                    </View>
-                    <View style={{ flex: 1, alignItems: 'flex-end', gap: 2 }}>
-                      <View style={{ flexDirection: 'row-reverse', alignItems: 'baseline', gap: 4 }}>
-                        <Text style={[s.rsrpBig, { color }]}>{sig.rsrp ?? '—'}</Text>
-                        <Text style={s.rsrpUnit}>dBm</Text>
-                      </View>
-                      <Text style={s.rsrpLabel}>RSRP</Text>
-                      {delta !== undefined && Math.abs(delta) >= 1 && (
-                        <Text style={[s.deltaTxt, { color: delta > 0 ? C.green : C.red }]}>
-                          {delta > 0 ? `↑ +${Math.round(delta)}` : `↓ ${Math.round(delta)}`} dB
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-
-                  <View style={s.statsRow}>
-                    <View style={s.statCell}>
-                      <Text style={s.statVal}>{sig.sinr ?? '—'}</Text>
-                      <Text style={s.statLbl}>SINR</Text>
-                    </View>
-                    <View style={s.statSep} />
-                    <View style={s.statCell}>
-                      <Text style={s.statVal}>{sig.rsrq ?? '—'}</Text>
-                      <Text style={s.statLbl}>RSRQ</Text>
-                    </View>
-                    <View style={s.statSep} />
-                    <View style={s.statCell}>
-                      <Text style={[s.statVal, { color }]}>{g.label}</Text>
-                      <Text style={s.statLbl}>التقييم</Text>
-                    </View>
-                  </View>
-
-                  {uniq.length > 0 && (
-                    <View style={s.bandRow}>
-                      {uniq.map(b => {
-                        const isNr = b.startsWith('n');
-                        return (
-                          <View
-                            key={b}
-                            style={[s.bandChip, isNr ? s.bandChipNr : s.bandChipLte]}
-                          >
-                            <Text style={[s.bandTxt, isNr && { color: C.violet }]}>{b}</Text>
-                          </View>
-                        );
-                      })}
-                      <View style={{ flex: 1 }} />
-                      {!!st?.at && <Text style={s.time}>{fmtTime(st.at)}</Text>}
-                    </View>
+              {/* ─── أزرار ─── */}
+              <View style={s.btnRow}>
+                <Pressable
+                  style={[s.primaryBtn, !hasPw && s.primaryBtnDisabled]}
+                  onPress={() => (hasPw ? open(item.id) : edit(item.id))}
+                  disabled={!!st?.loading}
+                >
+                  {st?.loading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={s.primaryBtnTxt}>
+                      {hasPw ? '🔓 دخول' : '🔑 إضافة بيانات'}
+                    </Text>
                   )}
-                </>
-              ) : (
-                <View style={s.skeleton} />
-              )}
-            </Pressable>
+                </Pressable>
+                <Pressable style={s.iconBtn} onPress={() => edit(item.id)}>
+                  <Icon name="settings" size={16} color={C.sub} />
+                </Pressable>
+              </View>
+            </View>
           );
         }}
       />
-      <Pressable
-        style={[s.fab, { bottom: insets.bottom + 16 }]}
-        onPress={add}
-      >
-        <Icon name="tower" size={22} color="#fff" />
-      </Pressable>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  list: { padding: 14, gap: 12, paddingTop: 6 },
+  list: { padding: 12, gap: 10, paddingTop: 8 },
 
   header: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     paddingHorizontal: 4,
-    paddingTop: 6,
+    paddingTop: 4,
     paddingBottom: 10,
   },
   headerTitle: {
     color: C.text,
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: '900',
     textAlign: 'right',
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   },
-  headerSub: { color: C.sub, fontSize: 13, textAlign: 'right', marginTop: 2 },
+  headerSub: { color: C.sub, fontSize: 12, textAlign: 'right', marginTop: 1 },
+  headerExplore: {
+    width: 36, height: 36,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.cardBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
+  },
+  headerExploreTxt: { fontSize: 18 },
+  footerExplore: {
+    alignSelf: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    marginTop: 8,
+  },
+  footerExploreTxt: { color: C.violet, fontWeight: '700', fontSize: 13 },
+  headerAdd: {
+    backgroundColor: C.blue,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  headerAddTxt: { color: '#fff', fontSize: 13, fontWeight: '800' },
 
   card: {
     backgroundColor: C.card,
-    borderRadius: 22,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: C.cardBorder,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    gap: 12,
-    overflow: 'hidden',
-    shadowColor: C.shadow,
-    shadowOpacity: 0.06,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-  },
-  accent: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: 5,
-    borderTopRightRadius: 22,
-    borderBottomRightRadius: 22,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 8,
   },
 
-  head: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
-  iconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
+  row: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 10,
+  },
+  icon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  name: { color: C.text, fontSize: 17, fontWeight: '900', textAlign: 'right' },
-  sub: { color: C.sub, fontSize: 12.5, textAlign: 'right', marginTop: 2 },
-  dot: { width: 10, height: 10, borderRadius: 5 },
-
-  mainRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 16,
-    paddingVertical: 4,
+  name: { color: C.text, fontSize: 15, fontWeight: '800', textAlign: 'right' },
+  subline: {
+    marginTop: 3,
+    fontSize: 12,
+    color: C.sub,
+    textAlign: 'right',
   },
-  gaugeWrap: { alignItems: 'center', justifyContent: 'center' },
-  rsrpBig: { fontSize: 34, fontWeight: '900', letterSpacing: -1, lineHeight: 38 },
-  rsrpUnit: { color: C.muted, fontSize: 12, fontWeight: '800' },
-  rsrpLabel: { color: C.muted, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
-  deltaTxt: { fontSize: 11.5, fontWeight: '800' },
+  ip: { color: C.sub, fontSize: 12, fontWeight: '600' },
+  user: { color: C.sub, fontSize: 12, fontWeight: '600' },
+  dotSep: { color: C.muted, fontSize: 12 },
+  dot: { width: 7, height: 7, borderRadius: 4 },
 
-  statsRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    backgroundColor: C.rowBg,
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-  },
-  statCell: { flex: 1, alignItems: 'center', gap: 2 },
-  statSep: { width: 1, height: 24, backgroundColor: C.line },
-  statVal: { color: C.text, fontSize: 15, fontWeight: '800' },
-  statLbl: { color: C.muted, fontSize: 10.5, fontWeight: '700' },
-
-  bandRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 6,
-    borderTopWidth: 1,
-    borderTopColor: C.lineSoft,
-    paddingTop: 10,
-  },
-  bandChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-  bandChipLte: { backgroundColor: C.blueSoft },
-  bandChipNr: { backgroundColor: C.violetSoft },
-  bandTxt: { color: C.blue, fontSize: 12, fontWeight: '800' },
-  time: { color: C.muted, fontSize: 10.5 },
-
-  errBox: {
-    backgroundColor: C.redSoft,
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+  metaRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: 8,
   },
-  errTxt: {
-    color: C.red,
-    fontSize: 12.5,
-    textAlign: 'right',
+  pwChip: {
+    backgroundColor: C.rowBg,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  pwChipTxt: { color: C.sub, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  sigChip: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 2,
+  },
+  sigChipTxt: { fontSize: 12, fontWeight: '800' },
+  bandTxt: { color: C.blue, fontSize: 11.5, fontWeight: '800' },
+
+  btnRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: C.lineSoft,
+  },
+  primaryBtn: {
     flex: 1,
-    lineHeight: 18,
-  },
-  retryBtn: {
-    backgroundColor: C.red,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  retryTxt: { color: '#fff', fontSize: 12.5, fontWeight: '800' },
-
-  skeleton: { height: 60, borderRadius: 14, backgroundColor: C.rowBg },
-
-  fab: {
-    position: 'absolute',
-    right: 16,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
     backgroundColor: C.blue,
+    paddingVertical: 9,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: C.blue,
-    shadowOpacity: 0.45,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
+  },
+  primaryBtnDisabled: { backgroundColor: C.muted },
+  primaryBtnTxt: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  iconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: C.cardBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   btn: {
