@@ -1,5 +1,6 @@
 // وضع الاستكشاف: يبصم أي راوتر ويطلع تقرير منظّف من أي بيانات حساسة.
 
+import { isLanHost } from './host';
 import { saveDiscovery, fingerprintFrom, guessApiStyle } from '../store/discovery';
 
 export interface ProbeStep {
@@ -87,6 +88,8 @@ export async function runProbe(
   onStep?: (done: number, total: number, label: string) => void,
   timeoutMs = 6000,
 ): Promise<ProbeReport> {
+  // ═══ حماية SSRF: نتأكد أن host محلي ═══
+  if (!isLanHost(host)) throw new Error('العنوان لازم يكون محلي');
   const steps: ProbeStep[] = [];
   const score: Record<string, number> = {};
   const hints: string[] = [];
@@ -188,6 +191,11 @@ function resolveUrl(base: string, path: string): string | null {
 }
 
 async function fetchText(url: string, refererBase: string, timeoutMs: number): Promise<string> {
+  // ═══ حماية: نرفض أي URL خارج الشبكة المحلية ═══
+  try {
+    const u = new URL(url);
+    if (!isLanHost(u.host)) return '';
+  } catch { return ''; }
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -417,6 +425,8 @@ export async function harvestCommands(
   onStep?: (done: number, total: number, label: string) => void,
   timeoutMs = 12000,
 ): Promise<Harvest> {
+  // ═══ حماية SSRF: نتأكد أن host محلي ═══
+  if (!isLanHost(host)) throw new Error('العنوان لازم يكون محلي');
   const base = host.startsWith('http') ? host.replace(/\/+$/, '') : 'http://' + host.replace(/\/+$/, '');
   const home = await fetchText(base + '/', base, timeoutMs);
   const srcs = extractScriptUrls(home);
@@ -479,6 +489,8 @@ export async function deepCommandHarvest(
   onStep?: (done: number, total: number, label: string) => void,
   timeoutMs = 12000,
 ): Promise<DeepHarvest> {
+  // ═══ حماية SSRF: نتأكد أن host محلي ═══
+  if (!isLanHost(host)) throw new Error('العنوان لازم يكون محلي');
   const base = host.startsWith('http') ? host.replace(/\/+$/, '') : 'http://' + host.replace(/\/+$/, '');
   const cmds = new Set<string>();
   const goforms = new Set<string>();
