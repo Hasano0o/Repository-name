@@ -82,7 +82,7 @@ export type EditResult =
 // ────────────── Builders ──────────────
 
 interface EvidenceLike {
-  value: string | null;
+  value: string | number | null;
   source: EvidenceSource;
   confidence: EvidenceConfidence;
   volatility?: EvidenceVolatility;
@@ -91,9 +91,11 @@ interface EvidenceLike {
 
 function toReviewedField(ev: EvidenceLike): ReviewedField | null {
   if (ev.value === null) return null;
+  const strValue = String(ev.value);
+  if (strValue === '') return null;
   return {
-    currentValue: ev.value,
-    originalValue: ev.value,
+    currentValue: strValue,
+    originalValue: strValue,
     edited: false,
     source: ev.source,
     confidence: ev.confidence,
