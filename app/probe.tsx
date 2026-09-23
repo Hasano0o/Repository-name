@@ -10,7 +10,6 @@ import {
   deepCommandHarvest, DeepHarvest,
 } from '../src/utils/probe';
 import { guessApiStyle } from '../src/store/discovery';
-import { ZteDriver } from '../src/drivers/zte';
 
 export default function ProbeScreen() {
   const params = useLocalSearchParams<{ host?: string }>();
@@ -22,7 +21,6 @@ export default function ProbeScreen() {
   const [prog, setProg] = useState({ done: 0, total: 0, label: '' });
   const [report, setReport] = useState<ProbeReport | null>(null);
   const [err, setErr] = useState('');
-  const [pw, setPw] = useState('');
   const [hits, setHits] = useState<FieldHit[] | null>(null);
   const [harv, setHarv] = useState<Harvest | null>(null);
   const [deepH, setDeepH] = useState<DeepHarvest | null>(null);
@@ -43,10 +41,8 @@ export default function ProbeScreen() {
     if (!harv) return;
     setErr(''); setHits(null); setBusy(true);
     try {
-      const drv = new ZteDriver();
-      await drv.login(host.trim(), '', pw);
       const list = signalish(harv.cmds).slice(0, 300);
-      const h = await probeFields(f => drv.rawFields(f), list, 20,
+      const h = await probeFields(host.trim(), list, 20,
         (done, total) => setProg({ done, total, label: 'فحص الأوامر المستخرجة' }));
       setHits(h);
     } catch (e: any) {
@@ -115,10 +111,8 @@ export default function ProbeScreen() {
     if (!isLanHost(host)) { setErr('العنوان لازم يكون داخل شبكتك المحلية'); return; }
     setErr(''); setHits(null); setBusy(true);
     try {
-      const drv = new ZteDriver();
-      await drv.login(host.trim(), '', pw);
       const h = await probeFields(
-        f => drv.rawFields(f),
+        host.trim(),
         ZTE_CANDIDATES, 20,
         (done, total) => setProg({ done, total, label: 'فحص الحقول' }),
       );
@@ -186,9 +180,10 @@ export default function ProbeScreen() {
 
       <GlassCard title="فحص عميق (ZTE)" subtitle="Field discovery" icon="🔬" tint={C.gold} collapsible={false}>
         <Text style={s.p}>يسجّل الدخول ويكشف أسماء الحقول اللي يدعمها راوترك فعلاً.</Text>
-        <Text style={s.lbl}>كلمة مرور الراوتر</Text>
-        <TextInput style={s.input} value={pw} onChangeText={setPw} secureTextEntry placeholder="••••••••" placeholderTextColor={C.muted} />
-        <Pressable style={[s.btn, (!pw || busy) && s.btnOff]} disabled={!pw || busy} onPress={deep}>
+        <Text style={s.p}>
+          الفحص العميق يعمل بدون تسجيل دخول — يستعلم الراوتر عبر نقطة قراءة فقط.
+        </Text>
+        <Pressable style={[s.btn, busy && s.btnOff]} disabled={busy} onPress={deep}>
           {busy ? <ActivityIndicator color={C.onAccent} /> : <Text style={s.btnTxt}>ابدأ الفحص العميق</Text>}
         </Pressable>
         {hits && (
@@ -217,7 +212,7 @@ export default function ProbeScreen() {
           <View style={{ marginTop: 10 }}>
             <Text style={s.rowTitle}>{harv.cmds.length} أمر · منها {signalish(harv.cmds).length} للإشارة · {harv.goforms.length} goformId</Text>
             <Text style={s.rowSub}>{signalish(harv.cmds).slice(0, 40).join('، ')}</Text>
-            <Pressable style={[s.btn, (!pw || busy) && s.btnOff]} disabled={!pw || busy} onPress={deepHarvested}>
+            <Pressable style={[s.btn, busy && s.btnOff]} disabled={busy} onPress={deepHarvested}>
               <Text style={s.btnTxt}>جرّبها على الراوتر</Text>
             </Pressable>
             <Pressable style={s.btn} onPress={shareHarvest}><Text style={s.btnTxt}>أرسل قائمة الأوامر</Text></Pressable>

@@ -2,6 +2,8 @@
 
 import { isLanHost } from './host';
 import { saveDiscovery, fingerprintFrom, guessApiStyle } from '../store/discovery';
+import { sanitize, sanitizeField, MASK } from '../router-discovery/sanitize';
+import { safeDiscoveryFetch } from '../router-discovery/safeRequest';
 
 export interface ProbeStep {
   label: string; path: string; status: number | 'ERR'; ms: number;
@@ -29,206 +31,8 @@ const TARGETS: Target[] = [
   { label: 'عام — api/status', path: '/api/status' },
 ];
 
-// ═══════════════════════════════════════════════════════════════════════
-// Sanitization — PHASE 1b (hardened)
-// ═══════════════════════════════════════════════════════════════════════
-//
-// Design:
-//   1. Field-name based (primary)  — SAFE_FIELD_NAMES vs SENSITIVE_FIELD_NAMES
-//   2. Value-based (secondary)     — Luhn-validated IMEI/ICCID + MAC + tokens
-//   3. Context-aware value scan    — applied only when field name is ambiguous
-//
-// Order:
-//   SAFE field   → value untouched
-//   SENSITIVE    → value replaced with MASK
-//   Ambiguous    → value scanned by maskValue()
-//
-// No oversanitization: generic digit-length rules removed.
-// IMEI/ICCID require Luhn validation — not just digit count.
-// ═══════════════════════════════════════════════════════════════════════
-
-export const MASK = '«محذوف»';
-
-/**
- * حقول قياس/شبكة/معلومات — لا تُمس أبدًا.
- * قيمها ضرورية للتشخيص ولا تكشف هوية.
- */
-const SAFE_FIELD_NAMES = /^(rsrp|rsrq|rssi|sinr|snr|cqi|mcs|tx_?power|txpower|rank|streams|dl_?mcs|ul_?mcs|dl_?streams|pci|earfcn|arfcn|nr_?arfcn|nrarfcn|cell_?id|cellid|enodeb|enodeb_?id|enb_?id|gnb_?id|tac|band|nr_?band|lte_?band|band_?width|bandwidth|dl_?bandwidth|ul_?bandwidth|bw|freq|frequency|channel|mcc|mnc|plmn|network_?type|net_?type|signalbar|signal_?bar|signal_?icon|signal_?strength|signal_?level|network_?provider|operator|sim_?state|sim_?status|connection_?status|ppp_?status|modem_?state|modem_?main_?state|ca_?state|ca_?band|scell|pcell|ngbr|network_?mode|nr5g_?state|z5g_?state)$/i;
-
-/**
- * حقول حساسة — تُمسح دائمًا.
- * Layered: credentials, identifiers, network names, personal data.
- */
-const SENSITIVE_FIELD_NAMES = new RegExp(
-  [
-    // Credentials
-    'pass(?!enger)', 'pwd', 'passwd', 'password',
-    'pin', 'puk',
-    'secret', 'apikey', 'api_?key',
-    'token', 'access_?token', 'refresh_?token', 'auth_?token',
-    'nonce', 'proof', 'salt', 'challenge',
-    'session',
-    'cookie', 'authorization', 'bearer',
-    'credential',
-    '\\bkey\\b',
-
-    // Identifiers
-    'imei', 'imeisv', 'imsi', 'iccid', 'meid', 'esn',
-    'msisdn',
-    'serial_?number', 'serial_?no', 'serialnum', '\\bserial\\b',
-    'device_?serial',
-    '\\bsn\\b',
-    'udid', 'device_?id',
-
-    // Network names / user-facing names
-    'ssid',
-    'wifi_?name', 'wifiname',
-    'wlan_?name', 'wlanname',
-    'network_?name',
-    'host_?name', 'hostname',
-    'actual_?name', 'actualname',
-    'device_?name', 'devicename',
-    'router_?name', 'routername',
-    'wan_?name',
-    'apn_?name', 'apnname', 'apn_?profile_?name',
-    'profile_?name', 'profilename',
-    'user_?name', 'username', 'login_?user',
-    'apn_?user', 'ppp_?user',
-    '\\bname\\b',
-
-    // Personal
-    'phone_?number', 'mobile_?number', 'sim_?number',
-    'phone', 'mobile',
-    'email', 'mail',
-    'mac_?addr', 'macaddr', 'hwaddr', '\\bmac\\b',
-
-    // Message content
-    'sms_?content', 'message_?content', 'text_?content',
-    'sms_?text',
-  ].join('|'),
-  'i',
-);
-
-/** أسماء WiFi المجرّدة (wifi، wlan، ssid) مع أو بدون رقم/لاحقة */
-const WIFI_NAME_LIKE = /^(wifi|wlan|ssid)(_?\d+)?(_?[0-9a-z]+)?$/i;
-
-/**
- * Luhn checksum — يُستخدم للتحقق من IMEI و ICCID.
- */
-function luhnValid(digits: string): boolean {
-  if (!/^\d+$/.test(digits)) return false;
-  let sum = 0;
-  let alt = false;
-  for (let i = digits.length - 1; i >= 0; i--) {
-    let n = digits.charCodeAt(i) - 48;
-    if (alt) {
-      n *= 2;
-      if (n > 9) n -= 9;
-    }
-    sum += n;
-    alt = !alt;
-  }
-  return sum % 10 === 0;
-}
-
-function looksLikeIMEI(v: string): boolean {
-  return /^\d{15}$/.test(v) && luhnValid(v);
-}
-
-function looksLikeICCID(v: string): boolean {
-  if (!/^\d{18,22}$/.test(v)) return false;
-  if (!v.startsWith('89')) return false;
-  return luhnValid(v);
-}
-
-function looksLikeMAC(v: string): boolean {
-  return /^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$/.test(v);
-}
-
-function looksLikeToken(v: string): boolean {
-  return /^[A-Za-z0-9+/]{40,}={0,2}$/.test(v);
-}
-
-function fieldDecision(name: string): boolean | undefined {
-  const n = name.trim().toLowerCase();
-  if (!n) return undefined;
-  if (SAFE_FIELD_NAMES.test(n)) return false;
-  if (SENSITIVE_FIELD_NAMES.test(n)) return true;
-  if (WIFI_NAME_LIKE.test(n)) return true;
-  return undefined;
-}
-
-function maskValue(value: string): string {
-  if (looksLikeMAC(value)) return MASK;
-  if (looksLikeIMEI(value)) return MASK;
-  if (looksLikeICCID(value)) return MASK;
-  if (looksLikeToken(value)) return MASK;
-  return value;
-}
-
-export function sanitizeField(key: string, value: string): string {
-  const d = fieldDecision(key);
-  if (d === false) return value;
-  if (d === true) return MASK;
-  return maskValue(value);
-}
-
-export function sanitize(raw: string): string {
-  if (!raw) return raw;
-  let t = raw;
-
-  // ── 1. XML: <tag>value</tag>
-  t = t.replace(/<([A-Za-z_][\w.\-]*)>([^<]{1,4000})<\/\1>/g, (m, tag, val) => {
-    const d = fieldDecision(String(tag));
-    if (d === false) return m;
-    if (d === true) return '<' + tag + '>' + MASK + '</' + tag + '>';
-    const masked = maskValue(String(val));
-    return masked === val ? m : '<' + tag + '>' + masked + '</' + tag + '>';
-  });
-
-  // ── 2. JSON: "key":"value"
-  t = t.replace(/"([\w.\-]+)"\s*:\s*"([^"]{0,4000})"/g, (m, k, val) => {
-    const d = fieldDecision(String(k));
-    if (d === false) return m;
-    if (d === true) return '"' + k + '":"' + MASK + '"';
-    const masked = maskValue(String(val));
-    return masked === val ? m : '"' + k + '":"' + masked + '"';
-  });
-
-  // ── 3. key=value / key: value
-  t = t.replace(
-    /([\w.\-]{2,40})\s*[:=]\s*(["']?)([^\s;,&"'<>]{1,400})\2/g,
-    (m, k, _q, val) => {
-      const d = fieldDecision(String(k));
-      if (d === false) return m;
-      if (d === true) return k + '=' + MASK;
-      const masked = maskValue(String(val));
-      return masked === val ? m : k + '=' + masked;
-    },
-  );
-
-  // ── 4. Standalone patterns (context-free)
-
-  // MAC addresses
-  t = t.replace(/\b([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b/g, MASK);
-
-  // Session/cookie headers
-  t = t.replace(
-    /\b(SessionID|Set-Cookie|stok)\s*[=:]\s*[^\s;"'&<]+/gi,
-    (_m, name) => name + '=' + MASK,
-  );
-
-  // Long base64 tokens
-  t = t.replace(/\b[A-Za-z0-9+/]{40,}={0,2}\b/g, MASK);
-
-  // IMEI/ICCID standalone (Luhn-validated)
-  t = t.replace(/\b(\d{14,22})\b/g, (m) => {
-    if (looksLikeIMEI(m) || looksLikeICCID(m)) return MASK;
-    return m;
-  });
-
-  return t;
-}
+// Sanitization moved to ../router-discovery/sanitize.ts (PHASE 3)
+export { sanitize, sanitizeField, MASK };
 
 function titleOf(body: string): string {
   const m = body.match(/<title[^>]*>([\s\S]{0,120}?)<\/title>/i);
@@ -239,23 +43,18 @@ async function one(host: string, t: Target, timeoutMs: number): Promise<ProbeSte
   const base = host.startsWith('http') ? host.replace(/\/+$/, '') : 'http://' + host.replace(/\/+$/, '');
   const url = base + t.path;
   const started = Date.now();
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
-      method: 'GET', credentials: 'include', signal: ctrl.signal,
-      headers: { Referer: base + '/', 'X-Requested-With': 'XMLHttpRequest' },
-    });
-    const body = await res.text();
-    return {
-      label: t.label, path: t.path, status: res.status, ms: Date.now() - started,
-      type: (res.headers.get('content-type') || '').split(';')[0],
-      title: sanitize(titleOf(body)).slice(0, 120), size: body.length,
-      sample: sanitize(body).slice(0, 2500),
-    };
-  } catch {
+  const result = await safeDiscoveryFetch({ url, timeoutMs });
+  if (!result.ok) {
     return { label: t.label, path: t.path, status: 'ERR', ms: Date.now() - started, type: '', title: '', size: 0, sample: '' };
-  } finally { clearTimeout(timer); }
+  }
+  const body = result.body;
+  return {
+    label: t.label, path: t.path, status: result.status, ms: Date.now() - started,
+    type: result.contentType,
+    title: titleOf(body).slice(0, 120),
+    size: result.bodyRawLength,
+    sample: body.slice(0, 2500),
+  };
 }
 
 export async function runProbe(
@@ -329,19 +128,25 @@ export const ZTE_CANDIDATES: string[] = [
 export interface FieldHit { key: string; value: string }
 
 export async function probeFields(
-  read: (fields: string[]) => Promise<Record<string, string>>,
+  host: string,
   candidates: string[] = ZTE_CANDIDATES,
   chunk = 20,
   onStep?: (done: number, total: number) => void,
 ): Promise<FieldHit[]> {
   const hits: FieldHit[] = [];
+  const base = host.startsWith('http') ? host.replace(/\/+$/, '') : 'http://' + host.replace(/\/+$/, '');
   for (let i = 0; i < candidates.length; i += chunk) {
     const part = candidates.slice(i, i + chunk);
     onStep?.(Math.min(i + chunk, candidates.length), candidates.length);
+    const cmd = part.join(',');
+    const url = base + '/goform/goform_get_cmd_process?isTest=false&multi_data=1&cmd=' +
+      encodeURIComponent(cmd) + '&_=' + Date.now();
+    const result = await safeDiscoveryFetch({ url });
+    if (!result.ok) continue;
     try {
-      const r = await read(part);
+      const j = JSON.parse(result.body) as Record<string, unknown>;
       for (const k of part) {
-        const v = r[k];
+        const v = j[k];
         if (v !== undefined && v !== '' && v !== 'null') {
           hits.push({ key: k, value: sanitizeField(k, String(v)).slice(0, 160) });
         }
@@ -365,27 +170,10 @@ function resolveUrl(base: string, path: string): string | null {
   return base + '/' + p.replace(/^\.\//, '');
 }
 
-async function fetchText(url: string, refererBase: string, timeoutMs: number): Promise<string> {
-  // ═══ حماية: نرفض أي URL خارج الشبكة المحلية ═══
-  try {
-    const u = new URL(url);
-    if (!isLanHost(u.host)) return '';
-  } catch { return ''; }
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
-      credentials: 'include',
-      signal: ctrl.signal,
-      headers: { Referer: refererBase + '/' },
-    });
-    if (!res.ok) return '';
-    return (await res.text()).slice(0, 1500000);
-  } catch {
-    return '';
-  } finally {
-    clearTimeout(timer);
-  }
+async function fetchText(url: string, _refererBase: string, timeoutMs: number): Promise<string> {
+  const result = await safeDiscoveryFetch({ url, timeoutMs });
+  if (!result.ok) return '';
+  return result.body;
 }
 
 function extractScriptUrls(home: string): string[] {
@@ -550,27 +338,18 @@ export async function trySourceMap(jsUrl: string, timeoutMs = 8000): Promise<str
   if (!jsUrl) return null;
   const url = jsUrl.replace(/\.js(\?.*)?$/i, '.js.map$1');
   if (url === jsUrl) return null;
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const result = await safeDiscoveryFetch({ url, timeoutMs });
+  if (!result.ok) return null;
   try {
-    const res = await fetch(url, { credentials: 'include', signal: ctrl.signal });
-    if (!res.ok) return null;
-    const txt = await res.text();
-    try {
-      const j = JSON.parse(txt) as { sourcesContent?: unknown };
-      if (!Array.isArray(j.sourcesContent)) return null;
-      const parts: string[] = [];
-      for (const s of j.sourcesContent) {
-        if (typeof s === 'string' && s.length > 0) parts.push(s);
-      }
-      return parts.join('\n\n');
-    } catch {
-      return null;
+    const j = JSON.parse(result.body) as { sourcesContent?: unknown };
+    if (!Array.isArray(j.sourcesContent)) return null;
+    const parts: string[] = [];
+    for (const x of j.sourcesContent) {
+      if (typeof x === 'string' && x.length > 0) parts.push(x);
     }
+    return parts.join('\n\n');
   } catch {
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -580,18 +359,29 @@ export async function trySourceMap(jsUrl: string, timeoutMs = 8000): Promise<str
 
 export interface Harvest { scripts: string[]; cmds: string[]; goforms: string[] }
 
-const EXTRA_SCRIPTS = [
+/** مسارات سكربتات JavaScript — تُحمّل للتحليل فقط */
+const SCRIPT_PATHS = [
   '/js/app.js', '/js/main.js', '/js/config/config.js', '/js/index.js',
   '/js/lib/app.js', '/js/common.js', '/js/status.js', '/js/lang/lang_ar.js',
-  // مسارات Huawei محدّثة (H138 وما بعده)
-  '/html/index.html', '/html/home.html',
   '/lib/emui-jquery.js', '/../lib/emui-jquery.js',
   '/core.js', '/base64x.js',
   '/js/jquery.js', '/js/jquery.min.js',
+];
+
+/** صفحات HTML ثابتة — تُحمّل للبحث عن مراجع سكربتات */
+const STATIC_PAGE_PATHS = [
+  '/html/index.html', '/html/home.html',
+];
+
+/**
+ * نقاط API معروفة بأنها قراءة — مرجع فقط.
+ * ⚠️ لا تُستدعى تلقائيًا. كل استدعاء يمر عبر safeDiscoveryFetch.
+ * ملاحظة: هذه موجودة أيضًا في policy.ts (HUAWEI_SAFE_GET).
+ */
+export const DISCOVERY_ENDPOINTS = [
   '/api/device/information', '/api/device/signal',
   '/api/monitoring/status', '/api/monitoring/traffic-statistics',
   '/api/net/current-plmn', '/api/net/net-mode',
-  '/api/user/state-login', '/api/webserver/SesTokInfo',
 ];
 
 /** يسحب ملفات الواجهة ويستخرج منها أسماء الأوامر الحقيقية */
@@ -605,7 +395,8 @@ export async function harvestCommands(
   const base = host.startsWith('http') ? host.replace(/\/+$/, '') : 'http://' + host.replace(/\/+$/, '');
   const home = await fetchText(base + '/', base, timeoutMs);
   const srcs = extractScriptUrls(home);
-  for (const e of EXTRA_SCRIPTS) srcs.push(e);
+  for (const e of SCRIPT_PATHS) srcs.push(e);
+  for (const e of STATIC_PAGE_PATHS) srcs.push(e);
   const seen = new Set<string>();
   const urls: string[] = [];
   for (const s of srcs) {
@@ -688,7 +479,8 @@ export async function deepCommandHarvest(
   const home = await fetchText(base + '/', base, timeoutMs);
   absorb(home);
   const srcs = extractScriptUrls(home);
-  for (const e of EXTRA_SCRIPTS) srcs.push(e);
+  for (const e of SCRIPT_PATHS) srcs.push(e);
+  for (const e of STATIC_PAGE_PATHS) srcs.push(e);
 
   const seen = new Set<string>();
   const scriptUrls: string[] = [];

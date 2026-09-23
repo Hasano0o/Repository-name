@@ -153,6 +153,9 @@ const ZTE_READ_PATH_RE = /^\/goform\/goform_get_cmd_process$/i;
 /** LuCI root (صفحة عامة) — تُسمح كصفحة discovery */
 const LUCI_ROOT_RE = /^\/cgi-bin\/luci\/?$/i;
 
+/** مصادر ثابتة (JS/CSS/source-map) — قراءة فقط */
+const STATIC_RESOURCE_RE = /^\/[\w.\-]+\/([\w.\-]+\/)*[\w.\-]+\.(js|js\.map|css)$/i;
+
 // ═══════════════════════════════════════════════════════════════════════
 // Result helpers
 // ═══════════════════════════════════════════════════════════════════════
@@ -436,6 +439,15 @@ export function evaluatePolicy(input: PolicyInput): PolicyResult {
         'Static discovery page',
       );
     }
+  }
+
+  // ── 12.5. Static resources (JS/CSS/source-map)
+  if (STATIC_RESOURCE_RE.test(url.pathname)) {
+    return allow(
+      'SAFE_READ',
+      'discovery.static-resource',
+      'Static JS/CSS/source-map resource',
+    );
   }
 
   // ── 13. LuCI
