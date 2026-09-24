@@ -19,6 +19,13 @@ import {
   ALL_PROFILES,
   MockRouterProfile,
 } from '../lab';
+import {
+  HUAWEI_GENERIC_V1,
+  HUAWEI_GENERIC_V2,
+  ZTE_GENERIC_V1,
+  ZTE_GENERIC_V2,
+  UNKNOWN_NOISY,
+} from '../lab/profiles';
 
 // ═══════════════════════════════════════════════════════════════════════
 // normalizePath
@@ -348,8 +355,8 @@ describe('all profiles can construct and lookup /', () => {
 // ═══════════════════════════════════════════════════════════════════════
 
 describe('registry — NORMAL vs MALICIOUS separation', () => {
-  test('NORMAL_PROFILES has 3 entries', () => {
-    expect(NORMAL_PROFILES.length).toBe(3);
+  test('NORMAL_PROFILES has 6 entries', () => {
+    expect(NORMAL_PROFILES.length).toBe(6);
   });
 
   test('MALICIOUS_FIXTURES has 4 entries', () => {
@@ -363,5 +370,147 @@ describe('registry — NORMAL vs MALICIOUS separation', () => {
   test('no id collisions', () => {
     const ids = ALL_PROFILES.map((p) => p.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Backward-compat aliases
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('backward-compat aliases', () => {
+  test('HUAWEI_GENERIC === HUAWEI_GENERIC_V1', () => {
+    expect(HUAWEI_GENERIC).toBe(HUAWEI_GENERIC_V1);
+  });
+  test('ZTE_GENERIC === ZTE_GENERIC_V1', () => {
+    expect(ZTE_GENERIC).toBe(ZTE_GENERIC_V1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Firmware variants — Huawei
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('firmware variants — Huawei', () => {
+  test('V1 and V2 differ in model', () => {
+    expect(HUAWEI_GENERIC_V1.model).not.toBe(HUAWEI_GENERIC_V2.model);
+  });
+  test('V1 has /api/net/current-plmn; V2 does not', () => {
+    const v1 = HUAWEI_GENERIC_V1.endpoints.map((e) => e.path);
+    const v2 = HUAWEI_GENERIC_V2.endpoints.map((e) => e.path);
+    expect(v1).toContain('/api/net/current-plmn');
+    expect(v2).not.toContain('/api/net/current-plmn');
+  });
+  test('V2 has /api/device/seccellinfo; V1 does not', () => {
+    const v1 = HUAWEI_GENERIC_V1.endpoints.map((e) => e.path);
+    const v2 = HUAWEI_GENERIC_V2.endpoints.map((e) => e.path);
+    expect(v2).toContain('/api/device/seccellinfo');
+    expect(v1).not.toContain('/api/device/seccellinfo');
+  });
+  test('V1 and V2 differ in /api/device/signal Content-Type', () => {
+    const v1 = HUAWEI_GENERIC_V1.endpoints.find((e) => e.path === '/api/device/signal');
+    const v2 = HUAWEI_GENERIC_V2.endpoints.find((e) => e.path === '/api/device/signal');
+    expect(v1?.contentType).toBe('text/xml');
+    expect(v2?.contentType).toBe('application/xml');
+  });
+  test('V1 uses <rsrp>; V2 uses <lte_rsrp>', () => {
+    const v1 = HUAWEI_GENERIC_V1.endpoints.find((e) => e.path === '/api/device/signal');
+    const v2 = HUAWEI_GENERIC_V2.endpoints.find((e) => e.path === '/api/device/signal');
+    expect(v1?.body).toContain('<rsrp>');
+    expect(v2?.body).toContain('<lte_rsrp>');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Firmware variants — ZTE
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('firmware variants — ZTE', () => {
+  test('V1 and V2 differ in model', () => {
+    expect(ZTE_GENERIC_V1.model).not.toBe(ZTE_GENERIC_V2.model);
+  });
+  test('V1 has /status.json; V2 does not', () => {
+    const v1 = ZTE_GENERIC_V1.endpoints.map((e) => e.path);
+    const v2 = ZTE_GENERIC_V2.endpoints.map((e) => e.path);
+    expect(v1).toContain('/status.json');
+    expect(v2).not.toContain('/status.json');
+  });
+  test('V2 has /device/status (text/plain); V1 does not', () => {
+    const v1 = ZTE_GENERIC_V1.endpoints.map((e) => e.path);
+    const v2 = ZTE_GENERIC_V2.endpoints.find((e) => e.path === '/device/status');
+    expect(v1).not.toContain('/device/status');
+    expect(v2?.contentType).toBe('text/plain');
+  });
+  test('V2 includes 5G NSA fields', () => {
+    const goform = ZTE_GENERIC_V2.endpoints.find(
+      (e) => e.path === '/goform/goform_get_cmd_process',
+    );
+    expect(goform?.body).toContain('nr5g_pci');
+    expect(goform?.body).toContain('nr5g_action_band');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// UNKNOWN_NOISY — status codes coverage
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('UNKNOWN_NOISY status codes', () => {
+  test('includes 403', () => {
+    expect(UNKNOWN_NOISY.endpoints.map((e) => e.status)).toContain(403);
+  });
+  test('includes 404', () => {
+    expect(UNKNOWN_NOISY.endpoints.map((e) => e.status)).toContain(404);
+  });
+  test('includes 500', () => {
+    expect(UNKNOWN_NOISY.endpoints.map((e) => e.status)).toContain(500);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Content-Type coverage — across NORMAL_PROFILES
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('content-type coverage across normal profiles', () => {
+  const endpoints = NORMAL_PROFILES.flatMap((p) => p.endpoints);
+  const pages = NORMAL_PROFILES.flatMap((p) => p.pages);
+
+  test('text/html present in pages', () => {
+    expect(pages.some((r) => r.contentType === 'text/html')).toBe(true);
+  });
+  test('application/xml present', () => {
+    expect(endpoints.some((r) => r.contentType === 'application/xml')).toBe(true);
+  });
+  test('text/xml present', () => {
+    expect(endpoints.some((r) => r.contentType === 'text/xml')).toBe(true);
+  });
+  test('application/json present', () => {
+    expect(endpoints.some((r) => r.contentType === 'application/json')).toBe(true);
+  });
+  test('text/plain present', () => {
+    expect(endpoints.some((r) => r.contentType === 'text/plain')).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Registry integrity — aliases not counted
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('registry integrity', () => {
+  test('NORMAL_PROFILES ids are v1/v2/generic/noisy', () => {
+    const ids = NORMAL_PROFILES.map((p) => p.id).sort();
+    expect(ids).toEqual(
+      [
+        'huawei-generic-v1',
+        'huawei-generic-v2',
+        'unknown-generic',
+        'unknown-noisy',
+        'zte-generic-v1',
+        'zte-generic-v2',
+      ].sort(),
+    );
+  });
+  test('aliases not present in NORMAL_PROFILES by their old ids', () => {
+    const ids = NORMAL_PROFILES.map((p) => p.id);
+    expect(ids).not.toContain('huawei-generic');
+    expect(ids).not.toContain('zte-generic');
   });
 });
