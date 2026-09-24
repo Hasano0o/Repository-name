@@ -1,55 +1,197 @@
 /**
- * Sanitization — PHASE 3
- * Moved from src/utils/probe.ts (PHASE 1b) to break circular imports
- * between probe.ts and safeRequest.ts.
+ * Sanitization — PHASE 5G (Hardening)
+ *
+ * المبادئ:
+ *   1. normalizeFieldName → يطابق camelCase / kebab / snake بنفس القاعدة.
+ *   2. SAFE exact match (radio/network) — أعلى أولوية.
+ *   3. SAFE structured patterns.
+ *   4. SENSITIVE exact / structured match.
+ *   5. SENSITIVE substring فقط لمجموعة محدودة جدًا (بدون 'name').
+ *   6. value-based masking (MAC، Luhn IMEI/ICCID، base64 طويل).
+ *
+ * لا oversanitization:
+ *   - لا قاعدة رقمية عامة.
+ *   - 'name' ليس substring حساسًا (فقط exact 'name' أو 'hostname'/'devicename'...).
+ *   - `pass` يُعالج بـ structured rule (prefix + suffix whitelist).
+ *
+ * لا dependency، لا شبكة، لا تخزين.
  */
 
 export const MASK = '«محذوف»';
 
-const SAFE_FIELD_NAMES = /^(rsrp|rsrq|rssi|sinr|snr|cqi|mcs|tx_?power|txpower|rank|streams|dl_?mcs|ul_?mcs|dl_?streams|pci|earfcn|arfcn|nr_?arfcn|nrarfcn|cell_?id|cellid|enodeb|enodeb_?id|enb_?id|gnb_?id|tac|band|nr_?band|lte_?band|band_?width|bandwidth|dl_?bandwidth|ul_?bandwidth|bw|freq|frequency|channel|mcc|mnc|plmn|network_?type|net_?type|signalbar|signal_?bar|signal_?icon|signal_?strength|signal_?level|network_?provider|operator|sim_?state|sim_?status|connection_?status|ppp_?status|modem_?state|modem_?main_?state|ca_?state|ca_?band|scell|pcell|ngbr|network_?mode|nr5g_?state|z5g_?state)$/i;
+// ═══════════════════════════════════════════════════════════════════════
+// Normalization
+// ═══════════════════════════════════════════════════════════════════════
 
-const SENSITIVE_FIELD_NAMES = new RegExp(
-  [
-    'pass(?!enger)', 'pwd', 'passwd', 'password',
-    'pin', 'puk',
-    'secret', 'apikey', 'api_?key',
-    'token', 'access_?token', 'refresh_?token', 'auth_?token',
-    'nonce', 'proof', 'salt', 'challenge',
-    'session',
-    'cookie', 'authorization', 'bearer',
-    'credential',
-    '\\bkey\\b',
-    'imei', 'imeisv', 'imsi', 'iccid', 'meid', 'esn',
-    'msisdn',
-    'serial_?number', 'serial_?no', 'serialnum', '\\bserial\\b',
-    'device_?serial',
-    '\\bsn\\b',
-    'udid', 'device_?id',
-    'ssid',
-    'wifi_?name', 'wifiname',
-    'wlan_?name', 'wlanname',
-    'network_?name',
-    'host_?name', 'hostname',
-    'actual_?name', 'actualname',
-    'device_?name', 'devicename',
-    'router_?name', 'routername',
-    'wan_?name',
-    'apn_?name', 'apnname', 'apn_?profile_?name',
-    'profile_?name', 'profilename',
-    'user_?name', 'username', 'login_?user',
-    'apn_?user', 'ppp_?user',
-    '\\bname\\b',
-    'phone_?number', 'mobile_?number', 'sim_?number',
-    'phone', 'mobile',
-    'email', 'mail',
-    'mac_?addr', 'macaddr', 'hwaddr', '\\bmac\\b',
-    'sms_?content', 'message_?content', 'text_?content',
-    'sms_?text',
-  ].join('|'),
-  'i',
-);
+/** يزيل كل ما ليس [a-z0-9] ويصغّر الحروف. */
+function normalizeFieldName(name: string): string {
+  if (typeof name !== 'string') return '';
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
 
-const WIFI_NAME_LIKE = /^(wifi|wlan|ssid)(_?\d+)?(_?[0-9a-z]+)?$/i;
+// ═══════════════════════════════════════════════════════════════════════
+// SAFE — قيم القياس/الشبكة/المعلومات — لا تُمس أبدًا
+// ═══════════════════════════════════════════════════════════════════════
+
+const SAFE_EXACT = new Set<string>([
+  // Signal
+  'rsrp', 'rsrq', 'rssi', 'sinr', 'snr', 'cqi',
+  'lterrsrp', 'lterrsrq', 'lterrssi', 'ltesnr', 'ltesinr',
+  'nrrrsrp', 'nrrrsrq', 'nrrsinr',
+  'z5grsrp', 'z5grsrq', 'z5gsinr', 'z5gsnr',
+  'nr5grsrp', 'nr5grsrq', 'nr5gsinr',
+  // Link
+  'mcs', 'dlmcs', 'ulmcs', 'txpower', 'rank', 'streams', 'dlstreams',
+  // Cell
+  'pci', 'ltpci', 'ltepci', 'nrpci', 'nr5gpci',
+  'earfcn', 'arfcn', 'nrarfcn', 'lteearfcn',
+  'cellid', 'ltecellid', 'nr5gcellid', 'nr5g sacellid',
+  'enodebid', 'enbid', 'gnbid',
+  'tac',
+  // Band / freq
+  'band', 'nrband', 'lteband', 'wanactiveband', 'nr5gactionband',
+  'bandwidth', 'dlbandwidth', 'ulbandwidth', 'bw',
+  'freq', 'frequency', 'channel', 'nr5gactionchannel',
+  'ltecappcellband', 'ltecappcellbandwidth', 'ltecappcellfreq',
+  'ltecascellband', 'ltecascellbandwidth', 'wanlteca',
+  'ltemulticascellinfo', 'ltecascellinfo',
+  'scell', 'pcell', 'ngbr',
+  // PLMN / Network
+  'mcc', 'mnc', 'plmn',
+  'networktype', 'networkmode', 'nettype',
+  'signalbar', 'signalicon', 'signalstrength', 'signallevel',
+  'networkprovider', 'operator',
+  'simstate', 'simstatus',
+  'connectionstatus', 'pppstatus',
+  'modemstate', 'modemmainstate',
+  'nr5gstate', 'z5gstate',
+  // Identity (radio-only, non-sensitive)
+  'model', 'modelname',
+  'vendor', 'manufacturer', 'brand',
+  'softwareversion', 'hardwareversion', 'firmware',
+]);
+
+// كلمات SAFE كـ substring (لأنها كلمات مركبة قد تحتوي prefixes)
+const SAFE_PATTERNS: readonly RegExp[] = [
+  // Radio prefixes — يجب أن يُتبع بـ suffix رقمي/شرطة أو نهاية الكلمة (لا يُلتصق بـ 'name'/'ssid')
+  /^(lte|nr|nr5g|z5g|wan|signal|network|sim|modem|ca|cell|band|freq|pci|arfcn|earfcn)(rsrp|rsrq|rssi|sinr|snr|cqi|pci|band|freq|channel|type|mode|state|status|bar|icon|provider|mcc|mnc|carrier|earfcn|arfcn|bandwidth|bw|id)/,
+  // Suffix radio
+  /(rsrp|rsrq|rssi|sinr|snr|cqi)$/,
+  /^(dl|ul)(bw|mcs|bandwidth|streams)$/,
+];
+
+function isSafe(norm: string): boolean {
+  if (!norm) return false;
+  if (SAFE_EXACT.has(norm)) return true;
+  for (const re of SAFE_PATTERNS) {
+    if (re.test(norm)) return true;
+  }
+  return false;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// SENSITIVE — exact / structured (بدون substring عشوائي)
+// ═══════════════════════════════════════════════════════════════════════
+
+const SENSITIVE_EXACT = new Set<string>([
+  // Credentials
+  'password', 'passwd', 'passcode', 'pwd',
+  'pin', 'puk',
+  'secret', 'apikey', 'privatekey',
+  'token', 'authtoken', 'accesstoken', 'refreshtoken', 'authToken',
+  'session', 'sessionid', 'sessiontoken',
+  'cookie', 'authorization', 'bearer', 'credential',
+  // Identifiers
+  'imei', 'imeisv', 'imsi', 'iccid', 'meid', 'esn',
+  'serial', 'serialnumber', 'serialno', 'deviceserial',
+  'sn', 'udid',
+  'mac', 'macaddr', 'macaddress', 'hwaddr', 'physaddr',
+  // Network names / identifiers
+  'ssid', 'wifissid', 'wlanssid', 'ssidname',
+  'wifiname', 'wlanname', 'networkname',
+  'hostname', 'actualname',
+  'devicename', 'routername', 'wanname',
+  'profilename',
+  // Generic standalone 'name' — exact only (لا substring عام)
+  'name',
+  // Personal
+  'username', 'user', 'login', 'loginuser',
+  'userpassword', 'adminpassword',
+  'phone', 'phonenumber', 'mobile', 'mobilenumber', 'msisdn', 'userphone', 'simnumber',
+  'email', 'emailaddress',
+  // Messages
+  'smscontent', 'messagecontent', 'textcontent', 'smstext',
+  // WAN identifiers
+  'wanipaddr', 'staticwanipaddr', 'wanapn', 'apnname', 'apnuser', 'pppuser',
+]);
+
+/**
+ * بعض الكلمات الحساسة كـ substring — محدودة جدًا:
+ *   - prefix محدد (لا general 'name').
+ *   - نحن نستخدمها فقط لكلمات مركبة متوقعة مثل: userPassword → contains 'password'.
+ *     ومع ذلك نضعها في exact list.
+ *
+ * → عمليًا: بدون substring عام.
+ */
+
+/**
+ * يُعيد true إذا كان الاسم يحتوي على كلمة SENSITIVE exact
+ * كجزء من normalized name + يستوفي شرط الحدود.
+ *
+ * المنطق:
+ *   - نطابق الاسم الكامل (exact).
+ *   - أو نطابق كلمة داخلية (split على حدود الكلمات الأصلية قبل normalization).
+ */
+
+/**
+ * قاعدة pass بمنطق structured:
+ *   - يبدأ بـ pass أو pwd وليس من الكلمات المسموحة (passenger/passive/compass/bypass).
+ *   - أو ينتهي بـ password / passwd / pwd.
+ */
+const PASS_ALLOWED = new Set(['passenger', 'passive', 'compass', 'bypass', 'passthrough']);
+
+function isSensitivePassLike(raw: string, norm: string): boolean {
+  const lower = raw.toLowerCase();
+  if (PASS_ALLOWED.has(norm)) return false;
+  // starts with pass/pwd (but not passenger etc.)
+  if (/^pass/.test(lower)) {
+    // extract first token up to next separator
+    const firstToken = lower.split(/[^a-z0-9]/)[0];
+    if (PASS_ALLOWED.has(firstToken)) return false;
+    return true;
+  }
+  if (/^pwd/.test(lower)) return true;
+  // ends with password/passwd/pwd/passcode
+  if (/(password|passwd|passcode|pwd)$/i.test(lower)) return true;
+  return false;
+}
+
+/**
+ * أنماط حساسة محددة جدًا — لتفادي oversanitization.
+ * - ssidN / ssid_X → ssid + لاحقة
+ * - wifiXXXXX / wlanXXXXX → wifi/wlan + شيء (لكن SAFE أولًا)
+ */
+const SENSITIVE_PATTERNS: readonly RegExp[] = [
+  /^ssid\d*$/,
+  /^ssid(\d|_|[a-z])+$/,
+  /^wifi\w*$/,
+  /^wlan\w*$/,
+];
+
+function isSensitiveField(raw: string): boolean {
+  const norm = normalizeFieldName(raw);
+  if (!norm) return false;
+  if (SENSITIVE_EXACT.has(norm)) return true;
+  if (isSensitivePassLike(raw, norm)) return true;
+  for (const re of SENSITIVE_PATTERNS) {
+    if (re.test(norm)) return true;
+  }
+  return false;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Value-based masking (Luhn + MAC + base64)
+// ═══════════════════════════════════════════════════════════════════════
 
 function luhnValid(digits: string): boolean {
   if (!/^\d+$/.test(digits)) return false;
@@ -79,15 +221,6 @@ function looksLikeToken(v: string): boolean {
   return /^[A-Za-z0-9+/]{40,}={0,2}$/.test(v);
 }
 
-function fieldDecision(name: string): boolean | undefined {
-  const n = name.trim().toLowerCase();
-  if (!n) return undefined;
-  if (SAFE_FIELD_NAMES.test(n)) return false;
-  if (SENSITIVE_FIELD_NAMES.test(n)) return true;
-  if (WIFI_NAME_LIKE.test(n)) return true;
-  return undefined;
-}
-
 function maskValue(value: string): string {
   if (looksLikeMAC(value)) return MASK;
   if (looksLikeIMEI(value)) return MASK;
@@ -96,38 +229,51 @@ function maskValue(value: string): string {
   return value;
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// Public API
+// ═══════════════════════════════════════════════════════════════════════
+
 export function sanitizeField(key: string, value: string): string {
-  const d = fieldDecision(key);
-  if (d === false) return value;
-  if (d === true) return MASK;
+  if (isSafe(normalizeFieldName(key))) return value;
+  if (isSensitiveField(key)) return MASK;
   return maskValue(value);
 }
 
 export function sanitize(raw: string): string {
   if (!raw) return raw;
   let t = raw;
+
+  // 1. XML: <tag>value</tag>
   t = t.replace(/<([A-Za-z_][\w.\-]*)>([^<]{1,4000})<\/\1>/g, (m, tag, val) => {
-    const d = fieldDecision(String(tag));
-    if (d === false) return m;
-    if (d === true) return '<' + tag + '>' + MASK + '</' + tag + '>';
-    const masked = maskValue(String(val));
-    return masked === val ? m : '<' + tag + '>' + masked + '</' + tag + '>';
+    const v = String(val);
+    if (isSafe(normalizeFieldName(String(tag)))) return m;
+    if (isSensitiveField(String(tag))) return '<' + tag + '>' + MASK + '</' + tag + '>';
+    const masked = maskValue(v);
+    return masked === v ? m : '<' + tag + '>' + masked + '</' + tag + '>';
   });
+
+  // 2. JSON: "key":"value"
   t = t.replace(/"([\w.\-]+)"\s*:\s*"([^"]{0,4000})"/g, (m, k, val) => {
-    const d = fieldDecision(String(k));
-    if (d === false) return m;
-    if (d === true) return '"' + k + '":"' + MASK + '"';
-    const masked = maskValue(String(val));
-    return masked === val ? m : '"' + k + '":"' + masked + '"';
+    const v = String(val);
+    if (isSafe(normalizeFieldName(String(k)))) return m;
+    if (isSensitiveField(String(k))) return '"' + k + '":"' + MASK + '"';
+    const masked = maskValue(v);
+    return masked === v ? m : '"' + k + '":"' + masked + '"';
   });
-  t = t.replace(/([\w.\-]{2,40})\s*[:=]\s*(["']?)([^\s;,&"'<>]{1,400})\2/g,
+
+  // 3. key=value / key: value
+  t = t.replace(
+    /([\w.\-]{2,40})\s*[:=]\s*(["']?)([^\s;,&"'<>]{1,400})\2/g,
     (m, k, _q, val) => {
-      const d = fieldDecision(String(k));
-      if (d === false) return m;
-      if (d === true) return k + '=' + MASK;
-      const masked = maskValue(String(val));
-      return masked === val ? m : k + '=' + masked;
-    });
+      const v = String(val);
+      if (isSafe(normalizeFieldName(String(k)))) return m;
+      if (isSensitiveField(String(k))) return k + '=' + MASK;
+      const masked = maskValue(v);
+      return masked === v ? m : k + '=' + masked;
+    },
+  );
+
+  // 4. Standalone patterns
   t = t.replace(/\b([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b/g, MASK);
   t = t.replace(/\b(SessionID|Set-Cookie|stok)\s*[=:]\s*[^\s;"'&<]+/gi,
     (_m, name) => name + '=' + MASK);
@@ -136,5 +282,6 @@ export function sanitize(raw: string): string {
     if (looksLikeIMEI(m) || looksLikeICCID(m)) return MASK;
     return m;
   });
+
   return t;
 }

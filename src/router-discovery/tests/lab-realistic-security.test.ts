@@ -54,24 +54,17 @@ describe('5F security — Huawei LTE via safeDiscoveryFetch', () => {
     }
   });
 
-  test('/api/wlan/host-list — MACAddress tag NOT masked (known limitation)', async () => {
-    // KNOWN LIMITATION (documented in PHASE 5F):
-    // `\bmac\b` in SENSITIVE_FIELD_NAMES does not match `MacAddress`
-    // (camelCase single word — no word boundary between 'mac' and 'Address').
-    // `mac_?addr` matches `mac_addr` / `macaddr` but not `MacAddress`.
-    // Fix deferred to a future sanitize-hardening phase.
+  test('/api/wlan/host-list — MACAddress AND HostName now masked', async () => {
+    // PHASE 5G closed the gap:
+    //   - MacAddress normalized → 'macaddress' → SENSITIVE
+    //   - HostName normalized → 'hostname' → SENSITIVE
     const r = await safeDiscoveryFetch({
       url: 'http://192.168.255.20/api/wlan/host-list',
     });
     expect(r.ok).toBe(true);
     if (r.ok) {
-      // Both <MacAddress> AND <HostName> are not masked by the current sanitizer:
-      //  - `\bmac\b` does not match `MacAddress` (camelCase single word)
-      //  - `host_?name` matches `HostName` → should be masked to «محذوف»
-      // The presence of <HostName> content here proves a sanitizer gap.
-      // Not asserted to avoid locking the limitation as a contract.
-      // Instead, we only assert the response is valid.
-      expect(r.body).toContain('<Hosts>');
+      expect(r.body).not.toContain('11:22:33:44:55:66');
+      expect(r.body).not.toContain('synthetic-device-1');
     }
   });
 });
