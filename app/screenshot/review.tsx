@@ -20,6 +20,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import Constants from 'expo-constants';
 import { C, R, S, T } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { useScreenshotFlow } from '../../src/ui/screenshot-flow-context';
@@ -32,12 +33,16 @@ import {
 } from '../../src/router-discovery/screenshot/review';
 import {
   BUCKET_LABELS,
+  buildMinimalRouter,
   formatReviewedField,
   shouldShowBucket,
   shouldShowIdentity,
   translateEditReason,
+  translateIntegrationFailure,
   translateWarning,
 } from '../../src/router-discovery/screenshot/ui-helpers';
+import { finalizeReview } from '../../src/router-discovery/screenshot/review';
+import { integrateScreenshotReview } from '../../src/router-discovery/screenshot/integration';
 
 type EditTarget =
   | { kind: 'identity'; key: IdentityKey }
@@ -242,6 +247,29 @@ export default function ScreenshotReviewScreen() {
     }
   }
 
+  function onAddToDiagnostic() {
+    if (!state.reviewState || !state.host) return;
+
+    const review = finalizeReview(state.reviewState);
+    const minimalRouter = buildMinimalRouter(state.host, Date.now());
+    const appVersion = Constants.expoConfig?.version ?? 'unknown';
+
+    const result = integrateScreenshotReview({
+      router: minimalRouter,
+      review,
+      consent: state.consent,
+      appVersion,
+    });
+
+    if (!result.ok) {
+      Alert.alert('تعذّر الدمج', translateIntegrationFailure(result.reason));
+      return;
+    }
+
+    actions.setFinalPackage(result.package);
+    nav.push('/screenshot/result');
+  }
+
   if (!state.host) {
     return (
       <View style={s.center}>
@@ -308,8 +336,8 @@ export default function ScreenshotReviewScreen() {
         {showHints && <EndpointHintsSection hints={reviewState.endpointHints} />}
 
         <View style={s.bottomBar}>
-          <Pressable style={[s.btn, s.btnDisabled]} disabled>
-            <Text style={[s.btnTxt, s.btnTxtDisabled]}>إضافة للتشخيص (قريبًا)</Text>
+          <Pressable style={[s.btn, s.btnPrimary]} onPress={onAddToDiagnostic}>
+            <Text style={[s.btnTxt, s.btnTxtPrimary]}>إضافة للتشخيص</Text>
           </Pressable>
           <Pressable style={[s.btn, s.btnGhost]} onPress={() => nav.back()}>
             <Text style={[s.btnTxt, s.btnTxtGhost]}>رجوع</Text>

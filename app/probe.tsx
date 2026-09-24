@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, Share, ActivityIndicator, Switch } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { GlassCard } from '../src/ui/GlassCard';
 import { C } from '../src/ui/theme';
 import { isLanHost } from '../src/utils/host';
@@ -13,6 +13,7 @@ import { guessApiStyle } from '../src/store/discovery';
 
 export default function ProbeScreen() {
   const params = useLocalSearchParams<{ host?: string }>();
+  const nav = useRouter();
   const [host, setHost] = useState(params.host || '192.168.0.1');
   const [model, setModel] = useState('');
   const [notes, setNotes] = useState('');
@@ -173,6 +174,14 @@ export default function ProbeScreen() {
         <TextInput style={[s.input, s.multi]} value={notes} onChangeText={setNotes} multiline placeholder="مثال: الشركة موبايلي، الجهاز 5G" placeholderTextColor={C.muted} />
         <Pressable style={[s.btn, (!agree || busy) && s.btnOff]} disabled={!agree || busy} onPress={start}>
           {busy ? <ActivityIndicator color={C.onAccent} /> : <Text style={s.btnTxt}>ابدأ الاستكشاف</Text>}
+        </Pressable>
+
+        <Pressable
+          style={[s.btn, { backgroundColor: C.gold, marginTop: 10 }, !isLanHost(host) && s.btnOff]}
+          disabled={!isLanHost(host)}
+          onPress={() => nav.push({ pathname: '/screenshot', params: { host } })}
+        >
+          <Text style={s.btnTxt}>🖼️ مساعد الصور</Text>
         </Pressable>
         {busy && prog.total > 0 && (<Text style={s.prog}>{prog.done}/{prog.total} — {prog.label}</Text>)}
         {!!err && <Text style={s.err}>{err}</Text>}

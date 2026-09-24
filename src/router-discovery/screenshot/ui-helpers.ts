@@ -184,3 +184,39 @@ export function translateEditReason(reason: EditReason): string {
       return 'خطأ';
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Integration helpers — PHASE 4C-2C-3
+// ═══════════════════════════════════════════════════════════════════════
+
+export function translateIntegrationFailure(
+  reason: 'NO_CONSENT' | 'NO_EVIDENCE',
+): string {
+  switch (reason) {
+    case 'NO_CONSENT':
+      return 'موافقة مفقودة';
+    case 'NO_EVIDENCE':
+      return 'لا توجد أدلة كافية للدمج';
+    default:
+      return 'تعذّر الدمج';
+  }
+}
+
+export interface StatRow {
+  label: string;
+  value: number;
+}
+
+export function formatStats(stats: {
+  filled: number;
+  overridden: number;
+  sanitized: number;
+  hintsIgnored: number;
+}): StatRow[] {
+  return [
+    { label: 'حقول جديدة', value: stats.filled },
+    { label: 'حقول مُتجاهَلة (مصدر أقوى)', value: stats.overridden },
+    { label: 'قيم تم تنظيفها', value: stats.sanitized },
+    { label: 'مؤشرات واجهات مُتجاهَلة', value: stats.hintsIgnored },
+  ];
+}
