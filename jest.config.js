@@ -14,6 +14,12 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
+  globals: {
+    // React Native/Expo global — declared here for Jest (Node.js).
+    // Matches react-native/types/globals.d.ts:
+    //   declare const __DEV__: boolean;
+    __DEV__: true,
+  },
   roots: ['<rootDir>/src'],
   testMatch: [
     '**/__tests__/**/*.test.ts',

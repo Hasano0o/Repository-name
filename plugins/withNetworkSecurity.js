@@ -17,14 +17,18 @@ const NETWORK_CONFIG_XML = `<?xml version="1.0" encoding="utf-8"?>
     </trust-anchors>
   </base-config>
   <domain-config cleartextTrafficPermitted="true">
-    <domain includeSubdomains="true">192.168.0.0</domain>
-    <domain includeSubdomains="true">192.168.1.1</domain>
-    <domain includeSubdomains="true">192.168.8.1</domain>
-    <domain includeSubdomains="true">10.0.0.1</domain>
-    <domain includeSubdomains="true">10.0.0.138</domain>
-    <domain includeSubdomains="true">172.16.0.1</domain>
-    <domain includeSubdomains="true">127.0.0.1</domain>
-    <domain includeSubdomains="true">localhost</domain>
+    <domain>192.168.0.1</domain>
+    <domain>192.168.1.1</domain>
+    <domain>192.168.2.1</domain>
+    <domain>192.168.8.1</domain>
+    <domain>192.168.50.1</domain>
+    <domain>192.168.88.1</domain>
+    <domain>192.168.100.1</domain>
+    <domain>10.0.0.1</domain>
+    <domain>10.0.0.138</domain>
+    <domain>172.16.0.1</domain>
+    <domain>127.0.0.1</domain>
+    <domain>localhost</domain>
   </domain-config>
 </network-security-config>
 `;

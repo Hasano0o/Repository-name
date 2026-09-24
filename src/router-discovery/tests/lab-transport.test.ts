@@ -324,3 +324,64 @@ describe('safeDiscoveryFetch + Mock Transport (integration)', () => {
     expect(r.ok).toBe(false);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════
+// PHASE 5I — Early redirect block
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('PHASE 5I — early redirect block', () => {
+  test('redirected=true with same-host URL → REDIRECT_BLOCKED', async () => {
+    const saved = (globalThis as any).fetch;
+    (globalThis as any).fetch = async () => ({
+      status: 302,
+      url: 'http://192.168.255.1/samehost-redirect',
+      redirected: true,
+      headers: {
+        get: (k: string) =>
+          k.toLowerCase() === 'content-type' ? 'text/plain' : null,
+      },
+      body: {
+        getReader: () => ({
+          read: async () => ({ done: true, value: undefined }),
+          cancel: async () => {},
+        }),
+      },
+      arrayBuffer: async () => new ArrayBuffer(0),
+      text: async () => '',
+    });
+    try {
+      const r = await safeDiscoveryFetch({ url: 'http://192.168.255.1/' });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.code).toBe('REDIRECT_BLOCKED');
+    } finally {
+      (globalThis as any).fetch = saved;
+    }
+  });
+
+  test('redirected=false → same-host response allowed', async () => {
+    const saved = (globalThis as any).fetch;
+    (globalThis as any).fetch = async () => ({
+      status: 200,
+      url: 'http://192.168.255.1/',
+      redirected: false,
+      headers: {
+        get: (k: string) =>
+          k.toLowerCase() === 'content-type' ? 'text/plain' : null,
+      },
+      body: {
+        getReader: () => ({
+          read: async () => ({ done: true, value: undefined }),
+          cancel: async () => {},
+        }),
+      },
+      arrayBuffer: async () => new ArrayBuffer(0),
+      text: async () => '',
+    });
+    try {
+      const r = await safeDiscoveryFetch({ url: 'http://192.168.255.1/' });
+      expect(r.ok).toBe(true);
+    } finally {
+      (globalThis as any).fetch = saved;
+    }
+  });
+});

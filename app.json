@@ -16,6 +16,7 @@
           "fetch",
           "processing"
         ],
+        "NSLocalNetworkUsageDescription": "يحتاج Bandly إلى الوصول للشبكة المحلية للاتصال براوترك وقراءة معلومات الشبكة والإشارة.\nBandly needs Local Network access to reach your router and read network and signal information.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true,
           "NSExceptionDomains": {

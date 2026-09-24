@@ -166,14 +166,23 @@ export async function safeDiscoveryFetch(
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   let res: Response;
+  const fetchOpts: RequestInit = {
+    method: 'GET',
+    credentials: 'omit',
+    redirect: 'follow',
+    signal: ctrl.signal,
+    // No custom headers — Discovery sends the absolute minimum.
+  };
+  // PHASE 5I — Discovery credentials invariant (dev-only, documentation-in-code).
+  // This is NOT a network-layer guarantee. See docs/security-gate-closure.md.
+  if (__DEV__ && fetchOpts.credentials !== 'omit') {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[safeRequest] SECURITY: credentials must remain "omit" for discovery',
+    );
+  }
   try {
-    res = await fetch(input.url, {
-      method: 'GET',
-      credentials: 'omit',
-      redirect: 'follow',
-      signal: ctrl.signal,
-      // No custom headers — Discovery sends the absolute minimum.
-    });
+    res = await fetch(input.url, fetchOpts);
   } catch (e: any) {
     clearTimeout(timer);
     const isAbort = e?.name === 'AbortError';
@@ -185,6 +194,21 @@ export async function safeDiscoveryFetch(
     };
   }
   clearTimeout(timer);
+
+  // 3.5. Early redirect block — PHASE 5I
+  // React Native fetch may follow redirects. If response.redirected is true,
+  // at least one redirect occurred. We refuse to consume the body in that
+  // case, regardless of the final URL. This is stricter than the URL-based
+  // checks below (which are retained as additional defense-in-depth).
+  if ((res as any).redirected === true) {
+    return {
+      ok: false,
+      code: 'REDIRECT_BLOCKED',
+      reason: 'Redirect detected — response not consumed',
+      status: res.status,
+      ms: Date.now() - started,
+    };
+  }
 
   // 4. Redirect check (post-hoc, RN limitation documented)
   let finalUrl: URL;

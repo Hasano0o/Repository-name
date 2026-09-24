@@ -48,9 +48,14 @@ export function buildMockResponse(init: MockResponseInit): Response {
     };
   };
 
+  // PHASE 5I — mirror React Native fetch semantics: any 3xx status
+  // is marked as redirected. safeRequest refuses to consume such responses.
+  const isRedirect = init.status >= 300 && init.status < 400;
+
   const res: any = {
     status: init.status,
     url: init.url,
+    redirected: isRedirect,
     headers: {
       get(name: string): string | null {
         return headerMap.get(name.toLowerCase()) ?? null;
