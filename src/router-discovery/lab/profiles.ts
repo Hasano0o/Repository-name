@@ -216,7 +216,7 @@ export const SENSITIVE_VALUES_FIXTURE: MockRouterProfile = {
   endpoints: [
     {
       method: 'GET',
-      path: '/api/status',
+      path: '/api/device/signal',
       status: 200,
       contentType: 'application/json',
       body: '{"rsrp":"-91","password":"SECRET_VALUE","token":"ABC123TOKEN","imei":"490154203237518","mac":"AA:BB:CC:DD:EE:FF","ssid":"HomeWiFi"}',
@@ -235,7 +235,7 @@ export const REDIRECT_FIXTURE: MockRouterProfile = {
   endpoints: [
     {
       method: 'GET',
-      path: '/api/status',
+      path: '/login.html',
       status: 302,
       contentType: 'text/plain',
       body: '',

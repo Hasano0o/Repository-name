@@ -296,32 +296,32 @@ describe('normal profiles are clean', () => {
 describe('malicious fixtures — content sanity', () => {
   test('SENSITIVE_VALUES_FIXTURE has password field', () => {
     const r = createMockRouter(SENSITIVE_VALUES_FIXTURE);
-    expect(r.lookup('/api/status').response?.body).toContain('"password"');
+    expect(r.lookup('/api/device/signal').response?.body).toContain('"password"');
   });
 
   test('SENSITIVE_VALUES_FIXTURE has token field', () => {
     const r = createMockRouter(SENSITIVE_VALUES_FIXTURE);
-    expect(r.lookup('/api/status').response?.body).toContain('"token"');
+    expect(r.lookup('/api/device/signal').response?.body).toContain('"token"');
   });
 
   test('SENSITIVE_VALUES_FIXTURE has IMEI', () => {
     const r = createMockRouter(SENSITIVE_VALUES_FIXTURE);
-    expect(r.lookup('/api/status').response?.body).toContain('490154203237518');
+    expect(r.lookup('/api/device/signal').response?.body).toContain('490154203237518');
   });
 
   test('SENSITIVE_VALUES_FIXTURE has MAC', () => {
     const r = createMockRouter(SENSITIVE_VALUES_FIXTURE);
-    expect(r.lookup('/api/status').response?.body).toContain('AA:BB:CC:DD:EE:FF');
+    expect(r.lookup('/api/device/signal').response?.body).toContain('AA:BB:CC:DD:EE:FF');
   });
 
   test('SENSITIVE_VALUES_FIXTURE has SSID', () => {
     const r = createMockRouter(SENSITIVE_VALUES_FIXTURE);
-    expect(r.lookup('/api/status').response?.body).toContain('HomeWiFi');
+    expect(r.lookup('/api/device/signal').response?.body).toContain('HomeWiFi');
   });
 
   test('REDIRECT_FIXTURE returns 302 with location to public host', () => {
     const r = createMockRouter(REDIRECT_FIXTURE);
-    const res = r.lookup('/api/status');
+    const res = r.lookup('/login.html');
     expect(res.response?.status).toBe(302);
     expect(res.response?.headers?.location).toContain('evil.example.com');
   });
