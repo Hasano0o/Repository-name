@@ -84,19 +84,7 @@ export default function ScreenshotInputScreen() {
 
       const reviewState = createReviewFromResult(result.result);
       actions.setReviewState(reviewState);
-
-      // ═══ PHASE 4C-2C-1: التنقل إلى /screenshot/review سيُضاف في 4C-2C-2
-      // ═══ الآن: نعرض تأكيد + نحفظ الحالة في Context
-      const fieldCount =
-        Object.keys(reviewState.signalFields).length +
-        Object.keys(reviewState.bandFields).length +
-        Object.keys(reviewState.cellFields).length;
-      Alert.alert(
-        'تم التحليل ✓',
-        fieldCount > 0
-          ? `استخرجنا ${fieldCount} حقلًا من النص. شاشة المراجعة قادمة في المرحلة التالية.`
-          : 'لم نجد حقولًا قابلة للتحليل في النص.',
-      );
+      nav.push('/screenshot/review');
     } catch (e: any) {
       Alert.alert('خطأ', e?.message ?? 'فشل التحليل.');
     } finally {

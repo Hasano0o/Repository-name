@@ -11,7 +11,7 @@ import {
 } from '../types';
 import { unknownEvidence } from '../evidence';
 import { ScreenshotWarningCode } from '../screenshotCollector';
-import { FieldBucket } from './review';
+import { EditReason, FieldBucket, ReviewedField } from './review';
 
 /** الحد الأقصى لطول النص المدخل — حماية فعلية عند UI */
 export const MAX_TEXT_INPUT_LENGTH = 50_000;
@@ -107,3 +107,80 @@ export const BUCKET_LABELS: Record<FieldBucket, string> = {
   cellFields: 'الخلية',
   networkFields: 'الشبكة',
 };
+
+// ═══════════════════════════════════════════════════════════════════════
+// Display helpers — PHASE 4C-2C-2
+// ═══════════════════════════════════════════════════════════════════════
+
+export const FIELD_LABELS: Record<string, string> = {
+  rsrp: 'RSRP',
+  rsrq: 'RSRQ',
+  rssi: 'RSSI',
+  sinr: 'SINR',
+  pci: 'PCI',
+  earfcn: 'EARFCN',
+  nrarfcn: 'NR-ARFCN',
+  band: 'Band',
+  bandwidth: 'عرض النطاق',
+  cell_id: 'Cell ID',
+  tac: 'TAC',
+  mcc: 'MCC',
+  mnc: 'MNC',
+  network_type: 'نوع الشبكة',
+  operator: 'المشغل',
+  vendor: 'الشركة',
+  model: 'الموديل',
+};
+
+export const FIELD_UNITS: Record<string, string> = {
+  rsrp: 'dBm',
+  rsrq: 'dB',
+  rssi: 'dBm',
+  sinr: 'dB',
+  bandwidth: 'MHz',
+};
+
+export interface FormattedField {
+  label: string;
+  value: string;
+  unit: string;
+  edited: boolean;
+  display: string;
+}
+
+export function formatReviewedField(
+  key: string,
+  field: ReviewedField,
+): FormattedField {
+  const label = FIELD_LABELS[key] ?? key;
+  const unit = FIELD_UNITS[key] ?? '';
+  const value = field.currentValue;
+  const display = unit ? `${label}: ${value} ${unit}` : `${label}: ${value}`;
+  return { label, value, unit, edited: field.edited, display };
+}
+
+export function shouldShowBucket(
+  bucket: Record<string, ReviewedField>,
+): boolean {
+  return Object.keys(bucket).length > 0;
+}
+
+export function shouldShowIdentity(identity: {
+  vendor: ReviewedField | null;
+  model: ReviewedField | null;
+}): boolean {
+  return identity.vendor !== null || identity.model !== null;
+}
+
+export function translateEditReason(reason: EditReason): string {
+  switch (reason) {
+    case 'INVALID_VALUE':
+      return 'القيمة غير صالحة';
+    case 'SENSITIVE_VALUE':
+      return 'القيمة تحتوي على بيانات حساسة';
+    case 'UNKNOWN_FIELD':
+      return 'حقل غير معروف';
+    default:
+      return 'خطأ';
+  }
+}
