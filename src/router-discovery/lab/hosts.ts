@@ -18,8 +18,18 @@ import {
   WRITE_ENDPOINT_FIXTURE,
   AUTH_ENDPOINT_FIXTURE,
 } from './profiles';
+import {
+  HUAWEI_LTE_REALISTIC,
+  HUAWEI_5G_REALISTIC,
+  ZTE_LTE_REALISTIC,
+  ZTE_5G_REALISTIC,
+  UNKNOWN_CPE_REALISTIC,
+  MALFORMED_FIXTURE,
+  PARTIAL_FIXTURE,
+} from './fixtures';
 
 export const MOCK_HOSTS: Readonly<Record<string, MockRouterProfile>> = {
+  // PHASE 5A/5B — basic + malicious
   '192.168.255.1': HUAWEI_GENERIC_V1,
   '192.168.255.2': HUAWEI_GENERIC_V2,
   '192.168.255.3': ZTE_GENERIC_V1,
@@ -30,6 +40,15 @@ export const MOCK_HOSTS: Readonly<Record<string, MockRouterProfile>> = {
   '192.168.255.11': REDIRECT_FIXTURE,
   '192.168.255.12': WRITE_ENDPOINT_FIXTURE,
   '192.168.255.13': AUTH_ENDPOINT_FIXTURE,
+
+  // PHASE 5F — realistic + behavioral
+  '192.168.255.20': HUAWEI_LTE_REALISTIC,
+  '192.168.255.21': HUAWEI_5G_REALISTIC,
+  '192.168.255.22': ZTE_LTE_REALISTIC,
+  '192.168.255.23': ZTE_5G_REALISTIC,
+  '192.168.255.24': UNKNOWN_CPE_REALISTIC,
+  '192.168.255.25': MALFORMED_FIXTURE,
+  '192.168.255.26': PARTIAL_FIXTURE,
 };
 
 export function isMockHost(host: string): boolean {

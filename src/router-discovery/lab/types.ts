@@ -41,6 +41,20 @@ export interface MockRouterProfile {
   readonly pages: readonly MockHttpResponse[];
   /** نقاط API (JSON/XML/نص) */
   readonly endpoints: readonly MockHttpResponse[];
+
+  /**
+   * تصنيف الواقعية — PHASE 5F.
+   * - 'synthetic-basic': بيانات مبسّطة
+   * - 'synthetic-realistic': بنية قريبة من أجهزة حقيقية
+   * غياب الحقل = profile قديم من 5A/5B.
+   */
+  readonly realism?: 'synthetic-basic' | 'synthetic-realistic';
+
+  /**
+   * إفصاح صريح عن مصدر البيانات.
+   * لا يُعتبر دليلًا على صحة المحتوى.
+   */
+  readonly disclosure?: string;
 }
 
 export type MockLookupReason = 'NOT_FOUND';

@@ -8,10 +8,11 @@ import {
   MALICIOUS_FIXTURES,
   ALL_PROFILES,
 } from '../lab/profiles';
+import { ALL_LAB_FIXTURES } from '../lab/fixtures';
 
 describe('MOCK_HOSTS mapping', () => {
-  test('has 10 entries', () => {
-    expect(Object.keys(MOCK_HOSTS).length).toBe(10);
+  test('has 17 entries (10 basic/malicious + 7 realistic/behavioral)', () => {
+    expect(Object.keys(MOCK_HOSTS).length).toBe(17);
   });
 
   test('all hosts are in 192.168.255.x range', () => {
@@ -34,10 +35,12 @@ describe('MOCK_HOSTS mapping', () => {
     }
   });
 
-  test('every mapped profile exists in ALL_PROFILES', () => {
-    const allIds = new Set(ALL_PROFILES.map((p) => p.id));
+  test('every mapped profile exists in a registry (profiles or fixtures)', () => {
+    const known = new Set<string>();
+    for (const p of ALL_PROFILES) known.add(p.id);
+    for (const p of ALL_LAB_FIXTURES) known.add(p.id);
     for (const profile of Object.values(MOCK_HOSTS)) {
-      expect(allIds.has(profile.id)).toBe(true);
+      expect(known.has(profile.id)).toBe(true);
     }
   });
 });

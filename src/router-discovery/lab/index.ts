@@ -24,3 +24,21 @@ export {
 } from './profiles';
 
 export { MockRouter, createMockRouter, normalizePath } from './router';
+
+// ─────────────────────────────────────────────────────────────────
+// PHASE 5F — Realistic Fixtures
+// ─────────────────────────────────────────────────────────────────
+
+export {
+  HUAWEI_LTE_REALISTIC,
+  HUAWEI_5G_REALISTIC,
+  ZTE_LTE_REALISTIC,
+  ZTE_5G_REALISTIC,
+  UNKNOWN_CPE_REALISTIC,
+  MALFORMED_FIXTURE,
+  PARTIAL_FIXTURE,
+  REALISTIC_FIXTURES,
+  BEHAVIORAL_FIXTURES,
+  ALL_LAB_FIXTURES,
+  DISCLOSURE_UNIFORM,
+} from './fixtures';
