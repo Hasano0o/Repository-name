@@ -510,33 +510,41 @@ export default function RouterDashboard() {
         })()}
 
         {!loading && info && (
-          <TileGrid>
-            <ToolTile icon="aim" color="#2f6bff" title="التوجيه" sub="لقّط أقوى إشارة"
-              onPress={() => router.push(`/aim/${info.id}` as Href)} />
-            <ToolTile icon="tower" color="#12b76a" title="الأبراج" sub="النواقل والدمج"
-              onPress={() => router.push(`/towers/${info.id}` as Href)} />
-            <ToolTile icon="spark" color="#7c5cff" title="أفضل تردد" sub="أسرع نت وأقل بنق"
-              onPress={() => router.push(`/finder/${info.id}` as Href)} />
-            <ToolTile icon="antenna" color="#f97316" title="الأنتنا" sub="تحتاجها؟ وأي نوع"
-              onPress={() => router.push(`/antenna/${info.id}` as Href)} />
-            <ToolTile icon="speed" color="#12b76a" title="السرعة" sub="تنزيل ورفع"
-              onPress={() => router.push(`/speed/${info.id}` as Href)} />
-            <ToolTile icon="game" color="#ec4899" title="البنق" sub="للألعاب"
-              onPress={() => router.push(`/ping/${info.id}` as Href)} />
-            <ToolTile icon="chart" color="#0891b2" title="التفاصيل" sub="كل الأرقام"
-              onPress={() => router.push(`/details/${info.id}` as Href)} />
-            <ToolTile icon="phone" color="#8b5cf6" title="الأجهزة" sub="المتصلين"
-              onPress={() => router.push(`/device/${info.id}` as Href)} />
-            <ToolTile icon="pin" color="#0ea5a4" title="الأماكن" sub="وين أحط الراوتر؟"
-              onPress={() => router.push(`/places/${info.id}` as Href)} />
-          </TileGrid>
+          <>
+            <Text style={s.groupTitle}>حسّن اتصالك</Text>
+            <TileGrid>
+              <ToolTile wide icon="aim" color="#2f6bff" title="التوجيه" sub="لقّط أقوى إشارة"
+                onPress={() => router.push(`/aim/${info.id}` as Href)} />
+              <ToolTile wide icon="tower" color="#12b76a" title="الأبراج" sub="النواقل والدمج"
+                onPress={() => router.push(`/towers/${info.id}` as Href)} />
+              <ToolTile wide icon="spark" color="#7c5cff" title="أفضل تردد" sub="أسرع نت وأقل بنق"
+                onPress={() => router.push(`/finder/${info.id}` as Href)} />
+              <ToolTile wide icon="antenna" color="#f97316" title="الأنتنا" sub="تحتاجها؟ وأي نوع"
+                onPress={() => router.push(`/antenna/${info.id}` as Href)} />
+            </TileGrid>
+            <Text style={s.groupTitle}>قِس وتابع</Text>
+            <TileGrid>
+              <ToolTile icon="speed" color="#12b76a" title="السرعة" sub="تنزيل ورفع"
+                onPress={() => router.push(`/speed/${info.id}` as Href)} />
+              <ToolTile icon="game" color="#ec4899" title="البنق" sub="للألعاب"
+                onPress={() => router.push(`/ping/${info.id}` as Href)} />
+              <ToolTile icon="chart" color="#0891b2" title="التفاصيل" sub="كل الأرقام"
+                onPress={() => router.push(`/details/${info.id}` as Href)} />
+              <ToolTile icon="phone" color="#8b5cf6" title="الأجهزة" sub="المتصلين"
+                onPress={() => router.push(`/device/${info.id}` as Href)} />
+              <ToolTile icon="pin" color="#0ea5a4" title="الأماكن" sub="وين أحط الراوتر؟"
+                onPress={() => router.push(`/places/${info.id}` as Href)} />
+              <ToolTile icon="report" color="#64748b" title="التقرير" sub="شاركه بصورة"
+                onPress={() => router.push(`/report/${info.id}` as Href)} />
+            </TileGrid>
+          </>
         )}
 
         {!loading && info && (
           <View style={s.moreCard}>
             <View style={s.moreHead}>
               <Icon name="layers" size={16} color={C.sub} />
-              <Text style={s.moreTitle}>المزيد</Text>
+              <Text style={s.moreTitle}>إعدادات وأدوات</Text>
             </View>
             <View style={s.moreGrid}>
               {feat.sms && (
@@ -560,12 +568,6 @@ export default function RouterDashboard() {
                   <Icon name="folder" size={18} color="#a16207" />
                 </View>
                 <Text style={s.moreLbl}>الملفات</Text>
-              </Pressable>
-              <Pressable style={s.moreTile} onPress={() => router.push(`/report/${info.id}` as Href)}>
-                <View style={[s.moreIcon, { backgroundColor: '#64748b18' }]}>
-                  <Icon name="report" size={18} color="#64748b" />
-                </View>
-                <Text style={s.moreLbl}>التقرير</Text>
               </Pressable>
               <Pressable style={s.moreTile} onPress={() => router.push('/monitor' as Href)}>
                 <View style={[s.moreIcon, { backgroundColor: '#f43f5e18' }]}>
@@ -774,6 +776,7 @@ const s = StyleSheet.create({
     marginTop: 6,
   },
   editBtnText: { color: C.blue, fontWeight: '800', fontSize: 14 },
+  groupTitle: { color: C.sub, fontSize: 13, fontWeight: '800', textAlign: 'right', marginTop: 6, marginBottom: -4, paddingHorizontal: 4 },
   moreCard: {
     backgroundColor: C.card, borderRadius: 20, padding: 14,
     borderWidth: 1, borderColor: C.cardBorder, gap: 10,
