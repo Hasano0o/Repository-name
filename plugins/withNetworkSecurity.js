@@ -10,22 +10,18 @@ const fs = require('fs');
 const path = require('path');
 
 const NETWORK_CONFIG_XML = `<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Bandly: HTTP مسموح على مستوى النظام لأن الراوترات عناوينها متنوعة
+  (192.168.0.1 / 192.168.31.1 / 10.0.0.138 ...) وأندرويد ما يدعم نطاقات CIDR هنا.
+  الحماية الفعلية: isLanHost() في src/drivers/http.ts يرفض أي عنوان خارج الشبكة المحلية،
+  وكل الاتصالات الخارجية (Cloudflare) HTTPS.
+-->
 <network-security-config>
-  <base-config cleartextTrafficPermitted="false">
+  <base-config cleartextTrafficPermitted="true">
     <trust-anchors>
       <certificates src="system" />
     </trust-anchors>
   </base-config>
-  <domain-config cleartextTrafficPermitted="true">
-    <domain includeSubdomains="true">192.168.0.0</domain>
-    <domain includeSubdomains="true">192.168.1.1</domain>
-    <domain includeSubdomains="true">192.168.8.1</domain>
-    <domain includeSubdomains="true">10.0.0.1</domain>
-    <domain includeSubdomains="true">10.0.0.138</domain>
-    <domain includeSubdomains="true">172.16.0.1</domain>
-    <domain includeSubdomains="true">127.0.0.1</domain>
-    <domain includeSubdomains="true">localhost</domain>
-  </domain-config>
 </network-security-config>
 `;
 

@@ -1,35 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Bandly — Network Security Config
-
-  الهدف: السماح بـ HTTP للشبكة المحلية فقط (192.168/10/172/127)،
-  ورفض HTTP لكل عنوان خارجي.
-
-  هذا يمنع MITM على كلمة مرور الراوتر عبر DNS spoofing.
+  Bandly: HTTP مسموح على مستوى النظام لأن الراوترات عناوينها متنوعة
+  (192.168.0.1 / 192.168.31.1 / 10.0.0.138 ...) وأندرويد ما يدعم نطاقات CIDR هنا.
+  الحماية الفعلية: isLanHost() في src/drivers/http.ts يرفض أي عنوان خارج الشبكة المحلية،
+  وكل الاتصالات الخارجية (Cloudflare) HTTPS.
 -->
 <network-security-config>
-  <!-- الافتراضي: HTTPS فقط (يمنع HTTP العادي) -->
-  <base-config cleartextTrafficPermitted="false">
+  <base-config cleartextTrafficPermitted="true">
     <trust-anchors>
       <certificates src="system" />
     </trust-anchors>
   </base-config>
-
-  <!-- الاستثناءات: الشبكات المحلية الخاصة بـ HTTP -->
-  <!-- IPv4 RFC 1918 + loopback -->
-  <domain-config cleartextTrafficPermitted="true">
-    <!-- 192.168.0.0/16 -->
-    <domain includeSubdomains="true">192.168.0.0</domain>
-    <domain includeSubdomains="true">192.168.1.1</domain>
-    <domain includeSubdomains="true">192.168.8.1</domain>
-    <domain includeSubdomains="true">192.168.100.1</domain>
-    <!-- 10.0.0.0/8 -->
-    <domain includeSubdomains="true">10.0.0.1</domain>
-    <domain includeSubdomains="true">10.0.0.138</domain>
-    <!-- 172.16.0.0/12 -->
-    <domain includeSubdomains="true">172.16.0.1</domain>
-    <!-- loopback -->
-    <domain includeSubdomains="true">127.0.0.1</domain>
-    <domain includeSubdomains="true">localhost</domain>
-  </domain-config>
 </network-security-config>

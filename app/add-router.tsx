@@ -102,7 +102,7 @@ export default function AddRouterScreen() {
       } else {
         saved = await saveRouter(payload, password);
       }
-      nav.replace('/router/' + saved.id);
+      nav.replace({ pathname: '/router/[id]', params: { id: saved.id } });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       Alert.alert('خطأ', msg);
