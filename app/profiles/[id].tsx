@@ -118,7 +118,7 @@ export default function ProfilesScreen() {
       {!!error && <Text style={s.err}>{error}</Text>}
       {!!status && <Text style={s.status}>{status}</Text>}
 
-      <GlassCard title="الوضع الحالي" subtitle="Current setup" icon="📍" tint={C.blue} collapsible={false}>
+      <GlassCard title="الوضع الحالي" icon="📍" tint={C.blue} collapsible={false}>
         <Text style={s.big}>{current}</Text>
         {!!cfg?.mode && <Text style={s.sub}>نمط الشبكة: {cfg.mode}</Text>}
         <Text style={s.lbl}>اسم الملف</Text>
@@ -132,7 +132,7 @@ export default function ProfilesScreen() {
         </Pressable>
       </GlassCard>
 
-      <GlassCard title="ملفاتي" subtitle="Saved profiles" icon="🗂️" tint={C.violet} collapsible={false}>
+      <GlassCard title="ملفاتي" icon="🗂️" tint={C.violet} collapsible={false}>
         {items.length === 0 && <Text style={s.sub}>ما حفظت أي ملف بعد.</Text>}
         {items.map(p => (
           <View key={p.id} style={s.row}>

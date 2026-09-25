@@ -9,7 +9,7 @@ import { CellTower, CellLockState, BandConfig } from '../../src/drivers/types';
 import { LEVEL_COLOR, LEVEL_LABEL, overallLevel } from '../../src/utils/signal';
 import { towerKey, towerTitle } from '../../src/utils/cells';
 import {
-  TowerGroup, groupTowers, loadConfirmed, rememberActive, cellQuality, rankScore, grade,
+  TowerGroup, groupTowers, loadConfirmed, rememberActive, rankScore, cellGrade,
   GRADE_LABEL, GRADE_COLOR, BADGE_LABEL, isLowBand, bandName, freqName,
 } from '../../src/utils/towers';
 import { C } from '../../src/ui/theme';
@@ -44,8 +44,7 @@ function TowerGroupCard({ g, rank, cellLock, canLock, busy, onLock }: {
   g: TowerGroup; rank?: number; cellLock: CellLockState | null; canLock: boolean; busy: boolean;
   onLock: (c: CellTower) => void;
 }) {
-  const q = cellQuality(g.best);
-  const gr = grade(q);
+  const gr = cellGrade(g.best);
   const lockedHere = !!cellLock && !!g.pci && cellLock.pci === g.pci;
   const low = isLowBand(g.best);
 
@@ -79,7 +78,7 @@ function TowerGroupCard({ g, rank, cellLock, canLock, busy, onLock }: {
 
       <View style={s.freqRow}>
         {g.cells.map((c, i) => {
-          const cg = grade(cellQuality(c));
+          const cg = cellGrade(c);
           return (
             <View key={i} style={[s.freq, c.kind !== 'neighbor' && s.freqOn]}>
               <View style={[s.freqDot, { backgroundColor: GRADE_COLOR[cg] }]} />
@@ -467,10 +466,10 @@ export default function TowersScreen() {
         )}
 
         {!loading && (lteNow || nrNow || nrAvail) && (
-          <GlassCard title="الاتصال الحالي" subtitle="ACTIVE CONNECTION" icon="📶" tint={C.blueSoft} collapsible={false}>
+          <GlassCard title="الاتصال الحالي" icon="📶" tint={C.blueSoft} collapsible={false}>
             <View style={s.dual}>
               {[{ c: lteNow, tag: '4G', color: C.blue }, { c: nrNow, tag: '5G', color: C.violet }].map(({ c, tag, color }) => {
-                const lv = overallLevel(c ? { rsrp: c.rsrp, sinr: c.sinr } : null);
+                const lv = overallLevel(c);
                 return (
                   <View key={tag} style={[s.dualBox, !c && { opacity: tag === '5G' && nrAvail ? 0.85 : 0.45 }]}>
                     <View style={[s.dualTag, { backgroundColor: color }]}>
@@ -500,7 +499,7 @@ export default function TowersScreen() {
         )}
 
         {!loading && canLock && primary && (
-          <GlassCard title="هل فيه برج أفضل؟" subtitle="RECOMMENDED" icon="⭐" tint={C.goldSoft} collapsible={false}>
+          <GlassCard title="هل فيه برج أفضل؟" icon="⭐" tint={C.goldSoft} collapsible={false}>
             {!worthIt || !bestOther ? (
               <Text style={s.recOk}>
                 ✓ أنت على أفضل برج متاح حسب القوة والجودة معاً — التثبيت على غيره ما بيحسّن شي.
@@ -529,7 +528,7 @@ export default function TowersScreen() {
         )}
 
         {!loading && !nrNow && !!nrAvail && (
-          <GlassCard title="أبراج 5G" subtitle="5G CELLS" icon="🛰️" tint={C.violetSoft} collapsible={false}>
+          <GlassCard title="أبراج 5G" icon="🛰️" tint={C.violetSoft} collapsible={false}>
             {nrFound === null && (
               <Text style={s.hint}>
                 البرج يدعم 5G لكنه غير نشط الحين، فالراوتر ما يقيس خلاياه. الكشف يحمّل ملف قصير عشان يصحّيه ويقرأ خلاياه.
@@ -565,7 +564,7 @@ export default function TowersScreen() {
         {!loading && inUse.length > 0 && (
           <GlassCard
             title={inUse.length > 1 ? `الأبراج اللي تستخدمها (${inUse.length})` : 'برجك الحالي'}
-            subtitle="IN USE" icon="🗼" tint={C.greenSoft} collapsible={false}
+            icon="🗼" tint={C.greenSoft} collapsible={false}
           >
             {inUse.map(g => (
               <TowerGroupCard key={g.key} g={g} cellLock={cellLock} canLock={canLock} busy={busy} onLock={onLock} />
@@ -574,7 +573,7 @@ export default function TowersScreen() {
         )}
 
         {!loading && (
-          <GlassCard title={`الأبراج حولك (${others.length})`} subtitle="NEARBY TOWERS" icon="📡" tint={C.blueSoft}>
+          <GlassCard title={`الأبراج حولك (${others.length})`} icon="📡" tint={C.blueSoft}>
             {others.length === 0 && (
               <Text style={s.muted}>
                 ما رجّع الراوتر أبراج مجاورة. بعض الإصدارات ما تدعم هذي القراءة، وبعضها ترجعها فقط وقت البحث عن شبكة.
@@ -590,7 +589,7 @@ export default function TowersScreen() {
         )}
 
         {!loading && (
-          <GlassCard title="كيف نقرأ الأبراج؟" subtitle="HOW IT WORKS" icon="ℹ️" tint={C.goldSoft} defaultOpen={false}>
+          <GlassCard title="كيف نقرأ الأبراج؟" icon="ℹ️" tint={C.goldSoft} defaultOpen={false}>
             <Text style={s.hint}>
               كل بطاقة = برج واحد. نجمع الترددات اللي لها نفس رقم البرج (PCI)، لأنها غالباً على نفس العمود.
             </Text>

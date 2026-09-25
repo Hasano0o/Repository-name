@@ -113,7 +113,7 @@ export default function DeviceScreen() {
       {!!error && <Text style={s.err}>{error}</Text>}
 
       {!!details && (
-        <GlassCard title="معلومات الجهاز" subtitle="DEVICE / NETWORK" icon="📟" tint={C.blueSoft} collapsible={false}>
+        <GlassCard title="معلومات الجهاز" icon="📟" tint={C.blueSoft} collapsible={false}>
           <View style={s.pills}>
             <Pill label="الموديل" value={details.model} />
             <Pill label="المشغّل" value={details.operator || details.simStatus} />
@@ -125,7 +125,7 @@ export default function DeviceScreen() {
       )}
 
       {!!usage && (
-        <GlassCard title="استهلاك هذا الشهر" subtitle="DATA USAGE" icon="📊" tint={C.greenSoft} collapsible={false}>
+        <GlassCard title="استهلاك هذا الشهر" icon="📊" tint={C.greenSoft} collapsible={false}>
           <UsageRing download={usage.downloadBytes} upload={usage.uploadBytes} size={150} />
           {limit > 0 ? (
             <View style={{ gap: 6, marginTop: 8 }}>
@@ -160,7 +160,7 @@ export default function DeviceScreen() {
 
       <GlassCard
         title={`الأجهزة المتصلة (${devices.length})`}
-        subtitle="CONNECTED DEVICES"
+       
         icon="🔗"
         tint={C.violetSoft}
         collapsible={false}

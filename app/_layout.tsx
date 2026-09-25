@@ -45,6 +45,9 @@ const SCREENS: [string, string][] = [
   ['monitor', 'المراقبة والتنبيهات'],
 ];
 
+// شاشات فيها عنوان كبير داخل الصفحة — ما نكرره في الشريط العلوي
+const OWN_TITLE = new Set(['aim/[id]', 'antenna/[id]']);
+
 export default function RootLayout() {
   const [loaded, error] = useFonts({
     IBMPlexSansArabic_400Regular,
@@ -79,7 +82,17 @@ export default function RootLayout() {
         }}
       >
         {SCREENS.map(([name, title]) => (
-          <Stack.Screen key={name} name={name} options={{ title }} />
+          <Stack.Screen
+            key={name}
+            name={name}
+            options={
+              name === 'index'
+                ? { title, headerShown: false } // الرئيسية لها عنوانها الخاص داخل الصفحة
+                : OWN_TITLE.has(name)
+                  ? { title, headerTitle: '' } // الصفحة تعرض عنوانها بنفسها — نخلي زر الرجوع بس
+                  : { title }
+            }
+          />
         ))}
       </Stack>
     </>

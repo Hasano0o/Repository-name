@@ -154,7 +154,7 @@ export default function ReportScreen() {
         </View>
       )}
 
-      <GlassCard title="تقييم الاتصال" subtitle="Connection grade" icon="🧾" tint={C.green} collapsible={false}>
+      <GlassCard title="تقييم الاتصال" icon="🧾" tint={C.green} collapsible={false}>
         <Text style={s.headline}>{sum?.headline ?? '—'}</Text>
         <Text style={s.sub}>{input?.routerName} · {input?.host}</Text>
         <View style={s.btnRow}>
@@ -167,13 +167,13 @@ export default function ReportScreen() {
         </View>
       </GlassCard>
 
-      <GlassCard title="التفاصيل" subtitle="Details" icon="📋" tint={C.blue} collapsible={false}>
+      <GlassCard title="التفاصيل" icon="📋" tint={C.blue} collapsible={false}>
         {(sum?.lines ?? []).map((l, i) => (
           <Text key={i} style={l.startsWith('  ') ? s.lineSub : s.line}>{l}</Text>
         ))}
       </GlassCard>
 
-      <GlassCard title="ملاحظات وتوصيات" subtitle="Advice" icon="💡" tint={C.gold} collapsible={false}>
+      <GlassCard title="ملاحظات وتوصيات" icon="💡" tint={C.gold} collapsible={false}>
         {(sum?.advice ?? []).map((a, i) => <Text key={i} style={s.advice}>• {a}</Text>)}
       </GlassCard>
 

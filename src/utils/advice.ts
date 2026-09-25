@@ -9,7 +9,11 @@ export interface Advice {
   action?: { label: string; route: ActionRoute; hint?: string };
 }
 
-export function buildAdvice(signal?: Signal | null, cells: CellTower[] = []): Advice {
+export function buildAdvice(
+  signal?: Signal | null,
+  cells: CellTower[] = [],
+  opts: { no5g?: boolean } = {},
+): Advice {
   if (!signal || (signal.rsrp === undefined && signal.nrRsrp === undefined)) {
     return {
       sentence: 'ما قدرنا نقرأ الإشارة من الراوتر — جرّب تحدّث الصفحة أو تأكد إنك على شبكته.',
@@ -49,7 +53,7 @@ export function buildAdvice(signal?: Signal | null, cells: CellTower[] = []): Ad
     };
   }
 
-  if (!nr && signal.nrAvailable) {
+  if (!nr && !opts.no5g && signal.nrAvailable) {
     return {
       sentence: `${parts.join(' ')}. البرج يدعم 5G لكنه غير نشط الحين — ينشط وقت التحميل. ` +
         'لو ما نشط حتى وأنت تحمّل، الأرجح أن شريحتك أو باقتك ما تدعم 5G.',
@@ -57,7 +61,7 @@ export function buildAdvice(signal?: Signal | null, cells: CellTower[] = []): Ad
     };
   }
 
-  if (!nr) {
+  if (!nr && !opts.no5g) {
     return {
       sentence: `${parts.join(' ')}. ما فيه 5G حالياً — الفحص يكشف إذا فيه تغطية حولك.`,
       action: { label: 'افحص ترددات 5G', route: 'bands' },

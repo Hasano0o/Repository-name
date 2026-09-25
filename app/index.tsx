@@ -124,7 +124,7 @@ export default function RoutersList() {
 
   if (!loaded) {
     return (
-      <View style={[s.list, { paddingTop: S.md }]}>
+      <View style={[s.list, { paddingTop: insets.top + S.md }]}>
         <SkeletonRouterCard />
         <SkeletonRouterCard />
       </View>
@@ -153,7 +153,7 @@ export default function RoutersList() {
       <FlatList
         data={items}
         keyExtractor={i => i.id}
-        contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 90 }]}
+        contentContainerStyle={[s.list, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 90 }]}
         ListHeaderComponent={
           <View style={s.header}>
             <View style={{ flex: 1 }}>

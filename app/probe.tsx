@@ -154,7 +154,7 @@ export default function ProbeScreen() {
 
   return (
     <ScrollView style={s.wrap} contentContainerStyle={s.content}>
-      <GlassCard title="ساعدنا ندعم راوترك" subtitle="Device explorer" icon="🧭" tint={C.violet} collapsible={false}>
+      <GlassCard title="ساعدنا ندعم راوترك" icon="🧭" tint={C.violet} collapsible={false}>
         <Text style={s.p}>
           التطبيق بيجرب عناوين معروفة داخل راوترك ويسجّل شكل الردود، عشان نقدر نضيف دعم كامل لموديلك.
         </Text>
@@ -170,7 +170,7 @@ export default function ProbeScreen() {
         </View>
       </GlassCard>
 
-      <GlassCard title="بيانات الجهاز" subtitle="Device info" icon="📋" tint={C.blue} collapsible={false}>
+      <GlassCard title="بيانات الجهاز" icon="📋" tint={C.blue} collapsible={false}>
         <Text style={s.lbl}>عنوان الراوتر</Text>
         <TextInput style={s.input} value={host} onChangeText={setHost} autoCapitalize="none" keyboardType="url" placeholder="192.168.0.1" placeholderTextColor={C.muted} />
         <Text style={s.lbl}>الموديل (اختياري)</Text>
@@ -184,7 +184,7 @@ export default function ProbeScreen() {
         {!!err && <Text style={s.err}>{err}</Text>}
       </GlassCard>
 
-      <GlassCard title="فحص عميق (ZTE)" subtitle="Field discovery" icon="🔬" tint={C.gold} collapsible={false}>
+      <GlassCard title="فحص عميق (ZTE)" icon="🔬" tint={C.gold} collapsible={false}>
         <Text style={s.p}>يسجّل الدخول ويكشف أسماء الحقول اللي يدعمها راوترك فعلاً.</Text>
         <Text style={s.lbl}>كلمة مرور الراوتر</Text>
         <TextInput style={s.input} value={pw} onChangeText={setPw} secureTextEntry placeholder="••••••••" placeholderTextColor={C.muted} />
@@ -208,7 +208,7 @@ export default function ProbeScreen() {
         )}
       </GlassCard>
 
-      <GlassCard title="سحب أوامر الواجهة" subtitle="Command harvest" icon="🧬" tint={C.blue} collapsible={false}>
+      <GlassCard title="سحب أوامر الواجهة" icon="🧬" tint={C.blue} collapsible={false}>
         <Text style={s.p}>يقرأ ملفات واجهة الراوتر ويستخرج أسماء الأوامر الحقيقية اللي يستخدمها.</Text>
         <Pressable style={[s.btn, busy && s.btnOff]} disabled={busy} onPress={harvest}>
           {busy ? <ActivityIndicator color={C.onAccent} /> : <Text style={s.btnTxt}>اسحب الأوامر</Text>}
@@ -225,7 +225,7 @@ export default function ProbeScreen() {
         )}
       </GlassCard>
 
-      <GlassCard title="حصاد عميق شامل" subtitle="Deep harvest · Webpack + Source maps" icon="🛰️" tint={C.violet} collapsible={false}>
+      <GlassCard title="حصاد عميق شامل" icon="🛰️" tint={C.violet} collapsible={false}>
         <Text style={s.p}>
           يقرأ كل ملفات JS الظاهرة، يمشي على webpack chunks، ويجرّب source maps — ويجمع أوامر ومسارات وسلاسل إشارة منظّفة.
         </Text>
@@ -299,7 +299,7 @@ export default function ProbeScreen() {
       </GlassCard>
 
       {report && (
-        <GlassCard title="النتيجة" subtitle="Report" icon="🧪" tint={C.green} collapsible={false}>
+        <GlassCard title="النتيجة" icon="🧪" tint={C.green} collapsible={false}>
           <View style={s.guessRow}>
             <Text style={s.guessLbl}>التخمين</Text>
             <Text style={s.guessVal}>{report.guess}</Text>

@@ -116,6 +116,7 @@ export default function RouterDashboard() {
   const [details, setDetails] = useState<DeviceDetails | null>(null);
   const [online, setOnline] = useState<boolean | undefined>();
   const [mode, setMode] = useState<string | undefined>();
+  const [has5g, setHas5g] = useState<boolean | undefined>();
   const [lock, setLock] = useState<ActiveLock | null>(null);
   const [traffic, setTraffic] = useState<Traffic | null>(null);
   const [plan, setPlan] = useState<DataPlan | null>(null);
@@ -168,6 +169,7 @@ export default function RouterDashboard() {
         setBlocked(blk);
         setOnline(net?.connected);
         setMode(net?.mode);
+        setHas5g(net?.supports5g);
         setTraffic(trf);
         setPlan(dp);
         setLock(lk);
@@ -398,7 +400,8 @@ export default function RouterDashboard() {
     ? (bands.length ? '5G NSA' : '5G')
     : (bands.length > 1 ? '4G+' : signal?.network ?? '4G LTE') + (nrIdle ? ' · 5G متاح' : '');
   const disconnected = online === false;
-  const fourGOnly = mode === '03';
+  // التنبيه يطلع بس لراوتر يدعم 5G ومقفول على 4G — راوتر 4G فقط ما نزعجه
+  const fourGOnly = mode === '03' && has5g !== false;
 
   return (
     <LinearGradient
@@ -492,7 +495,7 @@ export default function RouterDashboard() {
         )}
 
         {!loading && signal && info && (() => {
-          const adv = buildAdvice(signal);
+          const adv = buildAdvice(signal, [], { no5g: has5g === false });
           if (!adv.action) return null;
           const soft = level === 'excellent';
           return (
@@ -725,7 +728,7 @@ const s = StyleSheet.create({
   },
   pillHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 },
   pillIcon: { fontSize: 13 },
-  pillLabel: { color: C.muted, fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
+  pillLabel: { color: C.muted, fontSize: 10, fontWeight: '800' },
   pillValue: { color: C.text, fontWeight: '700', fontSize: 13, textAlign: 'right' },
   pill: { borderRadius: 999, borderWidth: 1, borderColor: C.cardBorder, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: C.rowBg },
   pillOn: { backgroundColor: C.blue, borderColor: C.blue },
@@ -740,7 +743,7 @@ const s = StyleSheet.create({
   speedBox: { flex: 1, alignItems: 'center', borderRadius: 16, paddingVertical: 12 },
   speedVal: { fontSize: 24, fontWeight: '800' },
   speedUnit: { color: C.sub, fontSize: 11 },
-  speedLabel: { color: C.muted, fontWeight: '800', fontSize: 10, marginTop: 4, letterSpacing: 0.8 },
+  speedLabel: { color: C.muted, fontWeight: '800', fontSize: 10, marginTop: 4 },
   planWrap: { borderTopWidth: 1, borderTopColor: C.cardBorder, paddingTop: 12, gap: 8 },
   planHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   planTitle: { color: C.text, fontWeight: '800', textAlign: 'right' },

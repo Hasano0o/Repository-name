@@ -13,6 +13,7 @@ import { withSession } from '../../src/store/sessions';
 import { Carrier, CellTower, Signal } from '../../src/drivers/types';
 import { adviseAntenna, AntennaAdvice, Need } from '../../src/utils/antenna';
 import { Icon } from '../../src/ui/Icon';
+import { Level, LEVEL_COLOR, LEVEL_LABEL, rsrpLevel, rsrqLevel, sinrLevel, rssiLevel } from '../../src/utils/signal';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -29,36 +30,14 @@ const CARD = '#FFFFFF';
 const CARD_BG = '#FAFCFF';
 const BORDER = '#E6ECF5';
 
-// ═══ تقييم كل مؤشر (نص + لون) ═══
+// ═══ تقييم كل مؤشر (نص + لون) — من المصدر الموحّد src/utils/signal.ts ═══
 type Grade = { label: string; color: string };
-function rsrpGrade(v?: number): Grade {
-  if (v === undefined) return { label: '—', color: MUTED };
-  if (v >= -85) return { label: 'ممتاز', color: SUCCESS };
-  if (v >= -95) return { label: 'جيد', color: '#22C55E' };
-  if (v >= -105) return { label: 'مقبول', color: WARN };
-  return { label: 'ضعيف', color: DANGER };
-}
-function sinrGrade(v?: number): Grade {
-  if (v === undefined) return { label: '—', color: MUTED };
-  if (v >= 20) return { label: 'ممتاز', color: SUCCESS };
-  if (v >= 13) return { label: 'جيد', color: '#22C55E' };
-  if (v >= 5) return { label: 'مقبول', color: WARN };
-  return { label: 'ضعيف', color: DANGER };
-}
-function rsrqGrade(v?: number): Grade {
-  if (v === undefined) return { label: '—', color: MUTED };
-  if (v >= -10) return { label: 'ممتاز', color: SUCCESS };
-  if (v >= -15) return { label: 'جيد', color: '#22C55E' };
-  if (v >= -20) return { label: 'مقبول', color: WARN };
-  return { label: 'ضعيف', color: DANGER };
-}
-function rssiGrade(v?: number): Grade {
-  if (v === undefined) return { label: '—', color: MUTED };
-  if (v >= -70) return { label: 'ممتاز', color: SUCCESS };
-  if (v >= -80) return { label: 'جيد', color: '#22C55E' };
-  if (v >= -90) return { label: 'مقبول', color: WARN };
-  return { label: 'ضعيف', color: DANGER };
-}
+const toGrade = (l: Level): Grade =>
+  l === 'unknown' ? { label: '—', color: MUTED } : { label: LEVEL_LABEL[l], color: LEVEL_COLOR[l] };
+const rsrpGrade = (v?: number) => toGrade(rsrpLevel(v));
+const sinrGrade = (v?: number) => toGrade(sinrLevel(v));
+const rsrqGrade = (v?: number) => toGrade(rsrqLevel(v));
+const rssiGrade = (v?: number) => toGrade(rssiLevel(v));
 
 /** بطاقة مؤشر صغيرة */
 function MetricCard({
@@ -169,10 +148,10 @@ export default function AntennaAdvisor() {
   const theme = adv ? NEED_THEME[adv.need] : NEED_THEME.maybe;
 
   // القيم الأربع للدوائر
-  const c1 = { pct: pctFromRsrp(sig?.rsrp), color: sig?.rsrp === undefined ? MUTED : (sig.rsrp >= -85 ? SUCCESS : sig.rsrp >= -95 ? '#22C55E' : sig.rsrp >= -105 ? WARN : DANGER) };
-  const c2 = { pct: pctFromRsrq(sig?.rsrq), color: sig?.rsrq === undefined ? MUTED : (sig.rsrq >= -10 ? SUCCESS : sig.rsrq >= -15 ? WARN : DANGER) };
-  const c3 = { pct: pctFromSinr(sig?.sinr), color: sig?.sinr === undefined ? MUTED : (sig.sinr >= 13 ? SUCCESS : sig.sinr >= 5 ? WARN : DANGER) };
-  const c4 = { pct: pctFromRssi(sig?.rssi), color: sig?.rssi === undefined ? MUTED : (sig.rssi >= -70 ? SUCCESS : sig.rssi >= -85 ? WARN : DANGER) };
+  const c1 = { pct: pctFromRsrp(sig?.rsrp), color: rsrpGrade(sig?.rsrp).color };
+  const c2 = { pct: pctFromRsrq(sig?.rsrq), color: rsrqGrade(sig?.rsrq).color };
+  const c3 = { pct: pctFromSinr(sig?.sinr), color: sinrGrade(sig?.sinr).color };
+  const c4 = { pct: pctFromRssi(sig?.rssi), color: rssiGrade(sig?.rssi).color };
 
   return (
     <View style={g.container}>

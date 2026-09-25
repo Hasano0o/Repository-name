@@ -21,7 +21,7 @@ const Haptics = {
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { Signal, CellTower, CellLockTarget } from '../../src/drivers/types';
-import { LEVEL_LABEL, overallLevel, signalScore, parseBands, parseNrBands } from '../../src/utils/signal';
+import { Level, LEVEL_COLOR, LEVEL_LABEL, overallLevel, signalScore, parseBands, parseNrBands } from '../../src/utils/signal';
 import { trafficBurst } from '../../src/utils/nrprobe';
 import { AimBeeper } from '../../src/utils/aimSound';
 
@@ -68,19 +68,7 @@ function readOf(sig: Signal, tech: Tech): { rsrp?: number; sinr?: number; cell: 
     cell: { tech: 'LTE', band: b ? parseInt(b.slice(1), 10) : undefined, pci: sig.pci, arfcn: sig.earfcn },
   };
 }
-function levelColor(level: string): string {
-  if (level === 'excellent') return '#16A34A';
-  if (level === 'good') return SUCCESS;
-  if (level === 'fair') return WARN;
-  return DANGER;
-}
-function estimateDistance(rsrp?: number): string {
-  if (rsrp === undefined) return '—';
-  const c = Math.max(-125, Math.min(-60, rsrp));
-  const m = 150 * Math.pow(10, (-60 - c) / 25);
-  if (m < 1000) return `${Math.round(m / 50) * 50} م`;
-  return `${(m / 1000).toFixed(1)} كم`;
-}
+const levelColor = (level: Level): string => LEVEL_COLOR[level];
 
 
 
@@ -569,8 +557,8 @@ export default function AimScreen() {
   const pct = current?.score ?? 0;
   const bandList = [...new Set([...bands, ...nrBands])];
   const currentBand = current?.cell.band ? (current.cell.tech === 'NR' ? `n${current.cell.band}` : `B${current.cell.band}`) : undefined;
-  const distance = estimateDistance(shown);
-  const improvePct = delta !== undefined && delta !== 0 ? Math.round(Math.abs(delta) * 2.5) : 0;
+  // أرقام حقيقية فقط: أفضل قراءة سجّلناها، وكم تبعد عنها الحين
+  const gapToBest = bestShown !== undefined && shown !== undefined ? Math.round(bestShown - shown) : undefined;
 
   const stability = readings.length >= 5
     ? (() => {
@@ -632,7 +620,7 @@ export default function AimScreen() {
                 <MetricTile icon="tower" label="PCI" value={current?.cell.pci ?? '—'} iconBg="#EEE8FF" iconColor="#7C3AED" />
                 <MetricTile icon="chart" label="RSRP" value={shown ?? '—'} unit="dBm" iconBg="#DFF9ED" iconColor="#16A34A" />
                 <MetricTile icon="speed" label="SINR" value={current?.sinr ?? '—'} unit="dB" iconBg="#E1F5FF" iconColor="#0891B2" />
-                <MetricTile icon="bands" label="Band" value={currentBand ?? '—'} iconBg="#FEF3C7" iconColor="#D97706" />
+                <MetricTile icon="bands" label="الباند" value={currentBand ?? '—'} iconBg="#FEF3C7" iconColor="#D97706" />
               </View>
 
               {/* Status */}
@@ -723,15 +711,17 @@ export default function AimScreen() {
                 <View style={a.dirBody}>
                   <View style={a.dirStatCol}>
                     <Icon name="spark" size={18} color={SUCCESS} />
-                    <Text style={a.dirStatLbl}>تحسن متوقع</Text>
-                    <Text style={[a.dirStatVal, { color: SUCCESS }]}>
-                      {improvePct > 0 ? `+${improvePct}%` : '—'}
+                    <Text style={a.dirStatLbl}>أفضل قراءة</Text>
+                    <Text style={[a.dirStatVal, { color: SUCCESS }]} numberOfLines={1}>
+                      {bestShown !== undefined ? `${Math.round(bestShown)} dBm` : '—'}
                     </Text>
                   </View>
                   <View style={a.dirStatCol}>
                     <Icon name="pin" size={18} color={BLUE} />
-                    <Text style={a.dirStatLbl}>المسافة</Text>
-                    <Text style={a.dirStatVal} numberOfLines={1}>{distance}</Text>
+                    <Text style={a.dirStatLbl}>أنت الحين</Text>
+                    <Text style={[a.dirStatVal, gapToBest !== undefined && gapToBest > 1 && { color: WARN }]} numberOfLines={1}>
+                      {gapToBest === undefined ? '—' : gapToBest <= 1 ? 'عليها ✓' : `أقل بـ ${gapToBest} dB`}
+                    </Text>
                   </View>
                   <View style={a.dirStatCol}>
                     <Icon name="tower" size={18} color={PURPLE} />

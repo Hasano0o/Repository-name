@@ -93,7 +93,7 @@ export default function HistoryScreen() {
         )}
 
         {!loading && list.length > 0 && (
-          <GlassCard title="منحنى الإشارة" subtitle="SIGNAL OVER TIME" icon="📈" tint={C.blueSoft} collapsible={false}>
+          <GlassCard title="منحنى الإشارة" icon="📈" tint={C.blueSoft} collapsible={false}>
             <TimeChart times={times} series={series} />
             <View style={s.stats}>
               <Stat label="أضعف RSRP" value={sum.rsrpMin} unit="dBm" color={LEVEL_COLOR[rsrpLevel(sum.rsrpMin)]} />
@@ -104,13 +104,13 @@ export default function HistoryScreen() {
         )}
 
         {!loading && list.length >= 3 && (
-          <GlassCard title="نبضة الإشارة" subtitle="LAST 20 READINGS" icon="🎯" tint={C.blueSoft} collapsible={false}>
+          <GlassCard title="نبضة الإشارة" icon="🎯" tint={C.blueSoft} collapsible={false}>
             <SignalRadar history={list.slice(-20).map(x => ({ rsrp: x.rsrp, sinr: x.sinr }))} />
           </GlassCard>
         )}
 
         {!loading && list.length > 0 && (
-          <GlassCard title="السرعة اللحظية" subtitle="THROUGHPUT" icon="⚡" tint={C.greenSoft}>
+          <GlassCard title="السرعة اللحظية" icon="⚡" tint={C.greenSoft}>
             <TimeChart times={times} series={speedSeries} />
             <Text style={s.hint}>
               أعلى تنزيل مسجّل: {fmtRate(Math.max(0, ...list.map(x => x.down ?? 0)))}
@@ -119,7 +119,7 @@ export default function HistoryScreen() {
         )}
 
         {!loading && sum.topBands.length > 0 && (
-          <GlassCard title="الترددات الأكثر استخداماً" subtitle="BAND USAGE" icon="📊" tint={C.violetSoft}>
+          <GlassCard title="الترددات الأكثر استخداماً" icon="📊" tint={C.violetSoft}>
             {sum.topBands.map(([band, n]) => {
               const pct = Math.round((n / sum.count) * 100);
               return (

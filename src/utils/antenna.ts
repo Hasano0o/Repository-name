@@ -2,6 +2,7 @@ import { Carrier, CellTower, Signal } from '../drivers/types';
 import { freqLabel } from './bands';
 import { isLowBand } from './towers';
 import { estimateLoad } from './congestion';
+import { LEVEL_LABEL, overallLevel } from './signal';
 
 export type Need = 'yes' | 'maybe' | 'no';
 
@@ -42,7 +43,7 @@ export function adviseAntenna(sig: Signal, carriers: Carrier[], cells: CellTower
 
   if (rsrp < -110) { score += 3; reasons.push(`الإشارة ضعيفة جداً (${rsrp} dBm) — الأنتنا الخارجية ترفعها عادة ٨–١٥ dB.`); }
   else if (rsrp < -100) { score += 2; reasons.push(`الإشارة ضعيفة (${rsrp} dBm).`); }
-  else if (rsrp < -93) { score += 1; reasons.push(`الإشارة متوسطة (${rsrp} dBm).`); }
+  else if (rsrp < -90) { score += 1; reasons.push(`الإشارة متوسطة (${rsrp} dBm).`); }
 
   if (sinr < 3) { score += 2; reasons.push(`تشويش عالي (SINR ${sinr}) — أنتنا اتجاهية تسمع برج واحد وتتجاهل الباقي.`); }
   else if (sinr < 10) { score += 1; reasons.push(`فيه تشويش متوسط (SINR ${sinr}).`); }
@@ -58,14 +59,14 @@ export function adviseAntenna(sig: Signal, carriers: Carrier[], cells: CellTower
   const load = estimateLoad(sig.rsrq, sig.sinr);
   let otherCause: string | undefined;
   if (need === 'no' && load !== undefined && load >= 0.75) {
-    otherCause = 'إشارتك قوية ونظيفة، فالبطء (لو فيه) سببه زحمة البرج — الأنتنا ما بتحلها. جرّب برج أو تردد ثاني وقت الزحمة.';
+    otherCause = 'إشارتك كافية ونظيفة، فالبطء (لو فيه) سببه زحمة البرج — الأنتنا ما بتحلها. جرّب برج أو تردد ثاني وقت الزحمة.';
   }
 
   const headline =
     need === 'yes' ? 'نعم — الأنتنا الخارجية بتفرق معك بوضوح' :
     need === 'maybe' ? 'ممكن تفيد — جرّب التوجيه وتغيير المكان أول' :
     'ما تحتاج أنتنا — إشارتك داخل البيت كافية';
-  if (!reasons.length) reasons.push(`إشارة قوية (${rsrp} dBm) ونظيفة (SINR ${sinr}) والراوتر مرتاح في الإرسال.`);
+  if (!reasons.length) reasons.push(`اتصالك ${LEVEL_LABEL[overallLevel(sig)]} (RSRP ${rsrp} · SINR ${sinr}) والراوتر مرتاح في الإرسال.`);
 
   // ─── نوع الأنتنا ───
   const used = carriers.length

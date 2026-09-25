@@ -215,7 +215,7 @@ export default function PingScreen() {
         )}
 
         {!loading && (
-          <GlassCard title="استجابتك الآن" subtitle="CURRENT PING" icon="🎮" tint={C.greenSoft} collapsible={false}>
+          <GlassCard title="استجابتك الآن" icon="🎮" tint={C.greenSoft} collapsible={false}>
             {now ? (
               <>
                 <View style={s.statRow}>
@@ -244,7 +244,7 @@ export default function PingScreen() {
       )}
 
       {!loading && avail.length > 0 && cfg && (
-          <GlassCard title="قارن الترددات" subtitle="LATENCY SCAN" icon="🔬" tint={C.goldSoft} collapsible={false}>
+          <GlassCard title="قارن الترددات" icon="🔬" tint={C.goldSoft} collapsible={false}>
             <Text style={s.hint}>
               نقفل على كل تردد ونقيس استجابته فعلياً. الإنترنت بينقطع أثناء الفحص، وبعده نرجّع إعدادك
             </Text>
@@ -311,7 +311,7 @@ export default function PingScreen() {
         )}
 
         {!loading && (
-          <GlassCard title="وش يهم في الألعاب" subtitle="WHAT MATTERS" icon="💡" tint={C.violetSoft} defaultOpen={false}>
+          <GlassCard title="وش يهم في الألعاب" icon="💡" tint={C.violetSoft} defaultOpen={false}>
             <Text style={s.hint}>
               الاستجابة (ping) أهم من السرعة. تحت 50ms ممتاز، و50 إلى 90 جيد، وفوق 150 تحس بالتأخير
             </Text>

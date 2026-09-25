@@ -13,6 +13,7 @@ import { withSession } from '../../src/store/sessions';
 import { Signal } from '../../src/drivers/types';
 import { snapshot } from '../../src/utils/safeLock';
 import { Icon, IconName } from '../../src/ui/Icon';
+import { LEVEL_COLOR, LEVEL_LABEL, rsrpLevel } from '../../src/utils/signal';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -66,19 +67,12 @@ const ago = (t: number) => {
   const d = Math.round(h / 24);
   return d === 1 ? 'أمس' : `قبل ${d} أيام`;
 };
+// التقييم من المصدر الموحّد (src/utils/signal.ts)
 function rsrpColor(v?: number): string {
-  if (v === undefined) return MUTED;
-  if (v >= -85) return SUCCESS;
-  if (v >= -95) return '#22C55E';
-  if (v >= -105) return WARN;
-  return DANGER;
+  return v === undefined ? MUTED : LEVEL_COLOR[rsrpLevel(v)];
 }
 function rsrpGrade(v?: number): string {
-  if (v === undefined) return '—';
-  if (v >= -85) return 'ممتاز';
-  if (v >= -95) return 'جيد';
-  if (v >= -105) return 'مقبول';
-  return 'ضعيف';
+  return v === undefined ? '—' : LEVEL_LABEL[rsrpLevel(v)];
 }
 
 /** ═══ خريطة منزل مبسّطة (SVG) ═══ */

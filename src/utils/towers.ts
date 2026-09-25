@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CellTower } from '../drivers/types';
 import { bandFreq, nrFreq } from './bands';
+import { Level, LEVEL_COLOR, LEVEL_LABEL, overallLevel } from './signal';
 
 /** ترددات منخفضة: تصل أبعد وتخترق الجدران لكن سعتها أقل */
 const LOW_LTE = new Set([5, 8, 12, 13, 14, 17, 18, 19, 20, 26, 28, 71]);
@@ -29,20 +30,11 @@ export function rankScore(c: CellTower): number {
   return q * cap;
 }
 
-export type Grade = 'excellent' | 'good' | 'fair' | 'poor' | 'unknown';
-export const GRADE_LABEL: Record<Grade, string> = {
-  excellent: 'ممتاز', good: 'جيد', fair: 'مقبول', poor: 'ضعيف', unknown: 'غير معروف',
-};
-export const GRADE_COLOR: Record<Grade, string> = {
-  excellent: '#12b76a', good: '#5ba644', fair: '#f79009', poor: '#e5484d', unknown: '#9aa1bd',
-};
-export function grade(q?: number): Grade {
-  if (q === undefined) return 'unknown';
-  if (q >= 0.7) return 'excellent';
-  if (q >= 0.5) return 'good';
-  if (q >= 0.32) return 'fair';
-  return 'poor';
-}
+// التقييم موحّد مع باقي التطبيق — من src/utils/signal.ts
+export type Grade = Level;
+export const GRADE_LABEL = LEVEL_LABEL;
+export const GRADE_COLOR = LEVEL_COLOR;
+export const cellGrade = (c: Pick<CellTower, 'rsrp' | 'rsrq' | 'sinr'>): Grade => overallLevel(c);
 
 export const bandName = (c: Pick<CellTower, 'tech' | 'band'>) =>
   c.band ? (c.tech === 'NR' ? `n${c.band}` : `B${c.band}`) : c.tech === 'NR' ? '5G' : '4G';

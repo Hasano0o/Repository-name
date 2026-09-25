@@ -19,7 +19,11 @@ export interface Signal {
   enodebId?: string;
 }
 
-export interface NetworkInfo { operator?: string; connected?: boolean; mode?: string; }
+export interface NetworkInfo {
+  operator?: string; connected?: boolean; mode?: string;
+  /** true = الراوتر يدعم 5G، false = 4G فقط (مؤكد)، undefined = ما نعرف */
+  supports5g?: boolean;
+}
 export interface Traffic { downBytesPerSec: number; upBytesPerSec: number; connectedSecs: number; }
 export interface ConnectedDevice { mac: string; ip?: string; name?: string; blocked?: boolean; }
 export interface Usage { downloadBytes: number; uploadBytes: number; }

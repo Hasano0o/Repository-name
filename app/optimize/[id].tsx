@@ -236,7 +236,7 @@ export default function OptimizeScreen() {
     <ScrollView style={s.wrap} contentContainerStyle={s.content}>
       {!!error && <Text style={s.err}>{error}</Text>}
 
-      <GlassCard title="المُحسِّن التلقائي" subtitle="Auto optimizer" icon="🪄" tint={C.violet} collapsible={false}>
+      <GlassCard title="المُحسِّن التلقائي" icon="🪄" tint={C.violet} collapsible={false}>
         <Text style={s.p}>
           يجرب كل تردد متاح، يقيس القوة والنقاء والاستقرار والسرعة، ويثبّتك على الأفضل تلقائياً — ويحفظه كملف تعريف.
         </Text>
@@ -292,7 +292,7 @@ export default function OptimizeScreen() {
       </GlassCard>
 
       {rows.length > 0 && (
-        <GlassCard title="النتائج" subtitle="Results" icon="📊" tint={C.blue} collapsible={false}>
+        <GlassCard title="النتائج" icon="📊" tint={C.blue} collapsible={false}>
           {ranked.length > 0 && (
             <Text style={s.headline}>
               🏆 الأفضل: {bandLabel(best.tech, best.band)} — {testLabel(best)} ({Math.round(scoreResult(best) * 100)}%)

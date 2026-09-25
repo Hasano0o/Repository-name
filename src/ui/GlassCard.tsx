@@ -76,7 +76,7 @@ const s = StyleSheet.create({
   },
   chev: { color: C.sub, fontSize: 12 },
   title: { color: C.text, fontSize: 15, fontWeight: '800', textAlign: 'right' },
-  subtitle: { color: C.muted, fontSize: 10, fontWeight: '700', textAlign: 'right', letterSpacing: 1, marginTop: 2 },
+  subtitle: { color: C.muted, fontSize: 11.5, fontWeight: '600', textAlign: 'right', marginTop: 2 },
   iconBox: {
     width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
     backgroundColor: C.blueSoft, borderWidth: 1, borderColor: C.cardBorder,

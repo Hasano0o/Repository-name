@@ -132,6 +132,7 @@ export class HuaweiDriver implements RouterDriver {
   private allLte = ALL_LTE;
   private lockFreq: boolean | null = null;
   private cellLockMode: string | null = null;
+  private nr5g: boolean | undefined | null = null; // null = ما فحصنا بعد
 
   private log(...a: unknown[]) {
     if (__DEV__) console.log('[huawei]', ...a);
@@ -355,6 +356,30 @@ export class HuaweiDriver implements RouterDriver {
     const st = await this.get('monitoring/status');
     return tag(st, 'ConnectionStatus') === '901';
   }
+  /**
+   * هل الراوتر يدعم 5G؟ نرجع false فقط لما نكون متأكدين (عشان ما نخفي 5G عن راوتر يدعمه).
+   *  - موديلات B### و E5### = راوترات 4G (B311, B535, B618, E5186...)
+   *  - موديلات H### و E6### = راوترات 5G (5G CPE / Pro)
+   *  - أو الراوتر يعرض وضع 5G (08) في قائمة الأوضاع، أو فيه حقول NR في الإشارة
+   */
+  private async nrCapable(): Promise<boolean | undefined> {
+    if (this.nr5g !== null) return this.nr5g;
+    let model = '';
+    try { model = unesc(tag(await this.get('device/information'), 'DeviceName') ?? ''); } catch {}
+    let modes: string[] = [];
+    try { modes = tagsAll(tag(await this.get('net/net-mode-list'), 'AccessList') ?? '', 'Access'); } catch {}
+    let sigXml = '';
+    try { sigXml = await this.get('device/signal'); } catch {}
+    let r: boolean | undefined;
+    if (/^(B\d{3}|E5\d{3})/i.test(model)) r = false;
+    else if (/^(H\d{3}|E6\d{3})/i.test(model)) r = true;
+    else if (modes.some(m => m.includes('08'))) r = true;
+    else if (/<nr(rsrp|earfcn|arfcn|pci)>/i.test(sigXml)) r = true;
+    else if (modes.length && model) r = false;
+    this.log('5G capable?', model, modes.join(','), r);
+    this.nr5g = r;
+    return r;
+  }
   async getNetworkInfo(): Promise<NetworkInfo> {
     let operator: string | undefined;
     try {
@@ -365,7 +390,8 @@ export class HuaweiDriver implements RouterDriver {
     try { connected = await this.isConnected(); } catch {}
     let mode: string | undefined;
     try { mode = tag(await this.get('net/net-mode'), 'NetworkMode'); } catch {}
-    return { operator, connected, mode };
+    const supports5g = await this.nrCapable().catch(() => undefined);
+    return { operator, connected, mode, supports5g };
   }
   async getTraffic(): Promise<Traffic> {
     const xml = await this.get('monitoring/traffic-statistics');
@@ -516,9 +542,8 @@ export class HuaweiDriver implements RouterDriver {
       locked = opt === '0' || active.length === 0 || active.length >= supported.length ? [] : active;
     }
     this.log('bands supported', supported.join(','), 'locked', locked.join(',') || 'auto', 'lockFreq', this.lockFreq);
-    // ═══ نعرض ترددات 5G دائماً — لأن كل هواوي CPE حديث (5G CPE Pro/Pro 3) يدعمها.
-    // لو الراوتر ما يدعم 5G فعلاً، الراوتر نفسه سيرفض الأمر بدون أي ضرر.
-    const nrSupported = DEFAULT_NR_BANDS;
+    // ═══ ترددات 5G: نعرضها إلا إذا تأكدنا إن الراوتر 4G فقط (B535، B311...)
+    const nrSupported = (await this.nrCapable().catch(() => undefined)) === false ? [] : DEFAULT_NR_BANDS;
     return {
       supported,
       locked,
