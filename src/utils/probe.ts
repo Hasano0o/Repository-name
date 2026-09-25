@@ -2,8 +2,6 @@
 
 import { isLanHost } from './host';
 import { saveDiscovery, fingerprintFrom, guessApiStyle } from '../store/discovery';
-import { sanitize, sanitizeField, MASK } from '../router-discovery/sanitize';
-import { safeDiscoveryFetch } from '../router-discovery/safeRequest';
 
 export interface ProbeStep {
   label: string; path: string; status: number | 'ERR'; ms: number;
@@ -31,8 +29,31 @@ const TARGETS: Target[] = [
   { label: 'عام — api/status', path: '/api/status' },
 ];
 
-// Sanitization moved to ../router-discovery/sanitize.ts (PHASE 3)
-export { sanitize, sanitizeField, MASK };
+const SENSITIVE =
+  /(tok|ses|nonce|proof|salt|challenge|ssid|wlan|wifi|pass|pwd|passwd|token|cookie|session|secret|key|auth|imei|imsi|iccid|meid|msisdn|phone|number|sn\b|serial|ssid|wifi_?name|mac|username|user_?name|login|apn_?user|pin|puk|content|message|sms)/i;
+const MASK = '«محذوف»';
+
+export function sanitizeField(key: string, value: string): string {
+  if (SENSITIVE.test(key)) return MASK;
+  return sanitize(value);
+}
+
+export function sanitize(raw: string): string {
+  let t = raw;
+  t = t.replace(/<([A-Za-z_][\w.\-]*)>([^<]{1,4000})<\/\1>/g, (m, tag) =>
+    SENSITIVE.test(tag) ? '<' + tag + '>' + MASK + '</' + tag + '>' : m);
+  t = t.replace(/"([\w.\-]+)"\s*:\s*"([^"]{0,4000})"/g, (m, k) =>
+    SENSITIVE.test(k) ? '"' + k + '":"' + MASK + '"' : m);
+  t = t.replace(/([\w.\-]{2,40})\s*[:=]\s*(["']?)([^\s;,&"'<>]{1,400})\2/g,
+    (m, k) => (SENSITIVE.test(k) ? k + '=' + MASK : m));
+  t = t.replace(/\b[0-9A-Fa-f]{2}([:-][0-9A-Fa-f]{2}){5}\b/g, MASK);
+  t = t.replace(/\b[0-9A-Fa-f]{12}\b/g, MASK);
+  t = t.replace(/\+?\d[\d\s\-()]{8,16}\d/g, MASK);
+  t = t.replace(/\b[A-Za-z0-9+/]{40,}={0,2}\b/g, MASK);
+  t = t.replace(/\b\d{10,}\b/g, MASK);
+  t = t.replace(/(SessionID|Set-Cookie|stok)\s*[=:]\s*[^\s;"'&<]+/gi, '$1=' + MASK);
+  return t;
+}
 
 function titleOf(body: string): string {
   const m = body.match(/<title[^>]*>([\s\S]{0,120}?)<\/title>/i);
@@ -43,18 +64,23 @@ async function one(host: string, t: Target, timeoutMs: number): Promise<ProbeSte
   const base = host.startsWith('http') ? host.replace(/\/+$/, '') : 'http://' + host.replace(/\/+$/, '');
   const url = base + t.path;
   const started = Date.now();
-  const result = await safeDiscoveryFetch({ url, timeoutMs });
-  if (!result.ok) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      method: 'GET', credentials: 'include', signal: ctrl.signal,
+      headers: { Referer: base + '/', 'X-Requested-With': 'XMLHttpRequest' },
+    });
+    const body = await res.text();
+    return {
+      label: t.label, path: t.path, status: res.status, ms: Date.now() - started,
+      type: (res.headers.get('content-type') || '').split(';')[0],
+      title: sanitize(titleOf(body)).slice(0, 120), size: body.length,
+      sample: sanitize(body).slice(0, 2500),
+    };
+  } catch {
     return { label: t.label, path: t.path, status: 'ERR', ms: Date.now() - started, type: '', title: '', size: 0, sample: '' };
-  }
-  const body = result.body;
-  return {
-    label: t.label, path: t.path, status: result.status, ms: Date.now() - started,
-    type: result.contentType,
-    title: titleOf(body).slice(0, 120),
-    size: result.bodyRawLength,
-    sample: body.slice(0, 2500),
-  };
+  } finally { clearTimeout(timer); }
 }
 
 export async function runProbe(
@@ -128,25 +154,19 @@ export const ZTE_CANDIDATES: string[] = [
 export interface FieldHit { key: string; value: string }
 
 export async function probeFields(
-  host: string,
+  read: (fields: string[]) => Promise<Record<string, string>>,
   candidates: string[] = ZTE_CANDIDATES,
   chunk = 20,
   onStep?: (done: number, total: number) => void,
 ): Promise<FieldHit[]> {
   const hits: FieldHit[] = [];
-  const base = host.startsWith('http') ? host.replace(/\/+$/, '') : 'http://' + host.replace(/\/+$/, '');
   for (let i = 0; i < candidates.length; i += chunk) {
     const part = candidates.slice(i, i + chunk);
     onStep?.(Math.min(i + chunk, candidates.length), candidates.length);
-    const cmd = part.join(',');
-    const url = base + '/goform/goform_get_cmd_process?isTest=false&multi_data=1&cmd=' +
-      encodeURIComponent(cmd) + '&_=' + Date.now();
-    const result = await safeDiscoveryFetch({ url });
-    if (!result.ok) continue;
     try {
-      const j = JSON.parse(result.body) as Record<string, unknown>;
+      const r = await read(part);
       for (const k of part) {
-        const v = j[k];
+        const v = r[k];
         if (v !== undefined && v !== '' && v !== 'null') {
           hits.push({ key: k, value: sanitizeField(k, String(v)).slice(0, 160) });
         }
@@ -170,10 +190,27 @@ function resolveUrl(base: string, path: string): string | null {
   return base + '/' + p.replace(/^\.\//, '');
 }
 
-async function fetchText(url: string, _refererBase: string, timeoutMs: number): Promise<string> {
-  const result = await safeDiscoveryFetch({ url, timeoutMs });
-  if (!result.ok) return '';
-  return result.body;
+async function fetchText(url: string, refererBase: string, timeoutMs: number): Promise<string> {
+  // ═══ حماية: نرفض أي URL خارج الشبكة المحلية ═══
+  try {
+    const u = new URL(url);
+    if (!isLanHost(u.host)) return '';
+  } catch { return ''; }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      credentials: 'include',
+      signal: ctrl.signal,
+      headers: { Referer: refererBase + '/' },
+    });
+    if (!res.ok) return '';
+    return (await res.text()).slice(0, 1500000);
+  } catch {
+    return '';
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function extractScriptUrls(home: string): string[] {
@@ -338,18 +375,27 @@ export async function trySourceMap(jsUrl: string, timeoutMs = 8000): Promise<str
   if (!jsUrl) return null;
   const url = jsUrl.replace(/\.js(\?.*)?$/i, '.js.map$1');
   if (url === jsUrl) return null;
-  const result = await safeDiscoveryFetch({ url, timeoutMs });
-  if (!result.ok) return null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const j = JSON.parse(result.body) as { sourcesContent?: unknown };
-    if (!Array.isArray(j.sourcesContent)) return null;
-    const parts: string[] = [];
-    for (const x of j.sourcesContent) {
-      if (typeof x === 'string' && x.length > 0) parts.push(x);
+    const res = await fetch(url, { credentials: 'include', signal: ctrl.signal });
+    if (!res.ok) return null;
+    const txt = await res.text();
+    try {
+      const j = JSON.parse(txt) as { sourcesContent?: unknown };
+      if (!Array.isArray(j.sourcesContent)) return null;
+      const parts: string[] = [];
+      for (const s of j.sourcesContent) {
+        if (typeof s === 'string' && s.length > 0) parts.push(s);
+      }
+      return parts.join('\n\n');
+    } catch {
+      return null;
     }
-    return parts.join('\n\n');
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -359,29 +405,18 @@ export async function trySourceMap(jsUrl: string, timeoutMs = 8000): Promise<str
 
 export interface Harvest { scripts: string[]; cmds: string[]; goforms: string[] }
 
-/** مسارات سكربتات JavaScript — تُحمّل للتحليل فقط */
-const SCRIPT_PATHS = [
+const EXTRA_SCRIPTS = [
   '/js/app.js', '/js/main.js', '/js/config/config.js', '/js/index.js',
   '/js/lib/app.js', '/js/common.js', '/js/status.js', '/js/lang/lang_ar.js',
+  // مسارات Huawei محدّثة (H138 وما بعده)
+  '/html/index.html', '/html/home.html',
   '/lib/emui-jquery.js', '/../lib/emui-jquery.js',
   '/core.js', '/base64x.js',
   '/js/jquery.js', '/js/jquery.min.js',
-];
-
-/** صفحات HTML ثابتة — تُحمّل للبحث عن مراجع سكربتات */
-const STATIC_PAGE_PATHS = [
-  '/html/index.html', '/html/home.html',
-];
-
-/**
- * نقاط API معروفة بأنها قراءة — مرجع فقط.
- * ⚠️ لا تُستدعى تلقائيًا. كل استدعاء يمر عبر safeDiscoveryFetch.
- * ملاحظة: هذه موجودة أيضًا في policy.ts (HUAWEI_SAFE_GET).
- */
-export const DISCOVERY_ENDPOINTS = [
   '/api/device/information', '/api/device/signal',
   '/api/monitoring/status', '/api/monitoring/traffic-statistics',
   '/api/net/current-plmn', '/api/net/net-mode',
+  '/api/user/state-login', '/api/webserver/SesTokInfo',
 ];
 
 /** يسحب ملفات الواجهة ويستخرج منها أسماء الأوامر الحقيقية */
@@ -395,8 +430,7 @@ export async function harvestCommands(
   const base = host.startsWith('http') ? host.replace(/\/+$/, '') : 'http://' + host.replace(/\/+$/, '');
   const home = await fetchText(base + '/', base, timeoutMs);
   const srcs = extractScriptUrls(home);
-  for (const e of SCRIPT_PATHS) srcs.push(e);
-  for (const e of STATIC_PAGE_PATHS) srcs.push(e);
+  for (const e of EXTRA_SCRIPTS) srcs.push(e);
   const seen = new Set<string>();
   const urls: string[] = [];
   for (const s of srcs) {
@@ -479,8 +513,7 @@ export async function deepCommandHarvest(
   const home = await fetchText(base + '/', base, timeoutMs);
   absorb(home);
   const srcs = extractScriptUrls(home);
-  for (const e of SCRIPT_PATHS) srcs.push(e);
-  for (const e of STATIC_PAGE_PATHS) srcs.push(e);
+  for (const e of EXTRA_SCRIPTS) srcs.push(e);
 
   const seen = new Set<string>();
   const scriptUrls: string[] = [];
