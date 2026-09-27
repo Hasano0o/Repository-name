@@ -48,23 +48,25 @@ function Chip({ label, value, color }: { label: string; value?: number; color?: 
   );
 }
 
-/** بطاقة برج واحد (كل ترددات نفس رقم PCI) */
+/** بطاقة برج واحد — مضغوطة: سطر العنوان + شريط الجودة + سطر القيم وزر التثبيت */
 function TowerGroupCard({ g, rank, lockedHere, canPin, busy, onLock }: {
   g: TowerGroup; rank?: number; lockedHere: boolean; canPin: boolean; busy: boolean;
   onLock: (g: TowerGroup) => void;
 }) {
   const gr = cellGrade(g.best);
   const color = GRADE_COLOR[gr];
-  const low = isLowBand(g.best);
   const freq = freqName(g.best);
+  const bands = g.cells.length > 1
+    ? g.cells.map(c => bandName(c)).filter((x, i, a) => a.indexOf(x) === i).join(' + ')
+    : `${bandName(g.best)}${freq ? ` · ${freq}` : ''}`;
 
   return (
     <View style={[s.tower, g.inUse && s.towerInUse, lockedHere && s.towerLocked]}>
       <View style={s.head}>
         <View style={[s.avatar, { backgroundColor: LEVEL_SOFT[gr] }]}>
-          {rank !== undefined
-            ? <Text style={[s.avatarRank, { color }]}>{rank}</Text>
-            : <Text style={[s.avatarRank, { color }]}>{lockedHere ? '📌' : '●'}</Text>}
+          <Text style={[s.avatarRank, { color }]}>
+            {lockedHere ? '📌' : rank !== undefined ? rank : g.tech === 'NR' ? '5G' : '4G'}
+          </Text>
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={s.titleRow}>
@@ -72,60 +74,42 @@ function TowerGroupCard({ g, rank, lockedHere, canPin, busy, onLock }: {
             <View style={[s.techTag, g.tech === 'NR' && { backgroundColor: C.violet }]}>
               <Text style={s.techTagText}>{g.tech === 'NR' ? '5G' : '4G'}</Text>
             </View>
-            {lockedHere && (
-              <View style={s.pinTag}><Text style={s.pinTagText}>مثبّت</Text></View>
-            )}
           </View>
           <Text style={s.role} numberOfLines={1}>
-            {ROLE_LABEL[g.role]} · {bandName(g.best)}{freq ? ` (${freq})` : ''}
+            {bands}{g.role !== 'neighbor' ? ` · ${ROLE_LABEL[g.role]}` : ''}{isLowBand(g.best) ? ' · تردد بعيد المدى' : ''}
           </Text>
         </View>
         <View style={s.rsrpBox}>
           <Text style={[s.rsrpVal, { color }]}>{g.best.rsrp ?? '—'}</Text>
-          <Text style={s.rsrpUnit}>dBm</Text>
+          <Text style={[s.rsrpUnit, { color }]}>{GRADE_LABEL[gr]}</Text>
         </View>
       </View>
 
       <QualityBar q={cellQuality(g.best)} color={color} />
 
-      <View style={s.chips}>
-        <View style={[s.gradePill, { backgroundColor: LEVEL_SOFT[gr] }]}>
-          <Text style={[s.gradeText, { color }]}>{GRADE_LABEL[gr]}</Text>
+      <View style={s.foot}>
+        <View style={s.chips}>
+          <Chip label="SINR" value={g.best.sinr} />
+          <Chip label="RSRQ" value={g.best.rsrq} />
+          {(g.badge === 'active' || g.badge === 'confirmed') && (
+            <View style={[s.badge, { backgroundColor: BADGE_BG[g.badge] }]}>
+              <Text style={[s.badgeText, { color: BADGE_FG[g.badge] }]}>{g.badge === 'active' ? 'مدموج' : 'يدمج'}</Text>
+            </View>
+          )}
         </View>
-        <Chip label="SINR" value={g.best.sinr} />
-        <Chip label="RSRQ" value={g.best.rsrq} />
-        {g.badge !== 'single' && (
-          <View style={[s.badge, { backgroundColor: BADGE_BG[g.badge] }]}>
-            <Text style={[s.badgeText, { color: BADGE_FG[g.badge] }]}>{BADGE_LABEL[g.badge]}</Text>
-          </View>
+        {canPin && (
+          <Pressable
+            style={({ pressed }) => [s.pinBtn, lockedHere && s.pinBtnOn, (busy || pressed) && { opacity: 0.6 }]}
+            onPress={() => onLock(g)}
+            disabled={busy}
+            hitSlop={6}
+          >
+            <Text style={[s.pinBtnText, lockedHere && { color: C.onAccent }]}>
+              {lockedHere ? 'فك' : '📌 ثبّت'}
+            </Text>
+          </Pressable>
         )}
       </View>
-
-      {g.cells.length > 1 && (
-        <View style={s.freqRow}>
-          {g.cells.map((c, i) => (
-            <View key={i} style={[s.freq, c.kind !== 'neighbor' && s.freqOn]}>
-              <View style={[s.freqDot, { backgroundColor: GRADE_COLOR[cellGrade(c)] }]} />
-              <Text style={[s.freqBand, c.tech === 'NR' && { color: C.violet }]}>{bandName(c)}</Text>
-              {c.rsrp !== undefined && <Text style={s.freqRsrp}>{c.rsrp}</Text>}
-            </View>
-          ))}
-        </View>
-      )}
-
-      {low && <Text style={s.lowNote}>تردد منخفض — يوصل بعيد، لكن سرعته محدودة.</Text>}
-
-      {canPin && (
-        <Pressable
-          style={({ pressed }) => [s.lockBtn, lockedHere && s.lockBtnOn, (busy || pressed) && { opacity: 0.6 }]}
-          onPress={() => onLock(g)}
-          disabled={busy}
-        >
-          <Text style={[s.lockText, lockedHere && { color: C.onAccent }]}>
-            {lockedHere ? '✓ مثبّت على هذا البرج · اضغط للفك' : g.pci ? '📌 ثبّت على هذا البرج' : `📌 ثبّت تردد ${bandName(g.best)}`}
-          </Text>
-        </Pressable>
-      )}
     </View>
   );
 }
@@ -421,7 +405,6 @@ export default function TowersScreen() {
   };
 
   const groups = groupTowers(cells, confirmed);
-  const lteNow = cells.find(c => c.kind === 'serving' && c.tech === 'LTE');
   const nrNow = cells.find(c => c.tech === 'NR' && (c.kind === 'serving' || c.kind === 'secondary'));
   const primary = groups.find(g => g.role === 'primary');
   const inUse = groups.filter(g => g.inUse);
@@ -482,39 +465,6 @@ export default function TowersScreen() {
               </Text>
             </View>
           </View>
-        )}
-
-        {!loading && (lteNow || nrNow || nrAvail) && (
-          <GlassCard title="الاتصال الحالي" icon="📶" tint={C.blueSoft} collapsible={false}>
-            <View style={s.dual}>
-              {[{ c: lteNow, tag: '4G', color: C.blue }, { c: nrNow, tag: '5G', color: C.violet }].map(({ c, tag, color }) => {
-                const lv = overallLevel(c);
-                return (
-                  <View key={tag} style={[s.dualBox, !c && { opacity: tag === '5G' && nrAvail ? 0.85 : 0.45 }]}>
-                    <View style={[s.dualTag, { backgroundColor: color }]}>
-                      <Text style={s.dualTagText}>{tag}</Text>
-                    </View>
-                    {c ? (
-                      <>
-                        <Text style={s.dualBand}>{towerTitle(c)}</Text>
-                        <Text style={[s.dualRsrp, { color: LEVEL_COLOR[lv] }]}>{c.rsrp ?? '—'} dBm</Text>
-                        <Text style={s.dualSinr}>SINR {c.sinr ?? '—'} dB</Text>
-                        <Text style={[s.dualLevel, { color: LEVEL_COLOR[lv] }]}>{LEVEL_LABEL[lv]}</Text>
-                      </>
-                    ) : tag === '5G' && nrAvail ? (
-                      <>
-                        <Text style={[s.dualBand, { color: C.violet }]}>البرج يدعم 5G</Text>
-                        <Text style={s.dualSinr}>غير نشط الحين</Text>
-                        <Text style={s.dualNone}>ينشط وقت التحميل. لو ما نشط أبداً، الأرجح شريحتك ما تدعمه</Text>
-                      </>
-                    ) : (
-                      <Text style={s.dualNone}>غير متصل</Text>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-          </GlassCard>
         )}
 
         {!loading && (canLock || !!bandCfg) && primary && (
@@ -638,7 +588,7 @@ const s = StyleSheet.create({
   center: { alignItems: 'center', gap: 10, paddingVertical: 30 },
   muted: { color: C.sub, textAlign: 'center', lineHeight: 22 },
   hint: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 19 },
-  lowNote: { color: C.gold, fontSize: 12, textAlign: 'right', lineHeight: 19, fontWeight: '700' },
+  lowNote: { color: '#b76e00', fontSize: 12, textAlign: 'right', lineHeight: 19, fontWeight: '700' },
   link: { color: C.blue, fontSize: 12.5, textAlign: 'center', fontWeight: '700', marginTop: 2 },
   errorCard: { backgroundColor: C.redSoft, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 16, padding: 14, gap: 10 },
   errorText: { color: C.red, fontWeight: '700', textAlign: 'right' },
@@ -646,50 +596,42 @@ const s = StyleSheet.create({
   retryText: { color: '#fff', fontWeight: '700' },
 
   tower: {
-    backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: '#e7eefb', padding: 14, gap: 10,
+    backgroundColor: C.card, borderRadius: 16, borderWidth: 1, borderColor: '#e7eefb', padding: 12, gap: 9,
     shadowColor: C.shadow, shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 1,
   },
   towerInUse: { borderColor: C.green, borderWidth: 1.5 },
   towerLocked: { borderColor: C.blue, borderWidth: 2, backgroundColor: '#f5f8ff' },
   head: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
-  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  avatarRank: { fontWeight: '900', fontSize: 16 },
+  avatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  avatarRank: { fontWeight: '900', fontSize: 13 },
   titleRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
   towerName: { color: C.text, fontWeight: '800', fontSize: 16.5, textAlign: 'right', flexShrink: 1 },
   techTag: { backgroundColor: C.blue, borderRadius: 7, paddingHorizontal: 7, paddingVertical: 1 },
   techTagText: { color: '#fff', fontWeight: '800', fontSize: 10.5 },
-  pinTag: { backgroundColor: C.blue, borderRadius: 7, paddingHorizontal: 7, paddingVertical: 1 },
-  pinTagText: { color: '#fff', fontWeight: '800', fontSize: 10.5 },
   role: { color: C.sub, fontSize: 12, textAlign: 'right', marginTop: 3 },
   rsrpBox: { alignItems: 'center', minWidth: 54 },
-  rsrpVal: { fontWeight: '900', fontSize: 22, lineHeight: 26 },
-  rsrpUnit: { color: C.muted, fontSize: 10, fontWeight: '700' },
+  rsrpVal: { fontWeight: '900', fontSize: 20, lineHeight: 24 },
+  rsrpUnit: { fontSize: 10.5, fontWeight: '800' },
+  foot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  pinBtn: {
+    borderRadius: 999, borderWidth: 1.5, borderColor: C.blue, backgroundColor: '#f5f8ff',
+    paddingHorizontal: 14, paddingVertical: 6,
+  },
+  pinBtnOn: { backgroundColor: C.blue },
+  pinBtnText: { color: C.blue, fontWeight: '800', fontSize: 12.5 },
   qTrack: { height: 6, borderRadius: 3, backgroundColor: '#edf1f8', overflow: 'hidden', flexDirection: 'row-reverse' },
   qFill: { height: 6, borderRadius: 3 },
-  chips: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  chips: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   chip: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 5,
     backgroundColor: C.rowBg, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: '#e7eefb',
   },
   chipLabel: { color: C.muted, fontSize: 10.5, fontWeight: '700' },
   chipVal: { color: C.text, fontSize: 12, fontWeight: '800' },
-  gradePill: { borderRadius: 999, paddingHorizontal: 11, paddingVertical: 4 },
-  gradeText: { fontWeight: '800', fontSize: 11.5 },
   badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   badgeText: { fontWeight: '800', fontSize: 11 },
-  freqRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6 },
-  freq: {
-    flexDirection: 'row-reverse', alignItems: 'center', gap: 5,
-    backgroundColor: C.rowBg, borderWidth: 1, borderColor: '#e7eefb', borderRadius: 10,
-    paddingHorizontal: 8, paddingVertical: 4,
-  },
-  freqOn: { borderColor: C.green },
-  freqDot: { width: 7, height: 7, borderRadius: 4 },
   freqBand: { color: C.text, fontWeight: '800', fontSize: 12.5 },
   freqRsrp: { color: C.sub, fontSize: 10.5, fontWeight: '700' },
-  lockBtn: { borderRadius: 12, borderWidth: 1.5, borderColor: C.blue, paddingVertical: 10, alignItems: 'center', backgroundColor: '#f5f8ff' },
-  lockBtnOn: { backgroundColor: C.blue, borderColor: C.blue },
-  lockText: { color: C.blue, fontWeight: '800', fontSize: 13.5 },
 
   pinBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
@@ -717,15 +659,6 @@ const s = StyleSheet.create({
   cancel: { paddingVertical: 12, alignItems: 'center' },
   cancelText: { color: C.red, fontWeight: '800', fontSize: 14 },
 
-  dual: { flexDirection: 'row', gap: 10 },
-  dualBox: { flex: 1, backgroundColor: C.rowBg, borderRadius: 16, borderWidth: 1, borderColor: C.cardBorder, padding: 12, alignItems: 'center', gap: 3 },
-  dualTag: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 3, marginBottom: 4 },
-  dualTagText: { color: '#fff', fontWeight: '800', fontSize: 12 },
-  dualBand: { color: C.text, fontWeight: '800', fontSize: 13, textAlign: 'center' },
-  dualRsrp: { fontWeight: '800', fontSize: 18 },
-  dualSinr: { color: C.sub, fontSize: 11, textAlign: 'center' },
-  dualLevel: { fontWeight: '800', fontSize: 12, marginTop: 2 },
-  dualNone: { color: C.muted, fontSize: 11, paddingVertical: 6, textAlign: 'center', lineHeight: 16 },
 
   nrRow: {
     flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center',

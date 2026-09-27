@@ -89,7 +89,8 @@ export function isAllBandsMask(mask?: string | number, maxBits = 64): boolean {
 export function parseZteCa(s?: string): Carrier[] {
   if (!s) return [];
   const out: Carrier[] = [];
-  const re = /(\d+(?:\.\d+)?)\s*MHz\s*@\s*(\d+)\s*\(\s*([BbNn])\s*(\d+)\s*\)/g;
+  // عرض النطاق اختياري: بعض الراوترات ترجع "@1279(B3)" بدون MHz
+  const re = /(?:(\d+(?:\.\d+)?)\s*MHz\s*)?@\s*(\d+)\s*\(\s*([BbNn])\s*(\d+)\s*\)/g;
   let first = true;
   for (const m of s.matchAll(re)) {
     out.push({
@@ -97,7 +98,7 @@ export function parseZteCa(s?: string): Carrier[] {
       band: parseInt(m[4], 10),
       role: first ? 'PCC' : 'SCC',
       arfcn: m[2],
-      bandwidth: parseFloat(m[1]),
+      bandwidth: m[1] ? parseFloat(m[1]) : undefined,
     });
     first = false;
   }
