@@ -126,26 +126,12 @@ input.small{font-size:15px;letter-spacing:0;text-align:right;direction:rtl}
       <span class="tag" style="background:var(--card);color:var(--text);border:1px solid var(--border)"><span class="dot" id="stDot"></span><span id="stTxt">نتصل…</span></span>
     </div>
 
-    <!-- عدّاد التوجيه -->
-    <div class="hero" id="meter">
-      <div class="row sp">
-        <span class="tag" id="cellTag">—</span>
-        <span class="tag" id="pingTag" style="direction:ltr">— ms</span>
-      </div>
-      <div class="gauge">
-        <svg viewBox="0 0 240 130" id="arc"></svg>
-        <div class="gc"><div class="gnum" id="gNum">—<small>dBm</small></div><div class="glvl" id="gLvl">—</div></div>
-        <div class="scale"><span>ضعيف</span><span>قوي</span></div>
-      </div>
-      <div class="stats">
-        <div><div class="l">عن البداية</div><div class="v" id="sDelta">—</div></div>
-        <div><div class="l"><span style="display:inline-block;width:8px;height:3px;border-radius:2px;background:#ffd166;vertical-align:middle"></span> أفضل نقطة</div><div class="v" id="sBest">—</div></div>
-        <div><div class="l">SINR</div><div class="v" id="sSinr">—</div></div>
-      </div>
-      <div class="hint"><span class="dot" id="hDot"></span><span id="hTxt">بانتظار أول قراءة من جوال العميل…</span></div>
-    </div>
-
     <div id="nets" style="display:flex;flex-direction:column;gap:12px"></div>
+
+    <div class="card" id="bestCard">
+      <div class="row sp"><h2 style="margin:0">أفضل نقطة</h2><span id="bestTxt" style="font-weight:700;direction:ltr">—</span></div>
+      <div id="gapTxt" style="margin-top:6px;font-size:13px;font-weight:700;color:var(--sub)">نجمع القراءات…</div>
+    </div>
 
     <div class="card">
       <h2>تاريخ الإشارة</h2>
@@ -289,6 +275,12 @@ function meter(r){
   $('hDot').style.background=gap==null?'rgba(255,255,255,.5)':gap<=1?'#16c784':gap>=5?'#ff5a5f':'#ffb020';
   $('hTxt').textContent=gap==null?'نجمع القراءات…':gap<=1?'العميل على أفضل نقطة ✓':`العميل أقل من أفضل نقطة بـ ${gap} dB`;
 }
+function bestLine(r){
+  $('bestTxt').textContent=best?`${best.rsrp} dBm${best.pci?' · PCI '+best.pci:''}`:'—';
+  const gap=best&&r.rsrp!=null?Math.round(best.rsrp-r.rsrp):null, g=$('gapTxt');
+  g.textContent=gap==null?'نجمع القراءات…':gap<=1?'العميل على أفضل نقطة ✓':`العميل أقل من أفضل نقطة بـ ${gap} dB`;
+  g.style.color=gap==null?'var(--sub)':gap<=1?'var(--green)':gap>=5?'var(--red)':'#b76e00';
+}
 // ═══ عدادات صغيرة ═══
 function mini(v,label,unit,level,ratio,dark){
   const size=68,sw=7,c=size/2,rad=c-sw/2-1,S=135,W=270;
@@ -315,7 +307,7 @@ function nets(r){
     <div class="tiles">${tile('الباند',s.nrBand)}${tile('PCI',s.nrPci)}${tile('NR-ARFCN',s.nrArfcn)}${tile('عرض النطاق',s.nrDlBandwidth)}</div></div>`;
   $('nets').innerHTML=h;
 }
-function render(){ const r=hist[hist.length-1]; if(!r) return; meter(r); nets(r); chart(); }
+function render(){ const r=hist[hist.length-1]; if(!r) return; nets(r); bestLine(r); chart(); }
 function chart(){
   const v=hist.map(r=>r.rsrp).filter(x=>x!=null); const svg=$('chart');
   if(v.length<2){ svg.innerHTML=''; return; }

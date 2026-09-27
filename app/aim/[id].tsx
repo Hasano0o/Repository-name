@@ -9,7 +9,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { NetPanel } from '../../src/ui/NetPanel';
 import { PushToTalk, playVoice, VoiceNote } from '../../src/ui/Voice';
 import { pickSig } from '../../src/services/live';
-import { AimMeter, trendOf, Trend, TrendMark } from '../../src/ui/AimMeter';
+import { trendOf, Trend, TrendMark } from '../../src/ui/AimMeter';
 import { measureLatency } from '../../src/utils/latency';
 import { LiveHost, createLiveSession, CmdAction, CMD_LABEL, LIVE_BASE } from '../../src/services/live';
 import Svg, { Circle, Path, Line, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
@@ -700,25 +700,26 @@ export default function AimScreen() {
         {!loading && (
           <>
             {/* ═══ Hero ═══ */}
-            {/* ═══ مؤشر التوجيه ═══ */}
-            <AimMeter
-              value={shown} best={bestShown} delta={delta} sinr={current?.sinr} trend={trendR}
-              levelLabel={current ? lvlLabel(level) : undefined}
-              cellLabel={current ? cellName(current.cell) : undefined} isNr={isNr}
-              hintColor={stab?.c}
-              hint={!stab ? 'نجمع القراءات…'
-                : gapToBest !== undefined && gapToBest <= 1 && stability === 'stable' ? 'مستقرة على أفضل نقطة — ثبّت هنا'
-                : gapToBest !== undefined && gapToBest >= 5 ? `ابتعدت عن أفضل نقطة بـ ${gapToBest} dB — ارجع`
-                : stab.t}
-              right={<>
-                <Pressable onPress={() => setSound(v => !v)} hitSlop={6} style={[a.mBtn, sound && a.mBtnOn]}>
-                  <Icon name="sound" size={17} color={sound ? P.violet : '#fff'} stroke={2.2} />
-                </Pressable>
-                <Pressable onPress={() => setHaptics(v => !v)} hitSlop={6} style={[a.mBtn, haptics && a.mBtnOn]}>
-                  <Icon name="vibrate" size={17} color={haptics ? P.green : '#fff'} stroke={2.2} />
-                </Pressable>
-              </>}
-            />
+            {/* ═══ شريط التوجيه: الصوت والاهتزاز + وين أنت من أفضل نقطة ═══ */}
+            <View style={a.aimBar}>
+              <Pressable onPress={() => setSound(v => !v)} style={[a.aimTgl, sound && { backgroundColor: PURPLE, borderColor: PURPLE }]}>
+                <Icon name="sound" size={16} color={sound ? '#fff' : MUTED} stroke={2.2} />
+                <Text style={[a.aimTglTxt, sound && { color: '#fff' }]}>الصوت</Text>
+              </Pressable>
+              <Pressable onPress={() => setHaptics(v => !v)} style={[a.aimTgl, haptics && { backgroundColor: SUCCESS, borderColor: SUCCESS }]}>
+                <Icon name="vibrate" size={16} color={haptics ? '#fff' : MUTED} stroke={2.2} />
+                <Text style={[a.aimTglTxt, haptics && { color: '#fff' }]}>الاهتزاز</Text>
+              </Pressable>
+              <View style={[a.aimState, {
+                backgroundColor: gapToBest === undefined ? P.soft : gapToBest <= 1 ? P.greenSoft : gapToBest >= 5 ? P.redSoft : P.amberSoft,
+              }]}>
+                <Text numberOfLines={1} style={[a.aimStateTxt, {
+                  color: gapToBest === undefined ? MUTED : gapToBest <= 1 ? SUCCESS : gapToBest >= 5 ? DANGER : '#b76e00',
+                }]}>
+                  {gapToBest === undefined ? 'نجمع القراءات…' : gapToBest <= 1 ? 'على أفضل نقطة ✓' : `أقل من الأفضل بـ ${gapToBest} dB`}
+                </Text>
+              </View>
+            </View>
 
             {/* ═══ لوحة الشبكة 4G / 5G ═══ */}
             <NetPanel signal={signal} ping={ping} />
@@ -909,6 +910,14 @@ const a = StyleSheet.create({
   headerTitle: { fontSize: 21, fontWeight: '800', color: TEXT, textAlign: 'center' },
   headerSub: { fontSize: 11.5, color: MUTED, textAlign: 'center', marginTop: 1 },
 
+  aimBar: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
+  aimTgl: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 6, height: 40, paddingHorizontal: 12,
+    borderRadius: 14, borderWidth: 1.5, borderColor: P.border, backgroundColor: P.card,
+  },
+  aimTglTxt: { color: TEXT, fontSize: 12.5, fontWeight: '800' },
+  aimState: { flex: 1, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  aimStateTxt: { fontSize: 12.5, fontWeight: '800' },
   mTop: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   mTag: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 6, flexShrink: 1,

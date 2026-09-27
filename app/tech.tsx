@@ -12,7 +12,6 @@ import {
 import { rsrpLevel, sinrLevel, Level } from '../src/utils/signal';
 import { Icon } from '../src/ui/Icon';
 import { SignalChart } from '../src/ui/SignalChart';
-import { AimMeter, trendOf } from '../src/ui/AimMeter';
 import { NetPanel } from '../src/ui/NetPanel';
 import { PushToTalk, playVoice, VoiceNote } from '../src/ui/Voice';
 import { Signal } from '../src/drivers/types';
@@ -200,18 +199,15 @@ export default function TechScreen() {
 
         {!!r && (
           <>
-            <AimMeter
-              value={r.rsrp} best={best?.rsrp} delta={r.rsrp != null && first?.rsrp != null ? r.rsrp - first.rsrp : undefined}
-              sinr={r.sinr} trend={trendOf(r.rsrp, withR.length >= 2 ? withR[withR.length - 2].rsrp : undefined)}
-              levelLabel={r.rsrp != null ? lvlLabel(lr) : undefined}
-              cellLabel={r.band ? `${r.band}${r.pci ? ` · PCI ${r.pci}` : ''}` : undefined}
-              isNr={r.tech === 'NR'}
-              hintColor={gap === undefined ? undefined : gap <= 1 ? '#16c784' : gap >= 5 ? '#ff5a5f' : '#ffb020'}
-              hint={gap === undefined ? 'نجمع القراءات…' : gap <= 1 ? 'العميل على أفضل نقطة ✓' : `العميل أقل من أفضل نقطة بـ ${gap} dB`}
-              right={r.ping != null ? (
-                <View style={s.pingTag}><Text style={s.pingTxt}>{`${r.ping} ms`}</Text></View>
-              ) : undefined}
-            />
+            <View style={s.card}>
+              <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={s.cardTitle}>أفضل نقطة</Text>
+                <Text style={[s.cardTitle, { color: P.green }]}>{best ? `${best.rsrp} dBm${best.pci ? ` · PCI ${best.pci}` : ''}` : '—'}</Text>
+              </View>
+              <Text style={[s.bestGap, { textAlign: 'right', color: gap === undefined ? P.sub : gap <= 1 ? P.green : gap >= 5 ? P.red : P.amber }]}>
+                {gap === undefined ? 'نجمع القراءات…' : gap <= 1 ? 'العميل على أفضل نقطة ✓' : `العميل أقل من أفضل نقطة بـ ${gap} dB`}
+              </Text>
+            </View>
             {!!r.pinned && <Text style={s.pinned}>الراوتر مثبّت على {r.pinned}</Text>}
             {!!r.sig && <NetPanel signal={r.sig as Signal} ping={r.ping} />}
             <View style={s.card}>

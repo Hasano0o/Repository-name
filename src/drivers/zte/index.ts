@@ -58,6 +58,10 @@ const pick = (o: Record<string, string>, ...keys: string[]): string | undefined 
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+/** صيغة كلمة المرور اللي نجحت مع كل راوتر — عشان المرة الجاية نحاول مرة وحدة بس
+ *  (كل محاولة غلط تنقص عداد الراوتر، وبعد ٥ غلطات يقفل الدخول دقائق) */
+const GOOD_FORMULA = new Map<string, string>();
+
 /** تباعد الترددات الفرعية (SCS) لـ 5G — ترددات TDD العالية 30 والباقي 15 */
 const NR_SCS30 = new Set([34, 38, 39, 40, 41, 46, 47, 48, 77, 78, 79]);
 const nrScs = (band: number) => (NR_SCS30.has(band) ? 30 : 15);
@@ -260,6 +264,13 @@ export class ZteDriver implements RouterDriver {
     this.host = host;
     this.password = password;
 
+    // ═══ لو جلستنا شغالة أصلاً ما نصرف أي محاولة ═══
+    if (await this.verifyLogin()) { this.log('login: already ok'); return; }
+
+    // ═══ هل الراوتر قافل الدخول بسبب محاولات غلط؟ ═══
+    const lockMsg = await this.lockState();
+    if (lockMsg) throw new Error(lockMsg);
+
     // ═══ نفكّ أي جلسة عالقة أول (MU5001 يقبل مستخدم واحد فقط) ═══
     try { await this.post({ goformId: 'LOGOUT' }); } catch {}
     try { await this.post({ goformId: 'GOFORM_LOGOUT' }); } catch {}
@@ -311,6 +322,10 @@ export class ZteDriver implements RouterDriver {
 
     let sawBusy = false;
 
+    // الصيغة اللي نجحت قبل تنجرب أول
+    const known = GOOD_FORMULA.get(host);
+    if (known) candidates.sort((a, b) => (a.name === known ? -1 : b.name === known ? 1 : 0));
+
     for (const c of candidates) {
       let out = '';
       try {
@@ -324,18 +339,48 @@ export class ZteDriver implements RouterDriver {
       // ✅ نجاح صريح — نرجع فوراً بدون انتظار verifyLogin
       if (isOk(out)) {
         this.log('login: ✓ ✓ ✓ نجح بـ', c.name);
+        GOOD_FORMULA.set(host, c.name);
         await new Promise(r => setTimeout(r, 400));
         return;
       }
       // 2 = duplicateUser (مستخدم آخر داخل) — نتذكره ونكمل
-      if (/"result"\s*:\s*"?2"?/.test(out)) sawBusy = true;
+      if (/"result"\s*:\s*"?2"?/.test(out)) { sawBusy = true; continue; }
+      // نوقف قبل ما يقفل الراوتر الدخول — نخلي محاولة احتياط
+      const left = await this.attemptsLeft();
+      if (left !== undefined && left <= 1) {
+        const lock = await this.lockState();
+        throw new Error(lock ?? 'تعذّر تسجيل الدخول — كلمة المرور غالباً غلط، والراوتر باقي له محاولة وحدة قبل ما يقفل الدخول. تأكد منها من الإعدادات.');
+      }
       // غير ذلك: نجرّب الصيغة التالية (1 أو 3 ما نوقف)
     }
 
     if (sawBusy) {
       throw new Error('الراوتر فيه مستخدم ثاني داخل حالياً. اقفل صفحته من أي متصفح وانتظر دقيقة.');
     }
-    throw new Error('ما نجحت أي صيغة من ' + candidates.length + ' محاولة — جرّب تقفل التطبيق وتفتحه من جديد');
+    throw new Error('تعذّر تسجيل الدخول للراوتر — تأكد إن جوالك على شبكة الراوتر وإن كلمة المرور صحيحة، وبعدها اضغط إعادة المحاولة');
+  }
+
+  /** كم محاولة باقية قبل ما يقفل الراوتر الدخول (لو الفيرموير يرجعها) */
+  private async attemptsLeft(): Promise<number | undefined> {
+    try {
+      const r = await this.get(['psw_fail_num_str']);
+      const n = parseInt(r.psw_fail_num_str ?? '', 10);
+      return Number.isFinite(n) ? n : undefined;
+    } catch { return undefined; }
+  }
+
+  /** لو الراوتر قافل الدخول مؤقتاً نرجع رسالة واضحة بالوقت الباقي */
+  private async lockState(): Promise<string | null> {
+    try {
+      const r = await this.get(['psw_fail_num_str', 'login_lock_time']);
+      const left = parseInt(r.psw_fail_num_str ?? '', 10);
+      const secs = parseInt(r.login_lock_time ?? '', 10);
+      if (left === 0 && Number.isFinite(secs) && secs > 0) {
+        const mins = Math.max(1, Math.ceil(secs / 60));
+        return `الراوتر قفل تسجيل الدخول مؤقتاً بسبب محاولات كثيرة — انتظر ${mins} دقيقة وبعدها جرّب`;
+      }
+    } catch {}
+    return null;
   }
 
   /** يفكّ الجلسة العالقة في الفيرموير اللي يسمح بمستخدم واحد */

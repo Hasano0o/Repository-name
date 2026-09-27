@@ -10,7 +10,18 @@ const chains = new Map<string, Promise<unknown>>();
 /** بعد كذا نعيد تسجيل الدخول احتياطاً — لو المستخدم غيّر كلمة مرور الراوتر من المتصفح */
 const MAX_AGE = 5 * 60 * 1000;
 
-export async function connect(r: SavedRouter, force = false): Promise<RouterDriver> {
+const connecting = new Map<string, Promise<RouterDriver>>();
+
+/** اتصال واحد لكل راوتر في نفس الوقت — الشاشات والمهام الخلفية تنتظر نفس تسجيل الدخول بدل ما كل وحدة تسجّل لحالها */
+export function connect(r: SavedRouter, force = false): Promise<RouterDriver> {
+  const busy = connecting.get(r.id);
+  if (busy) return busy;
+  const p = doConnect(r, force).finally(() => connecting.delete(r.id));
+  connecting.set(r.id, p);
+  return p;
+}
+
+async function doConnect(r: SavedRouter, force = false): Promise<RouterDriver> {
   const cur = sessions.get(r.id);
   if (cur && !force && Date.now() - cur.authAt < MAX_AGE) return cur.d;
   const d = cur?.d ?? driverById(r.driverId);
@@ -37,7 +48,8 @@ export function withRouterLock<T>(id: string, fn: () => Promise<T>): Promise<T> 
   return next;
 }
 
-const AUTH_FAIL = /(كلمة المرور|جلسة عالقة|جلسة أخرى|محاولات كثيرة|تعذّر تسجيل الدخول|108006|108007|108001|108002)/;
+const AUTH_FAIL = /(كلمة المرور|جلسة عالقة|جلسة أخرى|محاولات كثيرة|تعذّر تسجيل الدخول|قفل تسجيل الدخول|مستخدم ثاني|108006|108007|108001|108002)/;
+const NET_FAIL = /(تعذر الاتصال بالراوتر|Network request failed|timed? ?out|timeout|aborted|AbortError|انتهت المهلة|ما رد|ECONN|ENETUNREACH)/i;
 
 export async function withSession<T>(
   r: SavedRouter,
@@ -49,7 +61,10 @@ export async function withSession<T>(
     return await fn(d);
   } catch (e) {
     if (!retry) throw e;
-    if (AUTH_FAIL.test(String((e as any)?.message ?? e))) throw e;
+    const msg = String((e as any)?.message ?? e);
+    if (AUTH_FAIL.test(msg)) throw e;
+    // انقطاع شبكة/مهلة: إعادة تسجيل الدخول ما تفيد وتصرف محاولات على الراوتر
+    if (NET_FAIL.test(msg)) throw e;
     const fresh = await connect(r, true);
     return fn(fresh);
   }
