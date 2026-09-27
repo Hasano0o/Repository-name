@@ -2,11 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
-import Svg, { Circle, Path, Line, Defs, LinearGradient as SvgLinearGradient, Stop, G } from 'react-native-svg';
+import Svg, { Circle, Path, Line, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { Icon, IconName } from '../../src/ui/Icon';
+import {
+  P, shadow, Hero, Section, Ring, Chip, ToggleCard, PrimaryBtn, Collapse, lvlLabel,
+} from '../../src/ui/Pro';
 
 // ═══ Haptics ═══
 let HapticsMod: any = null;
@@ -21,21 +23,18 @@ const Haptics = {
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { Signal, CellTower, CellLockTarget } from '../../src/drivers/types';
-import { Level, LEVEL_COLOR, LEVEL_LABEL, overallLevel, signalScore, parseBands, parseNrBands } from '../../src/utils/signal';
+import { Level, LEVEL_COLOR, overallLevel, signalScore, parseBands, parseNrBands } from '../../src/utils/signal';
 import { trafficBurst } from '../../src/utils/nrprobe';
 import { AimBeeper } from '../../src/utils/aimSound';
 
 // ═══ Design tokens ═══
-const BLUE = '#3567F5';
-const PURPLE = '#7655F5';
-const TEXT = '#14264A';
-const MUTED = '#71809A';
-const BG = '#F4F8FF';
-const SUCCESS = '#13B783';
-const WARN = '#F59E0B';
-const DANGER = '#DC2626';
-const CARD = '#FFFFFF';
-const BORDER = '#E6ECF5';
+const BLUE = P.blue;
+const PURPLE = P.violet;
+const TEXT = P.text;
+const MUTED = P.sub;
+const SUCCESS = P.green;
+const WARN = P.amber;
+const DANGER = P.red;
 
 type Tech = 'LTE' | 'NR';
 
@@ -70,203 +69,87 @@ function readOf(sig: Signal, tech: Tech): { rsrp?: number; sinr?: number; cell: 
 }
 const levelColor = (level: Level): string => LEVEL_COLOR[level];
 
+type Trend = 'up' | 'down' | 'flat';
+const trendOf = (now?: number, prev?: number): Trend =>
+  now !== undefined && prev !== undefined ? (now > prev + 0.5 ? 'up' : now < prev - 0.5 ? 'down' : 'flat') : 'flat';
 
-
-// ═══ مؤشر الإشارة (Hero) ═══
-function SignalHero({
-  rsrp, sinr, baselineRsrp, baselineSinr, rsrpHistory, sinrHistory, rsrpColor, sinrColor,
-}: {
-  rsrp?: number;
-  sinr?: number;
-  baselineRsrp: number | null;
-  baselineSinr: number | null;
-  rsrpHistory: number[];
-  sinrHistory: (number | undefined)[];
-  rsrpColor: string;
-  sinrColor: string;
-}) {
-  const deltaR = rsrp !== undefined && baselineRsrp !== null ? rsrp - baselineRsrp : undefined;
-  const deltaS = sinr !== undefined && baselineSinr !== null ? sinr - baselineSinr : undefined;
-
-  const prevR = rsrpHistory.length >= 2 ? rsrpHistory[rsrpHistory.length - 2] : undefined;
-  const trendR: 'up' | 'down' | 'flat' =
-    rsrp !== undefined && prevR !== undefined
-      ? rsrp > prevR + 0.5 ? 'up' : rsrp < prevR - 0.5 ? 'down' : 'flat'
-      : 'flat';
-  const arrowR = trendR === 'up' ? '↑' : trendR === 'down' ? '↓' : '•';
-  const trendColorR = trendR === 'up' ? SUCCESS : trendR === 'down' ? DANGER : MUTED;
-
-  const sinrClean = sinrHistory.filter((v): v is number => v !== undefined);
-  const prevS = sinrClean.length >= 2 ? sinrClean[sinrClean.length - 2] : undefined;
-  const trendS: 'up' | 'down' | 'flat' =
-    sinr !== undefined && prevS !== undefined
-      ? sinr > prevS + 0.5 ? 'up' : sinr < prevS - 0.5 ? 'down' : 'flat'
-      : 'flat';
-  const arrowS = trendS === 'up' ? '↑' : trendS === 'down' ? '↓' : '•';
-  const trendColorS = trendS === 'up' ? SUCCESS : trendS === 'down' ? DANGER : MUTED;
-
+// ═══ سهم الاتجاه ═══
+function TrendMark({ t, light }: { t: Trend; light?: boolean }) {
+  if (t === 'flat') return <View style={[a.flat, light && { backgroundColor: 'rgba(255,255,255,0.6)' }]} />;
   return (
-    <View style={h.wrap}>
-      {/* بطاقة RSRP — spark على اليمين */}
-      <View style={[h.card, { borderColor: rsrpColor + '40' }]}>
-        <View style={h.cardHead}>
-          <Text style={[h.arrow, { color: trendColorR }]}>{arrowR}</Text>
-          <Text style={h.cardLbl}>RSRP</Text>
-        </View>
-        <View style={h.bodyRow}>
-          {/* spark يمين */}
-          <VSpark value={rsrp} min={-120} max={-70} color={rsrpColor} count={12} />
-          {/* قيمة يسار */}
-          <View style={h.valueCol}>
-            <View style={h.valueRow}>
-              <Text style={[h.value, { color: rsrpColor }]}>{rsrp ?? '—'}</Text>
-              <Text style={h.unit}>dBm</Text>
-            </View>
-          </View>
-        </View>
-        {deltaR !== undefined && (
-          <Text style={[h.delta, {
-            color: deltaR > 0.5 ? SUCCESS : deltaR < -0.5 ? DANGER : MUTED,
-          }]}>
-            {deltaR > 0.5 ? `↑ +${Math.round(deltaR)}`
-              : deltaR < -0.5 ? `↓ ${Math.round(deltaR)}` : '• 0'} dB
-          </Text>
-        )}
-      </View>
-
-      {/* بطاقة SINR — spark على اليسار */}
-      <View style={[h.card, { borderColor: sinrColor + '40' }]}>
-        <View style={h.cardHead}>
-          <Text style={[h.arrow, { color: trendColorS }]}>{arrowS}</Text>
-          <Text style={h.cardLbl}>SINR</Text>
-        </View>
-        <View style={h.bodyRow}>
-          {/* قيمة يمين */}
-          <View style={h.valueCol}>
-            <View style={h.valueRow}>
-              <Text style={[h.value, { color: sinrColor }]}>{sinr ?? '—'}</Text>
-              <Text style={h.unit}>dB</Text>
-            </View>
-          </View>
-          {/* spark يسار */}
-          <VSpark value={sinr} min={-10} max={30} color={sinrColor} count={12} />
-        </View>
-        {deltaS !== undefined && (
-          <Text style={[h.delta, {
-            color: deltaS > 0.5 ? SUCCESS : deltaS < -0.5 ? DANGER : MUTED,
-          }]}>
-            {deltaS > 0.5 ? `↑ +${Math.round(deltaS)}`
-              : deltaS < -0.5 ? `↓ ${Math.round(deltaS)}` : '• 0'} dB
-          </Text>
-        )}
-      </View>
+    <View style={[a.trend, { backgroundColor: t === 'up' ? '#16c784' : '#ff5a5f' }]}>
+      <Icon name={t} size={11} color="#fff" stroke={3} />
     </View>
   );
 }
 
-// ═══ شريط قوة عمودي (12 نقطة) ═══
-function VSpark({
-  value, min, max, color, count = 12,
-}: {
-  value?: number;
-  min: number;
-  max: number;
-  color: string;
-  count?: number;
-}) {
-  const strength = value !== undefined
-    ? Math.max(0, Math.min(1, (value - min) / (max - min)))
-    : 0;
-  const lit = Math.round(strength * count);
-  return (
-    <View style={dot.wrap}>
-      {Array.from({ length: count }, (_, i) => {
-        // من الأعلى للأسفل: الأعلى = أقوى
-        const idx = count - i - 1;
-        const on = idx < lit;
-        const size = on ? 5 : 4;
-        return (
-          <View
-            key={i}
-            style={[
-              dot.dot,
-              {
-                width: size,
-                height: size,
-                borderRadius: size / 2,
-                backgroundColor: on ? color : '#E0E8F3',
-              },
-            ]}
-          />
-        );
-      })}
-    </View>
-  );
-}
-
-const dot = StyleSheet.create({
-  wrap: {
-    alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 2, gap: 2,
-  },
-  dot: {},
-});
-
-
-
-
-
-// ═══ Chart ═══
+// ═══ رسم الإشارة ═══
 function LineChart({ values, min, max, color, width }: { values: number[]; min: number; max: number; color: string; width: number }) {
-  const H = 110;
-  const pad = { top: 8, bottom: 16, left: 4, right: 4 };
-  if (values.length < 2) return <View style={{ height: H }} />;
+  const H = 120;
+  const pad = { top: 10, bottom: 10, left: 6, right: 10 };
+  if (values.length < 2 || width <= 0) return <View style={{ height: H }} />;
   const innerW = width - pad.left - pad.right;
   const innerH = H - pad.top - pad.bottom;
   const range = max - min || 1;
   const stepX = innerW / (values.length - 1);
-  const pts = values.map((v, i) => {
-    const x = pad.left + i * stepX;
-    const y = pad.top + innerH - ((Math.max(min, Math.min(max, v)) - min) / range) * innerH;
-    return { x, y };
-  });
-  const line = pts.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
+  const pts = values.map((v, i) => ({
+    x: pad.left + i * stepX,
+    y: pad.top + innerH - ((Math.max(min, Math.min(max, v)) - min) / range) * innerH,
+  }));
+  // منحنى ناعم
+  let line = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 1; i < pts.length; i++) {
+    const p0 = pts[i - 1]; const p1 = pts[i];
+    const mx = (p0.x + p1.x) / 2;
+    line += ` C ${mx} ${p0.y} ${mx} ${p1.y} ${p1.x} ${p1.y}`;
+  }
   const area = `${line} L ${pts[pts.length - 1].x} ${pad.top + innerH} L ${pts[0].x} ${pad.top + innerH} Z`;
   const last = pts[pts.length - 1];
   return (
     <Svg width={width} height={H}>
       <Defs>
         <SvgLinearGradient id="area" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0%" stopColor={color} stopOpacity="0.22" />
+          <Stop offset="0%" stopColor={color} stopOpacity="0.28" />
           <Stop offset="100%" stopColor={color} stopOpacity="0" />
         </SvgLinearGradient>
       </Defs>
-      {[-60, -90, -120].map((v, i) => {
+      {[-70, -90, -110].map((v, i) => {
         const y = pad.top + innerH - ((v - min) / range) * innerH;
-        return <Line key={i} x1={0} y1={y} x2={width} y2={y} stroke={BORDER} strokeWidth={1} />;
+        return <Line key={i} x1={0} y1={y} x2={width} y2={y} stroke="#edf1f8" strokeWidth={1} strokeDasharray="4 5" />;
       })}
       <Path d={area} fill="url(#area)" />
-      <Path d={line} stroke={color} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      <Circle cx={last.x} cy={last.y} r={4} fill={color} />
-      <Circle cx={last.x} cy={last.y} r={8} fill={color} opacity={0.22} />
+      <Path d={line} stroke={color} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <Circle cx={last.x} cy={last.y} r={9} fill={color} opacity={0.18} />
+      <Circle cx={last.x} cy={last.y} r={5} fill="#fff" stroke={color} strokeWidth={3} />
     </Svg>
   );
 }
 
-// ═══ Metric tile ═══
-function MetricTile({ icon, label, value, unit, iconBg, iconColor }: {
-  icon: IconName; label: string; value?: string | number; unit?: string; iconBg: string; iconColor: string;
-}) {
+// ═══ خانة زجاجية داخل الترويسة ═══
+function GlassStat({ label, value, unit, trend }: { label: string; value?: string | number; unit?: string; trend?: Trend }) {
   return (
-    <View style={a.metric}>
-      <View style={[a.metricIcon, { backgroundColor: iconBg }]}>
-        <Icon name={icon} size={13} color={iconColor} />
+    <View style={a.gStat}>
+      <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 5 }}>
+        <Text style={a.gLbl}>{label}</Text>
+        {trend && <TrendMark t={trend} light />}
       </View>
-      <Text style={a.metricLbl}>{label}</Text>
-      <View style={{ flexDirection: 'row-reverse', alignItems: 'baseline', gap: 2 }}>
-        <Text style={a.metricVal}>{value ?? '—'}</Text>
-        {unit ? <Text style={a.metricUnit}>{unit}</Text> : null}
+      <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+        <Text style={a.gVal} numberOfLines={1} adjustsFontSizeToFit>{value ?? '—'}</Text>
+        {!!unit && value !== undefined && <Text style={a.gUnit}> {unit}</Text>}
       </View>
+    </View>
+  );
+}
+
+// ═══ خانة في بطاقة أفضل نقطة ═══
+function DirStat({ icon, label, value, color, bg }: { icon: IconName; label: string; value: string; color: string; bg: string }) {
+  return (
+    <View style={a.dirStat}>
+      <View style={[a.dirIcon, { backgroundColor: bg }]}>
+        <Icon name={icon} size={16} color={color} stroke={2.2} />
+      </View>
+      <Text style={a.dirLbl}>{label}</Text>
+      <Text style={[a.dirVal, { color }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
     </View>
   );
 }
@@ -570,31 +453,44 @@ export default function AimScreen() {
     : null;
 
   const chartValues = readings.slice(-30).map(r => r.smooth ?? r.rsrp ?? -110);
-  const chartWidth = 320;
+  const [chartW, setChartW] = useState(0);
+
+  const rsrpHist = readings.map(r => r.smooth ?? r.rsrp);
+  const trendR = trendOf(shown, rsrpHist.length >= 2 ? rsrpHist[rsrpHist.length - 2] : undefined);
+  const sinrHist = readings.map(r => r.sinr).filter((v): v is number => v !== undefined);
+  const trendS = trendOf(current?.sinr, sinrHist.length >= 2 ? sinrHist[sinrHist.length - 2] : undefined);
+
+  const STAB = {
+    stable: { t: 'الإشارة مستقرة', d: 'جودة الاتصال جيدة — يمكنك تحسينها بتحريك الهوائي', c: '#16c784' },
+    ok: { t: 'الإشارة متغيرة قليلاً', d: 'جرّب تحريك الراوتر ببطء وانتظر ٣-٥ ثواني', c: '#ffb020' },
+    unstable: { t: 'الإشارة متقلبة', d: 'حرّك الراوتر ببطء — الأرقام تتغير بسرعة', c: '#ff5a5f' },
+  } as const;
+  const stab = stability ? STAB[stability] : null;
+  const isNr = tech === 'NR';
 
   return (
     <View style={a.container}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[a.content, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[a.content, { paddingBottom: insets.bottom + 110 }]}
       >
         {/* ═══ Header ═══ */}
         <View style={a.header}>
-          <Pressable style={a.headerBtn} onPress={reset}>
+          <Pressable style={a.headerBtn} onPress={reset} hitSlop={6}>
             <Icon name="refresh" size={18} color={TEXT} />
           </Pressable>
           <View style={{ flex: 1, alignItems: 'center' }}>
             <Text style={a.headerTitle}>مساعد التوجيه</Text>
             <Text style={a.headerSub}>اضبط اتجاه الهوائي للحصول على أفضل إشارة</Text>
           </View>
-          <Pressable style={a.headerBtn} onPress={() => Alert.alert('مساعدة',
+          <Pressable style={a.headerBtn} hitSlop={6} onPress={() => Alert.alert('مساعدة',
             '١) اختر 4G أو 5G\n٢) حرّك الراوتر ببطء\n٣) الجوال يهتز أسرع كل ما قويت الإشارة\n٤) لما تلقى أفضل نقطة، ثبّت على البرج')}>
             <Icon name="bulb" size={18} color={PURPLE} />
           </Pressable>
         </View>
 
         {loading && (
-          <View style={{ alignItems: 'center', gap: 10, paddingVertical: 40 }}>
+          <View style={{ alignItems: 'center', gap: 10, paddingVertical: 60 }}>
             <ActivityIndicator size="large" color={BLUE} />
             <Text style={{ color: MUTED }}>نبدأ القياس...</Text>
           </View>
@@ -602,79 +498,71 @@ export default function AimScreen() {
 
         {!loading && (
           <>
-            {/* ═══ Hero Card ═══ */}
-            <View style={a.heroCard}>
-              <SignalHero
-                rsrp={shown}
-                sinr={current?.sinr}
-                baselineRsrp={baseline}
-                baselineSinr={baselineSinr}
-                rsrpHistory={readings.map(r => r.smooth ?? r.rsrp ?? -110)}
-                sinrHistory={readings.map(r => r.sinr)}
-                rsrpColor={lvlColor}
-                sinrColor={BLUE}
-              />
-
-              {/* 4 Metrics */}
-              <View style={a.metricsRow}>
-                <MetricTile icon="tower" label="PCI" value={current?.cell.pci ?? '—'} iconBg="#EEE8FF" iconColor="#7C3AED" />
-                <MetricTile icon="chart" label="RSRP" value={shown ?? '—'} unit="dBm" iconBg="#DFF9ED" iconColor="#16A34A" />
-                <MetricTile icon="speed" label="SINR" value={current?.sinr ?? '—'} unit="dB" iconBg="#E1F5FF" iconColor="#0891B2" />
-                <MetricTile icon="bands" label="الباند" value={currentBand ?? '—'} iconBg="#FEF3C7" iconColor="#D97706" />
+            {/* ═══ Hero ═══ */}
+            <Hero colors={isNr ? ['#6a45ec', '#a24bd8'] : [P.heroA, P.heroB]}>
+              <View style={a.heroTop}>
+                <View style={a.heroTag}>
+                  <Icon name="tower" size={13} color="#fff" stroke={2.2} />
+                  <Text style={a.heroTagTxt} numberOfLines={1}>{current ? cellName(current.cell) : isNr ? '5G' : '4G'}</Text>
+                </View>
+                {stab ? (
+                  <View style={a.heroTag}>
+                    <View style={[a.stabDot, { backgroundColor: stab.c }]} />
+                    <Text style={a.heroTagTxt}>{stab.t}</Text>
+                  </View>
+                ) : (
+                  <View style={a.heroTag}>
+                    <ActivityIndicator size="small" color="#fff" style={{ transform: [{ scale: 0.7 }] }} />
+                    <Text style={a.heroTagTxt}>نجمع القراءات</Text>
+                  </View>
+                )}
               </View>
 
-              {/* Status */}
-              {stability && (
-                <View style={[a.statusBar, {
-                  backgroundColor: stability === 'stable' ? '#ECFBF6' : stability === 'ok' ? '#FFFBEB' : '#FEF2F2',
-                  borderColor: stability === 'stable' ? '#BEEFE0' : stability === 'ok' ? '#FCD34D' : '#FECACA',
-                }]}>
-                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Text style={[a.statusTitle, {
-                      color: stability === 'stable' ? '#079B72' : stability === 'ok' ? '#92400E' : '#991B1B',
-                    }]}>
-                      {stability === 'stable' ? '✓ الإشارة مستقرة' : stability === 'ok' ? '⚠ الإشارة متغيرة قليلاً' : '⚠ الإشارة متقلبة'}
-                    </Text>
-                    <Text style={[a.statusSub, {
-                      color: stability === 'stable' ? '#67958A' : stability === 'ok' ? '#A16207' : '#B91C1C',
-                    }]}>
-                      {stability === 'stable' ? 'جودة الاتصال جيدة - يمكنك تحسينها بتحريك الهوائي'
-                        : stability === 'ok' ? 'جرّب تحريك الراوتر ببطء وانتظر ٣-٥ ثواني'
-                          : 'حرّك الراوتر ببطء — الأرقام تتغير بسرعة'}
+              <View style={{ alignItems: 'center', marginTop: 8 }}>
+                <Ring ratio={pct} size={196} stroke={14}>
+                  <Text style={a.ringLbl}>RSRP</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                    <Text style={a.ringVal}>{shown ?? '—'}</Text>
+                    {shown !== undefined && <Text style={a.ringUnit}> dBm</Text>}
+                  </View>
+                  <View style={a.ringRow}>
+                    <TrendMark t={trendR} light />
+                    <Text style={a.ringLevel}>{current ? lvlLabel(level) : '—'} · {Math.round(pct * 100)}%</Text>
+                  </View>
+                </Ring>
+                {delta !== undefined && (
+                  <View style={[a.deltaPill, { backgroundColor: delta > 0.5 ? 'rgba(22,199,132,0.9)' : delta < -0.5 ? 'rgba(255,90,95,0.9)' : 'rgba(255,255,255,0.2)' }]}>
+                    <Text style={a.deltaTxt}>
+                      {delta > 0.5 ? `+${Math.round(delta)}` : delta < -0.5 ? `${Math.round(delta)}` : '0'} dB عن البداية
                     </Text>
                   </View>
-                  <View style={[a.statusCheck, {
-                    backgroundColor: stability === 'stable' ? SUCCESS : stability === 'ok' ? WARN : DANGER,
-                  }]}>
-                    <Text style={{ color: '#FFF', fontWeight: '900', fontSize: 15 }}>✓</Text>
-                  </View>
-                </View>
-              )}
-            </View>
+                )}
+              </View>
+
+              <View style={a.gRow}>
+                <GlassStat label="SINR" value={current?.sinr} unit="dB" trend={trendS} />
+                <View style={a.gSep} />
+                <GlassStat label="الباند" value={currentBand} />
+                <View style={a.gSep} />
+                <GlassStat label="PCI" value={current?.cell.pci} />
+              </View>
+
+              {!!stab && <Text style={a.heroHint}>{stab.d}</Text>}
+            </Hero>
 
             {/* ═══ Band selector ═══ */}
-            <View style={a.card}>
-              <View style={a.cardHead}>
-                <View style={a.cardIcon}>
-                  <Icon name="bands" size={16} color={BLUE} />
-                </View>
-                <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                  <Text style={a.cardTitle}>اختيار التردد</Text>
-                  <Text style={a.cardSub}>الترددات المتاحة على شبكتك</Text>
-                </View>
-              </View>
-
-              <View style={a.techRow}>
+            <Section title="اختيار التردد" sub="الترددات المتاحة على شبكتك" icon="bands">
+              <View style={a.segment}>
                 {(['LTE', 'NR'] as Tech[]).map(t => {
                   const on = tech === t;
                   const disabled = t === 'NR' && !nrSeen && !nrActive;
                   return (
                     <Pressable key={t}
-                      style={[a.techBtn, on && { backgroundColor: t === 'NR' ? PURPLE : BLUE, borderColor: t === 'NR' ? PURPLE : BLUE }, disabled && { opacity: 0.4 }]}
+                      style={[a.segBtn, on && [a.segOn, { backgroundColor: t === 'NR' ? PURPLE : BLUE }], disabled && { opacity: 0.4 }]}
                       onPress={() => !disabled && switchTech(t)}
                       disabled={disabled}
                     >
-                      <Text style={[a.techTxt, on && { color: '#FFF' }]}>{t === 'NR' ? '5G' : '4G'}</Text>
+                      <Text style={[a.segTxt, on && { color: '#FFF' }]}>{t === 'NR' ? '5G' : '4G LTE'}</Text>
                     </Pressable>
                   );
                 })}
@@ -684,148 +572,101 @@ export default function AimScreen() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={a.chipsRow}>
                   {bandList.map(b => {
                     const on = currentBand === b;
-                    const isNr = b.startsWith('n');
+                    const nr = b.startsWith('n');
+                    const col = nr ? PURPLE : BLUE;
                     return (
-                      <View key={b} style={[a.chip, on && { backgroundColor: isNr ? PURPLE : BLUE, borderColor: isNr ? PURPLE : BLUE }]}>
-                        <Text style={[a.chipTxt, on && { color: '#FFF' }]}>{b}</Text>
+                      <View key={b} style={[a.chip, on && { backgroundColor: col, borderColor: col }]}>
+                        {on && <View style={a.chipDot} />}
+                        <Text style={[a.chipTxt, { color: on ? '#FFF' : col }]}>{b}</Text>
                       </View>
                     );
                   })}
                 </ScrollView>
               )}
-            </View>
+            </Section>
 
             {/* ═══ Best Direction ═══ */}
             {best && (
-              <View style={a.card}>
-                <View style={a.cardHead}>
-                  <View style={[a.cardIcon, { backgroundColor: PURPLE + '18' }]}>
-                    <Icon name="aim" size={16} color={PURPLE} />
-                  </View>
-                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Text style={a.cardTitle}>أفضل نقطة توجيه</Text>
-                    <Text style={a.cardSub}>اتجه الهوائي إلى هذه الزاوية</Text>
-                  </View>
-                </View>
-
+              <Section title="أفضل نقطة توجيه" sub="ارجع الهوائي لهذي الزاوية" icon="aim"
+                tone={PURPLE} toneSoft={P.violetSoft}>
                 <View style={a.dirBody}>
-                  <View style={a.dirStatCol}>
-                    <Icon name="spark" size={18} color={SUCCESS} />
-                    <Text style={a.dirStatLbl}>أفضل قراءة</Text>
-                    <Text style={[a.dirStatVal, { color: SUCCESS }]} numberOfLines={1}>
-                      {bestShown !== undefined ? `${Math.round(bestShown)} dBm` : '—'}
-                    </Text>
-                  </View>
-                  <View style={a.dirStatCol}>
-                    <Icon name="pin" size={18} color={BLUE} />
-                    <Text style={a.dirStatLbl}>أنت الحين</Text>
-                    <Text style={[a.dirStatVal, gapToBest !== undefined && gapToBest > 1 && { color: WARN }]} numberOfLines={1}>
-                      {gapToBest === undefined ? '—' : gapToBest <= 1 ? 'عليها ✓' : `أقل بـ ${gapToBest} dB`}
-                    </Text>
-                  </View>
-                  <View style={a.dirStatCol}>
-                    <Icon name="tower" size={18} color={PURPLE} />
-                    <Text style={a.dirStatLbl}>البرج</Text>
-                    <Text style={a.dirStatVal} numberOfLines={1}>{cellName(best.cell)}</Text>
-                  </View>
+                  <DirStat icon="spark" label="أفضل قراءة" color={SUCCESS} bg={P.greenSoft}
+                    value={bestShown !== undefined ? `${Math.round(bestShown)} dBm` : '—'} />
+                  <DirStat icon="pin" label="أنت الحين"
+                    color={gapToBest !== undefined && gapToBest > 1 ? WARN : BLUE}
+                    bg={gapToBest !== undefined && gapToBest > 1 ? P.amberSoft : P.blueSoft}
+                    value={gapToBest === undefined ? '—' : gapToBest <= 1 ? 'عليها ✓' : `أقل بـ ${gapToBest} dB`} />
+                  <DirStat icon="tower" label="البرج" color={PURPLE} bg={P.violetSoft} value={cellName(best.cell)} />
                 </View>
 
                 {canPin && best.cell.pci && cellKey(pinned) !== cellKey(best.cell) && (
-                  <Pressable style={a.pinBtn} onPress={pinBest} disabled={pinBusy}>
-                    {pinBusy ? <ActivityIndicator color="#FFF" /> : (
-                      <Text style={a.pinTxt}>📌 ثبّت على برج أفضل نقطة</Text>
-                    )}
-                  </Pressable>
+                  <PrimaryBtn small text="ثبّت على برج أفضل نقطة" icon="pin" onPress={pinBest} busy={pinBusy} style={{ marginTop: 12 }} />
                 )}
 
                 {pinned && (
-                  <Pressable style={[a.pinBtn, { backgroundColor: '#E0E7FF' }]} onPress={pinDuringAim} disabled={pinBusy}>
-                    <Text style={[a.pinTxt, { color: BLUE }]}>✓ مثبّت على {cellName(pinned)}</Text>
+                  <Pressable style={a.pinnedBtn} onPress={pinDuringAim} disabled={pinBusy}>
+                    {pinBusy ? <ActivityIndicator color={BLUE} /> : (
+                      <>
+                        <Text style={a.pinnedTxt}>مثبّت على {cellName(pinned)} — اضغط للفك</Text>
+                        <Icon name="check" size={16} color={BLUE} stroke={2.6} />
+                      </>
+                    )}
                   </Pressable>
                 )}
-              </View>
+              </Section>
             )}
 
             {/* ═══ 5G Hunt ═══ */}
             {waitingNr && (
-              <View style={a.card}>
-                <View style={a.cardHead}>
-                  <View style={[a.cardIcon, { backgroundColor: PURPLE + '18' }]}>
-                    <Icon name="antenna" size={16} color={PURPLE} />
-                  </View>
-                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Text style={a.cardTitle}>صيد إشارة 5G</Text>
-                    <Text style={a.cardSub}>{waking !== null ? 'نبحث — حرّك الراوتر ببطء' : '5G ما يظهر إلا وقت التحميل'}</Text>
-                  </View>
-                </View>
-                <Pressable style={[a.wakeBtn, waking !== null && a.wakeBtnOn]} onPress={wake5g}>
-                  <Text style={[a.wakeTxt, waking !== null && { color: PURPLE }]}>
-                    {waking !== null ? `⏹ إيقاف البحث (${waking}ث)` : '⚡ ابحث عن 5G'}
-                  </Text>
-                </Pressable>
-              </View>
+              <Section title="صيد إشارة 5G"
+                sub={waking !== null ? 'نبحث — حرّك الراوتر ببطء' : '5G ما يظهر إلا وقت التحميل'}
+                icon="antenna" tone={PURPLE} toneSoft={P.violetSoft}>
+                {waking !== null ? (
+                  <Pressable style={a.wakeOn} onPress={wake5g}>
+                    <ActivityIndicator size="small" color={PURPLE} />
+                    <Text style={a.wakeOnTxt}>إيقاف البحث ({waking}ث)</Text>
+                  </Pressable>
+                ) : (
+                  <PrimaryBtn small text="ابحث عن 5G" icon="spark" onPress={wake5g}
+                    colors={['#6a45ec', '#a24bd8']} style={{ marginTop: 12 }} />
+                )}
+              </Section>
             )}
 
             {/* ═══ الصوت والاهتزاز ═══ */}
             <View style={a.togglesRow}>
-              <Pressable
-                style={[a.toggleBtn, sound && { backgroundColor: PURPLE, borderColor: PURPLE }]}
-                onPress={() => setSound(v => !v)}
-              >
-                <Text style={[a.toggleIcon, sound && { color: '#FFF' }]}>{sound ? '🔊' : '🔈'}</Text>
-                <Text style={[a.toggleTxt, sound && { color: '#FFF' }]}>
-                  {sound ? 'الصوت مفعّل' : 'تفعيل الصوت'}
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[a.toggleBtn, haptics && { backgroundColor: SUCCESS, borderColor: SUCCESS }]}
-                onPress={() => setHaptics(h => !h)}
-              >
-                <Text style={[a.toggleIcon, haptics && { color: '#FFF' }]}>📳</Text>
-                <Text style={[a.toggleTxt, haptics && { color: '#FFF' }]}>
-                  {haptics ? 'اهتزاز مفعّل' : 'تشغيل الاهتزاز'}
-                </Text>
-              </Pressable>
+              <ToggleCard on={sound} label="تفعيل الصوت" onLabel="الصوت مفعّل" icon="sound" color={PURPLE} onPress={() => setSound(v => !v)} />
+              <ToggleCard on={haptics} label="تشغيل الاهتزاز" onLabel="اهتزاز مفعّل" icon="vibrate" color={SUCCESS} onPress={() => setHaptics(v => !v)} />
             </View>
 
             {/* ═══ Chart ═══ */}
             {readings.length > 3 && (
-              <View style={a.card}>
-                <View style={a.cardHead}>
-                  <View style={a.cardIcon}>
-                    <Icon name="chart" size={16} color={BLUE} />
-                  </View>
-                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Text style={a.cardTitle}>تاريخ قوة الإشارة</Text>
-                    <Text style={a.cardSub}>آخر {Math.min(30, readings.length)} قراءة</Text>
-                  </View>
-                  <View style={a.rsrpBadge}>
-                    <Text style={a.rsrpBadgeTxt}>{shown ?? '—'} dBm</Text>
-                  </View>
-                </View>
-                <View style={{ alignItems: 'center', marginTop: 8 }}>
-                  <LineChart values={chartValues} min={-125} max={-60} color={lvlColor} width={chartWidth} />
+              <Section title="تاريخ قوة الإشارة" sub={`آخر ${Math.min(30, readings.length)} قراءة`} icon="chart"
+                right={<Chip text={`${shown ?? '—'} dBm`} color="#fff" bg={lvlColor} />}>
+                <View style={{ marginTop: 12 }} onLayout={e => setChartW(e.nativeEvent.layout.width)}>
+                  <LineChart values={chartValues} min={-125} max={-60} color={lvlColor} width={chartW} />
                 </View>
                 <View style={a.chartLabels}>
                   <Text style={a.chartLbl}>قبل قليل</Text>
                   <Text style={a.chartLbl}>الآن</Text>
                 </View>
-              </View>
+              </Section>
             )}
 
             {/* ═══ Tips ═══ */}
-            <View style={a.tipsCard}>
-              <View style={a.tipsHead}>
-                <View style={[a.cardIcon, { backgroundColor: '#FEF3C7' }]}>
-                  <Icon name="bulb" size={16} color={WARN} />
+            <Collapse title="نصائح لتحسين الإشارة" icon="bulb" tone={WARN} toneSoft={P.amberSoft}>
+              {[
+                'ارفع الهوائي لأعلى نقطة ممكنة',
+                'ابتعد عن العوائق المعدنية والجدران السميكة',
+                'جرّب الاتجاهات المختلفة حتى تجد أفضل إشارة',
+                'ثبّت الهوائي عند الوصول لأفضل قراءة',
+              ].map((t, i) => (
+                <View key={i} style={a.tipRow}>
+                  <View style={a.tipNum}><Text style={a.tipNumTxt}>{i + 1}</Text></View>
+                  <Text style={a.tipTxt}>{t}</Text>
                 </View>
-                <Text style={a.tipsTitle}>نصائح لتحسين الإشارة</Text>
-              </View>
-              <View style={a.tipRow}><Text style={a.tipCheck}>✓</Text><Text style={a.tipTxt}>ارفع الهوائي لأعلى نقطة ممكنة</Text></View>
-              <View style={a.tipRow}><Text style={a.tipCheck}>✓</Text><Text style={a.tipTxt}>ابتعد عن العوائق المعدنية والجدران السميكة</Text></View>
-              <View style={a.tipRow}><Text style={a.tipCheck}>✓</Text><Text style={a.tipTxt}>جرّب الاتجاهات المختلفة حتى تجد أفضل إشارة</Text></View>
-              <View style={a.tipRow}><Text style={a.tipCheck}>✓</Text><Text style={a.tipTxt}>ثبّت الهوائي عند الوصول لأفضل قراءة</Text></View>
-            </View>
+              ))}
+            </Collapse>
 
             {!!error && <Text style={a.err}>{error}</Text>}
           </>
@@ -835,175 +676,108 @@ export default function AimScreen() {
       {/* ═══ CTA أسفل ═══ */}
       {!loading && (
         <View style={[a.footer, { paddingBottom: insets.bottom + 12 }]}>
-          <Pressable onPress={() => { reset(); if (!sound) setSound(true); }}>
-            <LinearGradient colors={[BLUE, PURPLE]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={a.cta}>
-              <Icon name="aim" size={20} color="#FFF" />
-              <Text style={a.ctaTxt}>ابدأ التوجيه الآن</Text>
-            </LinearGradient>
-          </Pressable>
+          <PrimaryBtn text="ابدأ التوجيه الآن" icon="aim"
+            onPress={() => { reset(); if (!sound) setSound(true); }}
+            style={a.cta} />
         </View>
       )}
     </View>
   );
 }
 
-const h = StyleSheet.create({
-  wrap: {
-    flexDirection: 'row-reverse', gap: 10, width: '100%',
-  },
-  card: {
-    flex: 1, backgroundColor: '#FFFFFF', borderRadius: 16,
-    paddingVertical: 12, paddingHorizontal: 10,
-    borderWidth: 1.5, gap: 6,
-    alignItems: 'center',
-  },
-  cardHead: {
-    flexDirection: 'row-reverse', alignItems: 'center', gap: 5,
-  },
-  cardLbl: { color: MUTED, fontSize: 12, fontWeight: '800' },
-  arrow: { fontSize: 18, fontWeight: '900' },
-  bodyRow: {
-    flexDirection: 'row-reverse', alignItems: 'center',
-    gap: 6, width: '100%', justifyContent: 'space-between',
-  },
-  valueCol: { flex: 1, alignItems: 'center' },
-  valueRow: { flexDirection: 'row-reverse', alignItems: 'baseline', gap: 2 },
-  value: { fontSize: 26, fontWeight: '900', letterSpacing: -1, lineHeight: 30 },
-  unit: { color: MUTED, fontSize: 10, fontWeight: '800' },
-  delta: { fontSize: 10.5, fontWeight: '800' },
-});
-
 const a = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-  content: { paddingHorizontal: 16, paddingTop: 14, gap: 12 },
+  container: { flex: 1, backgroundColor: P.bg },
+  content: { paddingHorizontal: 16, paddingTop: 10, gap: 14 },
   header: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   headerBtn: {
-    width: 44, height: 44, borderRadius: 15, backgroundColor: CARD,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: BORDER,
+    width: 44, height: 44, borderRadius: 15, backgroundColor: P.card,
+    alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: P.border, ...shadow,
   },
-  headerTitle: { fontSize: 20, fontWeight: '900', color: TEXT, textAlign: 'center' },
-  headerSub: { fontSize: 11, color: MUTED, textAlign: 'center', marginTop: 2 },
+  headerTitle: { fontSize: 21, fontWeight: '800', color: TEXT, textAlign: 'center' },
+  headerSub: { fontSize: 11.5, color: MUTED, textAlign: 'center', marginTop: 1 },
 
-  heroCard: {
-    backgroundColor: CARD, borderRadius: 24, padding: 14, gap: 12,
-    borderWidth: 1, borderColor: BORDER,
-    shadowColor: '#0D2350', shadowOpacity: 0.05, shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 }, elevation: 2,
+  heroTop: { flexDirection: 'row-reverse', justifyContent: 'space-between', gap: 8 },
+  heroTag: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 6, flexShrink: 1,
+    backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 999, paddingHorizontal: 10, height: 28,
   },
-  heroVisual: {
-    backgroundColor: '#F7FAFF', borderRadius: 20,
-    paddingVertical: 18, paddingHorizontal: 16,
-    alignItems: 'center', gap: 4,
-    borderWidth: 1, borderColor: '#E5EDF9',
-  },
+  heroTagTxt: { color: '#fff', fontSize: 11.5, fontWeight: '800' },
+  stabDot: { width: 8, height: 8, borderRadius: 4 },
+  ringLbl: { color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+  ringVal: { color: '#fff', fontSize: 50, fontWeight: '800', letterSpacing: -2, lineHeight: 58 },
+  ringUnit: { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: '700' },
+  ringRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
+  ringLevel: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  deltaPill: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4, marginTop: -6 },
+  deltaTxt: { color: '#fff', fontSize: 12, fontWeight: '800' },
 
-  metricsRow: { flexDirection: 'row-reverse', gap: 6 },
-  metric: {
-    flex: 1, minHeight: 76, borderRadius: 12,
-    backgroundColor: '#FAFCFF', padding: 8,
-    borderWidth: 1, borderColor: BORDER, gap: 2,
+  gRow: {
+    flexDirection: 'row-reverse', marginTop: 14, backgroundColor: 'rgba(255,255,255,0.14)',
+    borderRadius: 18, paddingVertical: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
   },
-  metricIcon: { width: 22, height: 22, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
-  metricLbl: { color: MUTED, fontSize: 9.5, fontWeight: '700' },
-  metricVal: { color: TEXT, fontSize: 12, fontWeight: '900' },
-  metricUnit: { color: MUTED, fontSize: 8, fontWeight: '700' },
+  gStat: { flex: 1, alignItems: 'center', gap: 2, paddingHorizontal: 4 },
+  gSep: { width: 1, backgroundColor: 'rgba(255,255,255,0.22)', marginVertical: 4 },
+  gLbl: { color: 'rgba(255,255,255,0.78)', fontSize: 11, fontWeight: '700' },
+  gVal: { color: '#fff', fontSize: 19, fontWeight: '800' },
+  gUnit: { color: 'rgba(255,255,255,0.8)', fontSize: 10.5, fontWeight: '700' },
+  heroHint: { color: 'rgba(255,255,255,0.85)', fontSize: 11.5, textAlign: 'center', marginTop: 10 },
 
-  statusBar: {
-    flexDirection: 'row-reverse', alignItems: 'center', gap: 10,
-    paddingVertical: 10, paddingHorizontal: 12,
-    borderRadius: 14, borderWidth: 1,
-  },
-  statusTitle: { fontSize: 12.5, fontWeight: '900', textAlign: 'right' },
-  statusSub: { fontSize: 10, marginTop: 2, textAlign: 'right', lineHeight: 14 },
-  statusCheck: {
-    width: 26, height: 26, borderRadius: 13,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  trend: { width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  flat: { width: 8, height: 8, borderRadius: 4, backgroundColor: P.faint, marginHorizontal: 4 },
 
-  card: {
-    backgroundColor: CARD, borderRadius: 20, padding: 14, gap: 10,
-    borderWidth: 1, borderColor: BORDER,
-  },
-  cardHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
-  cardIcon: {
-    width: 30, height: 30, borderRadius: 10, backgroundColor: '#E1F5FF',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  cardTitle: { color: TEXT, fontSize: 14, fontWeight: '900', textAlign: 'right' },
-  cardSub: { color: MUTED, fontSize: 10, textAlign: 'right', marginTop: 2 },
+  segment: { flexDirection: 'row-reverse', backgroundColor: P.soft, borderRadius: 16, padding: 4, marginTop: 14, borderWidth: 1, borderColor: P.border },
+  segBtn: { flex: 1, paddingVertical: 11, borderRadius: 12, alignItems: 'center' },
+  segOn: { ...shadow, shadowOpacity: 0.15 },
+  segTxt: { color: TEXT, fontWeight: '800', fontSize: 13.5 },
 
-  techRow: { flexDirection: 'row-reverse', gap: 8 },
-  techBtn: {
-    flex: 1, paddingVertical: 10, borderRadius: 12,
-    backgroundColor: '#FAFCFF', alignItems: 'center',
-    borderWidth: 1.5, borderColor: BORDER,
-  },
-  techTxt: { color: TEXT, fontWeight: '900', fontSize: 13 },
-
-  chipsRow: { flexDirection: 'row-reverse', gap: 8, paddingVertical: 2 },
+  chipsRow: { flexDirection: 'row-reverse', gap: 8, paddingTop: 12 },
   chip: {
-    height: 36, paddingHorizontal: 16, borderRadius: 18,
-    backgroundColor: '#FAFCFF', borderWidth: 1.5, borderColor: BORDER,
-    alignItems: 'center', justifyContent: 'center',
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 6,
+    height: 34, paddingHorizontal: 16, borderRadius: 17,
+    backgroundColor: P.card, borderWidth: 1.5, borderColor: P.border,
   },
-  chipTxt: { color: TEXT, fontWeight: '800', fontSize: 12 },
+  chipDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff' },
+  chipTxt: { fontWeight: '800', fontSize: 12.5 },
 
-  dirBody: { flexDirection: 'row-reverse', gap: 8 },
-  dirStatCol: {
-    flex: 1, alignItems: 'center', gap: 5,
-    backgroundColor: '#FAFCFF', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 6,
-    borderWidth: 1, borderColor: BORDER,
+  dirBody: { flexDirection: 'row-reverse', gap: 8, marginTop: 14 },
+  dirStat: {
+    flex: 1, alignItems: 'center', gap: 4, backgroundColor: P.soft, borderRadius: 16,
+    paddingVertical: 12, paddingHorizontal: 6, borderWidth: 1, borderColor: P.border,
   },
-  dirStatLbl: { color: MUTED, fontSize: 10.5, fontWeight: '700', textAlign: 'center' },
-  dirStatVal: { color: TEXT, fontSize: 14, fontWeight: '900', textAlign: 'center' },
+  dirIcon: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+  dirLbl: { color: MUTED, fontSize: 11, fontWeight: '700', textAlign: 'center' },
+  dirVal: { fontSize: 14.5, fontWeight: '800', textAlign: 'center' },
 
-  pinBtn: { backgroundColor: BLUE, borderRadius: 13, paddingVertical: 11, alignItems: 'center', marginTop: 4 },
-  pinTxt: { color: '#FFF', fontWeight: '900', fontSize: 13 },
+  pinnedBtn: {
+    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6,
+    backgroundColor: P.blueSoft, borderRadius: 16, paddingVertical: 12, marginTop: 10,
+  },
+  pinnedTxt: { color: BLUE, fontWeight: '800', fontSize: 13 },
 
-  wakeBtn: { backgroundColor: PURPLE, borderRadius: 12, paddingVertical: 11, alignItems: 'center' },
-  wakeBtnOn: { backgroundColor: '#EEE8FF', borderWidth: 1.5, borderColor: PURPLE },
-  wakeTxt: { color: '#FFF', fontWeight: '900', fontSize: 13 },
+  wakeOn: {
+    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12,
+    backgroundColor: P.violetSoft, borderRadius: 16, paddingVertical: 12, borderWidth: 1.5, borderColor: PURPLE + '55',
+  },
+  wakeOnTxt: { color: PURPLE, fontWeight: '800', fontSize: 13 },
 
   togglesRow: { flexDirection: 'row-reverse', gap: 10 },
-  toggleBtn: {
-    flex: 1, flexDirection: 'row-reverse', alignItems: 'center',
-    justifyContent: 'center', gap: 8,
-    paddingVertical: 13, borderRadius: 14,
-    backgroundColor: CARD, borderWidth: 1.5, borderColor: BORDER,
-  },
-  toggleIcon: { fontSize: 16 },
-  toggleTxt: { color: TEXT, fontWeight: '900', fontSize: 12.5 },
 
-  rsrpBadge: { backgroundColor: BLUE, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 5 },
-  rsrpBadgeTxt: { color: '#FFF', fontSize: 11, fontWeight: '900' },
-  chartLabels: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 4, paddingHorizontal: 4 },
-  chartLbl: { color: MUTED, fontSize: 10, fontWeight: '700' },
+  chartLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2, paddingHorizontal: 4 },
+  chartLbl: { color: P.faint, fontSize: 10.5, fontWeight: '700' },
 
-  tipsCard: {
-    borderRadius: 20, backgroundColor: '#F7F3FF',
-    borderWidth: 1, borderColor: '#E4D9FF',
-    padding: 14, gap: 8,
-  },
-  tipsHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, marginBottom: 4 },
-  tipsTitle: { color: PURPLE, fontSize: 14, fontWeight: '900', flex: 1, textAlign: 'right' },
-  tipRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, paddingVertical: 3 },
-  tipCheck: { color: SUCCESS, fontSize: 14, fontWeight: '900' },
-  tipTxt: { flex: 1, textAlign: 'right', color: '#68718A', fontSize: 12.5, lineHeight: 19 },
+  tipRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, paddingVertical: 5 },
+  tipNum: { width: 22, height: 22, borderRadius: 11, backgroundColor: P.amberSoft, alignItems: 'center', justifyContent: 'center' },
+  tipNumTxt: { color: WARN, fontSize: 11, fontWeight: '800' },
+  tipTxt: { flex: 1, textAlign: 'right', color: '#4b5675', fontSize: 13, lineHeight: 20 },
 
   footer: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    paddingHorizontal: 16, paddingTop: 12,
-    backgroundColor: BG + 'F0',
+    paddingHorizontal: 16, paddingTop: 10, backgroundColor: P.bg + 'F2',
   },
   cta: {
-    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center',
-    gap: 10, paddingVertical: 16, borderRadius: 20,
-    shadowColor: PURPLE, shadowOpacity: 0.4,
-    shadowRadius: 16, shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
+    borderRadius: 20, shadowColor: P.heroB, shadowOpacity: 0.35,
+    shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 6,
   },
-  ctaTxt: { color: '#FFF', fontWeight: '900', fontSize: 16 },
 
   err: { color: DANGER, fontSize: 12, textAlign: 'center' },
 });
