@@ -15,7 +15,7 @@ import {
 import { C } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { trafficBurst, collectNr, mb } from '../../src/utils/nrprobe';
-import { safeApply, lastTrial, trialNote, trialMessage } from '../../src/utils/safeLock';
+import { safeApply, lastTrial, trialNote, trialMessage, loadTrials } from '../../src/utils/safeLock';
 
 const BADGE_BG: Record<TowerGroup['badge'], string> = {
   active: '#e8f8f0', confirmed: '#e8f8f0', likely: '#eaf0ff', single: '#f3f4fb',
@@ -171,6 +171,7 @@ export default function TowersScreen() {
   const [cellLock, setCellLock] = useState<CellLockState | null>(null);
   const [canLock, setCanLock] = useState(false);
   const [bandCfg, setBandCfg] = useState<BandConfig | null>(null);
+  const [trialCount, setTrialCount] = useState(0);
   const [sheet, setSheet] = useState<{ title: string; sub: string; opts: LockOpt[] } | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
@@ -194,6 +195,7 @@ export default function TowersScreen() {
       setCellLock(lock);
       setCanLock(supports);
       setBandCfg(cfg);
+      setTrialCount((await loadTrials(r.id)).length);
     } catch (e: any) {
       setError(e?.message ?? String(e));
     }
@@ -450,6 +452,12 @@ export default function TowersScreen() {
         {!loading && info && (
           <Pressable style={s.carrLink} onPress={() => router.push(`/carriers/${info.id}` as Href)}>
             <Text style={s.carrLinkText}>📶 النواقل المدموجة بالتفصيل (عرض كل ناقل وجودته) ‹</Text>
+          </Pressable>
+        )}
+
+        {!loading && info && trialCount > 0 && (
+          <Pressable style={[s.carrLink, { backgroundColor: C.goldSoft }]} onPress={() => router.push(`/trials/${info.id}` as Href)}>
+            <Text style={[s.carrLinkText, { color: '#b76e00' }]}>⭐ وش نجح عندي — نتائج {trialCount} تجربة تثبيت سابقة ‹</Text>
           </Pressable>
         )}
 
