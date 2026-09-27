@@ -2,16 +2,19 @@ import { useCallback, useRef, useState } from 'react';
 import {
   View, Text, Pressable, FlatList, ActivityIndicator, RefreshControl, StyleSheet, Alert,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect, Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SavedRouter, listRouters, getPassword, deleteRouter } from '../src/store/routers';
 import { withSession } from '../src/store/sessions';
 import { Signal } from '../src/drivers/types';
-import { C, R, S, T } from '../src/ui/theme';
 import { Icon } from '../src/ui/Icon';
 import { SkeletonRouterCard, EmptyState } from '../src/ui/States';
-import { LEVEL_COLOR, LEVEL_LABEL, overallLevel, parseBands } from '../src/utils/signal';
-import { fmtTime } from '../src/utils/format';
+import { overallLevel, parseBands, parseNrBands } from '../src/utils/signal';
+import {
+  P, shadow, Hero, GlassBtn, Val, QBar, Chip, PrimaryBtn,
+  lvlColor, lvlSoft, lvlLabel, ratioOf, RANGE,
+} from '../src/ui/Pro';
 
 interface Status {
   loading: boolean;
@@ -21,12 +24,6 @@ interface Status {
   at?: number;
   error?: string;
   hasPw?: boolean;
-}
-
-function gradeLevel(level: string): { label: string; color: string } {
-  const lvl = LEVEL_LABEL[level as keyof typeof LEVEL_LABEL] ?? '—';
-  const col = LEVEL_COLOR[level as keyof typeof LEVEL_COLOR] ?? C.muted;
-  return { label: lvl, color: col };
 }
 
 export default function RoutersList() {
@@ -124,7 +121,7 @@ export default function RoutersList() {
 
   if (!loaded) {
     return (
-      <View style={[s.list, { paddingTop: insets.top + S.md }]}>
+      <View style={[s.list, { paddingTop: insets.top + 12, flex: 1, backgroundColor: P.bg }]}>
         <SkeletonRouterCard />
         <SkeletonRouterCard />
       </View>
@@ -138,139 +135,189 @@ export default function RoutersList() {
         title="أضف أول راوتر"
         text="خلّ التطبيق يتصل براوترك ويعرض لك الإشارة والسرعة والأبراج والترددات مباشرة."
       >
-        <Pressable style={s.btn} onPress={add}>
-          <Text style={s.btnText}>+ إضافة راوتر</Text>
-        </Pressable>
+        <PrimaryBtn text="إضافة راوتر" icon="plus" onPress={add} style={{ alignSelf: 'stretch' }} />
         <Pressable style={s.link} onPress={explore}>
-          <Text style={s.linkTxt}>🧭 استكشاف جهاز غير مدعوم</Text>
+          <Icon name="compass" size={16} color={P.violet} />
+          <Text style={s.linkTxt}>استكشاف جهاز غير مدعوم</Text>
         </Pressable>
       </EmptyState>
     );
   }
 
+  // ملخص الترويسة
+  const statuses = items.map(i => status[i.id]);
+  const onlineCount = statuses.filter(x => x && !x.loading && !x.error && x.online !== false).length;
+  const anyLoading = statuses.some(x => !x || x.loading);
+  const rsrps = statuses.map(x => x?.signal?.rsrp).filter((v): v is number => v !== undefined);
+  const bestRsrp = rsrps.length ? Math.max(...rsrps) : undefined;
+
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: P.bg }}>
       <FlatList
         data={items}
         keyExtractor={i => i.id}
         contentContainerStyle={[s.list, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 90 }]}
+        showsVerticalScrollIndicator={false}
         ListHeaderComponent={
-          <View style={s.header}>
-            <View style={{ flex: 1 }}>
-              <Text style={s.headerTitle}>راوتراتي</Text>
-              <Text style={s.headerSub}>
-                {items.length === 1
-                  ? 'راوتر واحد'
-                  : `${items.length} راوترات`}
-              </Text>
+          <Hero style={{ marginBottom: 4 }}>
+            <View style={s.heroTop}>
+              <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                <Text style={s.hello}>Bandly</Text>
+                <Text style={s.heroTitle}>راوتراتي</Text>
+              </View>
+              <GlassBtn icon="compass" onPress={explore} />
+              <Pressable onPress={add} style={({ pressed }) => [s.addBtn, pressed && { opacity: 0.85 }]}>
+                <Text style={s.addTxt}>إضافة</Text>
+                <Icon name="plus" size={16} color={P.blue} stroke={2.6} />
+              </Pressable>
             </View>
-            <Pressable style={s.headerExplore} onPress={explore}>
-              <Text style={s.headerExploreTxt}>🧭</Text>
-            </Pressable>
-            <Pressable style={s.headerAdd} onPress={add}>
-              <Text style={s.headerAddTxt}>+ إضافة</Text>
-            </Pressable>
-          </View>
+
+            <View style={s.stats}>
+              <View style={s.stat}>
+                <Text style={s.statVal}>{items.length}</Text>
+                <Text style={s.statLbl}>{items.length === 1 ? 'راوتر' : 'راوترات'}</Text>
+              </View>
+              <View style={s.statSep} />
+              <View style={s.stat}>
+                {anyLoading && onlineCount === 0
+                  ? <ActivityIndicator size="small" color="#fff" style={{ height: 26 }} />
+                  : <Text style={s.statVal}>{onlineCount}</Text>}
+                <Text style={s.statLbl}>متصل الآن</Text>
+              </View>
+              <View style={s.statSep} />
+              <View style={s.stat}>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                  <Text style={s.statVal}>{bestRsrp ?? '—'}</Text>
+                  {bestRsrp !== undefined && <Text style={s.statUnit}> dBm</Text>}
+                </View>
+                <Text style={s.statLbl}>أقوى إشارة</Text>
+              </View>
+            </View>
+          </Hero>
         }
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={C.blue}
-            colors={[C.blue]}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.blue} colors={[P.blue]} />
         }
         ListFooterComponent={
-          <Pressable style={s.footerExplore} onPress={explore}>
-            <Text style={s.footerExploreTxt}>🧭 استكشاف جهاز غير مدعوم</Text>
+          <Pressable style={({ pressed }) => [s.explore, pressed && { opacity: 0.8 }]} onPress={explore}>
+            <View style={s.flip}><Icon name="chevron" size={16} color={P.violet} /></View>
+            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+              <Text style={s.exploreTitle}>استكشاف جهاز غير مدعوم</Text>
+              <Text style={s.exploreSub}>راوترك ما ظهر؟ خلّ التطبيق يتعرّف عليه</Text>
+            </View>
+            <View style={s.exploreIcon}>
+              <Icon name="compass" size={20} color={P.violet} />
+            </View>
           </Pressable>
         }
         renderItem={({ item }) => {
           const st = status[item.id];
           const sig = st?.signal;
           const level = overallLevel(sig);
-          const color = gradeLevel(level).color;
+          const color = lvlColor(level);
           const down = st?.error ? false : st?.online ?? undefined;
-          const bandList = parseBands(sig?.band).slice(0, 1);
+          const band = [...parseBands(sig?.band), ...parseNrBands(sig?.nrBand)];
+          const hasNr = sig?.nrRsrp !== undefined || !!sig?.nrBand;
           const hasPw = st?.hasPw !== false;
+          const loading = !!st?.loading;
+
+          const stTxt = loading ? 'نفحص…' : down === false ? 'غير متصل' : down ? 'متصل' : '—';
+          const stCol = loading ? P.sub : down === false ? P.red : down ? P.green : P.sub;
+          const stBg = loading ? P.soft : down === false ? P.redSoft : down ? P.greenSoft : P.soft;
 
           return (
             <View style={s.card}>
-              {/* ─── السطر العلوي ─── */}
+              {/* ─── الرأس ─── */}
               <Pressable onPress={() => open(item.id)} style={s.row}>
-                <View style={[s.icon, { backgroundColor: color + '18' }]}>
-                  <Icon name="tower" size={18} color={color} />
-                </View>
-                <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                  <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6 }}>
-                    {st?.loading && <ActivityIndicator size="small" color={C.muted} />}
-                    {!st?.loading && (
-                      <View
-                        style={[
-                          s.dot,
-                          { backgroundColor: down === false ? C.red : down ? C.green : C.muted },
-                        ]}
-                      />
-                    )}
+                <LinearGradient
+                  colors={sig ? [color, color + 'AA'] : [P.heroA, P.heroB]}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                  style={s.avatar}
+                >
+                  <Icon name="tower" size={22} color="#fff" stroke={2.1} />
+                </LinearGradient>
+                <View style={{ flex: 1, alignItems: 'flex-end', gap: 5 }}>
+                  <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
                     <Text style={s.name} numberOfLines={1}>{item.name}</Text>
+                    <View style={[s.state, { backgroundColor: stBg }]}>
+                      <View style={[s.stateDot, { backgroundColor: stCol }]} />
+                      <Text style={[s.stateTxt, { color: stCol }]}>{stTxt}</Text>
+                    </View>
                   </View>
-                  <Text style={s.subline} numberOfLines={1}>
-                    <Text style={s.ip}>{item.host}</Text>
-                    <Text style={s.dotSep}>  ·  </Text>
-                    <Text style={s.user}>👤 {item.username}</Text>
-                  </Text>
+                  <View style={s.metaRow}>
+                    <View style={s.meta}>
+                      <Text style={s.metaTxt}>{item.host}</Text>
+                      <Icon name="wifi" size={12} color={P.sub} stroke={2.2} />
+                    </View>
+                    <View style={s.meta}>
+                      <Text style={s.metaTxt}>{item.username}</Text>
+                      <Icon name="user" size={12} color={P.sub} stroke={2.2} />
+                    </View>
+                    {!!st?.operator && (
+                      <View style={s.meta}>
+                        <Text style={s.metaTxt} numberOfLines={1}>{st.operator}</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
-                <Icon name="chevron" size={16} color={C.muted} />
+                <View style={s.flip}><Icon name="chevron" size={18} color={P.faint} /></View>
               </Pressable>
 
-              {/* ─── سطر كلمة المرور + الإشارة ─── */}
-              <View style={s.metaRow}>
-                {hasPw ? (
-                  <View style={s.pwChip}>
-                    <Text style={s.pwChipTxt}>🔒 ••••••••</Text>
+              {/* ─── شريط الإشارة ─── */}
+              {sig ? (
+                <View style={[s.signal, { backgroundColor: lvlSoft(level) }]}>
+                  <View style={s.sigTop}>
+                    <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6 }}>
+                      <Text style={[s.sigLevel, { color }]}>الإشارة: {lvlLabel(level)}</Text>
+                      {band.slice(0, 2).map(b => (
+                        <Chip key={b} text={b}
+                          color={b.startsWith('n') ? P.violet : P.blue}
+                          bg={b.startsWith('n') ? P.violetSoft : P.blueSoft} />
+                      ))}
+                      {hasNr && !band.some(b => b.startsWith('n')) && <Chip text="5G" color={P.violet} bg={P.violetSoft} />}
+                    </View>
+                    <Val v={sig.rsrp} unit="dBm" size={17} color={color} />
                   </View>
-                ) : (
-                  <View style={[s.pwChip, { backgroundColor: C.redSoft }]}>
-                    <Text style={[s.pwChipTxt, { color: C.red }]}>⚠ بلا كلمة مرور</Text>
-                  </View>
-                )}
-                {sig && (
-                  <View style={s.sigChip}>
-                    <Text style={[s.sigChipTxt, { color }]}>
-                      {sig.rsrp ?? '—'} dBm
-                    </Text>
-                    {bandList[0] && (
-                      <>
-                        <Text style={s.dotSep}>  ·  </Text>
-                        <Text style={s.bandTxt}>{bandList[0]}</Text>
-                      </>
-                    )}
-                  </View>
-                )}
-              </View>
+                  <QBar ratio={ratioOf(sig.rsrp, RANGE.rsrp)} color={color} track="rgba(255,255,255,0.8)" />
+                </View>
+              ) : st?.error ? (
+                <View style={[s.signal, { backgroundColor: P.redSoft }]}>
+                  <Text style={[s.sigLevel, { color: P.red, textAlign: 'right' }]} numberOfLines={2}>
+                    تعذّر الوصول للراوتر — تأكد إنك على شبكته
+                  </Text>
+                </View>
+              ) : loading ? (
+                <View style={[s.signal, { backgroundColor: P.soft }]}>
+                  <Text style={[s.sigLevel, { color: P.sub, textAlign: 'right' }]}>نقرأ الإشارة…</Text>
+                  <QBar ratio={0.15} color={P.faint} />
+                </View>
+              ) : null}
 
-              {/* ─── أزرار ─── */}
+              {/* ─── كلمة المرور + الأزرار ─── */}
               <View style={s.btnRow}>
-                <Pressable
-                  style={[s.primaryBtn, !hasPw && s.primaryBtnDisabled]}
+                <PrimaryBtn
+                  small
+                  style={{ flex: 1 }}
+                  text={hasPw ? (loading ? 'يتصل…' : 'دخول للراوتر') : 'إضافة بيانات الدخول'}
+                  icon={hasPw ? 'login' : 'lock'}
+                  busy={loading}
+                  disabled={loading}
+                  colors={hasPw ? [P.heroA, P.heroB] : [P.amber, '#f97316']}
                   onPress={() => (hasPw ? open(item.id) : edit(item.id))}
-                  disabled={!!st?.loading}
-                >
-                  {st?.loading ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Text style={s.primaryBtnTxt}>
-                      {hasPw ? '🔓 دخول' : '🔑 إضافة بيانات'}
-                    </Text>
-                  )}
+                />
+                <Pressable style={s.iconBtn} onPress={() => edit(item.id)} hitSlop={4}>
+                  <Icon name="settings" size={18} color={P.sub} />
                 </Pressable>
-                <Pressable style={s.iconBtn} onPress={() => edit(item.id)}>
-                  <Icon name="settings" size={16} color={C.sub} />
-                </Pressable>
-                <Pressable style={s.deleteBtn} onPress={() => onDelete(item)}>
-                  <Icon name="trash" size={16} color={C.red} />
+                <Pressable style={[s.iconBtn, s.delBtn]} onPress={() => onDelete(item)} hitSlop={4}>
+                  <Icon name="trash" size={18} color={P.red} />
                 </Pressable>
               </View>
+              {hasPw && (
+                <View style={s.pwRow}>
+                  <Text style={s.pwTxt}>كلمة المرور محفوظة بأمان على جهازك</Text>
+                  <Icon name="lock" size={11} color={P.faint} stroke={2.2} />
+                </View>
+              )}
             </View>
           );
         }}
@@ -280,154 +327,61 @@ export default function RoutersList() {
 }
 
 const s = StyleSheet.create({
-  list: { padding: 12, gap: 10, paddingTop: 8 },
+  list: { padding: 16, gap: 14 },
+  flip: { transform: [{ scaleX: -1 }] },
 
-  header: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 4,
-    paddingTop: 4,
-    paddingBottom: 10,
+  heroTop: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
+  hello: { color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '700', letterSpacing: 1.5 },
+  heroTitle: { color: '#fff', fontSize: 28, fontWeight: '800', textAlign: 'right', marginTop: -2 },
+  addBtn: {
+    height: 40, borderRadius: 14, backgroundColor: '#fff', paddingHorizontal: 14,
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 6,
   },
-  headerTitle: {
-    color: C.text,
-    fontSize: 22,
-    fontWeight: '900',
-    textAlign: 'right',
-    letterSpacing: -0.3,
-  },
-  headerSub: { color: C.sub, fontSize: 12, textAlign: 'right', marginTop: 1 },
-  headerExplore: {
-    width: 36, height: 36,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: C.cardBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 6,
-  },
-  headerExploreTxt: { fontSize: 18 },
-  footerExplore: {
-    alignSelf: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    marginTop: 8,
-  },
-  footerExploreTxt: { color: C.violet, fontWeight: '700', fontSize: 13 },
-  headerAdd: {
-    backgroundColor: C.blue,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  headerAddTxt: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  addTxt: { color: P.blue, fontSize: 14, fontWeight: '800' },
 
-  card: {
-    backgroundColor: C.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: C.cardBorder,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    gap: 8,
+  stats: {
+    flexDirection: 'row-reverse', marginTop: 18, backgroundColor: 'rgba(255,255,255,0.14)',
+    borderRadius: 18, paddingVertical: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
   },
+  stat: { flex: 1, alignItems: 'center', gap: 2 },
+  statSep: { width: 1, backgroundColor: 'rgba(255,255,255,0.22)', marginVertical: 4 },
+  statVal: { color: '#fff', fontSize: 20, fontWeight: '800', lineHeight: 26 },
+  statUnit: { color: 'rgba(255,255,255,0.8)', fontSize: 10.5, fontWeight: '700' },
+  statLbl: { color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: '600' },
 
-  row: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 10,
-  },
-  icon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  name: { color: C.text, fontSize: 15, fontWeight: '800', textAlign: 'right' },
-  subline: {
-    marginTop: 3,
-    fontSize: 12,
-    color: C.sub,
-    textAlign: 'right',
-  },
-  ip: { color: C.sub, fontSize: 12, fontWeight: '600' },
-  user: { color: C.sub, fontSize: 12, fontWeight: '600' },
-  dotSep: { color: C.muted, fontSize: 12 },
-  dot: { width: 7, height: 7, borderRadius: 4 },
+  card: { backgroundColor: P.card, borderRadius: 24, padding: 14, gap: 12, borderWidth: 1, borderColor: P.border, ...shadow },
+  row: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
+  avatar: { width: 52, height: 52, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  name: { color: P.text, fontSize: 17, fontWeight: '800', textAlign: 'right', flexShrink: 1 },
+  state: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  stateDot: { width: 7, height: 7, borderRadius: 4 },
+  stateTxt: { fontSize: 11, fontWeight: '800' },
+  metaRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6 },
+  meta: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: P.soft, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3 },
+  metaTxt: { color: P.sub, fontSize: 11.5, fontWeight: '700' },
 
-  metaRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  pwChip: {
-    backgroundColor: C.rowBg,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  pwChipTxt: { color: C.sub, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-  sigChip: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 2,
-  },
-  sigChipTxt: { fontSize: 12, fontWeight: '800' },
-  bandTxt: { color: C.blue, fontSize: 11.5, fontWeight: '800' },
+  signal: { borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
+  sigTop: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
+  sigLevel: { fontSize: 12.5, fontWeight: '800' },
 
-  btnRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 8,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: C.lineSoft,
-  },
-  primaryBtn: {
-    flex: 1,
-    backgroundColor: C.blue,
-    paddingVertical: 9,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryBtnDisabled: { backgroundColor: C.muted },
-  primaryBtnTxt: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  btnRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: C.cardBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 46, height: 46, borderRadius: 15, backgroundColor: P.soft,
+    borderWidth: 1, borderColor: P.border, alignItems: 'center', justifyContent: 'center',
   },
-  deleteBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: C.redSoft,
-    backgroundColor: C.redSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  delBtn: { backgroundColor: P.redSoft, borderColor: '#ffdde2' },
+  pwRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: -4 },
+  pwTxt: { color: P.faint, fontSize: 10.5, fontWeight: '600' },
 
-  btn: {
-    backgroundColor: C.blue,
-    borderRadius: 14,
-    paddingVertical: 13,
-    paddingHorizontal: 22,
+  explore: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 12, marginTop: 4,
+    borderRadius: 20, padding: 14, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#cfc3fb',
+    backgroundColor: '#faf8ff',
   },
-  btnText: {
-    color: C.onAccent,
-    fontWeight: '800',
-    fontSize: 15,
-    textAlign: 'center',
-  },
-  link: { alignSelf: 'center', paddingVertical: 14, paddingHorizontal: 14 },
-  linkTxt: { color: C.violet, fontWeight: '700', fontSize: 13 },
+  exploreIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: P.violetSoft, alignItems: 'center', justifyContent: 'center' },
+  exploreTitle: { color: P.violet, fontSize: 14, fontWeight: '800' },
+  exploreSub: { color: P.sub, fontSize: 11.5, marginTop: 1 },
+
+  link: { flexDirection: 'row-reverse', alignSelf: 'center', alignItems: 'center', gap: 6, paddingVertical: 14, paddingHorizontal: 14 },
+  linkTxt: { color: P.violet, fontWeight: '700', fontSize: 13 },
 });
