@@ -168,6 +168,54 @@ function InfoPill({ icon, label, value, color, bg }: { icon: IconName; label: st
   );
 }
 
+// ═══ عدّاد التوجيه (نصف دائرة) — التعبئة = الإشارة الحين، العلامة الذهبية = أفضل نقطة ═══
+function AimArc({ value, best, min = -120, max = -70, size = 240 }: {
+  value?: number; best?: number; min?: number; max?: number; size?: number;
+}) {
+  const sw = 16;
+  const r = (size - sw) / 2;
+  const cx = size / 2, cy = r + sw / 2;
+  const h = cy + sw / 2 + 2;
+  const f = (v: number) => Math.max(0, Math.min(1, (v - min) / (max - min)));
+  const pt = (t: number) => {
+    const a = Math.PI * (1 - t); // من اليسار (ضعيف) لليمين (قوي)
+    return { x: cx + r * Math.cos(a), y: cy - r * Math.sin(a) };
+  };
+  const arc = (t0: number, t1: number) => {
+    const p0 = pt(t0), p1 = pt(t1);
+    return `M ${p0.x} ${p0.y} A ${r} ${r} 0 0 1 ${p1.x} ${p1.y}`;
+  };
+  const tv = value === undefined ? 0 : f(value);
+  const tb = best === undefined ? undefined : f(best);
+  const knob = pt(Math.max(0.005, tv));
+  return (
+    <Svg width={size} height={h}>
+      <Defs>
+        <SvgLinearGradient id="aimArc" x1="0" y1="0" x2="1" y2="0">
+          <Stop offset="0" stopColor="#ffffff" stopOpacity="0.55" />
+          <Stop offset="1" stopColor="#ffffff" stopOpacity="1" />
+        </SvgLinearGradient>
+      </Defs>
+      <Path d={arc(0, 1)} stroke="rgba(255,255,255,0.18)" strokeWidth={sw} strokeLinecap="round" fill="none" />
+      {value !== undefined && (
+        <Path d={arc(0, Math.max(0.005, tv))} stroke="url(#aimArc)" strokeWidth={sw} strokeLinecap="round" fill="none" />
+      )}
+      {tb !== undefined && (() => {
+        const a = Math.PI * (1 - tb);
+        const x1 = cx + (r - sw * 0.9) * Math.cos(a), y1 = cy - (r - sw * 0.9) * Math.sin(a);
+        const x2 = cx + (r + sw * 0.9) * Math.cos(a), y2 = cy - (r + sw * 0.9) * Math.sin(a);
+        return <Line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#ffd166" strokeWidth={4} strokeLinecap="round" />;
+      })()}
+      {value !== undefined && (
+        <>
+          <Circle cx={knob.x} cy={knob.y} r={sw * 0.62} fill="#ffffff" />
+          <Circle cx={knob.x} cy={knob.y} r={sw * 0.3} fill={P.heroA} />
+        </>
+      )}
+    </Svg>
+  );
+}
+
 // ═══ خانة في بطاقة أفضل نقطة ═══
 function DirStat({ icon, label, value, color, bg }: { icon: IconName; label: string; value: string; color: string; bg: string }) {
   return (
@@ -702,66 +750,71 @@ export default function AimScreen() {
           <>
             {/* ═══ Hero ═══ */}
             {/* ═══ مؤشر التوجيه ═══ */}
-            <View style={[a.meter, { borderColor: lvlColor + '55' }]}>
+            <Hero colors={isNr ? ['#6a45ec', '#a24bd8'] : [P.heroA, P.heroB]} style={{ paddingVertical: 14 }}>
               <View style={a.mTop}>
                 <View style={a.mTag}>
-                  <View style={[a.mTechDot, { backgroundColor: isNr ? PURPLE : BLUE }]} />
+                  <Icon name="tower" size={13} color="#fff" stroke={2.2} />
                   <Text style={a.mTagTxt} numberOfLines={1}>{current ? cellName(current.cell) : isNr ? '5G' : '4G'}</Text>
                 </View>
                 <View style={{ flex: 1 }} />
-                <Pressable onPress={() => setSound(v => !v)} hitSlop={6}
-                  style={[a.mBtn, sound && { backgroundColor: PURPLE, borderColor: PURPLE }]}>
-                  <Icon name="sound" size={16} color={sound ? '#fff' : MUTED} stroke={2.2} />
+                <Pressable onPress={() => setSound(v => !v)} hitSlop={6} style={[a.mBtn, sound && a.mBtnOn]}>
+                  <Icon name="sound" size={17} color={sound ? P.violet : '#fff'} stroke={2.2} />
                 </Pressable>
-                <Pressable onPress={() => setHaptics(v => !v)} hitSlop={6}
-                  style={[a.mBtn, haptics && { backgroundColor: SUCCESS, borderColor: SUCCESS }]}>
-                  <Icon name="vibrate" size={16} color={haptics ? '#fff' : MUTED} stroke={2.2} />
+                <Pressable onPress={() => setHaptics(v => !v)} hitSlop={6} style={[a.mBtn, haptics && a.mBtnOn]}>
+                  <Icon name="vibrate" size={17} color={haptics ? P.green : '#fff'} stroke={2.2} />
                 </Pressable>
               </View>
 
-              <View style={a.mMid}>
-                <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                  {delta !== undefined && (
-                    <View style={[a.mDelta, { backgroundColor: delta > 0.5 ? P.greenSoft : delta < -0.5 ? P.redSoft : P.soft }]}>
-                      <Text style={[a.mDeltaTxt, { color: delta > 0.5 ? SUCCESS : delta < -0.5 ? DANGER : MUTED }]}>
-                        {delta > 0.5 ? `+${Math.round(delta)}` : delta < -0.5 ? `${Math.round(delta)}` : '0'} dB
-                      </Text>
-                    </View>
-                  )}
-                  <Text style={a.mSmall}>عن البداية</Text>
+              <View style={a.mGauge}>
+                <AimArc value={shown} best={bestShown} />
+                <View style={a.mCenter}>
+                  <View style={a.mNumRow}>
+                    <Text style={a.mNum}>{shown ?? '—'}</Text>
+                    <Text style={a.mUnit}>dBm</Text>
+                  </View>
+                  <View style={a.mChips}>
+                    <TrendMark t={trendR} light />
+                    <Text style={a.mLevel}>{current ? lvlLabel(level) : '—'}</Text>
+                  </View>
                 </View>
-                <View style={{ flex: 1 }} />
-                <View style={a.mNumRow}>
-                  <TrendMark t={trendR} />
-                  <Text style={[a.mNum, { color: lvlColor }]}>{shown ?? '—'}</Text>
-                  <Text style={a.mUnit}>dBm</Text>
-                </View>
-              </View>
-
-              {/* وين أنت من أفضل نقطة */}
-              <View style={a.mBarRow}>
-                <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 4 }}>
-                  <Text style={a.mSmall}>أفضل</Text>
-                  <Text style={[a.mSmall, { color: TEXT }]}>{bestShown !== undefined ? `${Math.round(bestShown)} dBm` : '—'}</Text>
-                </View>
-                <View style={a.mBar}>
-                  <View style={[a.mBarFill, {
-                    width: `${Math.max(4, gapToBest === undefined ? 0 : Math.max(0, Math.min(1, 1 - gapToBest / 12)) * 100)}%`,
-                    backgroundColor: gapToBest !== undefined && gapToBest <= 1 ? SUCCESS : gapToBest !== undefined && gapToBest >= 5 ? DANGER : WARN,
-                  }]} />
+                <View style={a.mScale}>
+                  <Text style={a.mScaleTxt}>ضعيف</Text>
+                  <Text style={a.mScaleTxt}>قوي</Text>
                 </View>
               </View>
 
-              <View style={a.mStat}>
-                <View style={[a.stabDot, { backgroundColor: stab ? stab.c : P.faint }]} />
-                <Text style={[a.mStatTxt, stab && { color: stab.c }]} numberOfLines={1}>
+              <View style={a.mStats}>
+                <View style={a.mStat}>
+                  <Text style={a.mStatLbl}>عن البداية</Text>
+                  <Text style={[a.mStatVal, delta !== undefined && delta > 0.5 && { color: '#7dffc4' }, delta !== undefined && delta < -0.5 && { color: '#ffb3b5' }]}>
+                    {delta === undefined ? '—' : `${delta > 0.5 ? '+' : ''}${Math.round(delta)} dB`}
+                  </Text>
+                </View>
+                <View style={a.mSep} />
+                <View style={a.mStat}>
+                  <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 4 }}>
+                    <View style={a.mBestDot} />
+                    <Text style={a.mStatLbl}>أفضل نقطة</Text>
+                  </View>
+                  <Text style={a.mStatVal}>{bestShown !== undefined ? `${Math.round(bestShown)} dBm` : '—'}</Text>
+                </View>
+                <View style={a.mSep} />
+                <View style={a.mStat}>
+                  <Text style={a.mStatLbl}>SINR</Text>
+                  <Text style={a.mStatVal}>{current?.sinr !== undefined ? `${current.sinr} dB` : '—'}</Text>
+                </View>
+              </View>
+
+              <View style={a.mHint}>
+                <View style={[a.stabDot, { backgroundColor: stab ? stab.c : 'rgba(255,255,255,0.5)' }]} />
+                <Text style={a.mHintTxt} numberOfLines={1}>
                   {!stab ? 'نجمع القراءات…'
-                    : gapToBest !== undefined && gapToBest <= 1 && stability === 'stable' ? 'مستقرة على أفضل نقطة — ثبّت هنا ✓'
+                    : gapToBest !== undefined && gapToBest <= 1 && stability === 'stable' ? 'مستقرة على أفضل نقطة — ثبّت هنا'
                     : gapToBest !== undefined && gapToBest >= 5 ? `ابتعدت عن أفضل نقطة بـ ${gapToBest} dB — ارجع`
                     : stab.t}
                 </Text>
               </View>
-            </View>
+            </Hero>
 
             {/* ═══ لوحة الشبكة 4G / 5G ═══ */}
             <NetPanel signal={signal} ping={ping} />
@@ -947,27 +1000,37 @@ const a = StyleSheet.create({
   headerTitle: { fontSize: 21, fontWeight: '800', color: TEXT, textAlign: 'center' },
   headerSub: { fontSize: 11.5, color: MUTED, textAlign: 'center', marginTop: 1 },
 
-  meter: {
-    backgroundColor: P.card, borderRadius: 22, paddingVertical: 12, paddingHorizontal: 14, gap: 8,
-    borderWidth: 1.5, ...shadow,
-  },
   mTop: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
-  mTag: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, backgroundColor: P.soft, borderRadius: 999, paddingHorizontal: 10, height: 28, flexShrink: 1 },
-  mTechDot: { width: 8, height: 8, borderRadius: 4 },
-  mTagTxt: { color: TEXT, fontSize: 12, fontWeight: '800' },
-  mBtn: { width: 34, height: 34, borderRadius: 11, borderWidth: 1.5, borderColor: P.border, backgroundColor: P.soft, alignItems: 'center', justifyContent: 'center' },
-  mMid: { flexDirection: 'row-reverse', alignItems: 'center' },
-  mNumRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  mNum: { fontSize: 40, fontWeight: '800', letterSpacing: -1.5, lineHeight: 46 },
-  mUnit: { color: MUTED, fontSize: 13, fontWeight: '700', marginTop: 12 },
-  mDelta: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
-  mDeltaTxt: { fontSize: 13, fontWeight: '800' },
-  mSmall: { color: MUTED, fontSize: 11, fontWeight: '700' },
-  mBarRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
-  mBar: { flex: 1, height: 8, borderRadius: 4, backgroundColor: '#e9eef8', overflow: 'hidden', flexDirection: 'row-reverse' },
-  mBarFill: { height: 8, borderRadius: 4 },
-  mStat: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
-  mStatTxt: { color: MUTED, fontSize: 12, fontWeight: '800', flexShrink: 1, textAlign: 'right' },
+  mTag: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 6, flexShrink: 1,
+    backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 999, paddingHorizontal: 11, height: 30,
+  },
+  mTagTxt: { color: '#fff', fontSize: 12.5, fontWeight: '800' },
+  mBtn: {
+    width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.16)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
+  },
+  mBtnOn: { backgroundColor: '#fff', borderColor: '#fff' },
+  mGauge: { alignItems: 'center', marginTop: 6 },
+  mCenter: { position: 'absolute', bottom: 6, alignItems: 'center' },
+  mNumRow: { flexDirection: 'row', alignItems: 'baseline' },
+  mNum: { color: '#fff', fontSize: 50, fontWeight: '800', letterSpacing: -2, lineHeight: 56 },
+  mUnit: { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: '700', marginLeft: 4 },
+  mChips: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
+  mLevel: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  mScale: { flexDirection: 'row', justifyContent: 'space-between', width: 250, marginTop: -2 },
+  mScaleTxt: { color: 'rgba(255,255,255,0.6)', fontSize: 10.5, fontWeight: '700' },
+  mStats: {
+    flexDirection: 'row-reverse', marginTop: 10, backgroundColor: 'rgba(255,255,255,0.14)',
+    borderRadius: 16, paddingVertical: 9, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+  },
+  mStat: { flex: 1, alignItems: 'center', gap: 1 },
+  mSep: { width: 1, backgroundColor: 'rgba(255,255,255,0.22)', marginVertical: 3 },
+  mStatLbl: { color: 'rgba(255,255,255,0.75)', fontSize: 10.5, fontWeight: '700' },
+  mStatVal: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  mBestDot: { width: 8, height: 3, borderRadius: 2, backgroundColor: '#ffd166' },
+  mHint: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10 },
+  mHintTxt: { color: '#fff', fontSize: 12.5, fontWeight: '700' },
   heroCard: {
     backgroundColor: P.card, borderRadius: 24, padding: 14, gap: 12,
     borderWidth: 1, borderColor: P.border, ...shadow,
