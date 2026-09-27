@@ -89,7 +89,9 @@ ok "ملف الموقع: $CONF"
 if grep -q "snippets/bandly-live.conf" "$CONF"; then
   ok "الـ include موجود من قبل"
 else
-  BK="$CONF.bak-bandly-$(date +%s)"
+  # النسخة الاحتياطية برّا sites-enabled — وإلا nginx يحمّلها كإعداد ثاني
+  mkdir -p "$DST/nginx-backup"
+  BK="$DST/nginx-backup/$(basename "$CONF").bak-$(date +%s)"
   cp "$CONF" "$BK"
   python3 - "$CONF" "$DOMAIN" <<'PYEOF'
 import re, sys
