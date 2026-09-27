@@ -69,33 +69,71 @@ export function ActionCard({
 }
 
 /** مربع أداة داخل شبكة ٣ أعمدة */
+/** يغمّق اللون شوي للتدرّج */
+export function shade(hex: string, amt = 0.22): string {
+  const n = hex.replace('#', '');
+  const f = (i: number) => Math.round(parseInt(n.slice(i, i + 2), 16) * (1 - amt)).toString(16).padStart(2, '0');
+  return '#' + f(0) + f(2) + f(4);
+}
+
+/**
+ * بلاطة أداة ملوّنة:
+ * wide = تدرّج بلون الأداة ونص أبيض (أدوات التحسين الرئيسية)
+ * عادي = خلفية فاتحة من لون الأداة وأيقونة بدائرة ملوّنة
+ */
 export function ToolTile({
   icon, title, sub, color: custom, tone = 'tool', wide, onPress,
 }: {
   icon: IconName; title: string; sub?: string; color?: string;
   tone?: 'tool' | 'smart' | 'watch'; wide?: boolean; onPress: () => void;
 }) {
-  const color = custom ?? (tone === 'smart' ? C.violet : tone === 'watch' ? C.sub : C.blue);
-  const soft = custom ? custom + '1F' : (tone === 'smart' ? C.violetSoft : tone === 'watch' ? C.rowBg : C.blueSoft);
+  const color = custom ?? (tone === 'smart' ? C.violet : tone === 'watch' ? '#64748b' : C.blue);
   return (
     <Pressable
       hitSlop={4}
       style={({ pressed }) => [
         wide ? s.tileWide : s.tile,
-        pressed && { opacity: 0.6, transform: [{ scale: 0.98 }] },
+        { shadowColor: color },
+        pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
       ]}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={sub ? `${title} — ${sub}` : title}
     >
-      <View style={[wide ? s.tileIconWide : s.tileIcon, { backgroundColor: soft }]}>
-        <Icon name={icon} size={wide ? 20 : 17} color={color} />
-      </View>
-      <View style={wide ? { flex: 1, alignItems: 'flex-end' } : undefined}>
-        <Text style={wide ? s.tileTitleWide : s.tileTitle}>{title}</Text>
-        {!!sub && <Text style={wide ? s.tileSubWide : s.tileSub}>{sub}</Text>}
-      </View>
+      {wide ? (
+        <LinearGradient colors={[color, shade(color)]} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={s.tileWideIn}>
+          <View style={s.tileIconWide}>
+            <Icon name={icon} size={21} color="#fff" />
+          </View>
+          <View style={{ flex: 1, alignItems: 'flex-end' }}>
+            <Text style={s.tileTitleWide}>{title}</Text>
+            {!!sub && <Text style={s.tileSubWide} numberOfLines={1}>{sub}</Text>}
+          </View>
+        </LinearGradient>
+      ) : (
+        <LinearGradient
+          colors={[color + '24', color + '0A']}
+          start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
+          style={[s.tileIn, { borderColor: color + '33' }]}
+        >
+          <View style={[s.tileIcon, { backgroundColor: color }]}>
+            <Icon name={icon} size={17} color="#fff" />
+          </View>
+          <Text style={s.tileTitle}>{title}</Text>
+          {!!sub && <Text style={[s.tileSub, { color: shade(color, 0.1) }]} numberOfLines={1}>{sub}</Text>}
+        </LinearGradient>
+      )}
     </Pressable>
+  );
+}
+
+/** عنوان قسم بشريط لون صغير */
+export function GroupTitle({ title, color = C.blue }: { title: string; color?: string }) {
+  return (
+    <View style={s.gHead}>
+      <View style={[s.gBar, { backgroundColor: color }]} />
+      <Text style={s.gTitle}>{title}</Text>
+    </View>
   );
 }
 
@@ -120,21 +158,30 @@ const s = StyleSheet.create({
   actionHint: { fontSize: T.label, fontWeight: '700' },
   grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: S.sm },
   tile: {
-    flexBasis: '30%', flexGrow: 1, backgroundColor: C.card, borderRadius: R.md,
-    borderWidth: 1.5, borderColor: '#DCE6F5', paddingVertical: 11, paddingHorizontal: 7,
-    alignItems: 'center', gap: 3,
+    flexBasis: '30%', flexGrow: 1, borderRadius: R.md, backgroundColor: C.card,
+    shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 2,
   },
-  tileIcon: { width: 32, height: 32, borderRadius: R.sm, alignItems: 'center', justifyContent: 'center', marginBottom: 3 },
-  tileTitle: { color: C.text, fontWeight: '700', fontSize: 12.5, textAlign: 'center' },
-  tileSub: { color: C.muted, fontSize: 10.5, textAlign: 'center' },
+  tileIn: {
+    borderRadius: R.md, borderWidth: 1, paddingVertical: 12, paddingHorizontal: 6,
+    alignItems: 'center', gap: 3, flex: 1,
+  },
+  tileIcon: {
+    width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 4,
+  },
+  tileTitle: { color: C.text, fontWeight: '800', fontSize: 12.5, textAlign: 'center' },
+  tileSub: { fontSize: 10.5, fontWeight: '600', textAlign: 'center' },
   tileWide: {
-    flexBasis: '47%', flexGrow: 1, backgroundColor: C.card, borderRadius: R.lg,
-    borderWidth: 1, borderColor: C.line, padding: 13, gap: 10,
-    flexDirection: 'row-reverse', alignItems: 'center',
-    shadowColor: C.shadow, shadowOpacity: 0.05, shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 }, elevation: 1,
+    flexBasis: '47%', flexGrow: 1, borderRadius: R.lg,
+    shadowOpacity: 0.28, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 4,
   },
-  tileIconWide: { width: 40, height: 40, borderRadius: R.md, alignItems: 'center', justifyContent: 'center' },
-  tileTitleWide: { color: C.text, fontWeight: '800', fontSize: 14, textAlign: 'right' },
-  tileSubWide: { color: C.muted, fontSize: 11, textAlign: 'right', marginTop: 2 },
+  tileWideIn: { borderRadius: R.lg, padding: 13, gap: 10, flexDirection: 'row-reverse', alignItems: 'center', flex: 1 },
+  tileIconWide: {
+    width: 40, height: 40, borderRadius: R.md, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.22)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)',
+  },
+  tileTitleWide: { color: '#fff', fontWeight: '800', fontSize: 14.5, textAlign: 'right' },
+  tileSubWide: { color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: '600', textAlign: 'right', marginTop: 2 },
+  gHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, marginTop: 8, marginBottom: -2, paddingHorizontal: 4 },
+  gBar: { width: 4, height: 16, borderRadius: 2 },
+  gTitle: { color: C.text, fontSize: 14.5, fontWeight: '800', textAlign: 'right' },
 });

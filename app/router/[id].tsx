@@ -21,7 +21,7 @@ import { ArcGauge } from '../../src/ui/ArcGauge';
 import { RadarPoint } from '../../src/ui/SignalRadar';
 import { MetricRings, RingSpec } from '../../src/ui/MetricRing';
 import { Icon, IconName } from '../../src/ui/Icon';
-import { HeroCard, MetricCard, Section, TileGrid, ToolTile } from '../../src/ui/Cards';
+import { HeroCard, MetricCard, Section, TileGrid, ToolTile, GroupTitle } from '../../src/ui/Cards';
 import { buildAdvice } from '../../src/utils/advice';
 import { linkHealth } from '../../src/utils/linkHealth';
 import { LinkHealthCard } from '../../src/ui/LinkHealth';
@@ -50,6 +50,15 @@ const featuresOf = (d: RouterDriver): Features => ({
   network: !!d.getApnProfiles || !!d.getDns,
   carriers: !!d.getCarriers,
 });
+
+/** خلفية البطاقة الرئيسية حسب جودة الاتصال */
+const HERO_BG: Record<Level, [string, string, string]> = {
+  excellent: ['#ffffff', '#e3f8ee', '#c9f0de'],
+  good: ['#ffffff', '#e6f1ff', '#d3f3e6'],
+  fair: ['#ffffff', '#fff4e3', '#ffe6c2'],
+  poor: ['#ffffff', '#ffeef0', '#ffd9de'],
+  unknown: ['#ffffff', '#eef2fb', '#e2e8f6'],
+};
 
 function MetricRow({ label, value, unit, level }: { label: string; value?: number; unit: string; level: Level }) {
   return (
@@ -406,7 +415,7 @@ export default function RouterDashboard() {
 
   return (
     <LinearGradient
-      colors={error || disconnected ? [C.dangerTop, C.dangerBottom] : [C.bgTop, C.bgBottom]}
+      colors={error || disconnected ? [C.dangerTop, C.dangerBottom] : ['#eaf2ff', '#f3efff', '#eaf9f3']}
       style={{ flex: 1 }}
     >
       <Stack.Screen options={{ title: info?.name ?? 'الراوتر' }} />
@@ -461,8 +470,8 @@ export default function RouterDashboard() {
         )}
 
         {!loading && info && (
-          <View style={s.topBar}>
-            <View style={[s.statusPill, disconnected ? s.statusOff : s.statusOn]}>
+          <LinearGradient colors={['#2f6bff', '#6a4cff']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={s.topBar}>
+            <View style={[s.statusPill, { backgroundColor: '#ffffff' }]}>
               <Text style={[s.statusText, { color: disconnected ? C.red : C.green }]}>
                 {disconnected ? 'منقطع' : 'متصل'}
               </Text>
@@ -474,11 +483,11 @@ export default function RouterDashboard() {
               <Text style={s.topSub}>{details?.operator ? `${details.operator}  ·  ` : ''}{info.host}</Text>
             </View>
             <View style={s.topIcon}><Text style={{ fontSize: 18 }}>📡</Text></View>
-          </View>
+          </LinearGradient>
         )}
 
         {!loading && info && (
-          <LinearGradient colors={['#f4f8ff', '#e9f2ff', '#e8f8f1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.heroX}>
+          <LinearGradient colors={HERO_BG[disconnected ? 'poor' : level]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.heroX}>
             <ArcGauge score={signalScore(primary)} label={LEVEL_LABEL[level]} color={LEVEL_COLOR[level]} size={172} />
             <Text style={s.heroLine}>{disconnected ? 'الراوتر غير متصل' : `اتصالك ${LEVEL_LABEL[level]}`}</Text>
             <Text style={s.heroSub}>
@@ -512,7 +521,7 @@ export default function RouterDashboard() {
 
         {!loading && info && (
           <>
-            <Text style={s.groupTitle}>حسّن اتصالك</Text>
+            <GroupTitle title="حسّن اتصالك" color="#2f6bff" />
             <TileGrid>
               <ToolTile wide icon="aim" color="#2f6bff" title="التوجيه" sub="لقّط أقوى إشارة"
                 onPress={() => router.push(`/aim/${info.id}` as Href)} />
@@ -523,7 +532,7 @@ export default function RouterDashboard() {
               <ToolTile wide icon="antenna" color="#f97316" title="الأنتنا" sub="تحتاجها؟ وأي نوع"
                 onPress={() => router.push(`/antenna/${info.id}` as Href)} />
             </TileGrid>
-            <Text style={s.groupTitle}>قِس وتابع</Text>
+            <GroupTitle title="قِس وتابع" color="#12b76a" />
             <TileGrid>
               <ToolTile icon="speed" color="#12b76a" title="السرعة" sub="تنزيل ورفع"
                 onPress={() => router.push(`/speed/${info.id}` as Href)} />
@@ -543,43 +552,40 @@ export default function RouterDashboard() {
 
         {!loading && info && (
           <View style={s.moreCard}>
-            <View style={s.moreHead}>
-              <Icon name="layers" size={16} color={C.sub} />
-              <Text style={s.moreTitle}>إعدادات وأدوات</Text>
-            </View>
+            <GroupTitle title="إعدادات وأدوات" color="#f97316" />
             <View style={s.moreGrid}>
               {feat.sms && (
-                <Pressable style={s.moreTile} onPress={() => router.push(`/sms/${info.id}` as Href)}>
-                  <View style={[s.moreIcon, { backgroundColor: '#16a34a18' }]}>
-                    <Icon name="sms" size={18} color="#16a34a" />
+                <Pressable style={[s.moreTile, { backgroundColor: '#16a34a12', borderColor: '#16a34a30' }]} onPress={() => router.push(`/sms/${info.id}` as Href)}>
+                  <View style={[s.moreIcon, { backgroundColor: '#16a34a' }]}>
+                    <Icon name="sms" size={18} color="#fff" />
                   </View>
                   <Text style={s.moreLbl}>الرسائل</Text>
                 </Pressable>
               )}
               {feat.network && (
-                <Pressable style={s.moreTile} onPress={() => router.push(`/network/${info.id}` as Href)}>
-                  <View style={[s.moreIcon, { backgroundColor: '#0891b218' }]}>
-                    <Icon name="settings" size={18} color="#0891b2" />
+                <Pressable style={[s.moreTile, { backgroundColor: '#0891b212', borderColor: '#0891b230' }]} onPress={() => router.push(`/network/${info.id}` as Href)}>
+                  <View style={[s.moreIcon, { backgroundColor: '#0891b2' }]}>
+                    <Icon name="settings" size={18} color="#fff" />
                   </View>
                   <Text style={s.moreLbl}>الشبكة</Text>
                 </Pressable>
               )}
-              <Pressable style={s.moreTile} onPress={() => router.push(`/profiles/${info.id}` as Href)}>
-                <View style={[s.moreIcon, { backgroundColor: '#a1620718' }]}>
-                  <Icon name="folder" size={18} color="#a16207" />
+              <Pressable style={[s.moreTile, { backgroundColor: '#a1620712', borderColor: '#a1620730' }]} onPress={() => router.push(`/profiles/${info.id}` as Href)}>
+                <View style={[s.moreIcon, { backgroundColor: '#a16207' }]}>
+                  <Icon name="folder" size={18} color="#fff" />
                 </View>
                 <Text style={s.moreLbl}>الملفات</Text>
               </Pressable>
-              <Pressable style={s.moreTile} onPress={() => router.push('/monitor' as Href)}>
-                <View style={[s.moreIcon, { backgroundColor: '#f43f5e18' }]}>
-                  <Icon name="bell" size={18} color="#f43f5e" />
+              <Pressable style={[s.moreTile, { backgroundColor: '#f43f5e12', borderColor: '#f43f5e30' }]} onPress={() => router.push('/monitor' as Href)}>
+                <View style={[s.moreIcon, { backgroundColor: '#f43f5e' }]}>
+                  <Icon name="bell" size={18} color="#fff" />
                 </View>
                 <Text style={s.moreLbl}>المراقبة</Text>
               </Pressable>
               {feat.reboot && (
-                <Pressable style={s.moreTile} onPress={onReboot}>
-                  <View style={[s.moreIcon, { backgroundColor: '#e5484d18' }]}>
-                    <Icon name="power" size={18} color="#e5484d" />
+                <Pressable style={[s.moreTile, { backgroundColor: '#e5484d12', borderColor: '#e5484d30' }]} onPress={onReboot}>
+                  <View style={[s.moreIcon, { backgroundColor: '#e5484d' }]}>
+                    <Icon name="power" size={18} color="#fff" />
                   </View>
                   <Text style={s.moreLbl}>إعادة التشغيل</Text>
                 </Pressable>
@@ -624,19 +630,19 @@ const s = StyleSheet.create({
   retryBtn: { alignSelf: 'flex-end', backgroundColor: C.red, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
   retryText: { color: '#fff', fontWeight: '700' },
   topBar: {
-    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.card,
-    borderRadius: 20, borderWidth: 1, borderColor: C.cardBorder, padding: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 22, padding: 14,
+    shadowColor: '#2f6bff', shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 5,
   },
   statusPill: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1 },
   statusOn: { backgroundColor: C.greenSoft, borderColor: C.cardBorder },
   statusOff: { backgroundColor: C.redSoft, borderColor: C.cardBorder },
   statusText: { fontWeight: '800', fontSize: 13 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
-  topName: { color: C.text, fontSize: 17, fontWeight: '800', textAlign: 'right' },
-  topSub: { color: C.sub, fontSize: 12, textAlign: 'right', marginTop: 2 },
+  topName: { color: '#fff', fontSize: 17, fontWeight: '800', textAlign: 'right' },
+  topSub: { color: 'rgba(255,255,255,0.8)', fontSize: 12, textAlign: 'right', marginTop: 2 },
   topIcon: {
-    width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: C.blueSoft, borderWidth: 1, borderColor: C.cardBorder,
+    width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)',
   },
   heroHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   netBadge: { backgroundColor: C.blueSoft, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 11 },
@@ -657,7 +663,7 @@ const s = StyleSheet.create({
   bandChips: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 4, marginVertical: 5, alignSelf: 'stretch' },
   bandChip: { backgroundColor: C.blueSoft, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
   bandChipText: { color: C.blue, fontWeight: '800', fontSize: 12.5 },
-  heroX: { borderRadius: 24, padding: 16, gap: 6, borderWidth: 1, borderColor: '#e3ecff', alignItems: 'center' },
+  heroX: { borderRadius: 26, padding: 18, gap: 6, borderWidth: 1, borderColor: '#ffffff', alignItems: 'center', shadowColor: C.shadow, shadowOpacity: 0.08, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
   heroMain: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   heroSide: { flex: 1, gap: 8, alignItems: 'stretch' },
   heroGauge: { alignItems: 'center', justifyContent: 'center' },
@@ -775,14 +781,14 @@ const s = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: C.blueSoft,
-    backgroundColor: C.card,
+    backgroundColor: 'rgba(255,255,255,0.8)',
     marginTop: 6,
   },
   editBtnText: { color: C.blue, fontWeight: '800', fontSize: 14 },
   groupTitle: { color: C.sub, fontSize: 13, fontWeight: '800', textAlign: 'right', marginTop: 6, marginBottom: -4, paddingHorizontal: 4 },
   moreCard: {
-    backgroundColor: C.card, borderRadius: 20, padding: 14,
-    borderWidth: 1, borderColor: C.cardBorder, gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.75)', borderRadius: 22, padding: 12,
+    borderWidth: 1, borderColor: '#ffffff', gap: 10,
   },
   moreHead: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 8,
@@ -799,10 +805,10 @@ const s = StyleSheet.create({
     backgroundColor: C.card,
     borderRadius: 14,
     paddingVertical: 12, paddingHorizontal: 6,
-    borderWidth: 1.5, borderColor: '#DCE6F5',
+    borderWidth: 1, borderColor: '#DCE6F5',
   },
   moreIcon: {
-    width: 36, height: 36, borderRadius: 12,
+    width: 38, height: 38, borderRadius: 19,
     alignItems: 'center', justifyContent: 'center',
   },
   moreLbl: { color: C.text, fontSize: 11, fontWeight: '800', textAlign: 'center' },
