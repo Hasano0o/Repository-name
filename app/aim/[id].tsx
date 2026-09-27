@@ -141,6 +141,19 @@ function GlassStat({ label, value, unit, trend }: { label: string; value?: strin
   );
 }
 
+// ═══ خانة معلومة تحت العدادين ═══
+function InfoPill({ icon, label, value, color, bg }: { icon: IconName; label: string; value?: string; color: string; bg: string }) {
+  return (
+    <View style={a.pill}>
+      <View style={[a.pillIcon, { backgroundColor: bg }]}>
+        <Icon name={icon} size={14} color={color} stroke={2.2} />
+      </View>
+      <Text style={a.pillLbl}>{label}</Text>
+      <Text style={[a.pillVal, { color: value ? P.text : P.faint }]} numberOfLines={1} adjustsFontSizeToFit>{value ?? '—'}</Text>
+    </View>
+  );
+}
+
 // ═══ خانة في بطاقة أفضل نقطة ═══
 function DirStat({ icon, label, value, color, bg }: { icon: IconName; label: string; value: string; color: string; bg: string }) {
   return (
@@ -153,6 +166,179 @@ function DirStat({ icon, label, value, color, bg }: { icon: IconName; label: str
     </View>
   );
 }
+
+
+// ═══ ألوان العدادين الأصلية (بدون تغيير) ═══
+const O_SUCCESS = '#13B783';
+const O_DANGER = '#DC2626';
+const O_MUTED = '#71809A';
+
+// ═══ مؤشر الإشارة (Hero) ═══
+function SignalHero({
+  rsrp, sinr, baselineRsrp, baselineSinr, rsrpHistory, sinrHistory, rsrpColor, sinrColor,
+}: {
+  rsrp?: number;
+  sinr?: number;
+  baselineRsrp: number | null;
+  baselineSinr: number | null;
+  rsrpHistory: number[];
+  sinrHistory: (number | undefined)[];
+  rsrpColor: string;
+  sinrColor: string;
+}) {
+  const deltaR = rsrp !== undefined && baselineRsrp !== null ? rsrp - baselineRsrp : undefined;
+  const deltaS = sinr !== undefined && baselineSinr !== null ? sinr - baselineSinr : undefined;
+
+  const prevR = rsrpHistory.length >= 2 ? rsrpHistory[rsrpHistory.length - 2] : undefined;
+  const trendR: 'up' | 'down' | 'flat' =
+    rsrp !== undefined && prevR !== undefined
+      ? rsrp > prevR + 0.5 ? 'up' : rsrp < prevR - 0.5 ? 'down' : 'flat'
+      : 'flat';
+  const arrowR = trendR === 'up' ? '↑' : trendR === 'down' ? '↓' : '•';
+  const trendColorR = trendR === 'up' ? O_SUCCESS : trendR === 'down' ? O_DANGER : O_MUTED;
+
+  const sinrClean = sinrHistory.filter((v): v is number => v !== undefined);
+  const prevS = sinrClean.length >= 2 ? sinrClean[sinrClean.length - 2] : undefined;
+  const trendS: 'up' | 'down' | 'flat' =
+    sinr !== undefined && prevS !== undefined
+      ? sinr > prevS + 0.5 ? 'up' : sinr < prevS - 0.5 ? 'down' : 'flat'
+      : 'flat';
+  const arrowS = trendS === 'up' ? '↑' : trendS === 'down' ? '↓' : '•';
+  const trendColorS = trendS === 'up' ? O_SUCCESS : trendS === 'down' ? O_DANGER : O_MUTED;
+
+  return (
+    <View style={h.wrap}>
+      {/* بطاقة RSRP — spark على اليمين */}
+      <View style={[h.card, { borderColor: rsrpColor + '40' }]}>
+        <View style={h.cardHead}>
+          <Text style={[h.arrow, { color: trendColorR }]}>{arrowR}</Text>
+          <Text style={h.cardLbl}>RSRP</Text>
+        </View>
+        <View style={h.bodyRow}>
+          {/* spark يمين */}
+          <VSpark value={rsrp} min={-120} max={-70} color={rsrpColor} count={12} />
+          {/* قيمة يسار */}
+          <View style={h.valueCol}>
+            <View style={h.valueRow}>
+              <Text style={[h.value, { color: rsrpColor }]}>{rsrp ?? '—'}</Text>
+              <Text style={h.unit}>dBm</Text>
+            </View>
+          </View>
+        </View>
+        {deltaR !== undefined && (
+          <Text style={[h.delta, {
+            color: deltaR > 0.5 ? O_SUCCESS : deltaR < -0.5 ? O_DANGER : O_MUTED,
+          }]}>
+            {deltaR > 0.5 ? `↑ +${Math.round(deltaR)}`
+              : deltaR < -0.5 ? `↓ ${Math.round(deltaR)}` : '• 0'} dB
+          </Text>
+        )}
+      </View>
+
+      {/* بطاقة SINR — spark على اليسار */}
+      <View style={[h.card, { borderColor: sinrColor + '40' }]}>
+        <View style={h.cardHead}>
+          <Text style={[h.arrow, { color: trendColorS }]}>{arrowS}</Text>
+          <Text style={h.cardLbl}>SINR</Text>
+        </View>
+        <View style={h.bodyRow}>
+          {/* قيمة يمين */}
+          <View style={h.valueCol}>
+            <View style={h.valueRow}>
+              <Text style={[h.value, { color: sinrColor }]}>{sinr ?? '—'}</Text>
+              <Text style={h.unit}>dB</Text>
+            </View>
+          </View>
+          {/* spark يسار */}
+          <VSpark value={sinr} min={-10} max={30} color={sinrColor} count={12} />
+        </View>
+        {deltaS !== undefined && (
+          <Text style={[h.delta, {
+            color: deltaS > 0.5 ? O_SUCCESS : deltaS < -0.5 ? O_DANGER : O_MUTED,
+          }]}>
+            {deltaS > 0.5 ? `↑ +${Math.round(deltaS)}`
+              : deltaS < -0.5 ? `↓ ${Math.round(deltaS)}` : '• 0'} dB
+          </Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// ═══ شريط قوة عمودي (12 نقطة) ═══
+function VSpark({
+  value, min, max, color, count = 12,
+}: {
+  value?: number;
+  min: number;
+  max: number;
+  color: string;
+  count?: number;
+}) {
+  const strength = value !== undefined
+    ? Math.max(0, Math.min(1, (value - min) / (max - min)))
+    : 0;
+  const lit = Math.round(strength * count);
+  return (
+    <View style={dot.wrap}>
+      {Array.from({ length: count }, (_, i) => {
+        // من الأعلى للأسفل: الأعلى = أقوى
+        const idx = count - i - 1;
+        const on = idx < lit;
+        const size = on ? 5 : 4;
+        return (
+          <View
+            key={i}
+            style={[
+              dot.dot,
+              {
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+                backgroundColor: on ? color : '#E0E8F3',
+              },
+            ]}
+          />
+        );
+      })}
+    </View>
+  );
+}
+
+const dot = StyleSheet.create({
+  wrap: {
+    alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 2, gap: 2,
+  },
+  dot: {},
+});
+
+
+const h = StyleSheet.create({
+  wrap: {
+    flexDirection: 'row-reverse', gap: 10, width: '100%',
+  },
+  card: {
+    flex: 1, backgroundColor: '#FFFFFF', borderRadius: 16,
+    paddingVertical: 12, paddingHorizontal: 10,
+    borderWidth: 1.5, gap: 6,
+    alignItems: 'center',
+  },
+  cardHead: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 5,
+  },
+  cardLbl: { color: O_MUTED, fontSize: 12, fontWeight: '800' },
+  arrow: { fontSize: 18, fontWeight: '900' },
+  bodyRow: {
+    flexDirection: 'row-reverse', alignItems: 'center',
+    gap: 6, width: '100%', justifyContent: 'space-between',
+  },
+  valueCol: { flex: 1, alignItems: 'center' },
+  valueRow: { flexDirection: 'row-reverse', alignItems: 'baseline', gap: 2 },
+  value: { fontSize: 26, fontWeight: '900', letterSpacing: -1, lineHeight: 30 },
+  unit: { color: O_MUTED, fontSize: 10, fontWeight: '800' },
+  delta: { fontSize: 10.5, fontWeight: '800' },
+});
 
 // ═══ الشاشة ═══
 export default function AimScreen() {
@@ -499,56 +685,42 @@ export default function AimScreen() {
         {!loading && (
           <>
             {/* ═══ Hero ═══ */}
-            <Hero colors={isNr ? ['#6a45ec', '#a24bd8'] : [P.heroA, P.heroB]}>
-              <View style={a.heroTop}>
-                <View style={a.heroTag}>
-                  <Icon name="tower" size={13} color="#fff" stroke={2.2} />
-                  <Text style={a.heroTagTxt} numberOfLines={1}>{current ? cellName(current.cell) : isNr ? '5G' : '4G'}</Text>
+            {/* ═══ العدادان (كما هما) + شريط المعلومات ═══ */}
+            <View style={a.heroCard}>
+              <SignalHero
+                rsrp={shown}
+                sinr={current?.sinr}
+                baselineRsrp={baseline}
+                baselineSinr={baselineSinr}
+                rsrpHistory={readings.map(r => r.smooth ?? r.rsrp ?? -110)}
+                sinrHistory={readings.map(r => r.sinr)}
+                rsrpColor={lvlColor}
+                sinrColor="#3567F5"
+              />
+
+              <View style={a.infoStrip}>
+                <InfoPill icon="tower" label="PCI" value={current?.cell.pci} color={PURPLE} bg={P.violetSoft} />
+                <InfoPill icon="bands" label="الباند" value={currentBand} color={BLUE} bg={P.blueSoft} />
+                <InfoPill icon="spark" label="التقييم" value={current ? `${lvlLabel(level)} · ${Math.round(pct * 100)}%` : undefined} color={lvlColor} bg={lvlColor + '1A'} />
+              </View>
+
+              {stab ? (
+                <View style={[a.stabBar, { backgroundColor: stab.c + '14', borderColor: stab.c + '40' }]}>
+                  <View style={[a.stabIcon, { backgroundColor: stab.c }]}>
+                    <Icon name={stability === 'stable' ? 'check' : 'bulb'} size={15} color="#fff" stroke={2.6} />
+                  </View>
+                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                    <Text style={[a.stabTitle, { color: stab.c }]}>{stab.t}</Text>
+                    <Text style={a.stabSub}>{stab.d}</Text>
+                  </View>
                 </View>
-                {stab ? (
-                  <View style={a.heroTag}>
-                    <View style={[a.stabDot, { backgroundColor: stab.c }]} />
-                    <Text style={a.heroTagTxt}>{stab.t}</Text>
-                  </View>
-                ) : (
-                  <View style={a.heroTag}>
-                    <ActivityIndicator size="small" color="#fff" style={{ transform: [{ scale: 0.7 }] }} />
-                    <Text style={a.heroTagTxt}>نجمع القراءات</Text>
-                  </View>
-                )}
-              </View>
-
-              <View style={{ alignItems: 'center', marginTop: 8 }}>
-                <Ring ratio={pct} size={196} stroke={14}>
-                  <Text style={a.ringLbl}>RSRP</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-                    <Text style={a.ringVal}>{shown ?? '—'}</Text>
-                    {shown !== undefined && <Text style={a.ringUnit}> dBm</Text>}
-                  </View>
-                  <View style={a.ringRow}>
-                    <TrendMark t={trendR} light />
-                    <Text style={a.ringLevel}>{current ? lvlLabel(level) : '—'} · {Math.round(pct * 100)}%</Text>
-                  </View>
-                </Ring>
-                {delta !== undefined && (
-                  <View style={[a.deltaPill, { backgroundColor: delta > 0.5 ? 'rgba(22,199,132,0.9)' : delta < -0.5 ? 'rgba(255,90,95,0.9)' : 'rgba(255,255,255,0.2)' }]}>
-                    <Text style={a.deltaTxt}>
-                      {delta > 0.5 ? `+${Math.round(delta)}` : delta < -0.5 ? `${Math.round(delta)}` : '0'} dB عن البداية
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              <View style={a.gRow}>
-                <GlassStat label="SINR" value={current?.sinr} unit="dB" trend={trendS} />
-                <View style={a.gSep} />
-                <GlassStat label="الباند" value={currentBand} />
-                <View style={a.gSep} />
-                <GlassStat label="PCI" value={current?.cell.pci} />
-              </View>
-
-              {!!stab && <Text style={a.heroHint}>{stab.d}</Text>}
-            </Hero>
+              ) : (
+                <View style={[a.stabBar, { backgroundColor: P.soft, borderColor: P.border }]}>
+                  <ActivityIndicator size="small" color={MUTED} />
+                  <Text style={[a.stabSub, { flex: 1 }]}>نجمع القراءات لتقييم ثبات الإشارة…</Text>
+                </View>
+              )}
+            </View>
 
             {/* ═══ Band selector ═══ */}
             <Section title="اختيار التردد" sub="الترددات المتاحة على شبكتك" icon="bands">
@@ -696,6 +868,22 @@ const a = StyleSheet.create({
   headerTitle: { fontSize: 21, fontWeight: '800', color: TEXT, textAlign: 'center' },
   headerSub: { fontSize: 11.5, color: MUTED, textAlign: 'center', marginTop: 1 },
 
+  heroCard: {
+    backgroundColor: P.card, borderRadius: 24, padding: 14, gap: 12,
+    borderWidth: 1, borderColor: P.border, ...shadow,
+  },
+  infoStrip: { flexDirection: 'row-reverse', gap: 8 },
+  pill: {
+    flex: 1, alignItems: 'center', gap: 3, backgroundColor: P.soft, borderRadius: 16,
+    paddingVertical: 10, paddingHorizontal: 6, borderWidth: 1, borderColor: P.border,
+  },
+  pillIcon: { width: 28, height: 28, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+  pillLbl: { color: MUTED, fontSize: 10.5, fontWeight: '700' },
+  pillVal: { fontSize: 14, fontWeight: '800' },
+  stabBar: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, borderRadius: 16, borderWidth: 1, paddingVertical: 10, paddingHorizontal: 12 },
+  stabIcon: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  stabTitle: { fontSize: 13, fontWeight: '800', textAlign: 'right' },
+  stabSub: { color: MUTED, fontSize: 11.5, textAlign: 'right', marginTop: 1 },
   heroTop: { flexDirection: 'row-reverse', justifyContent: 'space-between', gap: 8 },
   heroTag: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 6, flexShrink: 1,
