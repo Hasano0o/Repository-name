@@ -11,12 +11,22 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Icon } from '../src/ui/Icon';
+import { Icon, IconName } from '../src/ui/Icon';
 import { C, R, S, T } from '../src/ui/theme';
 import { isLanHost } from '../src/utils/host';
 import { detectDriver } from '../src/drivers/registry';
-import { getRouter, saveRouter, updateRouter, SavedRouter } from '../src/store/routers';
+import { getRouter, saveRouter, updateRouter, deleteRouter, SavedRouter } from '../src/store/routers';
+import { dropSession } from '../src/store/sessions';
+
+/** عناوين الراوترات الشائعة — اختصار بضغطة */
+const COMMON_HOSTS: { host: string; hint: string }[] = [
+  { host: '192.168.8.1', hint: 'هواوي' },
+  { host: '192.168.0.1', hint: 'ZTE' },
+  { host: '192.168.1.1', hint: 'عام' },
+  { host: '192.168.31.1', hint: 'شاومي' },
+];
 
 export default function AddRouterScreen() {
   const nav = useRouter();
@@ -30,7 +40,9 @@ export default function AddRouterScreen() {
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [step, setStep] = useState('');
   const [loading, setLoading] = useState<boolean>(Boolean(editId));
+  const [focus, setFocus] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -66,12 +78,14 @@ export default function AddRouterScreen() {
     }
     setBusy(true);
     try {
+      setStep('نتعرّف على نوع الراوتر...');
       const driver = await detectDriver(h);
       if (!driver) {
-        Alert.alert('تعذّر التعرف', 'ما تعرفنا على نوع الراوتر على هذا العنوان');
+        Alert.alert('تعذّر التعرف', 'ما تعرفنا على نوع الراوتر على هذا العنوان. تأكد إنك متصل بشبكة الراوتر.');
         return;
       }
 
+      setStep('نسجّل الدخول...');
       try {
         await driver.login(h, u, password);
       } catch (e) {
@@ -92,8 +106,10 @@ export default function AddRouterScreen() {
         driverName: dName,
       };
 
+      setStep('نحفظ...');
       let saved: SavedRouter | null;
       if (editId) {
+        dropSession(editId);
         saved = await updateRouter(editId, payload, password);
         if (!saved) {
           Alert.alert('خطأ', 'ما لقينا الراوتر المحفوظ');
@@ -108,7 +124,22 @@ export default function AddRouterScreen() {
       Alert.alert('خطأ', msg);
     } finally {
       setBusy(false);
+      setStep('');
     }
+  }
+
+  function onDelete() {
+    if (!editId) return;
+    Alert.alert('حذف الراوتر', `تبي تحذف "${name || 'الراوتر'}" من التطبيق؟ بتنحذف كلمة المرور المحفوظة معه.`, [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'حذف', style: 'destructive', onPress: async () => {
+          dropSession(editId);
+          await deleteRouter(editId);
+          nav.replace('/');
+        },
+      },
+    ]);
   }
 
   if (loading) {
@@ -122,218 +153,269 @@ export default function AddRouterScreen() {
   const isEdit = Boolean(editId);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
-    >
-      <ScrollView
+    <LinearGradient colors={['#eaf2ff', '#f3efff', '#eaf9f3']} style={styles.flex}>
+      <KeyboardAvoidingView
         style={styles.flex}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        automaticallyAdjustKeyboardInsets
-        showsVerticalScrollIndicator={false}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
       >
-        <View style={styles.card}>
-          <Text style={styles.title}>
-            {isEdit ? 'تعديل الراوتر' : 'إضافة راوتر'}
-          </Text>
-          <Text style={styles.subtitle}>
-            أدخل بيانات الدخول — تُحفظ كلمة المرور في التخزين الآمن على جهازك فقط،
-            ولا تُرسل لأي جهة خارجية.
-          </Text>
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets
+          showsVerticalScrollIndicator={false}
+        >
+          {/* الترويسة */}
+          <LinearGradient
+            colors={['#2f6bff', '#6a4cff']}
+            start={{ x: 1, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.hero}
+          >
+            <View style={styles.heroIcon}>
+              <Text style={{ fontSize: 30 }}>{isEdit ? '✏️' : '📡'}</Text>
+            </View>
+            <Text style={styles.heroTitle}>{isEdit ? 'تعديل الراوتر' : 'أضف راوترك'}</Text>
+            <Text style={styles.heroSub}>
+              {isEdit
+                ? 'عدّل البيانات وأدخل كلمة المرور عشان نتأكد من الدخول'
+                : 'اتصل بشبكة الراوتر أول، وبعدها أدخل بيانات الدخول'}
+            </Text>
+            <View style={styles.safe}>
+              <Icon name="lock" size={13} color="#fff" />
+              <Text style={styles.safeText}>كلمة المرور تنحفظ مشفّرة على جوالك فقط</Text>
+            </View>
+          </LinearGradient>
 
-          <Field label="الاسم (اختياري)">
-            <TextInput
-              value={name}
-              onChangeText={setName}
-              placeholder="مثال: راوتر الصالة"
-              placeholderTextColor={C.muted}
-              style={styles.input}
-              returnKeyType="next"
-            />
-          </Field>
-
-          <Field label="عنوان الراوتر">
-            <TextInput
-              value={host}
-              onChangeText={setHost}
-              placeholder="192.168.8.1"
-              placeholderTextColor={C.muted}
-              style={styles.input}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="off"
-              keyboardType="numbers-and-punctuation"
-              returnKeyType="next"
-            />
-          </Field>
-
-          <Field label="اسم المستخدم">
-            <TextInput
-              value={username}
-              onChangeText={setUsername}
-              placeholder="admin"
-              placeholderTextColor={C.muted}
-              style={styles.input}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="username"
-              returnKeyType="next"
-            />
-          </Field>
-
-          <Field label="كلمة المرور">
-            <View style={styles.passwordRow}>
+          {/* النموذج */}
+          <View style={styles.card}>
+            <Field label="اسم الراوتر" hint="اختياري" icon="home" color="#8b5cf6" focused={focus === 'name'}>
               <TextInput
-                value={password}
-                onChangeText={setPassword}
-                placeholder="••••••••"
-                placeholderTextColor={C.muted}
-                style={[styles.input, styles.passwordInput]}
+                value={name}
+                onChangeText={setName}
+                onFocus={() => setFocus('name')}
+                onBlur={() => setFocus(null)}
+                placeholder="مثال: راوتر الصالة"
+                placeholderTextColor="#9aa3bd"
+                style={styles.input}
+                returnKeyType="next"
+              />
+            </Field>
+
+            <Field label="عنوان الراوتر (IP)" icon="tower" color="#2f6bff" focused={focus === 'host'}>
+              <TextInput
+                value={host}
+                onChangeText={setHost}
+                onFocus={() => setFocus('host')}
+                onBlur={() => setFocus(null)}
+                placeholder="192.168.8.1"
+                placeholderTextColor="#9aa3bd"
+                style={[styles.input, styles.ltr]}
                 autoCapitalize="none"
                 autoCorrect={false}
-                secureTextEntry={!showPass}
-                autoComplete="password"
-                textContentType="password"
-                returnKeyType="done"
-                onSubmitEditing={onSave}
+                autoComplete="off"
+                keyboardType="numbers-and-punctuation"
+                returnKeyType="next"
               />
-              <Pressable
-                onPress={() => setShowPass((v) => !v)}
-                hitSlop={10}
-                style={styles.eye}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  showPass ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'
-                }
-              >
-                <Icon
-                  name={showPass ? 'eye-off' : 'eye'}
-                  size={20}
-                  color={C.sub}
-                />
-              </Pressable>
+            </Field>
+            <View style={styles.hosts}>
+              {COMMON_HOSTS.map(h => {
+                const on = host.trim() === h.host;
+                return (
+                  <Pressable
+                    key={h.host}
+                    onPress={() => setHost(h.host)}
+                    style={({ pressed }) => [styles.hostChip, on && styles.hostChipOn, pressed && { opacity: 0.7 }]}
+                  >
+                    <Text style={[styles.hostIp, on && { color: '#fff' }]}>{h.host}</Text>
+                    <Text style={[styles.hostHint, on && { color: 'rgba(255,255,255,0.85)' }]}>{h.hint}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
-          </Field>
 
-          <Pressable
-            onPress={onSave}
-            disabled={busy}
-            style={({ pressed }) => [
-              styles.primaryBtn,
-              (busy || pressed) && styles.primaryBtnPressed,
-            ]}
-          >
-            {busy ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.primaryBtnText}>
-                {isEdit ? 'حفظ التعديلات' : 'إضافة الراوتر'}
-              </Text>
-            )}
-          </Pressable>
+            <Field label="اسم المستخدم" icon="user" color="#12b76a" focused={focus === 'user'}>
+              <TextInput
+                value={username}
+                onChangeText={setUsername}
+                onFocus={() => setFocus('user')}
+                onBlur={() => setFocus(null)}
+                placeholder="admin"
+                placeholderTextColor="#9aa3bd"
+                style={[styles.input, styles.ltr]}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="username"
+                returnKeyType="next"
+              />
+            </Field>
 
-          <Pressable
-            onPress={() => nav.back()}
-            disabled={busy}
-            style={styles.ghostBtn}
-          >
-            <Text style={styles.ghostBtnText}>إلغاء</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            <Field label="كلمة المرور" icon="lock" color="#f97316" focused={focus === 'pass'}>
+              <View style={styles.passwordRow}>
+                <TextInput
+                  value={password}
+                  onChangeText={setPassword}
+                  onFocus={() => setFocus('pass')}
+                  onBlur={() => setFocus(null)}
+                  placeholder="••••••••"
+                  placeholderTextColor="#9aa3bd"
+                  style={[styles.input, styles.ltr, styles.passwordInput]}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry={!showPass}
+                  autoComplete="password"
+                  textContentType="password"
+                  returnKeyType="done"
+                  onSubmitEditing={onSave}
+                />
+                <Pressable
+                  onPress={() => setShowPass((v) => !v)}
+                  hitSlop={10}
+                  style={styles.eye}
+                  accessibilityRole="button"
+                  accessibilityLabel={showPass ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                >
+                  <Icon name={showPass ? 'eye-off' : 'eye'} size={20} color={C.sub} />
+                </Pressable>
+              </View>
+            </Field>
+            <Text style={styles.passHint}>غالباً مكتوبة على ملصق تحت الراوتر (Password / كلمة مرور الإدارة)</Text>
+
+            <Pressable
+              onPress={onSave}
+              disabled={busy}
+              style={({ pressed }) => [styles.primaryWrap, (busy || pressed) && { opacity: 0.85 }]}
+            >
+              <LinearGradient
+                colors={['#2f6bff', '#6a4cff']}
+                start={{ x: 1, y: 0 }}
+                end={{ x: 0, y: 0 }}
+                style={styles.primaryBtn}
+              >
+                {busy ? (
+                  <View style={styles.busyRow}>
+                    <ActivityIndicator color="#fff" />
+                    {!!step && <Text style={styles.primaryBtnText}>{step}</Text>}
+                  </View>
+                ) : (
+                  <Text style={styles.primaryBtnText}>
+                    {isEdit ? '💾 حفظ التعديلات' : '🔗 اتصل وأضف الراوتر'}
+                  </Text>
+                )}
+              </LinearGradient>
+            </Pressable>
+
+            <Pressable onPress={() => nav.back()} disabled={busy} style={styles.ghostBtn}>
+              <Text style={styles.ghostBtnText}>إلغاء</Text>
+            </Pressable>
+          </View>
+
+          {isEdit && (
+            <Pressable
+              onPress={onDelete}
+              disabled={busy}
+              style={({ pressed }) => [styles.deleteBtn, pressed && { opacity: 0.7 }]}
+            >
+              <Icon name="trash" size={17} color={C.red} />
+              <Text style={styles.deleteText}>حذف الراوتر من التطبيق</Text>
+            </Pressable>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }
 
 function Field({
-  label,
-  children,
+  label, hint, icon, color, focused, children,
 }: {
-  label: string;
+  label: string; hint?: string; icon: IconName; color: string; focused?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      {children}
+      <View style={styles.labelRow}>
+        <View style={[styles.labelIcon, { backgroundColor: color }]}>
+          <Icon name={icon} size={13} color="#fff" />
+        </View>
+        <Text style={styles.label}>{label}</Text>
+        {!!hint && <Text style={styles.labelHint}>{hint}</Text>}
+      </View>
+      <View style={[styles.inputWrap, focused && { borderColor: color, backgroundColor: '#fff' }]}>
+        {children}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: C.bg },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: C.bg,
+  flex: { flex: 1 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg },
+  content: { padding: S.lg, paddingBottom: 200, gap: 14 },
+
+  hero: {
+    borderRadius: 26, paddingVertical: 22, paddingHorizontal: 18, alignItems: 'center', gap: 6,
+    shadowColor: '#2f6bff', shadowOpacity: 0.3, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 6,
   },
-  content: {
-    padding: S.lg,
-    paddingBottom: 200,
+  heroIcon: {
+    width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', marginBottom: 4,
   },
+  heroTitle: { color: '#fff', fontSize: 22, fontWeight: '900' },
+  heroSub: { color: 'rgba(255,255,255,0.88)', fontSize: 13, textAlign: 'center', lineHeight: 20 },
+  safe: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 6, marginTop: 6,
+    backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6,
+  },
+  safeText: { color: '#fff', fontSize: 11.5, fontWeight: '700' },
+
   card: {
-    backgroundColor: C.card,
-    borderRadius: R.lg,
-    padding: S.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: C.cardBorder,
-    shadowColor: C.shadow,
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-  title: {
-    fontSize: T.h1,
-    fontWeight: '700',
-    color: C.text,
-    marginBottom: S.xs,
-  },
-  subtitle: {
-    fontSize: T.body,
-    color: C.sub,
-    marginBottom: S.lg,
-    lineHeight: 20,
+    backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 24, padding: S.lg,
+    borderWidth: 1, borderColor: '#ffffff',
+    shadowColor: C.shadow, shadowOpacity: 0.07, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 2,
   },
   field: { marginBottom: S.md },
-  label: { fontSize: T.label, color: C.sub, marginBottom: S.xs },
+  labelRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, marginBottom: 7 },
+  labelIcon: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  label: { fontSize: 13.5, color: C.text, fontWeight: '800', textAlign: 'right' },
+  labelHint: { fontSize: 11, color: C.muted, fontWeight: '600' },
+  inputWrap: { borderRadius: 16, borderWidth: 1.5, borderColor: '#e3e9f6', backgroundColor: '#f6f8fd' },
   input: {
-    backgroundColor: C.rowBg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: C.blueSoft,
-    borderRadius: R.md,
-    paddingHorizontal: S.md,
-    paddingVertical: S.sm,
-    color: C.text,
-    fontSize: T.body,
-    minHeight: 48,
+    paddingHorizontal: S.md, paddingVertical: S.sm, color: C.text, fontSize: 15, minHeight: 50,
+    textAlign: 'right',
   },
+  ltr: { textAlign: 'left', writingDirection: 'ltr', fontWeight: '700', letterSpacing: 0.3 },
+  hosts: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6, marginTop: -4, marginBottom: S.md },
+  hostChip: {
+    borderRadius: 12, borderWidth: 1, borderColor: '#d6e2ff', backgroundColor: '#eef3ff',
+    paddingHorizontal: 10, paddingVertical: 5, alignItems: 'center',
+  },
+  hostChipOn: { backgroundColor: C.blue, borderColor: C.blue },
+  hostIp: { color: C.blue, fontSize: 12, fontWeight: '800' },
+  hostHint: { color: C.sub, fontSize: 9.5, fontWeight: '700' },
   passwordRow: { position: 'relative', justifyContent: 'center' },
-  passwordInput: { paddingRight: 44 },
+  passwordInput: { paddingRight: 46 },
   eye: {
-    position: 'absolute',
-    right: S.sm,
-    top: 0,
-    bottom: 0,
-    width: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: 'absolute', right: S.sm, top: 0, bottom: 0, width: 40,
+    alignItems: 'center', justifyContent: 'center',
   },
-  primaryBtn: {
-    marginTop: S.lg,
-    backgroundColor: C.blue,
-    borderRadius: R.md,
-    paddingVertical: S.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 52,
+  passHint: { color: C.muted, fontSize: 11.5, textAlign: 'right', marginTop: -6, lineHeight: 17 },
+
+  primaryWrap: {
+    marginTop: S.lg, borderRadius: 16,
+    shadowColor: '#2f6bff', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 5,
   },
-  primaryBtnPressed: { opacity: 0.85 },
-  primaryBtnText: { fontSize: T.body, color: '#ffffff', fontWeight: '600' },
+  primaryBtn: { borderRadius: 16, paddingVertical: S.md, alignItems: 'center', justifyContent: 'center', minHeight: 54 },
+  primaryBtnText: { fontSize: 16, color: '#ffffff', fontWeight: '800' },
+  busyRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   ghostBtn: { marginTop: S.sm, paddingVertical: S.sm, alignItems: 'center' },
-  ghostBtnText: { fontSize: T.body, color: C.sub },
+  ghostBtnText: { fontSize: T.body, color: C.sub, fontWeight: '700' },
+
+  deleteBtn: {
+    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: '#fff1f2', borderColor: '#fecdd3', borderWidth: 1, borderRadius: 16, paddingVertical: 14,
+  },
+  deleteText: { color: C.red, fontWeight: '800', fontSize: 14 },
 });
