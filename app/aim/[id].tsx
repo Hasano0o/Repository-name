@@ -6,6 +6,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { NetPanel } from '../../src/ui/NetPanel';
+import { measureLatency } from '../../src/utils/latency';
 import { LiveHost, createLiveSession, CmdAction, CMD_LABEL, LIVE_BASE } from '../../src/services/live';
 import Svg, { Circle, Path, Line, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { Icon, IconName } from '../../src/ui/Icon';
@@ -360,6 +362,20 @@ export default function AimScreen() {
   const [nrSeen, setNrSeen] = useState(false);
   const [nrCell, setNrCell] = useState<CellTower | null>(null);
   const [pinned, setPinned] = useState<CellId | null>(null);
+  // ═══ البنق (كل ١٥ ثانية، ٣ عينات) ═══
+  const [ping, setPing] = useState<number | undefined>(undefined);
+  useFocusEffect(useCallback(() => {
+    let alive = true;
+    const run = async () => {
+      try {
+        const r = await measureLatency(3, 2500);
+        if (alive && r.samples > 0) setPing(Math.round(r.median));
+      } catch {}
+    };
+    run();
+    const iv = setInterval(run, 15000);
+    return () => { alive = false; clearInterval(iv); };
+  }, []));
   // ═══ وضع الفني ═══
   const [live, setLive] = useState<{ code: string; url: string } | null>(null);
   const [liveBusy, setLiveBusy] = useState(false);
@@ -839,11 +855,6 @@ export default function AimScreen() {
                 sinrColor="#3567F5"
               />
 
-              <View style={a.infoStrip}>
-                <InfoPill icon="tower" label="PCI" value={current?.cell.pci} color={PURPLE} bg={P.violetSoft} />
-                <InfoPill icon="bands" label="الباند" value={currentBand} color={BLUE} bg={P.blueSoft} />
-                <InfoPill icon="spark" label="التقييم" value={current ? `${lvlLabel(level)} · ${Math.round(pct * 100)}%` : undefined} color={lvlColor} bg={lvlColor + '1A'} />
-              </View>
 
               {stab ? (
                 <View style={[a.stabBar, { backgroundColor: stab.c + '14', borderColor: stab.c + '40' }]}>
@@ -862,6 +873,9 @@ export default function AimScreen() {
                 </View>
               )}
             </View>
+
+            {/* ═══ لوحة الشبكة 4G / 5G ═══ */}
+            <NetPanel signal={signal} ping={ping} />
 
             {/* ═══ وضع الفني: شارك مع فني ═══ */}
             {!live ? (
