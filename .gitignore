@@ -33,3 +33,6 @@ _patch*.py
 
 expo-env.d.ts
 # @end expo-cli
+# مجلدات أصلية يولّدها prebuild — لا تُرفع
+/android
+/ios
