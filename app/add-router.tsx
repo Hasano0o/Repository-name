@@ -343,7 +343,7 @@ function Field({
         <Text style={styles.label}>{label}</Text>
         {!!hint && <Text style={styles.labelHint}>{hint}</Text>}
       </View>
-      <View style={[styles.inputWrap, focused && { borderColor: color, backgroundColor: '#fff' }]}>
+      <View style={[styles.inputWrap, focused && { borderColor: color, backgroundColor: '#f3f6fa' }]}>
         {children}
       </View>
     </View>
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
   labelIcon: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   label: { fontSize: 13.5, color: C.text, fontWeight: '800', textAlign: 'right' },
   labelHint: { fontSize: 11, color: C.muted, fontWeight: '600' },
-  inputWrap: { borderRadius: 16, borderWidth: 1.5, borderColor: '#e3e9f6', backgroundColor: '#f6f8fd' },
+  inputWrap: { borderRadius: 16, borderWidth: 1.5, borderColor: '#d8e0eb', backgroundColor: '#e9eef5' },
   input: {
     paddingHorizontal: S.md, paddingVertical: S.sm, color: C.text, fontSize: 15, minHeight: 50,
     textAlign: 'right',

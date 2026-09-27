@@ -8,9 +8,9 @@ const BLUE = '#3567F5';
 const PURPLE = '#7655F5';
 const TEXT = '#14264A';
 const MUTED = '#71809A';
-const BG = '#F4F8FF';
+const BG = '#E5EAF2';
 const SUCCESS = '#13B783';
-const CARD = '#FFFFFF';
+const CARD = '#F3F6FA';
 const BORDER = '#E6ECF5';
 
 interface Item {
@@ -163,7 +163,7 @@ const s = StyleSheet.create({
   card: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 12,
     paddingVertical: 12, paddingHorizontal: 12,
-    backgroundColor: '#FAFCFF',
+    backgroundColor: '#E9EEF5',
     borderRadius: 14, borderWidth: 1.5,
   },
   iconWrap: {

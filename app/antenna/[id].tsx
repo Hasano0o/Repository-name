@@ -22,12 +22,12 @@ const BLUE = '#3567F5';
 const PURPLE = '#7655F5';
 const TEXT = '#14264A';
 const MUTED = '#71809A';
-const BG = '#F4F8FF';
+const BG = '#E5EAF2';
 const SUCCESS = '#13B783';
 const WARN = '#F59E0B';
 const DANGER = '#DC2626';
-const CARD = '#FFFFFF';
-const CARD_BG = '#FAFCFF';
+const CARD = '#F3F6FA';
+const CARD_BG = '#E9EEF5';
 const BORDER = '#E6ECF5';
 
 // ═══ تقييم كل مؤشر (نص + لون) — من المصدر الموحّد src/utils/signal.ts ═══
@@ -412,7 +412,7 @@ const g = StyleSheet.create({
   },
   metricCard: {
     flexBasis: '47%', flexGrow: 1,
-    backgroundColor: '#FAFCFF', borderRadius: 14,
+    backgroundColor: '#E9EEF5', borderRadius: 14,
     borderWidth: 1, borderColor: BORDER,
     paddingVertical: 12, paddingHorizontal: 10, gap: 6,
   },

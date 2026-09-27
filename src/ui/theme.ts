@@ -1,11 +1,11 @@
 export const C = {
   // الأسطح
-  bg: '#f6fafd',
-  bgTop: '#f6fafd',
-  bgBottom: '#ddedfe',
-  card: '#ffffff',
-  cardBorder: '#f7fbfe',
-  rowBg: '#f7fbfe',
+  bg: '#e5eaf2',
+  bgTop: '#e5eaf2',
+  bgBottom: '#d6e2f2',
+  card: '#f3f6fa',
+  cardBorder: '#d8e0eb',
+  rowBg: '#e9eef5',
   track: '#bdd9fd',
 
   // تدرّج بطاقة الترويسة
@@ -50,8 +50,8 @@ export const C = {
   red: '#d73722',
   redSoft: '#ffecf2',
 
-  line: '#f7fbfe',
-  lineSoft: '#f7fbfe',
+  line: '#d8e0eb',
+  lineSoft: '#e1e7f0',
   onAccent: '#ffffff',
   onAccentSoft: '#cfe0ff',
   shadow: '#0d2350',

@@ -24,7 +24,8 @@
             }
           }
         },
-        "NSLocalNetworkUsageDescription": "Bandly يحتاج يوصل لراوترك على الشبكة المحلية عشان يقرأ الإشارة ويديره."
+        "NSLocalNetworkUsageDescription": "Bandly يحتاج يوصل لراوترك على الشبكة المحلية عشان يقرأ الإشارة ويديره.",
+        "NSMicrophoneUsageDescription": "Bandly يستخدم الميكروفون عشان ترسل رسائل صوتية للفني أثناء ضبط الإشارة."
       }
     },
     "android": {
@@ -41,7 +42,8 @@
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.ACCESS_WIFI_STATE",
-        "android.permission.POST_NOTIFICATIONS"
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO"
       ],
       "allowBackup": false
     },
@@ -72,7 +74,15 @@
         }
       ],
       "expo-notifications",
-      "./plugins/withNetworkSecurity"
+      "./plugins/withNetworkSecurity",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Bandly يستخدم الميكروفون عشان ترسل رسائل صوتية للفني أثناء ضبط الإشارة.",
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

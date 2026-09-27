@@ -13,6 +13,12 @@ mkdir -p "$DST/data"
 cp "$SRC/app.py" "$SRC/viewer.html" "$SRC/admin.py" "$SRC/requirements.txt" "$DST/"
 ok "$DST"
 
+echo "🎙  ffmpeg (للرسائل الصوتية)..."
+if ! command -v ffmpeg >/dev/null 2>&1; then
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg >/dev/null 2>&1 || true
+fi
+command -v ffmpeg >/dev/null 2>&1 && ok "ffmpeg موجود" || echo "  ⚠ ffmpeg غير مثبت — الصوت يشتغل بدون تحويل"
+
 echo "🐍 البيئة..."
 [ -x "$DST/venv/bin/python" ] || python3 -m venv "$DST/venv"
 "$DST/venv/bin/pip" install -q --upgrade pip >/dev/null
@@ -71,6 +77,7 @@ location /live-api/ {
     proxy_set_header X-Forwarded-Proto \$scheme;
     proxy_read_timeout 3600s;
     proxy_send_timeout 3600s;
+    client_max_body_size 2m;
 }
 location /live/ {
     proxy_pass http://127.0.0.1:$PORT;
@@ -88,6 +95,7 @@ ok "ملف الموقع: $CONF"
 
 if grep -q "snippets/bandly-live.conf" "$CONF"; then
   ok "الـ include موجود من قبل"
+  nginx -t 2>/dev/null && systemctl reload nginx && ok "أعدنا تحميل nginx"
 else
   # النسخة الاحتياطية برّا sites-enabled — وإلا nginx يحمّلها كإعداد ثاني
   mkdir -p "$DST/nginx-backup"

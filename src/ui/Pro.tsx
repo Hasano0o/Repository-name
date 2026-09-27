@@ -11,10 +11,10 @@ import { Level, LEVEL_COLOR, LEVEL_LABEL, LEVEL_SOFT } from '../utils/signal';
 
 // ═══ الألوان ═══
 export const P = {
-  bg: '#f3f6fc',
-  card: '#ffffff',
-  border: '#e8eef8',
-  soft: '#f6f8fd',
+  bg: '#e5eaf2',
+  card: '#f3f6fa',
+  border: '#d8e0eb',
+  soft: '#e9eef5',
   text: '#0f1f45',
   sub: '#6b7796',
   faint: '#a3adc6',

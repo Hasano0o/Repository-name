@@ -3,12 +3,30 @@
  * السيرفر: live-server/app.py على has-host.com
  * ما ينرسل أي شي غير أرقام الإشارة — كلمة مرور الراوتر ما تطلع من الجوال.
  */
+import { Signal } from '../drivers/types';
+
 export const LIVE_BASE = 'https://has-host.com';
 const WS_BASE = LIVE_BASE.replace(/^http/, 'ws');
 
 export interface LiveReading {
   rsrp?: number; sinr?: number; band?: string; pci?: string; tech?: string;
   level?: string; score?: number; best?: number; pinned?: string | null; ts?: number;
+  ping?: number; sig?: Partial<Signal>;
+}
+
+/** الحقول اللي نشاركها مع الفني من قراءة الراوتر (أرقام فقط — ما فيه أي بيانات دخول) */
+const SIG_KEYS = [
+  'rsrp', 'rsrq', 'sinr', 'rssi', 'band', 'cellId', 'pci', 'earfcn', 'dlBandwidth', 'ulBandwidth',
+  'nrRsrp', 'nrRsrq', 'nrSinr', 'nrBand', 'nrPci', 'nrArfcn', 'nrDlBandwidth',
+] as const;
+export function pickSig(s?: Signal | null): Partial<Signal> | undefined {
+  if (!s) return undefined;
+  const out: any = {};
+  for (const k of SIG_KEYS) {
+    const v = (s as any)[k];
+    if (v !== undefined && v !== null && v !== '') out[k] = v;
+  }
+  return out;
 }
 export interface LiveReport {
   code: string; label: string; duration_sec: number; gain_db: number | null; ended: boolean;
@@ -49,6 +67,24 @@ export function reportText(r: LiveReport, tech?: string) {
     x ? `\u2066${x.rsrp} dBm\u2069${x.band ? ` (${x.band}${x.pci ? ` · PCI ${x.pci}` : ''})` : ''}` : '—';
   const g = r.gain_db === null ? '—' : `${r.gain_db > 0 ? '+' : ''}${r.gain_db} dB`;
   return `📡 تقرير ضبط الإشارة — Bandly\n\nقبل: ${f(r.first)}\nبعد: ${f(r.last)}\nأفضل قراءة: ${f(r.best)}\nالتحسن: ${g}\nالمدة: ${Math.max(1, Math.round(r.duration_sec / 60))} دقيقة${tech ? `\nالفني: ${tech}` : ''}`;
+}
+
+export interface LiveVoice { url: string; from: string; role: 'cust' | 'tech'; dur: number; echo?: boolean }
+
+/** رفع رسالة صوتية — العميل يستخدم توكن الجلسة، والفني يستخدم التوكن اللي يوصله في hello */
+export async function uploadVoice(code: string, role: 'cust' | 'tech', token: string, uri: string, dur: number) {
+  const ext = (uri.match(/\.(\w{2,4})(\?|$)/)?.[1] || 'm4a').toLowerCase();
+  const fd = new FormData();
+  fd.append('file', { uri, name: `voice.${ext}`, type: ext === '3gp' ? 'audio/3gpp' : 'audio/mp4' } as any);
+  fd.append('role', role);
+  fd.append('token', token);
+  fd.append('dur', String(Math.round(dur * 10) / 10));
+  const r = await fetch(`${LIVE_BASE}/live-api/voice/${code}`, { method: 'POST', body: fd });
+  if (!r.ok) {
+    let msg = 'ما انرسل التسجيل';
+    try { const j = await r.json(); if (j?.detail) msg = String(j.detail); } catch {}
+    throw new Error(msg);
+  }
 }
 
 type Msg = { t: string; [k: string]: any };
@@ -96,19 +132,23 @@ class Link {
 /** جهة العميل: ينشر القراءات ويستقبل التعليمات والأوامر */
 export class LiveHost {
   private link: Link;
+  token: string;
   constructor(public code: string, token: string, h: {
     onViewers?: (n: number, names: string[]) => void;
     onSay?: (text: string, from: string) => void;
     onCmd?: (id: number, action: CmdAction, from: string) => void;
     onEnd?: (why: string, report: LiveReport | null) => void;
     onState?: (s: 'on' | 'off' | 'dead') => void;
+    onVoice?: (v: LiveVoice) => void;
   }) {
+    this.token = token;
     this.link = new Link(
       `${WS_BASE}/live-api/pub/${code}?token=${token}`,
       m => {
         if (m.t === 'viewers') h.onViewers?.(m.n ?? 0, m.names ?? []);
         else if (m.t === 'say') h.onSay?.(String(m.text ?? ''), String(m.from ?? 'الفني'));
         else if (m.t === 'cmd') h.onCmd?.(Number(m.id), m.action, String(m.from ?? 'الفني'));
+        else if (m.t === 'voice') h.onVoice?.(m as unknown as LiveVoice);
         else if (m.t === 'end') { this.link.close(); h.onEnd?.(m.why, m.report ?? null); }
       },
       s => h.onState?.(s),
@@ -116,6 +156,7 @@ export class LiveHost {
     this.link.open();
   }
   send(r: LiveReading) { this.link.send({ t: 'r', ...r }); }
+  voice(uri: string, dur: number) { return uploadVoice(this.code, 'cust', this.token, uri, dur); }
   result(id: number, ok: boolean, msg: string) { this.link.send({ t: 'cmd_result', id, ok, msg }); }
   end() { this.link.send({ t: 'end' }); setTimeout(() => this.link.close(), 800); }
   close() { this.link.close(); }
@@ -124,7 +165,8 @@ export class LiveHost {
 /** جهة الفني: يشاهد ويرسل */
 export class LiveViewer {
   private link: Link;
-  constructor(code: string, key: string, name: string, h: {
+  private vt = '';
+  constructor(private code: string, key: string, name: string, h: {
     onHello?: (m: { label: string; customer: boolean; history: LiveReading[]; say: Record<string, string>;
       ended: boolean; report: LiveReport | null }) => void;
     onReading?: (r: LiveReading) => void;
@@ -133,12 +175,14 @@ export class LiveViewer {
     onCmdResult?: (ok: boolean, msg: string) => void;
     onEnd?: (why: string, report: LiveReport | null) => void;
     onState?: (s: 'on' | 'off' | 'dead', code?: number) => void;
+    onVoice?: (v: LiveVoice) => void;
   }) {
     const q = `key=${encodeURIComponent(key)}&name=${encodeURIComponent(name)}`;
     this.link = new Link(
       `${WS_BASE}/live-api/sub/${code}?${q}`,
       m => {
-        if (m.t === 'hello') h.onHello?.(m as any);
+        if (m.t === 'hello') { this.vt = String(m.vt ?? ''); h.onHello?.(m as any); }
+        else if (m.t === 'voice') h.onVoice?.(m as unknown as LiveVoice);
         else if (m.t === 'r') h.onReading?.(m as LiveReading);
         else if (m.t === 'status') h.onCustomer?.(!!m.customer);
         else if (m.t === 'cmd_sent') h.onCmdSent?.(m.action, !!m.delivered);
@@ -150,6 +194,7 @@ export class LiveViewer {
     this.link.open();
   }
   say(k: string) { this.link.send({ t: 'say', k }); }
+  voice(uri: string, dur: number) { return uploadVoice(this.code, 'tech', this.vt, uri, dur); }
   cmd(action: CmdAction) { this.link.send({ t: 'cmd', action }); }
   close() { this.link.close(); }
 }

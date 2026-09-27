@@ -22,10 +22,10 @@ const BLUE = '#3567F5';
 const PURPLE = '#7655F5';
 const TEXT = '#14264A';
 const MUTED = '#71809A';
-const BG = '#F4F8FF';
+const BG = '#E5EAF2';
 const SUCCESS = '#13B783';
-const CARD = '#FFFFFF';
-const CARD_BG = '#FAFCFF';
+const CARD = '#F3F6FA';
+const CARD_BG = '#E9EEF5';
 const BORDER = '#E6ECF5';
 const WARN = '#F59E0B';
 const DANGER = '#DC2626';
@@ -611,7 +611,7 @@ const g = StyleSheet.create({
   bestSub: { color: '#15803D', fontSize: 11.5, textAlign: 'right', marginTop: 2 },
   bestStats: { flexDirection: 'row-reverse', gap: 8 },
   bestStat: {
-    flex: 1, alignItems: 'center', backgroundColor: '#FFFFFF',
+    flex: 1, alignItems: 'center', backgroundColor: '#F3F6FA',
     borderRadius: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#D1FAE5',
   },
   bestStatVal: { fontSize: 16, fontWeight: '900', color: '#166534' },

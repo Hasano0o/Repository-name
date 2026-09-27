@@ -17,16 +17,23 @@ import asyncio
 import json
 import os
 import secrets
+import shutil
+import subprocess
 import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 BASE = Path(__file__).resolve().parent
 DATA = BASE / "data"
 DATA.mkdir(exist_ok=True)
+VOICE = DATA / "voice"
+VOICE.mkdir(exist_ok=True)
+FFMPEG = shutil.which("ffmpeg")
+MAX_VOICE_BYTES = 1_500_000
+MAX_VOICES = 80
 CONFIG_FILE = DATA / "config.json"
 TECHS_FILE = DATA / "techs.json"
 PUBLIC_URL = os.environ.get("BANDLY_PUBLIC_URL", "https://has-host.com")
@@ -94,6 +101,8 @@ class Session:
         self.events: list[dict] = []
         self.ended = False
         self.cmd_seq = 0
+        self.vtokens: dict[str, str] = {}   # توكن رفع الصوت لكل فني ← اسمه
+        self.voices = 0
 
     def alive(self) -> bool:
         now = time.time()
@@ -196,6 +205,7 @@ async def _janitor():
                 # نخلي التقرير متاح ساعة بعد النهاية ثم نحذف
                 if s.ended and now - s.last > 3600:
                     SESSIONS.pop(code, None)
+                    shutil.rmtree(VOICE / code, ignore_errors=True)
     asyncio.create_task(loop())
 
 
@@ -283,7 +293,11 @@ async def ws_pub(ws: WebSocket, code: str, token: str = ""):
                 continue
             kind = m.get("t")
             if kind == "r":
-                r = {k: m.get(k) for k in ("rsrp", "sinr", "band", "pci", "tech", "level", "score", "best", "pinned")}
+                r = {k: m.get(k) for k in ("rsrp", "sinr", "band", "pci", "tech", "level", "score", "best", "pinned", "ping")}
+                sig = m.get("sig")
+                if isinstance(sig, dict) and len(sig) <= 25:
+                    r["sig"] = {str(k)[:20]: v for k, v in sig.items()
+                                if isinstance(v, (int, float)) or (isinstance(v, str) and len(v) <= 40)}
                 r["ts"] = int(time.time() * 1000)
                 s.add(r)
                 await to_subs(s, {"t": "r", **r})
@@ -320,13 +334,15 @@ async def ws_sub(ws: WebSocket, code: str, key: str = "", name: str = ""):
         await ws.close(code=4401)
         return
     tech_name = (t or {}).get("name") or name[:30] or "الفني"
+    vt = secrets.token_hex(12)
+    s.vtokens[vt] = tech_name
     s.subs.add(ws)
     s.tech_names[ws] = tech_name
     s.events.append({"at": int(time.time()), "e": "join", "who": tech_name})
     await send(ws, {
         "t": "hello", "label": s.label, "customer": s.pub is not None,
         "history": s.readings[-60:], "ended": s.ended, "report": s.report() if s.ended else None,
-        "say": SAY_ALLOWED,
+        "say": SAY_ALLOWED, "vt": vt, "voice": True,
     })
     await send(s.pub, {"t": "viewers", "n": len(s.subs), "names": list(s.tech_names.values())})
     try:
@@ -361,6 +377,77 @@ async def ws_sub(ws: WebSocket, code: str, key: str = "", name: str = ""):
         s.subs.discard(ws)
         s.tech_names.pop(ws, None)
         await send(s.pub, {"t": "viewers", "n": len(s.subs), "names": list(s.tech_names.values())})
+
+
+# ═══ الرسائل الصوتية ═══
+def _transcode(src: Path, dst: Path) -> bool:
+    """نحوّل أي تسجيل (webm/ogg/mp4/m4a/3gp) إلى m4a (AAC) يشتغل على أندرويد وآيفون والمتصفح."""
+    if not FFMPEG:
+        return False
+    try:
+        r = subprocess.run(
+            [FFMPEG, "-y", "-loglevel", "error", "-i", str(src), "-t", "90",
+             "-ac", "1", "-ar", "24000", "-c:a", "aac", "-b:a", "40k", "-movflags", "+faststart", str(dst)],
+            timeout=25, capture_output=True)
+        return r.returncode == 0 and dst.exists() and dst.stat().st_size > 200
+    except Exception:
+        return False
+
+
+@app.post("/live-api/voice/{code}")
+async def upload_voice(code: str, file: UploadFile = File(...), role: str = Form("cust"),
+                       token: str = Form(""), dur: float = Form(0)):
+    s = SESSIONS.get(code)
+    if not s or s.ended:
+        raise HTTPException(404, "الجلسة منتهية")
+    if role == "cust":
+        if not secrets.compare_digest(s.token, token):
+            raise HTTPException(403, "غير مصرح")
+        who = "العميل"
+    else:
+        who = s.vtokens.get(token)
+        if not who:
+            raise HTTPException(403, "غير مصرح")
+    if s.voices >= MAX_VOICES:
+        raise HTTPException(429, "وصلت الحد الأقصى للرسائل الصوتية في الجلسة")
+    data = await file.read(MAX_VOICE_BYTES + 1)
+    if len(data) > MAX_VOICE_BYTES or len(data) < 200:
+        raise HTTPException(413, "التسجيل طويل أو فاضي")
+    s.voices += 1
+    d = VOICE / code
+    d.mkdir(exist_ok=True)
+    vid = f"{int(time.time()*1000)}{secrets.token_hex(3)}"
+    ext = (Path(file.filename or "").suffix or ".bin").lower()[:6]
+    raw = d / f"{vid}.src{ext}"
+    raw.write_bytes(data)
+    out = d / f"{vid}.m4a"
+    ok = await asyncio.to_thread(_transcode, raw, out)
+    if ok:
+        raw.unlink(missing_ok=True)
+        fname = out.name
+    else:
+        fname = raw.name   # بدون ffmpeg نرسل الملف كما هو
+    url = f"{PUBLIC_URL}/live-api/voice/{code}/{fname}"
+    msg = {"t": "voice", "url": url, "from": who, "role": role, "dur": round(float(dur or 0), 1)}
+    s.events.append({"at": int(time.time()), "e": "voice", "from": who})
+    s.last = time.time()
+    if role == "cust":
+        await to_subs(s, msg)
+    else:
+        await send(s.pub, msg)
+        await to_subs(s, {**msg, "echo": True})
+    return {"ok": True, "url": url}
+
+
+@app.get("/live-api/voice/{code}/{fname}")
+async def get_voice(code: str, fname: str):
+    if "/" in fname or ".." in fname or not code.isdigit():
+        raise HTTPException(404)
+    p = VOICE / code / fname
+    if not p.exists():
+        raise HTTPException(404)
+    mt = "audio/mp4" if fname.endswith(".m4a") else "application/octet-stream"
+    return FileResponse(p, media_type=mt, headers={"Cache-Control": "private, max-age=3600"})
 
 
 # ═══ صفحة الفني (الويب) ═══

@@ -7,6 +7,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { NetPanel } from '../../src/ui/NetPanel';
+import { PushToTalk, playVoice, VoiceNote } from '../../src/ui/Voice';
+import { pickSig } from '../../src/services/live';
+import { AimMeter, trendOf, Trend, TrendMark } from '../../src/ui/AimMeter';
 import { measureLatency } from '../../src/utils/latency';
 import { LiveHost, createLiveSession, CmdAction, CMD_LABEL, LIVE_BASE } from '../../src/services/live';
 import Svg, { Circle, Path, Line, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
@@ -83,20 +86,6 @@ function readOf(sig: Signal, tech: Tech): { rsrp?: number; sinr?: number; cell: 
 }
 const levelColor = (level: Level): string => LEVEL_COLOR[level];
 
-type Trend = 'up' | 'down' | 'flat';
-const trendOf = (now?: number, prev?: number): Trend =>
-  now !== undefined && prev !== undefined ? (now > prev + 0.5 ? 'up' : now < prev - 0.5 ? 'down' : 'flat') : 'flat';
-
-// ═══ سهم الاتجاه ═══
-function TrendMark({ t, light }: { t: Trend; light?: boolean }) {
-  if (t === 'flat') return <View style={[a.flat, light && { backgroundColor: 'rgba(255,255,255,0.6)' }]} />;
-  return (
-    <View style={[a.trend, { backgroundColor: t === 'up' ? '#16c784' : '#ff5a5f' }]}>
-      <Icon name={t} size={11} color="#fff" stroke={3} />
-    </View>
-  );
-}
-
 // ═══ رسم الإشارة ═══
 function LineChart({ values, min, max, color, width }: { values: number[]; min: number; max: number; color: string; width: number }) {
   const H = 120;
@@ -168,54 +157,6 @@ function InfoPill({ icon, label, value, color, bg }: { icon: IconName; label: st
   );
 }
 
-// ═══ عدّاد التوجيه (نصف دائرة) — التعبئة = الإشارة الحين، العلامة الذهبية = أفضل نقطة ═══
-function AimArc({ value, best, min = -120, max = -70, size = 240 }: {
-  value?: number; best?: number; min?: number; max?: number; size?: number;
-}) {
-  const sw = 16;
-  const r = (size - sw) / 2;
-  const cx = size / 2, cy = r + sw / 2;
-  const h = cy + sw / 2 + 2;
-  const f = (v: number) => Math.max(0, Math.min(1, (v - min) / (max - min)));
-  const pt = (t: number) => {
-    const a = Math.PI * (1 - t); // من اليسار (ضعيف) لليمين (قوي)
-    return { x: cx + r * Math.cos(a), y: cy - r * Math.sin(a) };
-  };
-  const arc = (t0: number, t1: number) => {
-    const p0 = pt(t0), p1 = pt(t1);
-    return `M ${p0.x} ${p0.y} A ${r} ${r} 0 0 1 ${p1.x} ${p1.y}`;
-  };
-  const tv = value === undefined ? 0 : f(value);
-  const tb = best === undefined ? undefined : f(best);
-  const knob = pt(Math.max(0.005, tv));
-  return (
-    <Svg width={size} height={h}>
-      <Defs>
-        <SvgLinearGradient id="aimArc" x1="0" y1="0" x2="1" y2="0">
-          <Stop offset="0" stopColor="#ffffff" stopOpacity="0.55" />
-          <Stop offset="1" stopColor="#ffffff" stopOpacity="1" />
-        </SvgLinearGradient>
-      </Defs>
-      <Path d={arc(0, 1)} stroke="rgba(255,255,255,0.18)" strokeWidth={sw} strokeLinecap="round" fill="none" />
-      {value !== undefined && (
-        <Path d={arc(0, Math.max(0.005, tv))} stroke="url(#aimArc)" strokeWidth={sw} strokeLinecap="round" fill="none" />
-      )}
-      {tb !== undefined && (() => {
-        const a = Math.PI * (1 - tb);
-        const x1 = cx + (r - sw * 0.9) * Math.cos(a), y1 = cy - (r - sw * 0.9) * Math.sin(a);
-        const x2 = cx + (r + sw * 0.9) * Math.cos(a), y2 = cy - (r + sw * 0.9) * Math.sin(a);
-        return <Line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#ffd166" strokeWidth={4} strokeLinecap="round" />;
-      })()}
-      {value !== undefined && (
-        <>
-          <Circle cx={knob.x} cy={knob.y} r={sw * 0.62} fill="#ffffff" />
-          <Circle cx={knob.x} cy={knob.y} r={sw * 0.3} fill={P.heroA} />
-        </>
-      )}
-    </Svg>
-  );
-}
-
 // ═══ خانة في بطاقة أفضل نقطة ═══
 function DirStat({ icon, label, value, color, bg }: { icon: IconName; label: string; value: string; color: string; bg: string }) {
   return (
@@ -249,12 +190,13 @@ export default function AimScreen() {
   const [pinned, setPinned] = useState<CellId | null>(null);
   // ═══ البنق (كل ١٥ ثانية، ٣ عينات) ═══
   const [ping, setPing] = useState<number | undefined>(undefined);
+  const pingRef = useRef<number | undefined>(undefined);
   useFocusEffect(useCallback(() => {
     let alive = true;
     const run = async () => {
       try {
         const r = await measureLatency(3, 2500);
-        if (alive && r.samples > 0) setPing(Math.round(r.median));
+        if (alive && r.samples > 0) { setPing(Math.round(r.median)); pingRef.current = Math.round(r.median); }
       } catch {}
     };
     run();
@@ -267,6 +209,7 @@ export default function AimScreen() {
   const [liveOn, setLiveOn] = useState(false);
   const [viewers, setViewers] = useState<string[]>([]);
   const [sayMsg, setSayMsg] = useState<{ text: string; from: string; at: number } | null>(null);
+  const [lastVoice, setLastVoice] = useState<{ url: string; from: string; dur: number } | null>(null);
   const liveRef = useRef<LiveHost | null>(null);
   const lastRdRef = useRef<{ cell: CellId } | null>(null);
   const pinnedRef = useRef<CellId | null>(null);
@@ -405,6 +348,8 @@ export default function AimScreen() {
             score, level: overallLevel({ rsrp: smooth ?? rd.rsrp, sinr: rd.sinr }),
             best: b ? (b.smooth ?? b.rsrp) : undefined,
             pinned: pinnedRef.current ? cellName(pinnedRef.current) : null,
+            ping: pingRef.current,
+            sig: pickSig(sig),
           });
         }
       }
@@ -567,10 +512,16 @@ export default function AimScreen() {
           else Vibration.vibrate();
         },
         onCmd: (cid, action, from) => cmdRef.current(cid, action, from),
+        onVoice: v => {
+          setLastVoice({ url: v.url, from: v.from, dur: v.dur });
+          setSayMsg({ text: '🔊 رسالة صوتية', from: v.from, at: Date.now() });
+          playVoice(v.url);
+        },
         onEnd: (why, report) => {
           liveRef.current = null;
           setLive(null);
           setViewers([]);
+          setLastVoice(null);
           deactivateKeepAwake('bandly-live').catch(() => {});
           if (why === 'expired') {
             Alert.alert('انتهت المشاركة', 'انتهت جلسة الفني تلقائياً.'
@@ -750,71 +701,24 @@ export default function AimScreen() {
           <>
             {/* ═══ Hero ═══ */}
             {/* ═══ مؤشر التوجيه ═══ */}
-            <Hero colors={isNr ? ['#6a45ec', '#a24bd8'] : [P.heroA, P.heroB]} style={{ paddingVertical: 14 }}>
-              <View style={a.mTop}>
-                <View style={a.mTag}>
-                  <Icon name="tower" size={13} color="#fff" stroke={2.2} />
-                  <Text style={a.mTagTxt} numberOfLines={1}>{current ? cellName(current.cell) : isNr ? '5G' : '4G'}</Text>
-                </View>
-                <View style={{ flex: 1 }} />
+            <AimMeter
+              value={shown} best={bestShown} delta={delta} sinr={current?.sinr} trend={trendR}
+              levelLabel={current ? lvlLabel(level) : undefined}
+              cellLabel={current ? cellName(current.cell) : undefined} isNr={isNr}
+              hintColor={stab?.c}
+              hint={!stab ? 'نجمع القراءات…'
+                : gapToBest !== undefined && gapToBest <= 1 && stability === 'stable' ? 'مستقرة على أفضل نقطة — ثبّت هنا'
+                : gapToBest !== undefined && gapToBest >= 5 ? `ابتعدت عن أفضل نقطة بـ ${gapToBest} dB — ارجع`
+                : stab.t}
+              right={<>
                 <Pressable onPress={() => setSound(v => !v)} hitSlop={6} style={[a.mBtn, sound && a.mBtnOn]}>
                   <Icon name="sound" size={17} color={sound ? P.violet : '#fff'} stroke={2.2} />
                 </Pressable>
                 <Pressable onPress={() => setHaptics(v => !v)} hitSlop={6} style={[a.mBtn, haptics && a.mBtnOn]}>
                   <Icon name="vibrate" size={17} color={haptics ? P.green : '#fff'} stroke={2.2} />
                 </Pressable>
-              </View>
-
-              <View style={a.mGauge}>
-                <AimArc value={shown} best={bestShown} />
-                <View style={a.mCenter}>
-                  <View style={a.mNumRow}>
-                    <Text style={a.mNum}>{shown ?? '—'}</Text>
-                    <Text style={a.mUnit}>dBm</Text>
-                  </View>
-                  <View style={a.mChips}>
-                    <TrendMark t={trendR} light />
-                    <Text style={a.mLevel}>{current ? lvlLabel(level) : '—'}</Text>
-                  </View>
-                </View>
-                <View style={a.mScale}>
-                  <Text style={a.mScaleTxt}>ضعيف</Text>
-                  <Text style={a.mScaleTxt}>قوي</Text>
-                </View>
-              </View>
-
-              <View style={a.mStats}>
-                <View style={a.mStat}>
-                  <Text style={a.mStatLbl}>عن البداية</Text>
-                  <Text style={[a.mStatVal, delta !== undefined && delta > 0.5 && { color: '#7dffc4' }, delta !== undefined && delta < -0.5 && { color: '#ffb3b5' }]}>
-                    {delta === undefined ? '—' : `${delta > 0.5 ? '+' : ''}${Math.round(delta)} dB`}
-                  </Text>
-                </View>
-                <View style={a.mSep} />
-                <View style={a.mStat}>
-                  <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 4 }}>
-                    <View style={a.mBestDot} />
-                    <Text style={a.mStatLbl}>أفضل نقطة</Text>
-                  </View>
-                  <Text style={a.mStatVal}>{bestShown !== undefined ? `${Math.round(bestShown)} dBm` : '—'}</Text>
-                </View>
-                <View style={a.mSep} />
-                <View style={a.mStat}>
-                  <Text style={a.mStatLbl}>SINR</Text>
-                  <Text style={a.mStatVal}>{current?.sinr !== undefined ? `${current.sinr} dB` : '—'}</Text>
-                </View>
-              </View>
-
-              <View style={a.mHint}>
-                <View style={[a.stabDot, { backgroundColor: stab ? stab.c : 'rgba(255,255,255,0.5)' }]} />
-                <Text style={a.mHintTxt} numberOfLines={1}>
-                  {!stab ? 'نجمع القراءات…'
-                    : gapToBest !== undefined && gapToBest <= 1 && stability === 'stable' ? 'مستقرة على أفضل نقطة — ثبّت هنا'
-                    : gapToBest !== undefined && gapToBest >= 5 ? `ابتعدت عن أفضل نقطة بـ ${gapToBest} dB — ارجع`
-                    : stab.t}
-                </Text>
-              </View>
-            </Hero>
+              </>}
+            />
 
             {/* ═══ لوحة الشبكة 4G / 5G ═══ */}
             <NetPanel signal={signal} ping={ping} />
@@ -844,6 +748,11 @@ export default function AimScreen() {
                 <Text style={a.liveViewers}>
                   {viewers.length ? `👀 ${viewers.join('، ')} يتابع قراءتك الحين` : 'بانتظار الفني يفتح الرابط…'}
                 </Text>
+                <View style={{ alignSelf: 'stretch' }}>
+                  <PushToTalk label="اضغط مطوّل وكلّم الفني" color="#0b7f99" disabled={!viewers.length}
+                    onSend={(uri, dur) => liveRef.current ? liveRef.current.voice(uri, dur) : Promise.resolve()} />
+                  {!!lastVoice && <VoiceNote from={lastVoice.from} dur={lastVoice.dur} onReplay={() => playVoice(lastVoice.url)} />}
+                </View>
                 <PrimaryBtn small text="أرسل الرابط للفني" icon="share" onPress={() => shareLink()}
                   colors={['#0ea5c6', '#2f6bff']} style={{ marginTop: 10, alignSelf: 'stretch' }} />
                 <Text style={a.liveHint}>خلّ التطبيق مفتوح على هذي الشاشة لين يخلص الفني — الشاشة ما راح تنطفي.</Text>

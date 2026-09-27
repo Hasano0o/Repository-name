@@ -12,8 +12,12 @@ import {
 import { rsrpLevel, sinrLevel, Level } from '../src/utils/signal';
 import { Icon } from '../src/ui/Icon';
 import { SignalChart } from '../src/ui/SignalChart';
+import { AimMeter, trendOf } from '../src/ui/AimMeter';
+import { NetPanel } from '../src/ui/NetPanel';
+import { PushToTalk, playVoice, VoiceNote } from '../src/ui/Voice';
+import { Signal } from '../src/drivers/types';
 import {
-  P, shadow, Hero, Section, MeterTile, InfoCell, Grid, Cell, PrimaryBtn, RANGE, ratioOf, lvlColor,
+  P, shadow, Hero, Section, MeterTile, InfoCell, Grid, Cell, PrimaryBtn, RANGE, ratioOf, lvlColor, lvlLabel,
 } from '../src/ui/Pro';
 
 const K_KEY = 'bandly_tech_key';
@@ -40,6 +44,7 @@ export default function TechScreen() {
   const [logs, setLogs] = useState<Log[]>([]);
   const [report, setReport] = useState<{ why: string; r: LiveReport } | null>(null);
   const viewer = useRef<LiveViewer | null>(null);
+  const [lastVoice, setLastVoice] = useState<{ url: string; from: string; dur: number } | null>(null);
   const gotHello = useRef(false);
 
   useEffect(() => {
@@ -95,6 +100,12 @@ export default function TechScreen() {
         onCustomer: on => { setCustomer(on); addLog(on ? 'العميل رجع للتطبيق' : 'العميل طلع من التطبيق', on ? 'ok' : 'err'); },
         onCmdSent: (a, delivered) => addLog(`أرسلنا «${CMD_LABEL[a]}» — بانتظار موافقة العميل${delivered ? '' : ' (العميل مو متصل)'}`),
         onCmdResult: (ok, msg) => { addLog(msg, ok ? 'ok' : 'err'); Vibration.vibrate(); },
+        onVoice: v => {
+          if (v.echo) return;
+          setLastVoice({ url: v.url, from: v.from, dur: v.dur });
+          playVoice(v.url);
+          Vibration.vibrate(40);
+        },
         onEnd: (why, r) => { if (r) setReport({ why, r }); setConn('off'); },
       });
     } finally {
@@ -188,42 +199,35 @@ export default function TechScreen() {
         )}
 
         {!!r && (
-          <View style={s.card}>
-            <Grid>
-              <Cell>
-                <MeterTile label="RSRP" value={r.rsrp} unit="dBm" level={lr} ratio={ratioOf(r.rsrp, RANGE.rsrp)} />
-                <Text style={[s.delta, { color: deltaColor(r.rsrp, first?.rsrp) }]}>{d(r.rsrp, first?.rsrp)} {first ? 'عن البداية' : ''}</Text>
-              </Cell>
-              <Cell>
-                <MeterTile label="SINR" value={r.sinr} unit="dB" level={sinrLevel(r.sinr)} ratio={ratioOf(r.sinr, RANGE.sinr)} />
-                <Text style={[s.delta, { color: deltaColor(r.sinr, first?.sinr) }]}>{d(r.sinr, first?.sinr)} {first ? 'عن البداية' : ''}</Text>
-              </Cell>
-              <Cell><InfoCell label="الباند" value={r.band || '—'} accent={P.blue} /></Cell>
-              <Cell><InfoCell label="PCI" value={r.pci || '—'} /></Cell>
-            </Grid>
-            {!!best && (
-              <View style={s.best}>
-                <View style={{ flexDirection: 'row-reverse', gap: 6, flexWrap: 'wrap' }}>
-                  <Text style={s.bestTxt}>أفضل قراءة:</Text>
-                  <Text style={s.bestTxt}>{`${best.rsrp} dBm`}</Text>
-                  {!!best.band && <Text style={s.bestTxt}>{`· ${best.band}${best.pci ? ` · PCI ${best.pci}` : ''}`}</Text>}
-                </View>
-                <Text style={[s.bestGap, { color: gap !== undefined && gap > 1 ? P.amber : P.green }]}>
-                  {gap === undefined ? '' : gap <= 1 ? 'العميل عليها الحين ✓' : `الحين أقل بـ ${gap} dB`}
-                </Text>
-              </View>
-            )}
+          <>
+            <AimMeter
+              value={r.rsrp} best={best?.rsrp} delta={r.rsrp != null && first?.rsrp != null ? r.rsrp - first.rsrp : undefined}
+              sinr={r.sinr} trend={trendOf(r.rsrp, withR.length >= 2 ? withR[withR.length - 2].rsrp : undefined)}
+              levelLabel={r.rsrp != null ? lvlLabel(lr) : undefined}
+              cellLabel={r.band ? `${r.band}${r.pci ? ` · PCI ${r.pci}` : ''}` : undefined}
+              isNr={r.tech === 'NR'}
+              hintColor={gap === undefined ? undefined : gap <= 1 ? '#16c784' : gap >= 5 ? '#ff5a5f' : '#ffb020'}
+              hint={gap === undefined ? 'نجمع القراءات…' : gap <= 1 ? 'العميل على أفضل نقطة ✓' : `العميل أقل من أفضل نقطة بـ ${gap} dB`}
+              right={r.ping != null ? (
+                <View style={s.pingTag}><Text style={s.pingTxt}>{`${r.ping} ms`}</Text></View>
+              ) : undefined}
+            />
             {!!r.pinned && <Text style={s.pinned}>الراوتر مثبّت على {r.pinned}</Text>}
-            <View style={{ marginTop: 12 }}>
+            {!!r.sig && <NetPanel signal={r.sig as Signal} ping={r.ping} />}
+            <View style={s.card}>
+              <Text style={s.cardTitle}>تاريخ الإشارة</Text>
               <SignalChart values={withR.map(x => x.rsrp as number)} color={lvlColor(lr)} />
               <View style={s.chartLbls}><Text style={s.chartLbl}>قبل دقيقتين</Text><Text style={s.chartLbl}>الآن</Text></View>
             </View>
-          </View>
+          </>
         )}
 
         {!report && (
           <>
             <Section title="وجّه العميل" sub="تطلع رسالة كبيرة على جواله مع اهتزاز" icon="aim">
+              <PushToTalk label="اضغط مطوّل وكلّم العميل" disabled={!customer}
+                onSend={(uri, dur) => viewer.current ? viewer.current.voice(uri, dur) : Promise.resolve()} />
+              {!!lastVoice && <VoiceNote from={lastVoice.from} dur={lastVoice.dur} onReplay={() => playVoice(lastVoice.url)} />}
               <View style={s.sayGrid}>
                 {SAY_ORDER.filter(k => say[k]).map(k => (
                   <Pressable key={k} onPress={() => sendSay(k)}
@@ -322,6 +326,9 @@ const s = StyleSheet.create({
   waitCard: { backgroundColor: P.card, borderRadius: 22, padding: 24, alignItems: 'center', gap: 10, borderWidth: 1, borderColor: P.border },
   waitTxt: { color: P.sub, fontSize: 13 },
   delta: { fontSize: 11.5, fontWeight: '800', textAlign: 'center', marginTop: 4 },
+  cardTitle: { color: P.text, fontSize: 15, fontWeight: '800', textAlign: 'right', marginBottom: 6 },
+  pingTag: { backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 999, paddingHorizontal: 10, height: 30, justifyContent: 'center' },
+  pingTxt: { color: '#fff', fontSize: 12, fontWeight: '800' },
   best: { marginTop: 12, backgroundColor: P.greenSoft, borderRadius: 14, padding: 10, gap: 2 },
   bestTxt: { color: '#0b7a47', fontSize: 13, fontWeight: '700', textAlign: 'right' },
   bestGap: { fontSize: 12, fontWeight: '800', textAlign: 'right' },
