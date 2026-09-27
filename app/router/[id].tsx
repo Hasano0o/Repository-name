@@ -30,6 +30,7 @@ import { DiagnosisCard } from '../../src/ui/Diagnosis';
 import { UsageRing } from '../../src/ui/UsageRing';
 import { DeviceRow } from '../../src/ui/DeviceRow';
 import { SyncIcon } from '../../src/ui/SyncIcon';
+import { StoreAd } from '../../src/ui/StoreAd';
 
 interface Features {
   bands: boolean; sms: boolean; block: boolean; reboot: boolean; devices: boolean; cells: boolean; details: boolean; plan: boolean; network: boolean; carriers: boolean;
@@ -307,7 +308,7 @@ export default function RouterDashboard() {
           try {
             await withSession(info, async d => {
               if (d.unlockCell) await d.unlockCell();
-              else if (d.setBand) await d.setBand([], []);
+              if (d.setBand) await d.setBand([], []);
             }, false);
             await loadAll(info);
           } catch (e: any) {
@@ -603,6 +604,8 @@ export default function RouterDashboard() {
             <Text style={s.deleteText}>حذف الراوتر من التطبيق</Text>
           </Pressable>
         )}
+
+        <StoreAd />
       </ScrollView>
 
     </LinearGradient>

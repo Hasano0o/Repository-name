@@ -1,15 +1,15 @@
 import { useCallback, useRef, useState } from 'react';
-import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, RefreshControl } from 'react-native';
+import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, RefreshControl, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { CellTower, CellLockState, BandConfig } from '../../src/drivers/types';
-import { LEVEL_COLOR, LEVEL_LABEL, overallLevel } from '../../src/utils/signal';
+import { LEVEL_COLOR, LEVEL_LABEL, LEVEL_SOFT, overallLevel } from '../../src/utils/signal';
 import { towerKey, towerTitle } from '../../src/utils/cells';
 import {
-  TowerGroup, groupTowers, loadConfirmed, rememberActive, rankScore, cellGrade,
+  TowerGroup, groupTowers, loadConfirmed, rememberActive, rankScore, cellGrade, cellQuality,
   GRADE_LABEL, GRADE_COLOR, BADGE_LABEL, isLowBand, bandName, freqName,
 } from '../../src/utils/towers';
 import { C } from '../../src/ui/theme';
@@ -24,99 +24,150 @@ const BADGE_FG: Record<TowerGroup['badge'], string> = {
   active: '#12b76a', confirmed: '#12b76a', likely: '#2f6bff', single: '#6b7291',
 };
 const ROLE_LABEL: Record<TowerGroup['role'], string> = {
-  primary: 'متصل عليه — البرج الأساسي',
-  helper: 'شغّال كمساعد مع برجك الأساسي',
-  neighbor: 'برج مجاور',
+  primary: 'البرج الأساسي',
+  helper: 'مساعد (مدموج)',
+  neighbor: 'مجاور',
 };
 
-function Metric({ label, value, unit }: { label: string; value?: number; unit: string }) {
+/** شريط الجودة ٠–١ */
+function QualityBar({ q, color }: { q?: number; color: string }) {
+  const w = q === undefined ? 0 : Math.max(0.04, Math.min(1, q));
   return (
-    <View style={s.metric}>
-      <Text style={s.metricVal}>{value !== undefined ? value : '—'}</Text>
-      <Text style={s.metricUnit}>{unit}</Text>
-      <Text style={s.metricLabel}>{label}</Text>
+    <View style={s.qTrack}>
+      <View style={[s.qFill, { width: `${Math.round(w * 100)}%`, backgroundColor: color }]} />
+    </View>
+  );
+}
+
+function Chip({ label, value, color }: { label: string; value?: number; color?: string }) {
+  return (
+    <View style={s.chip}>
+      <Text style={s.chipLabel}>{label}</Text>
+      <Text style={[s.chipVal, color ? { color } : null]}>{value !== undefined ? value : '—'}</Text>
     </View>
   );
 }
 
 /** بطاقة برج واحد (كل ترددات نفس رقم PCI) */
-function TowerGroupCard({ g, rank, cellLock, canLock, busy, onLock }: {
-  g: TowerGroup; rank?: number; cellLock: CellLockState | null; canLock: boolean; busy: boolean;
-  onLock: (c: CellTower) => void;
+function TowerGroupCard({ g, rank, lockedHere, canPin, busy, onLock }: {
+  g: TowerGroup; rank?: number; lockedHere: boolean; canPin: boolean; busy: boolean;
+  onLock: (g: TowerGroup) => void;
 }) {
   const gr = cellGrade(g.best);
-  const lockedHere = !!cellLock && !!g.pci && cellLock.pci === g.pci;
+  const color = GRADE_COLOR[gr];
   const low = isLowBand(g.best);
+  const freq = freqName(g.best);
 
   return (
-    <View style={[s.tower, g.inUse && s.towerInUse]}>
-      <View style={s.towerHead}>
-        <View style={{ flexShrink: 1, flex: 1 }}>
+    <View style={[s.tower, g.inUse && s.towerInUse, lockedHere && s.towerLocked]}>
+      <View style={s.head}>
+        <View style={[s.avatar, { backgroundColor: LEVEL_SOFT[gr] }]}>
+          {rank !== undefined
+            ? <Text style={[s.avatarRank, { color }]}>{rank}</Text>
+            : <Text style={[s.avatarRank, { color }]}>{lockedHere ? '📌' : '●'}</Text>}
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
           <View style={s.titleRow}>
-            <Text style={s.towerName}>{g.pci ? `برج ${g.pci}` : 'برج'}</Text>
+            <Text style={s.towerName} numberOfLines={1}>{g.pci ? `برج ${g.pci}` : 'برج بدون رقم'}</Text>
             <View style={[s.techTag, g.tech === 'NR' && { backgroundColor: C.violet }]}>
               <Text style={s.techTagText}>{g.tech === 'NR' ? '5G' : '4G'}</Text>
             </View>
+            {lockedHere && (
+              <View style={s.pinTag}><Text style={s.pinTagText}>مثبّت</Text></View>
+            )}
           </View>
-          <Text style={s.role}>{ROLE_LABEL[g.role]}</Text>
+          <Text style={s.role} numberOfLines={1}>
+            {ROLE_LABEL[g.role]} · {bandName(g.best)}{freq ? ` (${freq})` : ''}
+          </Text>
         </View>
-        {rank !== undefined && (
-          <View style={[s.rank, { backgroundColor: GRADE_COLOR[gr] }]}>
-            <Text style={s.rankText}>{rank}</Text>
+        <View style={s.rsrpBox}>
+          <Text style={[s.rsrpVal, { color }]}>{g.best.rsrp ?? '—'}</Text>
+          <Text style={s.rsrpUnit}>dBm</Text>
+        </View>
+      </View>
+
+      <QualityBar q={cellQuality(g.best)} color={color} />
+
+      <View style={s.chips}>
+        <View style={[s.gradePill, { backgroundColor: LEVEL_SOFT[gr] }]}>
+          <Text style={[s.gradeText, { color }]}>{GRADE_LABEL[gr]}</Text>
+        </View>
+        <Chip label="SINR" value={g.best.sinr} />
+        <Chip label="RSRQ" value={g.best.rsrq} />
+        {g.badge !== 'single' && (
+          <View style={[s.badge, { backgroundColor: BADGE_BG[g.badge] }]}>
+            <Text style={[s.badgeText, { color: BADGE_FG[g.badge] }]}>{BADGE_LABEL[g.badge]}</Text>
           </View>
         )}
       </View>
 
-      <View style={s.badgeRow}>
-        <View style={[s.badge, { backgroundColor: BADGE_BG[g.badge] }]}>
-          <Text style={[s.badgeText, { color: BADGE_FG[g.badge] }]}>{BADGE_LABEL[g.badge]}</Text>
-        </View>
-        <View style={[s.grade, { backgroundColor: GRADE_COLOR[gr] }]}>
-          <Text style={s.gradeText}>{GRADE_LABEL[gr]}</Text>
-        </View>
-      </View>
-
-      <View style={s.freqRow}>
-        {g.cells.map((c, i) => {
-          const cg = cellGrade(c);
-          return (
+      {g.cells.length > 1 && (
+        <View style={s.freqRow}>
+          {g.cells.map((c, i) => (
             <View key={i} style={[s.freq, c.kind !== 'neighbor' && s.freqOn]}>
-              <View style={[s.freqDot, { backgroundColor: GRADE_COLOR[cg] }]} />
+              <View style={[s.freqDot, { backgroundColor: GRADE_COLOR[cellGrade(c)] }]} />
               <Text style={[s.freqBand, c.tech === 'NR' && { color: C.violet }]}>{bandName(c)}</Text>
-              {!!freqName(c) && <Text style={s.freqMhz}>{freqName(c)}</Text>}
               {c.rsrp !== undefined && <Text style={s.freqRsrp}>{c.rsrp}</Text>}
             </View>
-          );
-        })}
-      </View>
-
-      <View style={s.metrics}>
-        <Metric label="RSRP" value={g.best.rsrp} unit="dBm" />
-        <Metric label="SINR" value={g.best.sinr} unit="dB" />
-        <Metric label="RSRQ" value={g.best.rsrq} unit="dB" />
-      </View>
-
-      {low && (
-        <Text style={s.lowNote}>
-          {bandName(g.best)} تردد منخفض — يوصل بعيد ويخترق الجدران، لكن سرعته محدودة.
-        </Text>
-      )}
-      {g.badge === 'single' && (
-        <Text style={s.hint}>ما ظهر هذا البرج إلا على تردد واحد — غالباً ما يدمج، أو ما شفنا ترددات ثانية له.</Text>
+          ))}
+        </View>
       )}
 
-      {canLock && !!g.pci && (
+      {low && <Text style={s.lowNote}>تردد منخفض — يوصل بعيد، لكن سرعته محدودة.</Text>}
+
+      {canPin && (
         <Pressable
-          style={[s.lockBtn, lockedHere && s.lockBtnOn, busy && { opacity: 0.5 }]}
-          onPress={() => onLock(g.best)}
+          style={({ pressed }) => [s.lockBtn, lockedHere && s.lockBtnOn, (busy || pressed) && { opacity: 0.6 }]}
+          onPress={() => onLock(g)}
           disabled={busy}
         >
           <Text style={[s.lockText, lockedHere && { color: C.onAccent }]}>
-            {lockedHere ? '✓ مثبّت على هذا البرج — اضغط للفك' : `📌 ثبّت على ${bandName(g.best)} في هذا البرج`}
+            {lockedHere ? '✓ مثبّت على هذا البرج · اضغط للفك' : g.pci ? '📌 ثبّت على هذا البرج' : `📌 ثبّت تردد ${bandName(g.best)}`}
           </Text>
         </Pressable>
       )}
     </View>
+  );
+}
+
+type LockOpt = { key: string; title: string; desc: string; tag?: string; note?: string; run: () => void };
+
+/** قائمة خيارات التثبيت — بدل Alert (أندرويد يعرض ٣ أزرار بس) */
+function LockSheet({ sheet, onClose, bottom }: {
+  sheet: { title: string; sub: string; opts: LockOpt[] } | null; onClose: () => void; bottom: number;
+}) {
+  return (
+    <Modal visible={!!sheet} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={s.backdrop} onPress={onClose} />
+      {sheet && (
+        <View style={[s.sheet, { paddingBottom: bottom + 16 }]}>
+          <View style={s.grabber} />
+          <Text style={s.sheetTitle}>{sheet.title}</Text>
+          <Text style={s.sheetSub}>{sheet.sub}</Text>
+          {sheet.opts.map((o, i) => (
+            <Pressable
+              key={o.key}
+              style={({ pressed }) => [s.opt, i === 0 && s.optMain, pressed && { opacity: 0.7 }]}
+              onPress={() => { onClose(); o.run(); }}
+            >
+              <View style={s.optHead}>
+                <Text style={[s.optTitle, i === 0 && { color: C.blue }]}>{o.title}</Text>
+                {!!o.tag && (
+                  <View style={[s.optTag, i === 0 && { backgroundColor: C.blue }]}>
+                    <Text style={[s.optTagText, i === 0 && { color: C.onAccent }]}>{o.tag}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={s.optDesc}>{o.desc}</Text>
+              {!!o.note && <Text style={s.optNote}>🧠 {o.note}</Text>}
+            </Pressable>
+          ))}
+          <Pressable style={s.cancel} onPress={onClose}>
+            <Text style={s.cancelText}>إلغاء</Text>
+          </Pressable>
+        </View>
+      )}
+    </Modal>
   );
 }
 
@@ -135,18 +186,22 @@ export default function TowersScreen() {
   const [error, setError] = useState('');
   const [cellLock, setCellLock] = useState<CellLockState | null>(null);
   const [canLock, setCanLock] = useState(false);
+  const [bandCfg, setBandCfg] = useState<BandConfig | null>(null);
+  const [sheet, setSheet] = useState<{ title: string; sub: string; opts: LockOpt[] } | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
 
   const load = useCallback(async (r: SavedRouter) => {
     setError('');
     try {
-      const [list, lock, supports, sig] = await withSession(r, async d => Promise.all([
-        d.getCells ? d.getCells() : Promise.resolve([] as CellTower[]),
-        d.getCellLock ? d.getCellLock().catch(() => null) : Promise.resolve(null),
-        Promise.resolve(typeof d.lockCell === 'function' && typeof d.unlockCell === 'function'),
-        d.getSignal ? d.getSignal().catch(() => null) : Promise.resolve(null),
-      ]));
+      // بالتسلسل: بعض الراوترات (ZTE) ما تحب الطلبات المتوازية
+      const [list, lock, supports, sig, cfg] = await withSession(r, async d => [
+        d.getCells ? await d.getCells() : ([] as CellTower[]),
+        d.getCellLock ? await d.getCellLock().catch(() => null) : null,
+        typeof d.lockCell === 'function' && typeof d.unlockCell === 'function',
+        d.getSignal ? await d.getSignal().catch(() => null) : null,
+        d.getBandConfig && d.setBand ? await d.getBandConfig().catch(() => null) : null,
+      ] as const);
       const known = await loadConfirmed(r.id);
       const next = await rememberActive(r.id, list, known);
       setConfirmed(next);
@@ -154,6 +209,7 @@ export default function TowersScreen() {
       setNrAvail(sig?.nrAvailable);
       setCellLock(lock);
       setCanLock(supports);
+      setBandCfg(cfg);
     } catch (e: any) {
       setError(e?.message ?? String(e));
     }
@@ -197,165 +253,127 @@ export default function TowersScreen() {
     }
   };
 
-  const onLock = async (tower: CellTower) => {
+  const onUnlock = () => {
     if (!info) return;
-    const isLocked = !!cellLock && cellLock.pci === tower.pci;
-
-    if (isLocked) {
-      Alert.alert('فك التثبيت', 'بنرجع الراوتر يختار البرج بنفسه — ويرجع يدمج الترددات لو البرج يدعم.', [
-        { text: 'إلغاء', style: 'cancel' },
-        {
-          text: 'فك', onPress: async () => {
-            setBusy(true);
-            setError('');
-            try {
-              await withSession(info, d => d.unlockCell!(), false);
-              await load(info);
-              Alert.alert('تم', 'انفك التثبيت');
-            } catch (e: any) {
-              setError(e?.message ?? String(e));
-            } finally {
-              setBusy(false);
-            }
-          },
+    Alert.alert('فك التثبيت', 'بنرجع الراوتر يختار البرج بنفسه ويرجع يدمج الترددات. ممكن النت ينقطع دقيقة.', [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'فك', onPress: async () => {
+          setBusy(true);
+          setError('');
+          setStatus('نفك التثبيت...');
+          try {
+            await withSession(info, d => d.unlockCell!(), false);
+            await load(info);
+            Alert.alert('تم', 'انفك التثبيت — الراوتر رجع يختار بنفسه');
+          } catch (e: any) {
+            setError(e?.message ?? String(e));
+          } finally {
+            setBusy(false);
+            setStatus('');
+          }
         },
-      ]);
+      },
+    ]);
+  };
+
+  const onLock = async (g: TowerGroup) => {
+    if (!info) return;
+    if (cellLock && g.pci && cellLock.pci === g.pci) { onUnlock(); return; }
+
+    // نختار الخلية اللي عندها رقم تردد (ARFCN) — التثبيت يحتاجه
+    const tower = g.cells.find(c => c === g.best && c.arfcn) ?? g.cells.find(c => c.arfcn) ?? g.best;
+    const isNr = tower.tech === 'NR';
+    const bandTxt = bandName(tower);
+    const cfg = bandCfg;
+    const canBand = !!cfg && !!tower.band &&
+      (isNr ? cfg.nrSupported.includes(tower.band) : cfg.supported.includes(tower.band));
+    const canCell = canLock && !!tower.pci && !!tower.arfcn;
+
+    const cellKey = `cell:${tower.tech}:${tower.pci}:${tower.arfcn ?? tower.band ?? ''}`;
+    const bandKey = `band:${tower.tech}:${tower.band}`;
+    const [tCell, tBand] = await Promise.all([lastTrial(info.id, cellKey), lastTrial(info.id, bandKey)]);
+
+    const opts: LockOpt[] = [];
+
+    if (canCell) {
+      opts.push({
+        key: 'cell',
+        title: `ثبّت على برج ${tower.pci} (${bandTxt})`,
+        tag: 'البرج نفسه',
+        desc: 'الراوتر يبقى على هذا البرج بالذات حتى لو ظهر غيره. غالباً يوقف دمج الترددات، وممكن يعيد تشغيل الراوتر عشان يطبّق (دقيقة إلى دقيقتين).',
+        note: tCell ? trialNote(tCell) : undefined,
+        run: () => runSafe({
+          key: cellKey,
+          label: `التثبيت على ${towerTitle(tower)}`,
+          withNr: isNr,
+          apply: d => d.lockCell!({ tech: tower.tech, band: tower.band, arfcn: tower.arfcn, pci: tower.pci! }),
+          revert: d => d.unlockCell!(),
+        }),
+      });
+    }
+
+    if (canBand && cfg) {
+      const prevLte = cfg.locked;
+      const prevNr = cfg.nrLocked;
+      opts.push({
+        key: 'band',
+        title: `ثبّت التردد ${bandTxt} فقط`,
+        tag: 'أأمن',
+        desc: 'الراوتر يبقى حر يختار أقوى برج على نفس التردد — أقل خطر يوقف الدمج.',
+        note: tBand ? trialNote(tBand) : undefined,
+        run: () => runSafe({
+          key: bandKey,
+          label: `تثبيت التردد ${bandTxt}`,
+          withNr: isNr,
+          apply: d => (isNr ? d.setBand!(prevLte, [tower.band!]) : d.setBand!([tower.band!], prevNr)),
+          revert: d => d.setBand!(prevLte, prevNr),
+        }),
+      });
+
+      // 4G + 5G معاً (NSA) لو البرج 4G والراوتر يدعم 5G
+      if (!isNr && cfg.nrSupported.length > 0) {
+        const nrSame = tower.pci ? cells.find(c => c.tech === 'NR' && c.pci === tower.pci && c.band) : undefined;
+        const nrAny = cells
+          .filter(c => c.tech === 'NR' && c.band && cfg.nrSupported.includes(c.band))
+          .sort((a, b) => (b.rsrp ?? -999) - (a.rsrp ?? -999))[0];
+        const prefer = [78, 41, 40, 77];
+        const nrBand = (nrSame?.band && cfg.nrSupported.includes(nrSame.band) ? nrSame.band : undefined)
+          ?? nrAny?.band ?? prefer.find(b => cfg.nrSupported.includes(b));
+        if (nrBand) {
+          const combinedKey = `band:LTE:${tower.band}+NR:${nrBand}`;
+          opts.push({
+            key: 'combo',
+            title: `ثبّت ${bandTxt} + n${nrBand}`,
+            tag: 'أسرع',
+            desc: 'تثبيت تردد 4G مع 5G معاً — أعلى سرعة لو 5G قوي عندك، ويستهلك شوي باقة وقت القياس.',
+            run: () => runSafe({
+              key: combinedKey,
+              label: `تثبيت ${bandTxt} + n${nrBand}`,
+              withNr: true,
+              apply: d => d.setBand!([tower.band!], [nrBand]),
+              revert: d => d.setBand!(prevLte, prevNr),
+            }),
+          });
+        }
+      }
+    }
+
+    if (!opts.length) {
+      Alert.alert(
+        'ما نقدر نثبّت هنا',
+        !tower.pci
+          ? 'الراوتر ما أعطانا رقم هذا البرج، وما يدعم تثبيت التردد.'
+          : 'راوترك ما يدعم التثبيت على برج أو تردد من التطبيق.',
+      );
       return;
     }
 
-    const isNr = tower.tech === 'NR';
-    const bandTxt = tower.band ? (isNr ? `n${tower.band}` : `B${tower.band}`) : '';
-    const cellKey = `cell:${tower.tech}:${tower.pci}:${tower.arfcn ?? tower.band ?? ''}`;
-    const bandKey = `band:${tower.tech}:${tower.band}`;
-
-    // هل نقدر نقفل التردد بدل البرج؟ (أأمن: يبقى الراوتر حر يختار البرج)
-    let cfg: BandConfig | null = null;
-    try {
-      cfg = await withSession(info, d => (d.getBandConfig && d.setBand ? d.getBandConfig() : Promise.resolve(null)));
-    } catch {}
-    const canBand = !!cfg && !!tower.band &&
-      (isNr ? cfg.nrSupported.includes(tower.band) : cfg.supported.includes(tower.band));
-
-    const [tCell, tBand] = await Promise.all([lastTrial(info.id, cellKey), lastTrial(info.id, bandKey)]);
-    const notes = [
-      tCell ? `🧠 البرج: ${trialNote(tCell)}` : '',
-      tBand ? `🧠 التردد ${bandTxt}: ${trialNote(tBand)}` : '',
-    ].filter(Boolean).join('\n');
-
-    const cellLabel = `التثبيت على ${towerTitle(tower)}`;
-    const bandLabel = `تثبيت التردد ${bandTxt}`;
-
-    // ═══ هل نعرض خيار 4G + 5G؟ ═══
-    // نعرضه إذا البرج 4G والراوتر يدعم 5G (حتى لو ما شفنا NR حالياً)
-    if (!isNr && cfg && cfg.nrSupported.length > 0) {
-      // ١) نبحث عن NR على نفس PCI
-      // ٢) وإلا أي NR مرصود في cells (الأقوى)
-      // ٣) وإلا نختار من nrSupported (الأولوية: 78, 41, 40)
-      let pickedBand: number | null = null;
-      let pickedRsrp: number | undefined;
-      let pickedPci: string | undefined;
-      const nrSamePci = tower.pci
-        ? cells.find(c => c.tech === 'NR' && c.pci === tower.pci && c.band)
-        : null;
-      if (nrSamePci?.band && cfg.nrSupported.includes(nrSamePci.band)) {
-        pickedBand = nrSamePci.band;
-        pickedRsrp = nrSamePci.rsrp;
-        pickedPci = nrSamePci.pci;
-      } else {
-        const anyNr = cells
-          .filter(c => c.tech === 'NR' && c.band && cfg.nrSupported.includes(c.band!))
-          .sort((a, b) => (b.rsrp ?? -999) - (a.rsrp ?? -999))[0];
-        if (anyNr?.band) {
-          pickedBand = anyNr.band;
-          pickedRsrp = anyNr.rsrp;
-          pickedPci = anyNr.pci;
-        } else {
-          // ما شفنا NR — نستخدم الأكثر شيوعاً من المدعومة
-          const prefer = [78, 41, 40, 77, 1, 3, 5, 8, 20, 28];
-          pickedBand = prefer.find(b => cfg.nrSupported.includes(b)) ?? cfg.nrSupported[0];
-        }
-      }
-
-      if (pickedBand !== null) {
-        const nrBand = pickedBand;
-        const nrBandTxt = `n${nrBand}`;
-        const nrRsrpTxt = pickedRsrp !== undefined ? `${pickedRsrp} dBm` : 'غير مقيس — سنقيسه';
-        const combinedKey = `band:LTE:${tower.band}+NR:${nrBand}`;
-        const combinedLabel = `تثبيت ${bandTxt} + ${nrBandTxt}`;
-        const cfgRef = cfg;
-
-        Alert.alert(
-          `برج ${tower.pci} — فيه 4G و 5G`,
-          `هذا البرج يدعم 4G و 5G على نفس الموقع.\n\n` +
-          `📶 4G: ${bandTxt}\n` +
-          `📡 5G: ${nrBandTxt} (${nrRsrpTxt})\n\n` +
-          `تثبيت 4G + 5G معاً = أقصى سرعة (NSA).\n` +
-          `تثبيت 4G فقط = أضمن ثبات — استخدمها إذا 5G ضعيف أو يقطع.` +
-          (notes ? `\n\n${notes}` : ''),
-          [
-            { text: 'إلغاء', style: 'cancel' },
-            {
-              text: `4G فقط (${bandTxt})`,
-              onPress: () => runSafe({
-                key: bandKey,
-                label: bandLabel,
-                withNr: false,
-                apply: d => d.setBand!([tower.band!], cfgRef.nrLocked),
-                revert: d => d.setBand!(cfgRef.locked, cfgRef.nrLocked),
-              }),
-            },
-            {
-              text: `4G + 5G (أنصح)`,
-              onPress: () => runSafe({
-                key: combinedKey,
-                label: combinedLabel,
-                withNr: true,
-                apply: d => d.setBand!([tower.band!], [nrBand]),
-                revert: d => d.setBand!(cfgRef.locked, cfgRef.nrLocked),
-              }),
-            },
-          ],
-        );
-        return;
-      }
-    }
-
-    const doCell = () => runSafe({
-      key: cellKey,
-      label: cellLabel,
-      withNr: isNr,
-      apply: d => d.lockCell!({ tech: tower.tech, band: tower.band, arfcn: tower.arfcn, pci: tower.pci! }),
-      revert: d => d.unlockCell!(),
+    setSheet({
+      title: g.pci ? `برج ${g.pci} · ${bandTxt}` : `تردد ${bandTxt}`,
+      sub: 'نجرب بأمان: نقيس قبل وبعد، ولو صار أسوأ نرجع إعدادك تلقائياً.',
+      opts,
     });
-
-    const doBand = () => {
-      if (!cfg || !tower.band) return;
-      const prevLte = cfg.locked;
-      const prevNr = cfg.nrLocked;
-      runSafe({
-        key: bandKey,
-        label: bandLabel,
-        withNr: isNr,
-        apply: d => (isNr ? d.setBand!(prevLte, [tower.band!]) : d.setBand!([tower.band!], prevNr)),
-        revert: d => d.setBand!(prevLte, prevNr),
-      });
-    };
-
-    const intro =
-      `بنجرب بأمان: نقيس الاتصال الحين، نثبّت، ونقيس بعدها.\nلو صار أسوأ نرجع إعدادك تلقائياً.` +
-      (isNr ? '\n\nعشان نقيس 5G بنحمّل شوي قبل وبعد (حوالي ٥٠ ميقا).' : '') +
-      (canBand
-        ? `\n\n💡 ننصح بتثبيت التردد ${bandTxt} بدل البرج: الراوتر يبقى حر يختار أقوى برج على نفس التردد، وأقل خطر يوقف الدمج.`
-        : '\n\n⚠️ التثبيت على برج واحد غالباً يوقف دمج الترددات.') +
-      (notes ? `\n\n${notes}` : '');
-
-    const buttons: { text: string; style?: 'cancel' | 'default' | 'destructive'; onPress?: () => void }[] = [
-      { text: 'إلغاء', style: 'cancel' },
-    ];
-    if (canBand) buttons.push({ text: `ثبّت التردد ${bandTxt} (أنصح)`, onPress: doBand });
-    buttons.push({ text: canBand ? 'ثبّت البرج نفسه' : 'تثبيت', onPress: doCell });
-
-    Alert.alert(`تثبيت على ${towerTitle(tower)}`, intro, buttons);
   };
 
   const revealNr = () => {
@@ -412,6 +430,8 @@ export default function TowersScreen() {
   const currentScore = primary ? rankScore(primary.best) : 0;
   const worthIt = !!bestOther && bestOther.score > currentScore + 0.08;
   const lowCand = !!bestOther && isLowBand(bestOther.best);
+  const canPin = canLock || !!bandCfg;
+  const isPinned = (g: TowerGroup) => !!cellLock && !!g.pci && cellLock.pci === g.pci;
 
   return (
     <LinearGradient colors={[C.bgTop, C.bgBottom]} style={{ flex: 1 }}>
@@ -451,17 +471,16 @@ export default function TowersScreen() {
         )}
 
         {!loading && cellLock && (
-          <View style={s.lockBanner}>
-            <Pressable
-              style={s.unlockBtn}
-              onPress={() => primary && onLock(primary.best)}
-              disabled={busy}
-            >
-              <Text style={s.unlockText}>فك</Text>
+          <View style={s.pinBanner}>
+            <Pressable style={[s.unlockBtn, busy && { opacity: 0.5 }]} onPress={onUnlock} disabled={busy}>
+              <Text style={s.unlockText}>فك التثبيت</Text>
             </Pressable>
-            <Text style={s.lockBannerText}>
-              الراوتر مثبّت على برج PCI {cellLock.pci}{cellLock.band ? ` · B${cellLock.band}` : ''}
-            </Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.pinBannerTitle}>📌 مثبّت على برج {cellLock.pci}</Text>
+              <Text style={s.pinBannerSub}>
+                {cellLock.band ? `B${cellLock.band} · ` : ''}{cellLock.arfcn ? `EARFCN ${cellLock.arfcn}` : 'الراوتر ما يتنقل لبرج ثاني'}
+              </Text>
+            </View>
           </View>
         )}
 
@@ -498,7 +517,7 @@ export default function TowersScreen() {
           </GlassCard>
         )}
 
-        {!loading && canLock && primary && (
+        {!loading && (canLock || !!bandCfg) && primary && (
           <GlassCard title="هل فيه برج أفضل؟" icon="⭐" tint={C.goldSoft} collapsible={false}>
             {!worthIt || !bestOther ? (
               <Text style={s.recOk}>
@@ -514,7 +533,7 @@ export default function TowersScreen() {
                   {lowCand ? ` لكنه على ${bandName(bestOther.best)} — تردد منخفض، فممكن تكون سرعته أقل رغم قوة إشارته.` : ''}
                   {' '}تذكّر: التثبيت على برج واحد غالباً يوقف الدمج، فجرّب وقارن السرعة.
                 </Text>
-                <Pressable style={[s.recBtn, busy && { opacity: 0.5 }]} onPress={() => onLock(bestOther.best)} disabled={busy}>
+                <Pressable style={[s.recBtn, busy && { opacity: 0.5 }]} onPress={() => onLock(bestOther)} disabled={busy}>
                   <Text style={s.recBtnText}>📌 جرّب هذا البرج</Text>
                 </Pressable>
                 {info && (
@@ -567,7 +586,7 @@ export default function TowersScreen() {
             icon="🗼" tint={C.greenSoft} collapsible={false}
           >
             {inUse.map(g => (
-              <TowerGroupCard key={g.key} g={g} cellLock={cellLock} canLock={canLock} busy={busy} onLock={onLock} />
+              <TowerGroupCard key={g.key} g={g} lockedHere={isPinned(g)} canPin={canPin} busy={busy} onLock={onLock} />
             ))}
           </GlassCard>
         )}
@@ -580,10 +599,10 @@ export default function TowersScreen() {
               </Text>
             )}
             {others.map((g, i) => (
-              <TowerGroupCard key={g.key} g={g} rank={i + 1} cellLock={cellLock} canLock={canLock} busy={busy} onLock={onLock} />
+              <TowerGroupCard key={g.key} g={g} rank={i + 1} lockedHere={isPinned(g)} canPin={canPin} busy={busy} onLock={onLock} />
             ))}
             {others.length > 0 && (
-              <Text style={s.hint}>مرتّبة حسب الجودة الفعلية (القوة + الجودة + نوع التردد)، مو القوة لحالها.</Text>
+              <Text style={s.hint}>مرتّبة حسب الجودة الفعلية (القوة + الجودة + نوع التردد)، مو القوة لحالها. ◻️ الأبراج اللي ظهرت على تردد واحد غالباً ما تدمج.</Text>
             )}
           </GlassCard>
         )}
@@ -592,6 +611,9 @@ export default function TowersScreen() {
           <GlassCard title="كيف نقرأ الأبراج؟" icon="ℹ️" tint={C.goldSoft} defaultOpen={false}>
             <Text style={s.hint}>
               كل بطاقة = برج واحد. نجمع الترددات اللي لها نفس رقم البرج (PCI)، لأنها غالباً على نفس العمود.
+            </Text>
+            <Text style={s.hint}>
+              📌 التثبيت: اضغط «ثبّت على هذا البرج» على أي برج — مستخدم أو مجاور. تقدر تثبّت البرج نفسه، أو تردده فقط (أأمن).
             </Text>
             <Text style={s.hint}>
               ✅ مدموج الآن: الراوتر يدمج ترددات من هذا البرج حالياً. ✅ دمج مؤكد: شفناه يدمج عليه من قبل.
@@ -606,6 +628,7 @@ export default function TowersScreen() {
           </GlassCard>
         )}
       </ScrollView>
+      <LockSheet sheet={sheet} onClose={() => setSheet(null)} bottom={insets.bottom} />
     </LinearGradient>
   );
 }
@@ -622,40 +645,77 @@ const s = StyleSheet.create({
   retryBtn: { alignSelf: 'flex-end', backgroundColor: C.red, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
   retryText: { color: '#fff', fontWeight: '700' },
 
-  tower: { backgroundColor: C.rowBg, borderRadius: 16, borderWidth: 1, borderColor: C.cardBorder, padding: 12, gap: 10 },
+  tower: {
+    backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: '#e7eefb', padding: 14, gap: 10,
+    shadowColor: C.shadow, shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 1,
+  },
   towerInUse: { borderColor: C.green, borderWidth: 1.5 },
-  towerHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  titleRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, justifyContent: 'flex-start' },
-  towerName: { color: C.text, fontWeight: '800', fontSize: 16, textAlign: 'right' },
+  towerLocked: { borderColor: C.blue, borderWidth: 2, backgroundColor: '#f5f8ff' },
+  head: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
+  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  avatarRank: { fontWeight: '900', fontSize: 16 },
+  titleRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
+  towerName: { color: C.text, fontWeight: '800', fontSize: 16.5, textAlign: 'right', flexShrink: 1 },
   techTag: { backgroundColor: C.blue, borderRadius: 7, paddingHorizontal: 7, paddingVertical: 1 },
   techTagText: { color: '#fff', fontWeight: '800', fontSize: 10.5 },
-  role: { color: C.sub, fontSize: 11.5, textAlign: 'right', marginTop: 2 },
-  rank: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  rankText: { color: '#fff', fontWeight: '800', fontSize: 12 },
-  badgeRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  pinTag: { backgroundColor: C.blue, borderRadius: 7, paddingHorizontal: 7, paddingVertical: 1 },
+  pinTagText: { color: '#fff', fontWeight: '800', fontSize: 10.5 },
+  role: { color: C.sub, fontSize: 12, textAlign: 'right', marginTop: 3 },
+  rsrpBox: { alignItems: 'center', minWidth: 54 },
+  rsrpVal: { fontWeight: '900', fontSize: 22, lineHeight: 26 },
+  rsrpUnit: { color: C.muted, fontSize: 10, fontWeight: '700' },
+  qTrack: { height: 6, borderRadius: 3, backgroundColor: '#edf1f8', overflow: 'hidden', flexDirection: 'row-reverse' },
+  qFill: { height: 6, borderRadius: 3 },
+  chips: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  chip: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 5,
+    backgroundColor: C.rowBg, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: '#e7eefb',
+  },
+  chipLabel: { color: C.muted, fontSize: 10.5, fontWeight: '700' },
+  chipVal: { color: C.text, fontSize: 12, fontWeight: '800' },
+  gradePill: { borderRadius: 999, paddingHorizontal: 11, paddingVertical: 4 },
+  gradeText: { fontWeight: '800', fontSize: 11.5 },
   badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  badgeText: { fontWeight: '800', fontSize: 11.5 },
-  grade: { borderRadius: 999, paddingHorizontal: 11, paddingVertical: 4 },
-  gradeText: { color: '#fff', fontWeight: '800', fontSize: 11.5 },
+  badgeText: { fontWeight: '800', fontSize: 11 },
   freqRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6 },
   freq: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 5,
-    backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, borderRadius: 10,
-    paddingHorizontal: 8, paddingVertical: 5,
+    backgroundColor: C.rowBg, borderWidth: 1, borderColor: '#e7eefb', borderRadius: 10,
+    paddingHorizontal: 8, paddingVertical: 4,
   },
   freqOn: { borderColor: C.green },
   freqDot: { width: 7, height: 7, borderRadius: 4 },
   freqBand: { color: C.text, fontWeight: '800', fontSize: 12.5 },
-  freqMhz: { color: C.muted, fontSize: 10.5 },
   freqRsrp: { color: C.sub, fontSize: 10.5, fontWeight: '700' },
-  metrics: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  metric: { flex: 1, alignItems: 'center', backgroundColor: C.card, borderRadius: 12, paddingVertical: 8, borderWidth: 1, borderColor: C.cardBorder },
-  metricVal: { color: C.text, fontWeight: '800', fontSize: 16 },
-  metricUnit: { color: C.muted, fontSize: 10 },
-  metricLabel: { color: C.sub, fontSize: 11, fontWeight: '700', marginTop: 2 },
-  lockBtn: { borderRadius: 12, borderWidth: 1, borderColor: C.blue, paddingVertical: 10, alignItems: 'center' },
+  lockBtn: { borderRadius: 12, borderWidth: 1.5, borderColor: C.blue, paddingVertical: 10, alignItems: 'center', backgroundColor: '#f5f8ff' },
   lockBtnOn: { backgroundColor: C.blue, borderColor: C.blue },
-  lockText: { color: C.blue, fontWeight: '800', fontSize: 13 },
+  lockText: { color: C.blue, fontWeight: '800', fontSize: 13.5 },
+
+  pinBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#eef3ff', borderColor: C.blue, borderWidth: 1.5, borderRadius: 18, padding: 14,
+  },
+  pinBannerTitle: { color: C.text, fontWeight: '900', fontSize: 15, textAlign: 'right' },
+  pinBannerSub: { color: C.sub, fontSize: 12, textAlign: 'right', marginTop: 2 },
+
+  backdrop: { flex: 1, backgroundColor: 'rgba(13,35,80,0.35)' },
+  sheet: {
+    backgroundColor: C.card, borderTopLeftRadius: 26, borderTopRightRadius: 26,
+    paddingHorizontal: 16, paddingTop: 10, gap: 10,
+  },
+  grabber: { alignSelf: 'center', width: 42, height: 5, borderRadius: 3, backgroundColor: '#d9e1ef', marginBottom: 4 },
+  sheetTitle: { color: C.text, fontWeight: '900', fontSize: 18, textAlign: 'right' },
+  sheetSub: { color: C.sub, fontSize: 12.5, textAlign: 'right', lineHeight: 19, marginBottom: 2 },
+  opt: { borderRadius: 16, borderWidth: 1, borderColor: '#e7eefb', backgroundColor: C.rowBg, padding: 12, gap: 4 },
+  optMain: { borderColor: C.blue, borderWidth: 1.5, backgroundColor: '#f5f8ff' },
+  optHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
+  optTitle: { flex: 1, color: C.text, fontWeight: '800', fontSize: 15, textAlign: 'right' },
+  optTag: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, backgroundColor: '#e7eefb' },
+  optTagText: { color: C.sub, fontWeight: '800', fontSize: 10.5 },
+  optDesc: { color: C.sub, fontSize: 12, textAlign: 'right', lineHeight: 18 },
+  optNote: { color: C.violet, fontSize: 11.5, textAlign: 'right', fontWeight: '700' },
+  cancel: { paddingVertical: 12, alignItems: 'center' },
+  cancelText: { color: C.red, fontWeight: '800', fontSize: 14 },
 
   dual: { flexDirection: 'row', gap: 10 },
   dualBox: { flex: 1, backgroundColor: C.rowBg, borderRadius: 16, borderWidth: 1, borderColor: C.cardBorder, padding: 12, alignItems: 'center', gap: 3 },

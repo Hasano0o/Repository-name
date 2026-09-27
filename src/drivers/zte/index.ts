@@ -4,7 +4,7 @@ import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import {
   RouterDriver, Capability, Signal, NetworkInfo, Traffic, ConnectedDevice,
   Usage, DeviceDetails, CellTower, BandConfig, ActiveLock, Carrier,
-  SignalSnapshot,
+  SignalSnapshot, CellLockState, CellLockTarget,
 } from '../types';
 import { http } from '../http';
 import {
@@ -55,6 +55,15 @@ const pick = (o: Record<string, string>, ...keys: string[]): string | undefined 
   for (const k of keys) { const v = o[k]; if (v !== undefined && v !== '') return v; }
   return undefined;
 };
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+/** تباعد الترددات الفرعية (SCS) لـ 5G — ترددات TDD العالية 30 والباقي 15 */
+const NR_SCS30 = new Set([34, 38, 39, 40, 41, 46, 47, 48, 77, 78, 79]);
+const nrScs = (band: number) => (NR_SCS30.has(band) ? 30 : 15);
+
+/** أجهزة (حسب العنوان) احتاجت إعادة تشغيل عشان تطبّق قفل البرج */
+const rebootToApply = new Set<string>();
 
 const bandNum = (v?: string): number | undefined => {
   if (!v) return undefined;
@@ -525,10 +534,14 @@ export class ZteDriver implements RouterDriver {
     await this.ensure();
     const s = await this.getSignal();
     const out: CellTower[] = [];
+    // s.band نص الدمج "15MHz@1650(B3) + ..." — أول رقم فيه عرض النطاق مو التردد،
+    // فنأخذ التردد من داخل القوسين
+    const ca = parseZteCa(s.band);
+    const pcc = ca.find(c => c.role === 'PCC');
     if (s.rsrp !== undefined || s.pci) {
       out.push({
         kind: 'serving', tech: 'LTE', pci: s.pci, cellId: s.cellId,
-        arfcn: s.earfcn, band: bandNum(s.band),
+        arfcn: s.earfcn ?? pcc?.arfcn, band: pcc?.band ?? lteBandOf(num(s.earfcn)),
         rsrp: s.rsrp, rsrq: s.rsrq, sinr: s.sinr, rssi: s.rssi,
       });
     }
@@ -538,16 +551,17 @@ export class ZteDriver implements RouterDriver {
         band: bandNum(s.nrBand), rsrp: s.nrRsrp, rsrq: s.nrRsrq, sinr: s.nrSinr,
       });
     }
-    // النواقل الثانوية من نص الدمج "20MHz@500(B1) + ..." — parseZteCa يفكّها كاملة
-    if (s.band) {
-      for (const c of parseZteCa(s.band)) {
+    // النواقل الثانوية — من getCarriers لأنها تعطي رقم البرج (PCI) كمان
+    const scc = (await this.getCarriers().catch(() => [] as Carrier[]))
+      .filter(c => c.role === 'SCC' && c.tech === 'LTE');
+    if (scc.length) {
+      for (const c of scc) {
+        out.push({ kind: 'secondary', tech: 'LTE', band: c.band, arfcn: c.arfcn, pci: c.pci, rsrp: c.rsrp, rsrq: c.rsrq, sinr: c.sinr });
+      }
+    } else {
+      for (const c of ca) {
         if (c.role !== 'SCC') continue;
-        out.push({
-          kind: 'secondary',
-          tech: c.tech,
-          band: c.band,
-          arfcn: c.arfcn,
-        });
+        out.push({ kind: 'secondary', tech: c.tech, band: c.band, arfcn: c.arfcn });
       }
     }
     // الأبراج المجاورة (MU5001): "earfcn,pci,rsrq,rsrp,rssi;..." — PCI هنا عشري،
@@ -662,6 +676,78 @@ export class ZteDriver implements RouterDriver {
       });
     }
     return out;
+  }
+
+  // ─── التثبيت على برج (Cell Lock) ───
+
+  async getCellLock(): Promise<CellLockState | null> {
+    await this.ensure();
+    const r = await this.get(['lte_pci_lock', 'lte_earfcn_lock', 'nr5g_cell_lock']);
+    const pci = (r.lte_pci_lock || '').trim();
+    const ear = (r.lte_earfcn_lock || '').trim();
+    if (pci && ear && ear !== '0') return { pci, arfcn: ear, band: lteBandOf(num(ear)) };
+    const nr = (r.nr5g_cell_lock || '').split(',').map(x => x.trim());
+    if (nr.length >= 2 && nr[1] && nr[1] !== '0') return { pci: nr[0], arfcn: nr[1], band: bandNum(nr[2]) };
+    return null;
+  }
+
+  private async servingPci(tech: 'LTE' | 'NR'): Promise<string | undefined> {
+    const s = await this.getSignal();
+    return tech === 'NR' ? s.nrPci : s.pci;
+  }
+
+  private async waitServing(tech: 'LTE' | 'NR', pci: string, ms: number): Promise<boolean> {
+    const deadline = Date.now() + ms;
+    while (Date.now() < deadline) {
+      await sleep(3000);
+      try { if ((await this.servingPci(tech)) === pci) return true; } catch {}
+    }
+    return false;
+  }
+
+  /** يعيد تشغيل الراوتر وينتظره يرجع ويتصل (حتى ~٣ دقائق) */
+  private async rebootAndWait(): Promise<void> {
+    try { await this.post({ goformId: 'REBOOT_DEVICE' }); } catch {}
+    await sleep(25000);
+    const deadline = Date.now() + 150000;
+    while (Date.now() < deadline) {
+      try {
+        await this.login(this.host, '', this.password);
+        if (await this.isConnected()) return;
+      } catch {}
+      await sleep(5000);
+    }
+  }
+
+  async lockCell(t: CellLockTarget): Promise<void> {
+    await this.ensure();
+    const pci = String(parsePci(t.pci) ?? t.pci ?? '').trim();
+    const arfcn = (t.arfcn ?? '').trim();
+    if (!pci) throw new Error('ما عندنا رقم البرج (PCI) — ما نقدر نثبّت عليه');
+    if (!arfcn) throw new Error('الراوتر ما أعطانا رقم تردد هذا البرج (EARFCN) — ثبّت التردد بدلاً منه');
+    let out: string;
+    if (t.tech === 'NR') {
+      if (!t.band) throw new Error('ما نعرف تردد 5G لهذا البرج');
+      out = await this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: `${pci},${arfcn},${t.band},${nrScs(t.band)}` });
+    } else {
+      out = await this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: pci, lte_earfcn_lock: arfcn });
+    }
+    if (!/success/i.test(out)) throw this.rejected('التثبيت على البرج', out);
+    this.log('cell-lock set', t.tech, pci, arfcn);
+    // بعض الإصدارات تطبّقه فوراً — وأغلبها تحتاج إعادة تشغيل
+    if (!rebootToApply.has(this.host) && await this.waitServing(t.tech, pci, 12000)) return;
+    rebootToApply.add(this.host);
+    this.log('cell-lock needs reboot');
+    await this.rebootAndWait();
+  }
+
+  async unlockCell(): Promise<void> {
+    await this.ensure();
+    const had = await this.getCellLock().catch(() => null);
+    const o1 = await this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: '0', lte_earfcn_lock: '0' });
+    const o2 = await this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: '0,0,0,0' }).catch(() => '');
+    if (!/success/i.test(o1) && !/success/i.test(o2)) throw this.rejected('فك التثبيت', o1);
+    if (had && rebootToApply.has(this.host)) await this.rebootAndWait();
   }
 
   async reboot(): Promise<void> {
