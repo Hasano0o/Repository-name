@@ -250,7 +250,7 @@ function render(){
   $('vQ').textContent=r.score!=null?Math.round(r.score*100)+'%':'—';
   if(best){
     const gap=r.rsrp!=null?Math.round(best.rsrp-r.rsrp):null;
-    $('bestBox').textContent=`أفضل قراءة: \u200E${best.rsrp} dBm${best.band?' · '+best.band:''}${best.pci?' · PCI '+best.pci:''}`+(gap!=null?(gap<=1?' — العميل عليها الحين ✓':` — الحين أقل بـ ${gap} dB`):'');
+    $('bestBox').textContent=`أفضل قراءة: \u2066${best.rsrp} dBm\u2069${best.band?' · '+best.band:''}${best.pci?' · PCI '+best.pci:''}`+(gap!=null?(gap<=1?' — العميل عليها الحين ✓':` — الحين أقل بـ ${gap} dB`):'');
   }
   $('pinBox').textContent=r.pinned?`الراوتر مثبّت على ${r.pinned}`:'';
   chart();
@@ -288,7 +288,7 @@ function showReport(rep,why){
   const g=rep.gain_db;
   $('repGain').textContent=g==null?'—':(g>0?`+${g} dB`:`${g} dB`);
   $('repGain').style.color=g>0?'#12b76a':g<0?'#e5484d':'#6b7796';
-  const f=x=>x?`\u200E${x.rsrp} dBm${x.band?' · '+x.band:''}${x.pci?' · PCI '+x.pci:''}`:'—';
+  const f=x=>x?`\u2066${x.rsrp} dBm\u2069${x.band?' · '+x.band:''}${x.pci?' · PCI '+x.pci:''}`:'—';
   const mins=Math.max(1,Math.round((rep.duration_sec||0)/60));
   $('repTbl').innerHTML=`<tr><td>القراءة في البداية</td><td>${f(rep.first)}</td></tr><tr><td>أفضل قراءة</td><td>${f(rep.best)}</td></tr><tr><td>القراءة النهائية</td><td>${f(rep.last)}</td></tr><tr><td>مدة الجلسة</td><td>${mins} د</td></tr>`;
 }

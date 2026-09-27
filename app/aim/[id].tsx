@@ -21,8 +21,17 @@ try { HapticsMod = require('expo-haptics'); } catch { HapticsMod = null; }
 const Haptics = {
   ImpactFeedbackStyle: HapticsMod?.ImpactFeedbackStyle ?? { Heavy: 'heavy', Medium: 'medium', Light: 'light' },
   NotificationFeedbackType: HapticsMod?.NotificationFeedbackType ?? { Success: 'success' },
-  impactAsync: (s: any) => (HapticsMod?.impactAsync ? HapticsMod.impactAsync(s) : Promise.resolve()),
-  notificationAsync: (s: any) => (HapticsMod?.notificationAsync ? HapticsMod.notificationAsync(s) : Promise.resolve()),
+  // expo-haptics غير مثبت — نرجع لاهتزاز النظام (Vibration) عشان الاهتزاز يشتغل فعلاً
+  impactAsync: (s: any) => {
+    if (HapticsMod?.impactAsync) return HapticsMod.impactAsync(s);
+    Vibration.vibrate(s === 'heavy' ? 45 : s === 'medium' ? 28 : 15);
+    return Promise.resolve();
+  },
+  notificationAsync: (s: any) => {
+    if (HapticsMod?.notificationAsync) return HapticsMod.notificationAsync(s);
+    Vibration.vibrate(Platform.OS === 'android' ? [0, 60, 60, 60] : 400);
+    return Promise.resolve();
+  },
 };
 
 import { SavedRouter, getRouter } from '../../src/store/routers';
@@ -173,178 +182,6 @@ function DirStat({ icon, label, value, color, bg }: { icon: IconName; label: str
 }
 
 
-// ═══ ألوان العدادين الأصلية (بدون تغيير) ═══
-const O_SUCCESS = '#13B783';
-const O_DANGER = '#DC2626';
-const O_MUTED = '#71809A';
-
-// ═══ مؤشر الإشارة (Hero) ═══
-function SignalHero({
-  rsrp, sinr, baselineRsrp, baselineSinr, rsrpHistory, sinrHistory, rsrpColor, sinrColor,
-}: {
-  rsrp?: number;
-  sinr?: number;
-  baselineRsrp: number | null;
-  baselineSinr: number | null;
-  rsrpHistory: number[];
-  sinrHistory: (number | undefined)[];
-  rsrpColor: string;
-  sinrColor: string;
-}) {
-  const deltaR = rsrp !== undefined && baselineRsrp !== null ? rsrp - baselineRsrp : undefined;
-  const deltaS = sinr !== undefined && baselineSinr !== null ? sinr - baselineSinr : undefined;
-
-  const prevR = rsrpHistory.length >= 2 ? rsrpHistory[rsrpHistory.length - 2] : undefined;
-  const trendR: 'up' | 'down' | 'flat' =
-    rsrp !== undefined && prevR !== undefined
-      ? rsrp > prevR + 0.5 ? 'up' : rsrp < prevR - 0.5 ? 'down' : 'flat'
-      : 'flat';
-  const arrowR = trendR === 'up' ? '↑' : trendR === 'down' ? '↓' : '•';
-  const trendColorR = trendR === 'up' ? O_SUCCESS : trendR === 'down' ? O_DANGER : O_MUTED;
-
-  const sinrClean = sinrHistory.filter((v): v is number => v !== undefined);
-  const prevS = sinrClean.length >= 2 ? sinrClean[sinrClean.length - 2] : undefined;
-  const trendS: 'up' | 'down' | 'flat' =
-    sinr !== undefined && prevS !== undefined
-      ? sinr > prevS + 0.5 ? 'up' : sinr < prevS - 0.5 ? 'down' : 'flat'
-      : 'flat';
-  const arrowS = trendS === 'up' ? '↑' : trendS === 'down' ? '↓' : '•';
-  const trendColorS = trendS === 'up' ? O_SUCCESS : trendS === 'down' ? O_DANGER : O_MUTED;
-
-  return (
-    <View style={h.wrap}>
-      {/* بطاقة RSRP — spark على اليمين */}
-      <View style={[h.card, { borderColor: rsrpColor + '40' }]}>
-        <View style={h.cardHead}>
-          <Text style={[h.arrow, { color: trendColorR }]}>{arrowR}</Text>
-          <Text style={h.cardLbl}>RSRP</Text>
-        </View>
-        <View style={h.bodyRow}>
-          {/* spark يمين */}
-          <VSpark value={rsrp} min={-120} max={-70} color={rsrpColor} count={12} />
-          {/* قيمة يسار */}
-          <View style={h.valueCol}>
-            <View style={h.valueRow}>
-              <Text style={[h.value, { color: rsrpColor }]}>{rsrp ?? '—'}</Text>
-              <Text style={h.unit}>dBm</Text>
-            </View>
-          </View>
-        </View>
-        {deltaR !== undefined && (
-          <Text style={[h.delta, {
-            color: deltaR > 0.5 ? O_SUCCESS : deltaR < -0.5 ? O_DANGER : O_MUTED,
-          }]}>
-            {deltaR > 0.5 ? `↑ +${Math.round(deltaR)}`
-              : deltaR < -0.5 ? `↓ ${Math.round(deltaR)}` : '• 0'} dB
-          </Text>
-        )}
-      </View>
-
-      {/* بطاقة SINR — spark على اليسار */}
-      <View style={[h.card, { borderColor: sinrColor + '40' }]}>
-        <View style={h.cardHead}>
-          <Text style={[h.arrow, { color: trendColorS }]}>{arrowS}</Text>
-          <Text style={h.cardLbl}>SINR</Text>
-        </View>
-        <View style={h.bodyRow}>
-          {/* قيمة يمين */}
-          <View style={h.valueCol}>
-            <View style={h.valueRow}>
-              <Text style={[h.value, { color: sinrColor }]}>{sinr ?? '—'}</Text>
-              <Text style={h.unit}>dB</Text>
-            </View>
-          </View>
-          {/* spark يسار */}
-          <VSpark value={sinr} min={-10} max={30} color={sinrColor} count={12} />
-        </View>
-        {deltaS !== undefined && (
-          <Text style={[h.delta, {
-            color: deltaS > 0.5 ? O_SUCCESS : deltaS < -0.5 ? O_DANGER : O_MUTED,
-          }]}>
-            {deltaS > 0.5 ? `↑ +${Math.round(deltaS)}`
-              : deltaS < -0.5 ? `↓ ${Math.round(deltaS)}` : '• 0'} dB
-          </Text>
-        )}
-      </View>
-    </View>
-  );
-}
-
-// ═══ شريط قوة عمودي (12 نقطة) ═══
-function VSpark({
-  value, min, max, color, count = 12,
-}: {
-  value?: number;
-  min: number;
-  max: number;
-  color: string;
-  count?: number;
-}) {
-  const strength = value !== undefined
-    ? Math.max(0, Math.min(1, (value - min) / (max - min)))
-    : 0;
-  const lit = Math.round(strength * count);
-  return (
-    <View style={dot.wrap}>
-      {Array.from({ length: count }, (_, i) => {
-        // من الأعلى للأسفل: الأعلى = أقوى
-        const idx = count - i - 1;
-        const on = idx < lit;
-        const size = on ? 5 : 4;
-        return (
-          <View
-            key={i}
-            style={[
-              dot.dot,
-              {
-                width: size,
-                height: size,
-                borderRadius: size / 2,
-                backgroundColor: on ? color : '#E0E8F3',
-              },
-            ]}
-          />
-        );
-      })}
-    </View>
-  );
-}
-
-const dot = StyleSheet.create({
-  wrap: {
-    alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 2, gap: 2,
-  },
-  dot: {},
-});
-
-
-const h = StyleSheet.create({
-  wrap: {
-    flexDirection: 'row-reverse', gap: 10, width: '100%',
-  },
-  card: {
-    flex: 1, backgroundColor: '#FFFFFF', borderRadius: 16,
-    paddingVertical: 12, paddingHorizontal: 10,
-    borderWidth: 1.5, gap: 6,
-    alignItems: 'center',
-  },
-  cardHead: {
-    flexDirection: 'row-reverse', alignItems: 'center', gap: 5,
-  },
-  cardLbl: { color: O_MUTED, fontSize: 12, fontWeight: '800' },
-  arrow: { fontSize: 18, fontWeight: '900' },
-  bodyRow: {
-    flexDirection: 'row-reverse', alignItems: 'center',
-    gap: 6, width: '100%', justifyContent: 'space-between',
-  },
-  valueCol: { flex: 1, alignItems: 'center' },
-  valueRow: { flexDirection: 'row-reverse', alignItems: 'baseline', gap: 2 },
-  value: { fontSize: 26, fontWeight: '900', letterSpacing: -1, lineHeight: 30 },
-  unit: { color: O_MUTED, fontSize: 10, fontWeight: '800' },
-  delta: { fontSize: 10.5, fontWeight: '800' },
-});
-
 // ═══ الشاشة ═══
 export default function AimScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -396,6 +233,8 @@ export default function AimScreen() {
   useEffect(() => () => { wakeStop.current = true; }, []);
 
   const busy = useRef(false);
+  const lastEventRef = useRef(0);
+  const droppedRef = useRef(false);
   const lastPulse = useRef(0);
   const hapticsRef = useRef(true);
   const techRef = useRef<Tech>('LTE');
@@ -483,12 +322,32 @@ export default function AimScreen() {
         setReadings(list => [...list, reading].slice(-MAX_POINTS));
         setBaseline(b => (b === null ? (smooth ?? rd.rsrp ?? null) : b));
         setBaselineSinr(b => (b === null ? (rd.sinr ?? null) : b));
+        const hadBest = !!bestRef.current;
+        let newBest = false;
         if (vals.length >= SMOOTH_N && (!bestRef.current || score > bestRef.current.score)) {
           bestRef.current = reading;
           setBest(reading);
+          newBest = hadBest;
         }
-        pulse(score);
-        beeperRef.current?.update(score);
+        // ═══ الصوت والاهتزاز نسبيين: كم أنت قريب من أفضل نقطة في الجلسة ═══
+        const cur = smooth ?? rd.rsrp;
+        const bestV = bestRef.current ? (bestRef.current.smooth ?? bestRef.current.rsrp) : undefined;
+        const gap = cur !== undefined && bestV !== undefined ? Math.max(0, bestV - cur) : undefined;
+        const rel = gap === undefined ? score : Math.max(0, Math.min(1, 1 - gap / 12));
+        pulse(rel);
+        beeperRef.current?.update(rel);
+        const now = Date.now();
+        if (newBest && now - lastEventRef.current > 3000) {
+          lastEventRef.current = now;
+          beeperRef.current?.event('best');
+          if (hapticsRef.current) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        }
+        const dropped = gap !== undefined && gap >= 5;
+        if (dropped && !droppedRef.current && now - lastEventRef.current > 3000) {
+          lastEventRef.current = now;
+          beeperRef.current?.event('drop');
+        }
+        droppedRef.current = dropped;
         lastRdRef.current = rd;
         if (liveRef.current) {
           const b = bestRef.current;
@@ -842,36 +701,66 @@ export default function AimScreen() {
         {!loading && (
           <>
             {/* ═══ Hero ═══ */}
-            {/* ═══ العدادان (كما هما) + شريط المعلومات ═══ */}
-            <View style={a.heroCard}>
-              <SignalHero
-                rsrp={shown}
-                sinr={current?.sinr}
-                baselineRsrp={baseline}
-                baselineSinr={baselineSinr}
-                rsrpHistory={readings.map(r => r.smooth ?? r.rsrp ?? -110)}
-                sinrHistory={readings.map(r => r.sinr)}
-                rsrpColor={lvlColor}
-                sinrColor="#3567F5"
-              />
-
-
-              {stab ? (
-                <View style={[a.stabBar, { backgroundColor: stab.c + '14', borderColor: stab.c + '40' }]}>
-                  <View style={[a.stabIcon, { backgroundColor: stab.c }]}>
-                    <Icon name={stability === 'stable' ? 'check' : 'bulb'} size={15} color="#fff" stroke={2.6} />
-                  </View>
-                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Text style={[a.stabTitle, { color: stab.c }]}>{stab.t}</Text>
-                    <Text style={a.stabSub}>{stab.d}</Text>
-                  </View>
+            {/* ═══ مؤشر التوجيه ═══ */}
+            <View style={[a.meter, { borderColor: lvlColor + '55' }]}>
+              <View style={a.mTop}>
+                <View style={a.mTag}>
+                  <View style={[a.mTechDot, { backgroundColor: isNr ? PURPLE : BLUE }]} />
+                  <Text style={a.mTagTxt} numberOfLines={1}>{current ? cellName(current.cell) : isNr ? '5G' : '4G'}</Text>
                 </View>
-              ) : (
-                <View style={[a.stabBar, { backgroundColor: P.soft, borderColor: P.border }]}>
-                  <ActivityIndicator size="small" color={MUTED} />
-                  <Text style={[a.stabSub, { flex: 1 }]}>نجمع القراءات لتقييم ثبات الإشارة…</Text>
+                <View style={{ flex: 1 }} />
+                <Pressable onPress={() => setSound(v => !v)} hitSlop={6}
+                  style={[a.mBtn, sound && { backgroundColor: PURPLE, borderColor: PURPLE }]}>
+                  <Icon name="sound" size={16} color={sound ? '#fff' : MUTED} stroke={2.2} />
+                </Pressable>
+                <Pressable onPress={() => setHaptics(v => !v)} hitSlop={6}
+                  style={[a.mBtn, haptics && { backgroundColor: SUCCESS, borderColor: SUCCESS }]}>
+                  <Icon name="vibrate" size={16} color={haptics ? '#fff' : MUTED} stroke={2.2} />
+                </Pressable>
+              </View>
+
+              <View style={a.mMid}>
+                <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                  {delta !== undefined && (
+                    <View style={[a.mDelta, { backgroundColor: delta > 0.5 ? P.greenSoft : delta < -0.5 ? P.redSoft : P.soft }]}>
+                      <Text style={[a.mDeltaTxt, { color: delta > 0.5 ? SUCCESS : delta < -0.5 ? DANGER : MUTED }]}>
+                        {delta > 0.5 ? `+${Math.round(delta)}` : delta < -0.5 ? `${Math.round(delta)}` : '0'} dB
+                      </Text>
+                    </View>
+                  )}
+                  <Text style={a.mSmall}>عن البداية</Text>
                 </View>
-              )}
+                <View style={{ flex: 1 }} />
+                <View style={a.mNumRow}>
+                  <TrendMark t={trendR} />
+                  <Text style={[a.mNum, { color: lvlColor }]}>{shown ?? '—'}</Text>
+                  <Text style={a.mUnit}>dBm</Text>
+                </View>
+              </View>
+
+              {/* وين أنت من أفضل نقطة */}
+              <View style={a.mBarRow}>
+                <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 4 }}>
+                  <Text style={a.mSmall}>أفضل</Text>
+                  <Text style={[a.mSmall, { color: TEXT }]}>{bestShown !== undefined ? `${Math.round(bestShown)} dBm` : '—'}</Text>
+                </View>
+                <View style={a.mBar}>
+                  <View style={[a.mBarFill, {
+                    width: `${Math.max(4, gapToBest === undefined ? 0 : Math.max(0, Math.min(1, 1 - gapToBest / 12)) * 100)}%`,
+                    backgroundColor: gapToBest !== undefined && gapToBest <= 1 ? SUCCESS : gapToBest !== undefined && gapToBest >= 5 ? DANGER : WARN,
+                  }]} />
+                </View>
+              </View>
+
+              <View style={a.mStat}>
+                <View style={[a.stabDot, { backgroundColor: stab ? stab.c : P.faint }]} />
+                <Text style={[a.mStatTxt, stab && { color: stab.c }]} numberOfLines={1}>
+                  {!stab ? 'نجمع القراءات…'
+                    : gapToBest !== undefined && gapToBest <= 1 && stability === 'stable' ? 'مستقرة على أفضل نقطة — ثبّت هنا ✓'
+                    : gapToBest !== undefined && gapToBest >= 5 ? `ابتعدت عن أفضل نقطة بـ ${gapToBest} dB — ارجع`
+                    : stab.t}
+                </Text>
+              </View>
             </View>
 
             {/* ═══ لوحة الشبكة 4G / 5G ═══ */}
@@ -991,12 +880,6 @@ export default function AimScreen() {
               </Section>
             )}
 
-            {/* ═══ الصوت والاهتزاز ═══ */}
-            <View style={a.togglesRow}>
-              <ToggleCard on={sound} label="تفعيل الصوت" onLabel="الصوت مفعّل" icon="sound" color={PURPLE} onPress={() => setSound(v => !v)} />
-              <ToggleCard on={haptics} label="تشغيل الاهتزاز" onLabel="اهتزاز مفعّل" icon="vibrate" color={SUCCESS} onPress={() => setHaptics(v => !v)} />
-            </View>
-
             {/* ═══ Chart ═══ */}
             {readings.length > 3 && (
               <Section title="تاريخ قوة الإشارة" sub={`آخر ${Math.min(30, readings.length)} قراءة`} icon="chart"
@@ -1064,6 +947,27 @@ const a = StyleSheet.create({
   headerTitle: { fontSize: 21, fontWeight: '800', color: TEXT, textAlign: 'center' },
   headerSub: { fontSize: 11.5, color: MUTED, textAlign: 'center', marginTop: 1 },
 
+  meter: {
+    backgroundColor: P.card, borderRadius: 22, paddingVertical: 12, paddingHorizontal: 14, gap: 8,
+    borderWidth: 1.5, ...shadow,
+  },
+  mTop: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
+  mTag: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, backgroundColor: P.soft, borderRadius: 999, paddingHorizontal: 10, height: 28, flexShrink: 1 },
+  mTechDot: { width: 8, height: 8, borderRadius: 4 },
+  mTagTxt: { color: TEXT, fontSize: 12, fontWeight: '800' },
+  mBtn: { width: 34, height: 34, borderRadius: 11, borderWidth: 1.5, borderColor: P.border, backgroundColor: P.soft, alignItems: 'center', justifyContent: 'center' },
+  mMid: { flexDirection: 'row-reverse', alignItems: 'center' },
+  mNumRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  mNum: { fontSize: 40, fontWeight: '800', letterSpacing: -1.5, lineHeight: 46 },
+  mUnit: { color: MUTED, fontSize: 13, fontWeight: '700', marginTop: 12 },
+  mDelta: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
+  mDeltaTxt: { fontSize: 13, fontWeight: '800' },
+  mSmall: { color: MUTED, fontSize: 11, fontWeight: '700' },
+  mBarRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
+  mBar: { flex: 1, height: 8, borderRadius: 4, backgroundColor: '#e9eef8', overflow: 'hidden', flexDirection: 'row-reverse' },
+  mBarFill: { height: 8, borderRadius: 4 },
+  mStat: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
+  mStatTxt: { color: MUTED, fontSize: 12, fontWeight: '800', flexShrink: 1, textAlign: 'right' },
   heroCard: {
     backgroundColor: P.card, borderRadius: 24, padding: 14, gap: 12,
     borderWidth: 1, borderColor: P.border, ...shadow,

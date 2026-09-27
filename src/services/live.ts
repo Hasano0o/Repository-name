@@ -46,7 +46,7 @@ export async function checkTechKey(key: string): Promise<{ ok: boolean; name?: s
 
 export function reportText(r: LiveReport, tech?: string) {
   const f = (x: LiveReading | null) =>
-    x ? `\u200E${x.rsrp} dBm${x.band ? ` (${x.band}${x.pci ? ` · PCI ${x.pci}` : ''})` : ''}` : '—';
+    x ? `\u2066${x.rsrp} dBm\u2069${x.band ? ` (${x.band}${x.pci ? ` · PCI ${x.pci}` : ''})` : ''}` : '—';
   const g = r.gain_db === null ? '—' : `${r.gain_db > 0 ? '+' : ''}${r.gain_db} dB`;
   return `📡 تقرير ضبط الإشارة — Bandly\n\nقبل: ${f(r.first)}\nبعد: ${f(r.last)}\nأفضل قراءة: ${f(r.best)}\nالتحسن: ${g}\nالمدة: ${Math.max(1, Math.round(r.duration_sec / 60))} دقيقة${tech ? `\nالفني: ${tech}` : ''}`;
 }

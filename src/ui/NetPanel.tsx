@@ -86,7 +86,13 @@ function Card({ tech, dark, active, children, badge }: {
         </View>
         <View style={{ flex: 1, alignItems: 'flex-end' }}>
           <Text style={[c.title, dark && { color: '#fff' }]}>{tech === '5G' ? 'شبكة 5G' : 'شبكة 4G LTE'}</Text>
-          {!!badge && <Text style={[c.sub, dark && { color: 'rgba(255,255,255,0.65)' }]}>{badge}</Text>}
+          {!!badge && (
+            <View style={{ flexDirection: 'row-reverse', gap: 6, marginTop: 1 }}>
+              {badge.split(' · ').map((b, i) => (
+                <Text key={i} style={[c.sub, dark && { color: 'rgba(255,255,255,0.65)' }]}>{i ? `· ${b}` : b}</Text>
+              ))}
+            </View>
+          )}
         </View>
         <View style={[c.state, { backgroundColor: active ? '#16c78422' : dark ? 'rgba(255,255,255,0.08)' : P.soft }]}>
           <View style={[c.dot, { backgroundColor: active ? '#16c784' : P.faint }]} />
@@ -172,7 +178,7 @@ const c = StyleSheet.create({
   techPill: { borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6 },
   techTxt: { color: '#fff', fontSize: 17, fontWeight: '800' },
   title: { color: P.text, fontSize: 15, fontWeight: '800' },
-  sub: { color: P.sub, fontSize: 11.5, marginTop: 1 },
+  sub: { color: P.sub, fontSize: 11.5 },
   state: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
   dot: { width: 7, height: 7, borderRadius: 4 },
   stateTxt: { fontSize: 11, fontWeight: '800' },

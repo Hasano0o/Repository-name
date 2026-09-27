@@ -2,7 +2,9 @@ import { createAudioPlayer, setAudioModeAsync, AudioPlayer } from 'expo-audio';
 
 /**
  * وضع الصوت للتوجيه — مثل حساس الركن في السيارة:
- * كل ما تحسنت الإشارة تتقارب النغمات وتعلى نبرتها، فتوجّه الأنتنا بدون ما تشوف الشاشة.
+ * القيمة اللي تنرسل (update) نسبية: ١ = أنت على أفضل نقطة سجلتها في الجلسة، ٠ = بعيد عنها.
+ * كل ما قربت من أفضل نقطة تتقارب النغمات وتعلى نبرتها، فتوجّه الأنتنا بدون ما تشوف الشاشة.
+ * event('best') = رقم قياسي جديد (نغمتين عالية)، event('drop') = طاحت الإشارة (نغمتين منخفضة).
  */
 const SRC = {
   low: require('../../assets/sounds/beep-low.wav'),
@@ -30,6 +32,20 @@ export class AimBeeper {
   /** score من ٠ إلى ١ — نفس درجة الإشارة في الدائرة */
   update(score: number) {
     this.score = Math.max(0, Math.min(1, score));
+  }
+
+  /** تنبيه لمرة واحدة فوق النغمات العادية */
+  event(kind: 'best' | 'drop') {
+    if (!this.running) return;
+    const tone: Tone = kind === 'best' ? 'high' : 'low';
+    const p = this.players[tone];
+    if (!p) return;
+    const hit = () => p.seekTo(0).then(() => p.play()).catch(() => {});
+    hit();
+    setTimeout(hit, 140);
+    if (kind === 'best') setTimeout(hit, 280);
+    // نأخر النغمة العادية الجاية عشان التنبيه يبان
+    if (this.timer) { clearTimeout(this.timer); this.timer = setTimeout(this.loop, 700); }
   }
 
   stop() {

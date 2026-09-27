@@ -203,9 +203,11 @@ export default function TechScreen() {
             </Grid>
             {!!best && (
               <View style={s.best}>
-                <Text style={s.bestTxt}>
-                  أفضل قراءة: {'\u200E'}{best.rsrp} dBm{best.band ? ` · ${best.band}` : ''}{best.pci ? ` · PCI ${best.pci}` : ''}
-                </Text>
+                <View style={{ flexDirection: 'row-reverse', gap: 6, flexWrap: 'wrap' }}>
+                  <Text style={s.bestTxt}>أفضل قراءة:</Text>
+                  <Text style={s.bestTxt}>{`${best.rsrp} dBm`}</Text>
+                  {!!best.band && <Text style={s.bestTxt}>{`· ${best.band}${best.pci ? ` · PCI ${best.pci}` : ''}`}</Text>}
+                </View>
                 <Text style={[s.bestGap, { color: gap !== undefined && gap > 1 ? P.amber : P.green }]}>
                   {gap === undefined ? '' : gap <= 1 ? 'العميل عليها الحين ✓' : `الحين أقل بـ ${gap} dB`}
                 </Text>
@@ -268,7 +270,7 @@ export default function TechScreen() {
               ['القراءة في البداية', report.r.first], ['أفضل قراءة', report.r.best], ['القراءة النهائية', report.r.last],
             ].map(([l, x]: any) => (
               <View key={l} style={s.repRow}>
-                <Text style={s.repVal}>{x ? `\u200E${x.rsrp} dBm${x.band ? ` · ${x.band}` : ''}` : '—'}</Text>
+                <Text style={s.repVal}>{x ? `${x.rsrp} dBm${x.band ? ` · ${x.band}` : ''}` : '—'}</Text>
                 <Text style={s.repLbl}>{l}</Text>
               </View>
             ))}
