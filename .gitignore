@@ -36,3 +36,7 @@ expo-env.d.ts
 # مجلدات أصلية يولّدها prebuild — لا تُرفع
 /android
 /ios
+
+__pycache__/
+*.pyc
+live-server/data/
