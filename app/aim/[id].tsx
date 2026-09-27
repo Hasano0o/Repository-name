@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet,
+  Share, Vibration, Platform, Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { LiveHost, createLiveSession, CmdAction, CMD_LABEL, LIVE_BASE } from '../../src/services/live';
 import Svg, { Circle, Path, Line, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { Icon, IconName } from '../../src/ui/Icon';
 import {
@@ -357,6 +360,17 @@ export default function AimScreen() {
   const [nrSeen, setNrSeen] = useState(false);
   const [nrCell, setNrCell] = useState<CellTower | null>(null);
   const [pinned, setPinned] = useState<CellId | null>(null);
+  // ═══ وضع الفني ═══
+  const [live, setLive] = useState<{ code: string; url: string } | null>(null);
+  const [liveBusy, setLiveBusy] = useState(false);
+  const [liveOn, setLiveOn] = useState(false);
+  const [viewers, setViewers] = useState<string[]>([]);
+  const [sayMsg, setSayMsg] = useState<{ text: string; from: string; at: number } | null>(null);
+  const liveRef = useRef<LiveHost | null>(null);
+  const lastRdRef = useRef<{ cell: CellId } | null>(null);
+  const pinnedRef = useRef<CellId | null>(null);
+  const cmdRef = useRef<(id: number, action: CmdAction, from: string) => void>(() => {});
+  useEffect(() => { pinnedRef.current = pinned; }, [pinned]);
   const [pinBusy, setPinBusy] = useState(false);
   const [canPin, setCanPin] = useState(false);
   const [nrNb, setNrNb] = useState(false);
@@ -459,6 +473,17 @@ export default function AimScreen() {
         }
         pulse(score);
         beeperRef.current?.update(score);
+        lastRdRef.current = rd;
+        if (liveRef.current) {
+          const b = bestRef.current;
+          liveRef.current.send({
+            rsrp: smooth ?? rd.rsrp, sinr: rd.sinr, pci: rd.cell.pci, tech: rd.cell.tech,
+            band: rd.cell.band ? (rd.cell.tech === 'NR' ? `n${rd.cell.band}` : `B${rd.cell.band}`) : undefined,
+            score, level: overallLevel({ rsrp: smooth ?? rd.rsrp, sinr: rd.sinr }),
+            best: b ? (b.smooth ?? b.rsrp) : undefined,
+            pinned: pinnedRef.current ? cellName(pinnedRef.current) : null,
+          });
+        }
       }
       if (Date.now() - cellTick.current > 3000) {
         cellTick.current = Date.now();
@@ -493,6 +518,12 @@ export default function AimScreen() {
     return () => {
       alive = false;
       if (timer) clearInterval(timer);
+      if (liveRef.current) {
+        liveRef.current.end();
+        liveRef.current = null;
+        setLive(null);
+        deactivateKeepAwake('bandly-live').catch(() => {});
+      }
       if (tempPinRef.current && infoRef.current) {
         tempPinRef.current = false;
         withSession(infoRef.current, d => (d.unlockCell ? d.unlockCell() : Promise.resolve()), false).catch(() => {});
@@ -590,6 +621,116 @@ export default function AimScreen() {
       },
     ]);
   };
+
+  // ═══ وضع الفني — المشاركة ═══
+  const shareLink = (c = live) => {
+    if (!c) return;
+    Share.share({
+      message: `ساعدني أضبط إشارة الراوتر 📡\nافتح الرابط وشوف قراءتي مباشرة:\n${c.url}\n\nأو اكتب الكود في Bandly ← وضع الفني: ${c.code}`,
+    }).catch(() => {});
+  };
+
+  const startShare = async () => {
+    if (!info || liveBusy || liveRef.current) return;
+    setLiveBusy(true);
+    try {
+      const s = await createLiveSession(info.name);
+      const host = new LiveHost(s.code, s.token, {
+        onState: st => setLiveOn(st === 'on'),
+        onViewers: (_n, names) => setViewers(names),
+        onSay: (text, from) => {
+          setSayMsg({ text, from, at: Date.now() });
+          if (Platform.OS === 'android') Vibration.vibrate([0, 350, 120, 350]);
+          else Vibration.vibrate();
+        },
+        onCmd: (cid, action, from) => cmdRef.current(cid, action, from),
+        onEnd: (why, report) => {
+          liveRef.current = null;
+          setLive(null);
+          setViewers([]);
+          deactivateKeepAwake('bandly-live').catch(() => {});
+          if (why === 'expired') {
+            Alert.alert('انتهت المشاركة', 'انتهت جلسة الفني تلقائياً.'
+              + (report?.gain_db != null ? `\nالتحسن: ${report.gain_db > 0 ? '+' : ''}${report.gain_db} dB` : ''));
+          }
+        },
+      });
+      liveRef.current = host;
+      setLive({ code: s.code, url: s.url });
+      activateKeepAwakeAsync('bandly-live').catch(() => {});
+      shareLink({ code: s.code, url: s.url });
+    } catch (e: any) {
+      Alert.alert('ما قدرنا نبدأ المشاركة', `${e?.message ?? e}\nتأكد إن الراوتر متصل بالإنترنت.`);
+    } finally {
+      setLiveBusy(false);
+    }
+  };
+
+  const stopShare = () => {
+    Alert.alert('إيقاف المشاركة', 'الفني ما راح يشوف قراءتك بعدها. توقف؟', [
+      { text: 'لا', style: 'cancel' },
+      {
+        text: 'أوقف', style: 'destructive', onPress: () => {
+          liveRef.current?.end();
+          liveRef.current = null;
+          setLive(null);
+          setViewers([]);
+          deactivateKeepAwake('bandly-live').catch(() => {});
+        },
+      },
+    ]);
+  };
+
+  // أوامر الفني — ما تتنفذ إلا بموافقة العميل
+  cmdRef.current = (cid: number, action: CmdAction, from: string) => {
+    const host = liveRef.current;
+    if (!host) return;
+    const r = infoRef.current;
+    if (!r || !canPin) { host.result(cid, false, 'هذا الراوتر ما يدعم التثبيت على برج'); return; }
+    let target: CellLockTarget | null = null;
+    let cell: CellId | null = null;
+    if (action === 'lock_current') { cell = lastRdRef.current?.cell ?? null; target = cell ? toTarget(cell) : null; }
+    if (action === 'lock_best') { cell = bestRef.current?.cell ?? null; target = cell ? toTarget(cell) : null; }
+    if (action !== 'unlock' && !target) { host.result(cid, false, 'ما عندنا رقم البرج (PCI) للحين'); return; }
+    const what = action === 'unlock' ? CMD_LABEL.unlock : `${CMD_LABEL[action]}: ${cellName(cell)}`;
+    Vibration.vibrate();
+    Alert.alert(`طلب من ${from}`, `${what}\n\nتوافق؟`, [
+      { text: 'رفض', style: 'cancel', onPress: () => host.result(cid, false, 'العميل رفض الطلب') },
+      {
+        text: 'موافق', onPress: async () => {
+          setPinBusy(true);
+          try {
+            if (action === 'unlock') {
+              await withSession(r, d => d.unlockCell!(), false);
+              setPinned(null);
+              tempPinRef.current = false;
+              host.result(cid, true, 'تم فك التثبيت — الراوتر على الوضع التلقائي');
+            } else {
+              const ok = await lockAndVerify(r, target!);
+              if (ok) {
+                setPinned(cell);
+                tempPinRef.current = false;
+                host.result(cid, true, `تم التثبيت على ${cellName(cell)}`);
+              } else {
+                host.result(cid, false, 'الراوتر ما اتصل على هذا البرج، رجع للتلقائي');
+              }
+            }
+          } catch (e: any) {
+            host.result(cid, false, `فشل: ${e?.message ?? e}`);
+          } finally {
+            setPinBusy(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  // رسالة الفني تختفي بعد ٥ ثواني
+  useEffect(() => {
+    if (!sayMsg) return;
+    const t = setTimeout(() => setSayMsg(m => (m && m.at === sayMsg.at ? null : m)), 5000);
+    return () => clearTimeout(t);
+  }, [sayMsg]);
 
   const wake5g = () => {
     if (waking !== null) { wakeStop.current = true; return; }
@@ -722,6 +863,37 @@ export default function AimScreen() {
               )}
             </View>
 
+            {/* ═══ وضع الفني: شارك مع فني ═══ */}
+            {!live ? (
+              <Section title="شارك مع فني" sub="الفني يشوف قراءتك حيّة ويوجّهك وهو في مكانه" icon="share"
+                tone={P.cyan} toneSoft={P.cyanSoft}>
+                <PrimaryBtn small text="شارك قراءتي مع فني" icon="share" onPress={startShare} busy={liveBusy}
+                  colors={['#0ea5c6', '#2f6bff']} style={{ marginTop: 12 }} />
+                <Pressable onPress={() => Linking.openURL(`${LIVE_BASE}/live/`).catch(() => {})} style={a.linkRow}>
+                  <Text style={a.linkTxt}>ما عندك فني؟ شوف الفنيين المعتمدين</Text>
+                </Pressable>
+              </Section>
+            ) : (
+              <View style={a.liveCard}>
+                <View style={a.liveHead}>
+                  <View style={[a.liveDot, { backgroundColor: liveOn ? '#16c784' : '#ffb020' }]} />
+                  <Text style={a.liveTitle}>{liveOn ? 'المشاركة شغالة' : 'نعيد الاتصال…'}</Text>
+                  <View style={{ flex: 1 }} />
+                  <Pressable onPress={stopShare} hitSlop={8} style={a.liveStop}>
+                    <Text style={a.liveStopTxt}>إيقاف</Text>
+                  </Pressable>
+                </View>
+                <Text style={a.liveLbl}>كود الجلسة</Text>
+                <Text style={a.liveCode}>{live.code.slice(0, 3)} {live.code.slice(3)}</Text>
+                <Text style={a.liveViewers}>
+                  {viewers.length ? `👀 ${viewers.join('، ')} يتابع قراءتك الحين` : 'بانتظار الفني يفتح الرابط…'}
+                </Text>
+                <PrimaryBtn small text="أرسل الرابط للفني" icon="share" onPress={() => shareLink()}
+                  colors={['#0ea5c6', '#2f6bff']} style={{ marginTop: 10, alignSelf: 'stretch' }} />
+                <Text style={a.liveHint}>خلّ التطبيق مفتوح على هذي الشاشة لين يخلص الفني — الشاشة ما راح تنطفي.</Text>
+              </View>
+            )}
+
             {/* ═══ Band selector ═══ */}
             <Section title="اختيار التردد" sub="الترددات المتاحة على شبكتك" icon="bands">
               <View style={a.segment}>
@@ -845,6 +1017,16 @@ export default function AimScreen() {
         )}
       </ScrollView>
 
+      {/* ═══ رسالة الفني ═══ */}
+      {sayMsg && (
+        <Pressable onPress={() => setSayMsg(null)} style={[a.sayWrap, { top: insets.top + 8 }]}>
+          <View style={a.sayBox}>
+            <Text style={a.sayFrom}>{sayMsg.from} يقول:</Text>
+            <Text style={a.sayTxt}>{sayMsg.text}</Text>
+          </View>
+        </Pressable>
+      )}
+
       {/* ═══ CTA أسفل ═══ */}
       {!loading && (
         <View style={[a.footer, { paddingBottom: insets.bottom + 12 }]}>
@@ -966,6 +1148,28 @@ const a = StyleSheet.create({
     borderRadius: 20, shadowColor: P.heroB, shadowOpacity: 0.35,
     shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 6,
   },
+
+  linkRow: { alignSelf: 'center', paddingTop: 10 },
+  linkTxt: { color: P.cyan, fontSize: 12.5, fontWeight: '700' },
+  liveCard: {
+    backgroundColor: '#eaf8fc', borderRadius: 22, padding: 16, borderWidth: 1.5, borderColor: '#bfeaf5', alignItems: 'center',
+  },
+  liveHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, alignSelf: 'stretch' },
+  liveDot: { width: 10, height: 10, borderRadius: 5 },
+  liveTitle: { color: TEXT, fontSize: 14.5, fontWeight: '800' },
+  liveStop: { backgroundColor: '#ffeef0', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 },
+  liveStopTxt: { color: DANGER, fontWeight: '800', fontSize: 12.5 },
+  liveLbl: { color: MUTED, fontSize: 12, fontWeight: '700', marginTop: 12 },
+  liveCode: { color: TEXT, fontSize: 40, fontWeight: '800', letterSpacing: 4 },
+  liveViewers: { color: '#0b7f99', fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  liveHint: { color: MUTED, fontSize: 11.5, textAlign: 'center', marginTop: 10, lineHeight: 17 },
+  sayWrap: { position: 'absolute', left: 16, right: 16, zIndex: 50 },
+  sayBox: {
+    backgroundColor: '#0f1f45', borderRadius: 22, paddingVertical: 18, paddingHorizontal: 16, alignItems: 'center',
+    shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 12,
+  },
+  sayFrom: { color: 'rgba(255,255,255,0.7)', fontSize: 12.5, fontWeight: '700' },
+  sayTxt: { color: '#fff', fontSize: 26, fontWeight: '800', textAlign: 'center', marginTop: 4 },
 
   err: { color: DANGER, fontSize: 12, textAlign: 'center' },
 });

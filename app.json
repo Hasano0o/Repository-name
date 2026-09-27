@@ -23,7 +23,8 @@
               "NSExceptionAllowsInsecureHTTPLoads": true
             }
           }
-        }
+        },
+        "NSLocalNetworkUsageDescription": "Bandly يحتاج يوصل لراوترك على الشبكة المحلية عشان يقرأ الإشارة ويديره."
       }
     },
     "android": {

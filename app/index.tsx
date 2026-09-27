@@ -199,6 +199,15 @@ export default function RoutersList() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.blue} colors={[P.blue]} />
         }
         ListFooterComponent={
+          <View style={{ gap: 12 }}>
+          <Pressable style={({ pressed }) => [s.tech, pressed && { opacity: 0.85 }]} onPress={() => router.push('/tech' as Href)}>
+            <View style={s.flip}><Icon name="chevron" size={16} color="#fff" /></View>
+            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+              <Text style={s.techTitle}>وضع الفني</Text>
+              <Text style={s.techSub}>تابع إشارة عميل حيّة ووجّهه عن بُعد</Text>
+            </View>
+            <View style={s.techIcon}><Icon name="aim" size={20} color="#fff" /></View>
+          </Pressable>
           <Pressable style={({ pressed }) => [s.explore, pressed && { opacity: 0.8 }]} onPress={explore}>
             <View style={s.flip}><Icon name="chevron" size={16} color={P.violet} /></View>
             <View style={{ flex: 1, alignItems: 'flex-end' }}>
@@ -209,6 +218,7 @@ export default function RoutersList() {
               <Icon name="compass" size={20} color={P.violet} />
             </View>
           </Pressable>
+          </View>
         }
         renderItem={({ item }) => {
           const st = status[item.id];
@@ -373,8 +383,15 @@ const s = StyleSheet.create({
   pwRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: -4 },
   pwTxt: { color: P.faint, fontSize: 10.5, fontWeight: '600' },
 
-  explore: {
+  tech: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 12, marginTop: 4,
+    borderRadius: 20, padding: 14, backgroundColor: '#0ea5c6',
+  },
+  techIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  techTitle: { color: '#fff', fontSize: 14.5, fontWeight: '800' },
+  techSub: { color: 'rgba(255,255,255,0.85)', fontSize: 11.5, marginTop: 1 },
+  explore: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 12,
     borderRadius: 20, padding: 14, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#cfc3fb',
     backgroundColor: '#faf8ff',
   },

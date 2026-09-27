@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f6bff">
+<title>Bandly · وضع الفني</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f3f6fc;--card:#fff;--border:#e8eef8;--soft:#f6f8fd;--text:#0f1f45;--sub:#6b7796;--faint:#a3adc6;
+  --blue:#2f6bff;--violet:#7050f0;--green:#12b76a;--amber:#f59e0b;--red:#e5484d;
+  --ex:#12b76a;--good:#5ba644;--fair:#f79009;--poor:#e5484d;--unk:#9aa1bd;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;
+  padding:16px 16px calc(24px + env(safe-area-inset-bottom))}
+.wrap{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.hero{border-radius:26px;padding:18px;color:#fff;background:linear-gradient(135deg,#2f6bff,#6a45ec);position:relative;overflow:hidden}
+.hero:before{content:"";position:absolute;width:180px;height:180px;border-radius:50%;background:#fff;opacity:.08;top:-70px;left:-50px}
+.hero h1{margin:0;font-size:22px}
+.hero .k{opacity:.8;font-size:12px;font-weight:700;letter-spacing:1px}
+.row{display:flex;align-items:center;gap:8px}
+.sp{justify-content:space-between}
+.tag{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.18);border-radius:999px;padding:4px 11px;font-size:12px;font-weight:700}
+.dot{width:8px;height:8px;border-radius:50%;background:#a3adc6;display:inline-block}
+.card{background:var(--card);border:1px solid var(--border);border-radius:22px;padding:16px;box-shadow:0 6px 16px rgba(27,43,92,.06)}
+.card h2{margin:0 0 2px;font-size:15.5px}
+.card .s{color:var(--sub);font-size:12px;margin:0 0 12px}
+.counters{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ctr{border:1.5px solid var(--border);border-radius:18px;padding:12px;text-align:center;background:#fff}
+.ctr .l{color:var(--sub);font-size:12px;font-weight:700}
+.ctr .v{font-size:40px;font-weight:700;letter-spacing:-1.5px;direction:ltr;line-height:1.15}
+.ctr .u{font-size:13px;color:var(--sub);font-weight:600}
+.ctr .d{font-size:12px;font-weight:700;direction:ltr}
+.lvl{display:inline-block;border-radius:999px;padding:2px 10px;font-size:11.5px;font-weight:700;margin-top:4px}
+.chips{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.chip{background:var(--soft);border:1px solid var(--border);border-radius:14px;padding:8px;text-align:center}
+.chip .l{color:var(--sub);font-size:11px;font-weight:600}
+.chip .v{font-weight:700;font-size:14.5px;direction:ltr}
+.best{margin-top:10px;background:#e7f8ef;border-radius:14px;padding:10px 12px;font-size:13px;font-weight:600;color:#0b7a47}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.btn{border:0;border-radius:14px;padding:13px 10px;font:inherit;font-weight:700;font-size:14px;cursor:pointer;background:var(--soft);color:var(--text);border:1.5px solid var(--border)}
+.btn:active{transform:scale(.97)}
+.btn.p{background:linear-gradient(90deg,#6a45ec,#2f6bff);color:#fff;border:0}
+.btn.v{background:#efeaff;color:var(--violet);border-color:#ded5ff}
+.btn.r{background:#ffeef0;color:var(--red);border-color:#ffdde2}
+.btn.stop{background:#e7f8ef;color:#0b7a47;border-color:#c9f0dc;grid-column:span 2;font-size:16px}
+.btn[disabled]{opacity:.45}
+input{width:100%;border:1.5px solid var(--border);border-radius:14px;padding:14px;font:inherit;font-size:22px;text-align:center;letter-spacing:6px;direction:ltr;background:var(--soft);color:var(--text)}
+input.small{font-size:15px;letter-spacing:0;text-align:right;direction:rtl}
+.log{font-size:12.5px;color:var(--sub);display:flex;flex-direction:column;gap:6px;max-height:150px;overflow:auto}
+.log div{background:var(--soft);border-radius:10px;padding:7px 10px}
+.hide{display:none!important}
+.note{font-size:12px;color:var(--sub);text-align:center}
+.warn{background:#fff5e3;color:#a15c00;border-radius:14px;padding:10px 12px;font-size:13px;font-weight:600}
+.rep .big{font-size:30px;font-weight:700;direction:ltr;text-align:center}
+.rep table{width:100%;border-collapse:collapse;font-size:13.5px}
+.rep td{padding:8px 4px;border-bottom:1px solid var(--border)}
+.rep td:last-child{text-align:left;direction:ltr;font-weight:700}
+svg{display:block;width:100%}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- دخول -->
+  <section id="join" class="hide">
+    <div class="hero">
+      <div class="k">Bandly</div>
+      <h1>وضع الفني</h1>
+      <p style="margin:6px 0 0;opacity:.9;font-size:13.5px">شوف إشارة راوتر العميل حيّة ووجّهه وأنت في مكانك</p>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h2>كود العميل</h2>
+      <p class="s">اطلب من العميل يضغط «شارك مع فني» في تطبيق Bandly ويعطيك الكود</p>
+      <input id="codeIn" inputmode="numeric" maxlength="6" placeholder="••••••">
+      <div id="keyBox" class="hide" style="margin-top:10px">
+        <input id="keyIn" class="small" placeholder="مفتاح الفني (من اشتراكك)">
+      </div>
+      <input id="nameIn" class="small" style="margin-top:10px" placeholder="اسمك (يظهر للعميل)">
+      <button class="btn p" style="width:100%;margin-top:12px" id="goBtn">ابدأ المتابعة</button>
+      <p id="joinErr" class="warn hide" style="margin-top:10px"></p>
+    </div>
+    <div class="card" id="techsCard">
+      <h2>فنيين معتمدين</h2>
+      <p class="s">فنيين يستخدمون Bandly</p>
+      <div id="techs" class="log" style="max-height:none"></div>
+    </div>
+  </section>
+
+  <!-- الجلسة -->
+  <section id="live" class="hide" style="display:flex;flex-direction:column;gap:14px">
+    <div class="hero">
+      <div class="row sp">
+        <div>
+          <div class="k">جلسة <span id="codeLbl" style="direction:ltr;display:inline-block"></span></div>
+          <h1 id="lbl">راوتر العميل</h1>
+        </div>
+        <span class="tag"><span class="dot" id="stDot"></span><span id="stTxt">نتصل…</span></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="counters">
+        <div class="ctr" id="cR"><div class="l">RSRP</div><div class="v" id="vR">—</div><div class="u">dBm</div>
+          <div class="d" id="dR"></div><span class="lvl" id="lR"></span></div>
+        <div class="ctr" id="cS"><div class="l">SINR</div><div class="v" id="vS">—</div><div class="u">dB</div>
+          <div class="d" id="dS"></div><span class="lvl" id="lS"></span></div>
+      </div>
+      <div class="chips">
+        <div class="chip"><div class="l">الباند</div><div class="v" id="vB">—</div></div>
+        <div class="chip"><div class="l">PCI</div><div class="v" id="vP">—</div></div>
+        <div class="chip"><div class="l">التقييم</div><div class="v" id="vQ">—</div></div>
+      </div>
+      <div class="best" id="bestBox">أفضل قراءة: —</div>
+      <div id="pinBox" class="note" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
+      <h2>تاريخ الإشارة</h2>
+      <p class="s">آخر دقيقتين — يمين = الآن</p>
+      <svg id="chart" viewBox="0 0 320 120" preserveAspectRatio="none" height="120"></svg>
+    </div>
+
+    <div class="card" id="sayCard">
+      <h2>وجّه العميل</h2>
+      <p class="s">تطلع رسالة كبيرة على جواله مع اهتزاز</p>
+      <div class="grid" id="sayGrid"></div>
+    </div>
+
+    <div class="card" id="cmdCard">
+      <h2>أوامر الراوتر</h2>
+      <p class="s">ما تتنفذ إلا بعد موافقة العميل من جواله</p>
+      <div class="grid">
+        <button class="btn v" data-cmd="lock_current">ثبّت على البرج الحالي</button>
+        <button class="btn v" data-cmd="lock_best">ثبّت على أفضل برج</button>
+        <button class="btn r" data-cmd="unlock" style="grid-column:span 2">فك التثبيت (تلقائي)</button>
+      </div>
+      <div class="log" id="log" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card rep hide" id="repCard">
+      <h2>تقرير الجلسة</h2>
+      <p class="s" id="repWhy"></p>
+      <div class="big" id="repGain"></div>
+      <table id="repTbl"></table>
+      <div class="grid" style="margin-top:12px">
+        <button class="btn p" id="waBtn">أرسل للعميل واتساب</button>
+        <button class="btn" id="cpBtn">نسخ التقرير</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const LV = {excellent:['ممتاز','--ex'],good:['جيد','--good'],fair:['متوسط','--fair'],poor:['ضعيف','--poor'],unknown:['—','--unk']};
+const grade=(v,a,b,c)=>v==null?'unknown':v>=a?'excellent':v>=b?'good':v>=c?'fair':'poor';
+const rsrpL=v=>grade(v,-80,-90,-100), sinrL=v=>grade(v,20,13,0);
+const col=l=>getComputedStyle(document.documentElement).getPropertyValue(LV[l][1]).trim();
+const ls={get:k=>{try{return localStorage.getItem(k)||''}catch(e){return ''}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
+
+let code = (location.pathname.match(/\/live\/(\d{6})/)||[])[1] || '';
+let ws=null, hist=[], first=null, best=null, needKey=false, closedByEnd=false, retry=0, lastReport=null;
+
+async function init(){
+  try{ const c=await (await fetch('/live-api/config')).json(); needKey=!!c.require_tech_key; }catch(e){}
+  $('keyBox').classList.toggle('hide',!needKey);
+  $('keyIn').value=ls.get('bandly_key'); $('nameIn').value=ls.get('bandly_name');
+  loadTechs();
+  if(code && (!needKey || ls.get('bandly_key'))) start(); else { $('codeIn').value=code; show('join'); }
+}
+function show(w){ $('join').classList.toggle('hide',w!=='join'); $('live').classList.toggle('hide',w!=='live'); }
+
+async function loadTechs(){
+  try{
+    const d=await (await fetch('/live-api/techs')).json();
+    if(!d.techs.length){ $('techsCard').classList.add('hide'); return; }
+    $('techs').innerHTML=d.techs.map(t=>`<div><b>${esc(t.name||'')}</b> · ${esc(t.city||'')} ${t.phone?`· <a href="https://wa.me/${esc(t.phone).replace(/^0/,'966')}">${esc(t.phone)}</a>`:''}</div>`).join('');
+  }catch(e){ $('techsCard').classList.add('hide'); }
+}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+$('goBtn').onclick=()=>{
+  const c=$('codeIn').value.replace(/\D/g,'');
+  if(c.length!==6){ err('الكود ٦ أرقام'); return; }
+  if(needKey && !$('keyIn').value.trim()){ err('أدخل مفتاح الفني'); return; }
+  ls.set('bandly_key',$('keyIn').value.trim()); ls.set('bandly_name',$('nameIn').value.trim());
+  code=c; history.replaceState(null,'','/live/'+c); start();
+};
+function err(t){ $('joinErr').textContent=t; $('joinErr').classList.remove('hide'); }
+
+function start(){
+  show('live'); $('codeLbl').textContent=code;
+  const proto=location.protocol==='https:'?'wss':'ws';
+  const q=new URLSearchParams({key:ls.get('bandly_key'),name:ls.get('bandly_name')});
+  ws=new WebSocket(`${proto}://${location.host}/live-api/sub/${code}?${q}`);
+  ws.onopen=()=>{ retry=0; };
+  ws.onmessage=e=>{ let m; try{m=JSON.parse(e.data)}catch(x){return} onMsg(m); };
+  ws.onclose=e=>{
+    if(e.code===4404){ status('off','الجلسة منتهية أو الكود غلط'); if(!hist.length){ show('join'); err('الكود غلط أو الجلسة انتهت'); } return; }
+    if(e.code===4401){ show('join'); err('مفتاح الفني غير صالح أو منتهي'); return; }
+    if(e.code===4429){ show('join'); err('محاولات كثيرة، جرّب بعد شوي'); return; }
+    if(closedByEnd) return;
+    status('off','انقطع الاتصال، نعيد المحاولة…');
+    setTimeout(start, Math.min(10000, 1500*(++retry)));
+  };
+}
+function status(k,t){ $('stDot').style.background=k==='on'?'#16c784':k==='wait'?'#ffb020':'#ff5a5f'; $('stTxt').textContent=t; }
+
+function onMsg(m){
+  if(m.t==='hello'){
+    if(m.label) $('lbl').textContent=m.label;
+    buildSay(m.say||{});
+    hist=[]; first=null; best=null;
+    (m.history||[]).forEach(addReading);
+    render();
+    status(m.customer?'on':'wait', m.customer?'العميل متصل':'بانتظار العميل');
+    if(m.ended && m.report) showReport(m.report,'ended');
+  } else if(m.t==='r'){ addReading(m); render(); status('on','العميل متصل'); }
+  else if(m.t==='status'){ status(m.customer?'on':'wait', m.customer?'العميل متصل':'العميل طلع من التطبيق'); }
+  else if(m.t==='cmd_sent'){ log(`أرسلنا الطلب «${cmdName(m.action)}» — بانتظار موافقة العميل${m.delivered?'':' (العميل مو متصل)'}`); }
+  else if(m.t==='cmd_result'){ log((m.ok?'✅ ':'❌ ')+(m.msg||'')); }
+  else if(m.t==='end'){ closedByEnd=true; showReport(m.report,m.why); }
+}
+function cmdName(a){return {lock_current:'ثبّت على البرج الحالي',lock_best:'ثبّت على أفضل برج',unlock:'فك التثبيت'}[a]||a}
+function log(t){ const d=document.createElement('div'); d.textContent=new Date().toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'})+' · '+t; $('log').prepend(d); }
+
+function addReading(r){
+  hist.push(r); if(hist.length>60) hist.shift();
+  if(r.rsrp!=null){ if(!first) first=r; if(!best||r.rsrp>best.rsrp) best=r; }
+}
+function delta(el,v,base){
+  if(v==null||base==null){ el.textContent=''; return; }
+  const d=Math.round(v-base);
+  el.textContent=d>0?`↑ +${d} dB`:d<0?`↓ ${d} dB`:'• 0 dB';
+  el.style.color=d>0?'#13B783':d<0?'#DC2626':'#71809A';
+}
+function render(){
+  const r=hist[hist.length-1]; if(!r) return;
+  const lr=rsrpL(r.rsrp), lsn=sinrL(r.sinr);
+  $('vR').textContent=r.rsrp??'—'; $('vR').style.color=col(lr); $('cR').style.borderColor=col(lr)+'66';
+  $('vS').textContent=r.sinr??'—'; $('vS').style.color='#3567F5';
+  $('lR').textContent=LV[lr][0]; $('lR').style.background=col(lr)+'1f'; $('lR').style.color=col(lr);
+  $('lS').textContent=LV[lsn][0]; $('lS').style.background=col(lsn)+'1f'; $('lS').style.color=col(lsn);
+  delta($('dR'),r.rsrp,first&&first.rsrp); delta($('dS'),r.sinr,first&&first.sinr);
+  $('vB').textContent=r.band||'—'; $('vP').textContent=r.pci||'—';
+  $('vQ').textContent=r.score!=null?Math.round(r.score*100)+'%':'—';
+  if(best){
+    const gap=r.rsrp!=null?Math.round(best.rsrp-r.rsrp):null;
+    $('bestBox').textContent=`أفضل قراءة: \u200E${best.rsrp} dBm${best.band?' · '+best.band:''}${best.pci?' · PCI '+best.pci:''}`+(gap!=null?(gap<=1?' — العميل عليها الحين ✓':` — الحين أقل بـ ${gap} dB`):'');
+  }
+  $('pinBox').textContent=r.pinned?`الراوتر مثبّت على ${r.pinned}`:'';
+  chart();
+}
+function chart(){
+  const v=hist.map(r=>r.rsrp).filter(x=>x!=null); const svg=$('chart');
+  if(v.length<2){ svg.innerHTML=''; return; }
+  const W=320,H=120,min=-125,max=-60,p=8;
+  const pts=v.map((x,i)=>[p+i*(W-2*p)/(v.length-1), p+(H-2*p)*(1-(Math.max(min,Math.min(max,x))-min)/(max-min))]);
+  const c=col(rsrpL(v[v.length-1]));
+  const line=pts.map((q,i)=>(i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1)).join(' ');
+  const grid=[-70,-90,-110].map(g=>{const y=p+(H-2*p)*(1-(g-min)/(max-min));return `<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="#edf1f8" stroke-dasharray="4 5"/>`}).join('');
+  const last=pts[pts.length-1];
+  svg.innerHTML=`<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity=".28"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient></defs>${grid}
+  <path d="${line} L ${last[0]} ${H-p} L ${pts[0][0]} ${H-p} Z" fill="url(#g)"/><path d="${line}" fill="none" stroke="${c}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
+}
+function buildSay(say){
+  const order=['left','right','up','down','slow','more','back','wait','stop'];
+  $('sayGrid').innerHTML=order.filter(k=>say[k]).map(k=>`<button class="btn ${k==='stop'?'stop':''}" data-say="${k}">${esc(say[k])}</button>`).join('');
+  $('sayGrid').querySelectorAll('[data-say]').forEach(b=>b.onclick=()=>{ sendWs({t:'say',k:b.dataset.say}); flash(b); });
+}
+document.querySelectorAll('[data-cmd]').forEach(b=>b.onclick=()=>{
+  if(!confirm(`نرسل للعميل طلب: ${cmdName(b.dataset.cmd)}؟`)) return;
+  sendWs({t:'cmd',action:b.dataset.cmd}); flash(b);
+});
+function flash(b){ b.disabled=true; setTimeout(()=>b.disabled=false,1200); if(navigator.vibrate) navigator.vibrate(30); }
+function sendWs(m){ if(ws&&ws.readyState===1) ws.send(JSON.stringify(m)); }
+setInterval(()=>sendWs({t:'ping'}),20000);
+
+function showReport(rep,why){
+  if(!rep) return; lastReport=rep;
+  $('repCard').classList.remove('hide'); $('sayCard').classList.add('hide'); $('cmdCard').classList.add('hide');
+  status('off','انتهت الجلسة');
+  $('repWhy').textContent=why==='customer'?'العميل أنهى الجلسة':why==='expired'?'انتهت الجلسة تلقائياً':'انتهت الجلسة';
+  const g=rep.gain_db;
+  $('repGain').textContent=g==null?'—':(g>0?`+${g} dB`:`${g} dB`);
+  $('repGain').style.color=g>0?'#12b76a':g<0?'#e5484d':'#6b7796';
+  const f=x=>x?`\u200E${x.rsrp} dBm${x.band?' · '+x.band:''}${x.pci?' · PCI '+x.pci:''}`:'—';
+  const mins=Math.max(1,Math.round((rep.duration_sec||0)/60));
+  $('repTbl').innerHTML=`<tr><td>القراءة في البداية</td><td>${f(rep.first)}</td></tr><tr><td>أفضل قراءة</td><td>${f(rep.best)}</td></tr><tr><td>القراءة النهائية</td><td>${f(rep.last)}</td></tr><tr><td>مدة الجلسة</td><td>${mins} د</td></tr>`;
+}
+function reportText(){
+  const r=lastReport; if(!r) return '';
+  const f=x=>x?`${x.rsrp} dBm${x.band?' ('+x.band+(x.pci?' · PCI '+x.pci:'')+')':''}`:'—';
+  return `📡 تقرير ضبط الإشارة — Bandly\n\nقبل: ${f(r.first)}\nبعد: ${f(r.last)}\nأفضل قراءة: ${f(r.best)}\nالتحسن: ${r.gain_db==null?'—':(r.gain_db>0?'+':'')+r.gain_db+' dB'}\nالمدة: ${Math.max(1,Math.round((r.duration_sec||0)/60))} دقيقة${ls.get('bandly_name')?'\nالفني: '+ls.get('bandly_name'):''}`;
+}
+$('waBtn').onclick=()=>{ location.href='https://wa.me/?text='+encodeURIComponent(reportText()); };
+$('cpBtn').onclick=async()=>{ try{ await navigator.clipboard.writeText(reportText()); $('cpBtn').textContent='✓ انتسخ'; }catch(e){ prompt('انسخ التقرير:',reportText()); } };
+
+init();
+</script>
+</body>
+</html>
