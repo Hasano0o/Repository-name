@@ -79,12 +79,21 @@ export async function uploadVoice(code: string, role: 'cust' | 'tech', token: st
   fd.append('role', role);
   fd.append('token', token);
   fd.append('dur', String(Math.round(dur * 10) / 10));
-  const r = await fetch(`${LIVE_BASE}/live-api/voice/${code}`, { method: 'POST', body: fd });
-  if (!r.ok) {
-    let msg = 'ما انرسل التسجيل';
-    try { const j = await r.json(); if (j?.detail) msg = String(j.detail); } catch {}
-    throw new Error(msg);
-  }
+  // نستخدم XMLHttpRequest لأن fetch الجديد في Expo ما يدعم ملفات {uri} داخل FormData
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${LIVE_BASE}/live-api/voice/${code}`);
+    xhr.timeout = 30000;
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) { resolve(); return; }
+      let msg = 'ما انرسل التسجيل';
+      try { const j = JSON.parse(xhr.responseText); if (j?.detail) msg = String(j.detail); } catch {}
+      reject(new Error(msg));
+    };
+    xhr.onerror = () => reject(new Error('تعذّر الاتصال بالسيرفر — تأكد من النت'));
+    xhr.ontimeout = () => reject(new Error('انتهت المهلة — النت بطيء، جرّب رسالة أقصر'));
+    xhr.send(fd);
+  });
 }
 
 type Msg = { t: string; [k: string]: any };
