@@ -37,7 +37,10 @@ const lteBandOf = (earfcn?: number) =>
 
 /** ترددات MU5001 المعروفة — لو الراوتر ما قال غير كذا */
 const DEFAULT_LTE = [1, 3, 7, 8, 20, 28, 40, 41];
-const DEFAULT_NR = [40, 41, 78];
+// كل ترددات 5G الشائعة في راوترات ZTE — كانت ٣ بس فكان «عرض الكل» يطلّع n40/n41/n78 فقط
+const DEFAULT_NR = [1, 3, 5, 7, 8, 20, 28, 38, 40, 41, 77, 78, 79];
+// لو الراوتر رفض القائمة الكاملة وقت فك التثبيت نرجع لهذي
+const SAFE_NR = [40, 41, 78];
 
 const bandsFromMask = (hex?: string): number[] => (hex ? decodeBandMask(hex) : []);
 const maskFromBands = (bands: number[]) => encodeBandMask(bands);
@@ -642,7 +645,8 @@ export class ZteDriver implements RouterDriver {
     const supported = [...new Set([...DEFAULT_LTE, ...lte])].sort((a, b) => a - b);
     const nrSupported = [...new Set([...DEFAULT_NR, ...nr])].sort((a, b) => a - b);
     const locked = lte.length === 0 || supported.every(b => lte.includes(b)) ? [] : lte;
-    const nrLocked = nr.length === 0 || nrSupported.every(b => nr.includes(b)) ? [] : nr;
+    // نفس القاعدة القديمة: لو فيها n40+n41+n78 كلها نعتبرها غير مثبّتة (قائمة الراوتر الأصلية تختلف من جهاز لجهاز)
+    const nrLocked = nr.length === 0 || SAFE_NR.every(b => nr.includes(b)) ? [] : nr;
     return { supported, locked, nrSupported, nrLocked, mode: 'auto', modes: [] };
   }
 
@@ -661,7 +665,10 @@ export class ZteDriver implements RouterDriver {
       const cur = (await this.readLocks()).nr;
       const same = cur.length === nr.length && nr.every(b => cur.includes(b));
       if (!same) {
-        const o2 = await this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: nr.join(',') });
+        let o2 = await this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: nr.join(',') });
+        if (!/success/i.test(o2) && !nrBands.length) {
+          o2 = await this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: SAFE_NR.join(',') });
+        }
         if (!/success/i.test(o2)) throw this.rejected('تثبيت ترددات 5G', o2);
       }
     }
