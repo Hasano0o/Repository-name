@@ -19,6 +19,53 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
 fi
 command -v ffmpeg >/dev/null 2>&1 && ok "ffmpeg موجود" || echo "  ⚠ ffmpeg غير مثبت — الصوت يشتغل بدون تحويل"
 
+echo "📞 خادم المكالمات (TURN)..."
+command -v turnserver >/dev/null 2>&1 || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq coturn >/dev/null 2>&1 || true
+if command -v turnserver >/dev/null 2>&1; then
+  mkdir -p "$DST/data"
+  [ -s "$DST/data/turn_secret" ] || { head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 40 > "$DST/data/turn_secret"; chmod 600 "$DST/data/turn_secret"; }
+  PUBIP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}')
+  cat > /etc/turnserver.conf <<TURN
+# Bandly — خادم وسيط للمكالمات الصوتية (يُدار من install.sh)
+listening-port=3478
+fingerprint
+use-auth-secret
+static-auth-secret=$(cat "$DST/data/turn_secret")
+realm=has-host.com
+external-ip=$PUBIP
+min-port=49160
+max-port=49260
+no-tls
+no-dtls
+no-cli
+no-multicast-peers
+total-quota=60
+user-quota=6
+stale-nonce=600
+denied-peer-ip=0.0.0.0-0.255.255.255
+denied-peer-ip=10.0.0.0-10.255.255.255
+denied-peer-ip=100.64.0.0-100.127.255.255
+denied-peer-ip=127.0.0.0-127.255.255.255
+denied-peer-ip=169.254.0.0-169.254.255.255
+denied-peer-ip=172.16.0.0-172.31.255.255
+denied-peer-ip=192.168.0.0-192.168.255.255
+simple-log
+log-file=/var/log/turnserver.log
+TURN
+  [ -f /etc/default/coturn ] && sed -i 's/^#\?TURNSERVER_ENABLED=.*/TURNSERVER_ENABLED=1/' /etc/default/coturn
+  # نفتح المنافذ في الجدار الناري (لو فيه قواعد تمنع)
+  for r in "-p udp --dport 3478" "-p tcp --dport 3478" "-p udp --dport 49160:49260"; do
+    iptables -C INPUT $r -j ACCEPT 2>/dev/null || iptables -I INPUT $r -j ACCEPT
+  done
+  command -v netfilter-persistent >/dev/null && netfilter-persistent save >/dev/null 2>&1 || true
+  systemctl enable -q coturn 2>/dev/null || true
+  systemctl restart coturn
+  sleep 1
+  ss -lun | grep -q ":3478 " && ok "TURN شغال على 3478 ($PUBIP)" || echo "  ⚠ TURN ما اشتغل — المكالمات بتشتغل بس على الشبكات اللي تسمح بالاتصال المباشر"
+else
+  echo "  ⚠ ما قدرنا نثبت coturn"
+fi
+
 echo "🐍 البيئة..."
 [ -x "$DST/venv/bin/python" ] || python3 -m venv "$DST/venv"
 "$DST/venv/bin/pip" install -q --upgrade pip >/dev/null

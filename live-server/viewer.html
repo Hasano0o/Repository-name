@@ -89,6 +89,25 @@ input.small{font-size:15px;letter-spacing:0;text-align:right;direction:rtl}
 .rep table{width:100%;border-collapse:collapse;font-size:13.5px}
 .rep td{padding:8px 4px;border-bottom:1px solid var(--border)}
 .rep td:last-child{text-align:left;direction:ltr;font-weight:700}
+.callbtn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;border:0;border-radius:18px;padding:15px;font:inherit;font-weight:700;font-size:16px;cursor:pointer;color:#fff;background:linear-gradient(90deg,#0ea5a0,#12b76a);box-shadow:0 8px 20px rgba(18,183,106,.25)}
+.callbtn .ic{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.22);display:inline-flex;align-items:center;justify-content:center}
+.callbtn[disabled]{opacity:.45;box-shadow:none}
+.chint{text-align:center;color:var(--sub);font-size:11.5px;margin:6px 0 12px}
+.ended{text-align:center;margin:-4px 0 10px}.ended span{display:inline-block;background:#0f1f45;color:#fff;border-radius:999px;padding:6px 14px;font-size:12.5px;font-weight:700}
+.dim{position:fixed;inset:0;background:rgba(8,15,40,.6);display:flex;align-items:center;justify-content:center;padding:24px;z-index:30}
+.inbox{width:100%;max-width:380px;border-radius:30px;padding:34px 20px;text-align:center;color:#fff;background:linear-gradient(160deg,#1d3fc4,#6a45ec)}
+.inbox .av{width:86px;height:86px;border-radius:50%;margin:0 auto;background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.35);display:flex;align-items:center;justify-content:center;animation:pulse 1.4s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.35)}70%{box-shadow:0 0 0 22px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}
+.inbox h3{margin:14px 0 4px;font-size:23px}.inbox p{margin:0;opacity:.85}
+.inbtns{display:flex;justify-content:space-around;margin-top:28px}
+.rnd{display:flex;flex-direction:column;align-items:center;gap:6px;font-weight:700;font-size:13px}
+.rnd button{width:64px;height:64px;border-radius:50%;border:0;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.cbar{position:fixed;top:10px;left:10px;right:10px;max-width:520px;margin:0 auto;z-index:25;display:flex;align-items:center;gap:8px;background:#0f1f45;color:#fff;border-radius:24px;padding:10px 12px;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+.cbar .nm{flex:1}.cbar .nm b{display:block;font-size:14.5px}.cbar .nm span{font-size:12.5px;opacity:.75;font-weight:700}
+.cbar .dotl{display:inline-block;width:9px;height:9px;border-radius:50%;margin-left:6px}
+.cbar button{width:44px;height:44px;border-radius:50%;border:0;display:flex;align-items:center;justify-content:center;cursor:pointer;background:rgba(255,255,255,.16);color:#fff}
+.cbar button.on{background:#fff;color:#0f1f45}
+.cbar button.end{background:#ff5a5f}
 .toast{position:fixed;top:14px;left:14px;right:14px;max-width:520px;margin:0 auto;background:#0f1f45;color:#fff;border-radius:18px;padding:14px;text-align:center;font-weight:700;z-index:9;box-shadow:0 10px 30px rgba(0,0,0,.3)}
 </style>
 </head>
@@ -100,7 +119,7 @@ input.small{font-size:15px;letter-spacing:0;text-align:right;direction:rtl}
     <div class="hero">
       <div class="k">Bandly</div>
       <h1>وضع الفني</h1>
-      <p style="margin:6px 0 0;opacity:.9;font-size:13.5px">شوف إشارة راوتر العميل حيّة ووجّهه وأنت في مكانك</p>
+      <p style="margin:6px 0 0;opacity:.9;font-size:13.5px">شوف إشارة راوتر العميل حيّة، وكلّمه بمكالمة صوتية وأنت في مكانك 📞</p>
     </div>
     <div class="card">
       <h2>كود العميل</h2>
@@ -142,7 +161,10 @@ input.small{font-size:15px;letter-spacing:0;text-align:right;direction:rtl}
     <div class="card" id="sayCard">
       <h2>وجّه العميل</h2>
       <p class="s">صوتك أو رسالة جاهزة — تطلع عنده مع اهتزاز</p>
-      <button class="ptt" id="ptt"><span class="mic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></span><span id="pttTxt">اضغط مطوّل وكلّم العميل</span></button>
+      <button class="callbtn" id="callBtn" disabled><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg></span>اتصل بالعميل</button>
+      <div class="chint" id="callHint">مكالمة صوتية حيّة وأنت تشوف قراءته</div>
+      <div class="ended hide" id="callEnded"><span></span></div>
+      <button class="ptt" id="ptt"><span class="mic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></span><span id="pttTxt">أو أرسل رسالة صوتية (اضغط مطوّل)</span></button>
       <div id="vnote" class="vnote hide">🔊 <span id="vnoteTxt"></span><span style="margin-right:auto">إعادة ↻</span></div>
       <div class="grid" id="sayGrid" style="margin-top:12px"></div>
     </div>
@@ -171,6 +193,20 @@ input.small{font-size:15px;letter-spacing:0;text-align:right;direction:rtl}
   </section>
 </div>
 <div class="toast hide" id="toast"></div>
+<div class="dim hide" id="incoming"><div class="inbox">
+  <div class="av"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg></div>
+  <h3>العميل</h3><p>يتصل بك الحين… 📞</p>
+  <div class="inbtns">
+    <div class="rnd"><button style="background:#ff5a5f" id="inReject"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14.5c5.3-4.7 12.7-4.7 18 0l-2.2 2.6-3.3-1.2-.5-2.6c-2-.7-4-.7-6 0l-.5 2.6-3.3 1.2z"/></svg></button>رفض</div>
+    <div class="rnd"><button style="background:#16c784" id="inAccept"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg></button>رد</div>
+  </div>
+</div></div>
+<div class="cbar hide" id="cbar">
+  <div class="nm"><b><span class="dotl" id="cDot"></span>العميل</b><span id="cStatus">يرن…</span></div>
+  <button id="cMute" title="كتم"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
+  <button class="end" id="cHang" title="إنهاء"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14.5c5.3-4.7 12.7-4.7 18 0l-2.2 2.6-3.3-1.2-.5-2.6c-2-.7-4-.7-6 0l-.5 2.6-3.3 1.2z"/></svg></button>
+</div>
+<audio id="remoteAudio" autoplay playsinline></audio>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -226,11 +262,11 @@ function start(){
     setTimeout(start, Math.min(10000, 1500*(++retry)));
   };
 }
-function status(k,t){ $('stDot').style.background=k==='on'?'#16c784':k==='wait'?'#ffb020':'#ff5a5f'; $('stTxt').textContent=t; customer=k==='on'; }
+function status(k,t){ setTimeout(()=>{ const b=$('callBtn'); if(b) b.disabled=!(k==='on'&&cs==='idle'); },0); $('stDot').style.background=k==='on'?'#16c784':k==='wait'?'#ffb020':'#ff5a5f'; $('stTxt').textContent=t; customer=k==='on'; }
 
 function onMsg(m){
   if(m.t==='hello'){
-    vt=m.vt||'';
+    vt=m.vt||''; if(m.call) $('callBtn').dataset.ok='1';
     if(m.label) $('lbl').textContent=m.label;
     buildSay(m.say||{});
     hist=[]; first=null; best=null;
@@ -242,8 +278,9 @@ function onMsg(m){
   else if(m.t==='status'){ status(m.customer?'on':'wait', m.customer?'العميل متصل':'العميل طلع من التطبيق'); }
   else if(m.t==='cmd_sent'){ log(`أرسلنا «${cmdName(m.action)}» — بانتظار موافقة العميل${m.delivered?'':' (العميل مو متصل)'}`); }
   else if(m.t==='cmd_result'){ log((m.ok?'✅ ':'❌ ')+(m.msg||'')); if(navigator.vibrate) navigator.vibrate(60); }
+  else if(m.t==='rtc'){ callHandle(m); }
   else if(m.t==='voice'){ if(m.echo) return; lastVoiceUrl=m.url; $('vnoteTxt').textContent=`رسالة صوتية من ${m.from}${m.dur?' · '+Math.round(m.dur)+'ث':''}`; $('vnote').classList.remove('hide'); toast('🔊 رسالة صوتية من '+m.from); play(m.url); }
-  else if(m.t==='end'){ closedByEnd=true; showReport(m.report,m.why); }
+  else if(m.t==='end'){ closedByEnd=true; if(cs!=='idle') cEnd('انتهت الجلسة'); showReport(m.report,m.why); }
 }
 function cmdName(a){return {lock_current:'ثبّت على البرج الحالي',lock_best:'ثبّت على أفضل برج',unlock:'فك التثبيت'}[a]||a}
 function log(t){ const d=document.createElement('div'); d.textContent=new Date().toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'})+' · '+t; $('log').prepend(d); }
@@ -360,16 +397,91 @@ async function recStart(e){
 function recStop(){ if(!rec) return; clearInterval(tick); ptt.classList.remove('rec'); $('pttTxt').textContent='نرسل التسجيل…'; try{ rec.stop(); }catch(x){} }
 async function upload(){
   const dur=(Date.now()-t0)/1000, type=rec.mimeType||'audio/webm'; rec=null;
-  if(dur<0.6){ $('pttTxt').textContent='اضغط مطوّل وكلّم العميل'; return; }
+  if(dur<0.6){ $('pttTxt').textContent='أو أرسل رسالة صوتية (اضغط مطوّل)'; return; }
   const blob=new Blob(chunks,{type}); const ext=type.includes('mp4')?'m4a':'webm';
   const fd=new FormData(); fd.append('file',blob,'voice.'+ext); fd.append('role','tech'); fd.append('token',vt); fd.append('dur',dur.toFixed(1));
   try{ const r=await fetch(`/live-api/voice/${code}`,{method:'POST',body:fd}); if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.detail||'فشل'); } toast('✓ انرسلت الرسالة الصوتية'); }
   catch(x){ toast('ما انرسل التسجيل: '+x.message); }
-  $('pttTxt').textContent='اضغط مطوّل وكلّم العميل';
+  $('pttTxt').textContent='أو أرسل رسالة صوتية (اضغط مطوّل)';
 }
 ptt.addEventListener('pointerdown',recStart);
 ['pointerup','pointerleave','pointercancel'].forEach(ev=>ptt.addEventListener(ev,recStop));
 ptt.addEventListener('contextmenu',e=>e.preventDefault());
+
+// ═══ المكالمة الصوتية الحيّة (WebRTC) ═══
+let pc=null, lstream=null, cs='idle', pendIce=[], ringT=null, tickT=null, cStart=0, muted=false, ringCtx=null, ringI=null;
+function rtc(kind,data){ sendWs({t:'rtc',kind,data}); }
+function cSet(st,txt){
+  cs=st;
+  $('incoming').classList.toggle('hide', st!=='incoming');
+  $('cbar').classList.toggle('hide', !['outgoing','connecting','active'].includes(st));
+  $('cDot').style.background= st==='active' ? '#16c784' : '#ffb020';
+  if(txt) $('cStatus').textContent=txt;
+  $('callBtn').disabled = !(customer && st==='idle');
+}
+function ring(on){
+  clearInterval(ringI); ringI=null;
+  if(navigator.vibrate) navigator.vibrate(on?[600,400,600,400,600]:0);
+  if(!on) return;
+  const beep=()=>{ try{ ringCtx=ringCtx||new (window.AudioContext||window.webkitAudioContext)();
+    const o=ringCtx.createOscillator(), g=ringCtx.createGain(); o.frequency.value=720; g.gain.value=.12;
+    o.connect(g); g.connect(ringCtx.destination); o.start(); o.stop(ringCtx.currentTime+.45); }catch(e){} };
+  beep(); ringI=setInterval(beep,1200);
+}
+async function cSetup(){
+  let ice=[{urls:['stun:stun.l.google.com:19302']}];
+  try{ const r=await fetch(`/live-api/ice/${code}?token=${encodeURIComponent(vt)}`); if(r.ok) ice=(await r.json()).iceServers; }catch(e){}
+  lstream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+  pc=new RTCPeerConnection({iceServers:ice});
+  lstream.getTracks().forEach(t=>pc.addTrack(t,lstream));
+  pc.onicecandidate=e=>{ if(e.candidate) rtc('ice',e.candidate.toJSON()); };
+  pc.ontrack=e=>{ const a=$('remoteAudio'); a.srcObject=e.streams[0]; a.play().catch(()=>{}); };
+  pc.onconnectionstatechange=()=>{
+    if(pc.connectionState==='connected' && cs!=='active'){ cStart=Date.now(); cSet('active','00:00'); clearInterval(tickT);
+      tickT=setInterval(()=>{ const s=Math.floor((Date.now()-cStart)/1000); $('cStatus').textContent=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); },1000);
+      if(navigator.vibrate) navigator.vibrate(60); }
+    if(pc.connectionState==='failed') cHangup('تعذّر وصل الصوت — جرّب مرة ثانية');
+  };
+}
+async function flush(){ const q=pendIce; pendIce=[]; for(const c of q){ try{ await pc.addIceCandidate(c); }catch(e){} } }
+function cEnd(reason){
+  clearTimeout(ringT); clearInterval(tickT); ring(false);
+  try{ lstream&&lstream.getTracks().forEach(t=>t.stop()); }catch(e){}
+  try{ pc&&pc.close(); }catch(e){}
+  pc=null; lstream=null; pendIce=[]; muted=false; $('cMute').classList.remove('on');
+  cSet('idle');
+  if(reason){ const e=$('callEnded'); e.querySelector('span').textContent='📞 '+reason; e.classList.remove('hide'); clearTimeout(e._t); e._t=setTimeout(()=>e.classList.add('hide'),4000); }
+}
+function cHangup(reason){ if(cs==='idle') return; rtc('hangup'); cEnd(reason||'انتهت المكالمة'); }
+function fail(x){ cHangup(/Permission|NotAllowed|denied/i.test(String(x&&x.name||x))?'اسمح للمتصفح باستخدام الميكروفون':'تعذّر بدء المكالمة'); }
+$('callBtn').onclick=()=>{
+  if(cs!=='idle'||!customer) return;
+  cSet('outgoing','يرن…'); rtc('call');
+  ringT=setTimeout(()=>cHangup('ما رد العميل'),40000);
+};
+$('inAccept').onclick=async()=>{ if(cs!=='incoming') return; ring(false); clearTimeout(ringT); cSet('connecting','نوصل الصوت…');
+  try{ await cSetup(); rtc('accept'); }catch(x){ fail(x); } };
+$('inReject').onclick=()=>{ if(cs!=='incoming') return; rtc('reject'); cEnd('رفضت المكالمة'); };
+$('cHang').onclick=()=>cHangup();
+$('cMute').onclick=()=>{ muted=!muted; lstream&&lstream.getAudioTracks().forEach(t=>t.enabled=!muted); $('cMute').classList.toggle('on',muted); };
+async function callHandle(m){
+  try{
+    switch(m.kind){
+      case 'call': if(cs!=='idle'){ rtc('busy'); return; } cSet('incoming'); ring(true); ringT=setTimeout(()=>{ if(cs==='incoming') cEnd('مكالمة فائتة'); },40000); break;
+      case 'accept': if(cs!=='outgoing') return; clearTimeout(ringT); cSet('connecting','نوصل الصوت…'); await cSetup();
+        { const o=await pc.createOffer({offerToReceiveAudio:true}); await pc.setLocalDescription(o); rtc('offer',{type:o.type,sdp:o.sdp}); } break;
+      case 'offer': if(!pc) return; await pc.setRemoteDescription(m.data); await flush();
+        { const a=await pc.createAnswer(); await pc.setLocalDescription(a); rtc('answer',{type:a.type,sdp:a.sdp}); } break;
+      case 'answer': if(!pc) return; await pc.setRemoteDescription(m.data); await flush(); break;
+      case 'ice': if(!m.data) return; if(pc&&pc.remoteDescription) await pc.addIceCandidate(m.data); else pendIce.push(m.data); break;
+      case 'reject': if(cs==='outgoing') cEnd('رفض العميل المكالمة'); break;
+      case 'busy': if(cs==='outgoing') cEnd('العميل في مكالمة ثانية'); break;
+      case 'hangup': if(cs!=='idle') cEnd('انتهت المكالمة'); break;
+      case 'taken': if(cs==='incoming') cEnd('ردّ فني ثاني'); break;
+      case 'gone': if(cs!=='idle') cEnd('انقطع العميل'); break;
+    }
+  }catch(x){ fail(x); }
+}
 
 // ═══ التقرير ═══
 function showReport(rep,why){

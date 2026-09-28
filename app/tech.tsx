@@ -14,6 +14,8 @@ import { Icon } from '../src/ui/Icon';
 import { SignalChart } from '../src/ui/SignalChart';
 import { NetPanel } from '../src/ui/NetPanel';
 import { PushToTalk, playVoice, VoiceNote } from '../src/ui/Voice';
+import { CallController, CallInfo } from '../src/services/call';
+import { CallButton, IncomingCall, CallBar, CallEnded } from '../src/ui/CallUI';
 import { Signal } from '../src/drivers/types';
 import {
   P, shadow, Hero, Section, MeterTile, InfoCell, Grid, Cell, PrimaryBtn, RANGE, ratioOf, lvlColor, lvlLabel,
@@ -43,6 +45,9 @@ export default function TechScreen() {
   const [logs, setLogs] = useState<Log[]>([]);
   const [report, setReport] = useState<{ why: string; r: LiveReport } | null>(null);
   const viewer = useRef<LiveViewer | null>(null);
+  const [callInfo, setCallInfo] = useState<CallInfo>({ state: 'idle', peer: '', muted: false, speaker: true });
+  const callRef = useRef<CallController | null>(null);
+  const endCall = () => { callRef.current?.dispose(); callRef.current = null; };
   const [lastVoice, setLastVoice] = useState<{ url: string; from: string; dur: number } | null>(null);
   const gotHello = useRef(false);
 
@@ -57,7 +62,7 @@ export default function TechScreen() {
     })();
   }, []);
 
-  useFocusEffect(useCallback(() => () => { viewer.current?.close(); viewer.current = null; }, []));
+  useFocusEffect(useCallback(() => () => { callRef.current?.dispose(); callRef.current = null; viewer.current?.close(); viewer.current = null; }, []));
 
   const addLog = (text: string, tone: Log['tone'] = 'info') =>
     setLogs(l => [{ at: Date.now(), text, tone }, ...l].slice(0, 30));
@@ -75,9 +80,10 @@ export default function TechScreen() {
       }
       await AsyncStorage.multiSet([[K_KEY, key.trim()], [K_NAME, name.trim()]]);
       setHist([]); setLogs([]); setReport(null); setCustomer(false);
+      endCall();
       viewer.current?.close();
       gotHello.current = false;
-      viewer.current = new LiveViewer(c, key.trim(), name.trim(), {
+      const v = new LiveViewer(c, key.trim(), name.trim(), {
         onState: (s, cc) => {
           setConn(s === 'on' ? 'on' : 'off');
           if (s === 'dead') {
@@ -99,13 +105,21 @@ export default function TechScreen() {
         onCustomer: on => { setCustomer(on); addLog(on ? 'العميل رجع للتطبيق' : 'العميل طلع من التطبيق', on ? 'ok' : 'err'); },
         onCmdSent: (a, delivered) => addLog(`أرسلنا «${CMD_LABEL[a]}» — بانتظار موافقة العميل${delivered ? '' : ' (العميل مو متصل)'}`),
         onCmdResult: (ok, msg) => { addLog(msg, ok ? 'ok' : 'err'); Vibration.vibrate(); },
+        onRtc: m => callRef.current?.handle(m),
         onVoice: v => {
           if (v.echo) return;
           setLastVoice({ url: v.url, from: v.from, dur: v.dur });
           playVoice(v.url);
           Vibration.vibrate(40);
         },
-        onEnd: (why, r) => { if (r) setReport({ why, r }); setConn('off'); },
+        onEnd: (why, r) => { endCall(); if (r) setReport({ why, r }); setConn('off'); },
+      });
+      viewer.current = v;
+      callRef.current = new CallController({
+        role: 'tech', peerLabel: 'العميل',
+        send: (kind, data) => v.rtc(kind, data),
+        getIce: () => v.iceServers(),
+        onChange: setCallInfo,
       });
     } finally {
       setJoining(false);
@@ -113,6 +127,7 @@ export default function TechScreen() {
   };
 
   const leave = () => {
+    endCall();
     viewer.current?.close();
     viewer.current = null;
     setPhase('join');
@@ -153,7 +168,7 @@ export default function TechScreen() {
           <Text style={s.howTitle}>كيف تشتغل؟</Text>
           {['العميل يفتح Bandly ← مساعد التوجيه ← «شارك مع فني»',
             'يرسل لك الكود أو الرابط بالواتساب',
-            'تشوف قراءته حيّة وتوجهه بالأزرار أو بالتلفون',
+            'تشوف قراءته حيّة وتكلّمه بمكالمة صوتية من داخل التطبيق 📞',
             'تقدر تطلب تثبيت البرج — يتنفذ بعد موافقته'].map((t, i) => (
             <View key={i} style={s.howRow}>
               <View style={s.howNum}><Text style={s.howNumTxt}>{i + 1}</Text></View>
@@ -221,7 +236,11 @@ export default function TechScreen() {
         {!report && (
           <>
             <Section title="وجّه العميل" sub="تطلع رسالة كبيرة على جواله مع اهتزاز" icon="aim">
-              <PushToTalk label="اضغط مطوّل وكلّم العميل" disabled={!customer}
+              <CallButton label="اتصل بالعميل" disabled={!customer || callInfo.state !== 'idle'}
+                onPress={() => callRef.current?.call()}
+                hint={customer ? 'مكالمة صوتية حيّة وأنت تشوف قراءته' : 'الزر يتفعّل أول ما يكون العميل متصل'} />
+              <CallEnded info={callInfo} />
+              <PushToTalk label="أو أرسل رسالة صوتية (اضغط مطوّل)" disabled={!customer}
                 onSend={(uri, dur) => viewer.current ? viewer.current.voice(uri, dur) : Promise.resolve()} />
               {!!lastVoice && <VoiceNote from={lastVoice.from} dur={lastVoice.dur} onReplay={() => playVoice(lastVoice.url)} />}
               <View style={s.sayGrid}>
@@ -284,6 +303,9 @@ export default function TechScreen() {
           <Text style={s.leaveTxt}>جلسة جديدة / كود ثاني</Text>
         </Pressable>
       </ScrollView>
+      <IncomingCall info={callInfo} onAccept={() => callRef.current?.accept()} onReject={() => callRef.current?.reject()} />
+      <CallBar info={callInfo} top={8} onHangup={() => callRef.current?.hangup()}
+        onMute={() => callRef.current?.toggleMute()} onSpeaker={() => callRef.current?.toggleSpeaker()} />
     </View>
   );
 }

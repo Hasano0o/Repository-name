@@ -96,6 +96,15 @@ export async function uploadVoice(code: string, role: 'cust' | 'tech', token: st
   });
 }
 
+/** خوادم الاتصال للمكالمة (STUN/TURN ببيانات مؤقتة من سيرفرنا) */
+export async function fetchIce(code: string, token: string): Promise<any[]> {
+  try {
+    const r = await fetch(`${LIVE_BASE}/live-api/ice/${code}?token=${encodeURIComponent(token)}`);
+    if (r.ok) return (await r.json()).iceServers || [];
+  } catch {}
+  return [{ urls: ['stun:stun.l.google.com:19302'] }];
+}
+
 type Msg = { t: string; [k: string]: any };
 
 /** اتصال WebSocket يعيد الاتصال تلقائياً */
@@ -149,6 +158,7 @@ export class LiveHost {
     onEnd?: (why: string, report: LiveReport | null) => void;
     onState?: (s: 'on' | 'off' | 'dead') => void;
     onVoice?: (v: LiveVoice) => void;
+    onRtc?: (m: { kind: string; data?: any; sid?: string; from?: string }) => void;
   }) {
     this.token = token;
     this.link = new Link(
@@ -158,6 +168,7 @@ export class LiveHost {
         else if (m.t === 'say') h.onSay?.(String(m.text ?? ''), String(m.from ?? 'الفني'));
         else if (m.t === 'cmd') h.onCmd?.(Number(m.id), m.action, String(m.from ?? 'الفني'));
         else if (m.t === 'voice') h.onVoice?.(m as unknown as LiveVoice);
+        else if (m.t === 'rtc') h.onRtc?.(m as any);
         else if (m.t === 'end') { this.link.close(); h.onEnd?.(m.why, m.report ?? null); }
       },
       s => h.onState?.(s),
@@ -166,6 +177,8 @@ export class LiveHost {
   }
   send(r: LiveReading) { this.link.send({ t: 'r', ...r }); }
   voice(uri: string, dur: number) { return uploadVoice(this.code, 'cust', this.token, uri, dur); }
+  rtc(kind: string, data?: any, to?: string) { this.link.send({ t: 'rtc', kind, data, to }); }
+  iceServers() { return fetchIce(this.code, this.token); }
   result(id: number, ok: boolean, msg: string) { this.link.send({ t: 'cmd_result', id, ok, msg }); }
   end() { this.link.send({ t: 'end' }); setTimeout(() => this.link.close(), 800); }
   close() { this.link.close(); }
@@ -185,6 +198,7 @@ export class LiveViewer {
     onEnd?: (why: string, report: LiveReport | null) => void;
     onState?: (s: 'on' | 'off' | 'dead', code?: number) => void;
     onVoice?: (v: LiveVoice) => void;
+    onRtc?: (m: { kind: string; data?: any; sid?: string; from?: string }) => void;
   }) {
     const q = `key=${encodeURIComponent(key)}&name=${encodeURIComponent(name)}`;
     this.link = new Link(
@@ -192,6 +206,7 @@ export class LiveViewer {
       m => {
         if (m.t === 'hello') { this.vt = String(m.vt ?? ''); h.onHello?.(m as any); }
         else if (m.t === 'voice') h.onVoice?.(m as unknown as LiveVoice);
+        else if (m.t === 'rtc') h.onRtc?.(m as any);
         else if (m.t === 'r') h.onReading?.(m as LiveReading);
         else if (m.t === 'status') h.onCustomer?.(!!m.customer);
         else if (m.t === 'cmd_sent') h.onCmdSent?.(m.action, !!m.delivered);
@@ -204,6 +219,8 @@ export class LiveViewer {
   }
   say(k: string) { this.link.send({ t: 'say', k }); }
   voice(uri: string, dur: number) { return uploadVoice(this.code, 'tech', this.vt, uri, dur); }
+  rtc(kind: string, data?: any) { this.link.send({ t: 'rtc', kind, data }); }
+  iceServers() { return fetchIce(this.code, this.vt); }
   cmd(action: CmdAction) { this.link.send({ t: 'cmd', action }); }
   close() { this.link.close(); }
 }

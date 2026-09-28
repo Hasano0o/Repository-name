@@ -7,7 +7,7 @@ export type IconName =
   | 'spark' | 'bulb' | 'lock' | 'sms' | 'speed' | 'chart' | 'user' | 'power'
   | 'eye' | 'eye-off'
   | 'antenna' | 'layers' | 'pin' | 'clock' | 'bell' | 'share'
-  | 'trash' | 'plus' | 'compass' | 'check' | 'vibrate' | 'sound' | 'wifi' | 'login' | 'mic';
+  | 'trash' | 'plus' | 'compass' | 'check' | 'vibrate' | 'sound' | 'wifi' | 'login' | 'mic' | 'call' | 'hangup' | 'mic-off' | 'speaker' | 'earpiece';
 
 export function Icon({
   name, size = 20, color = C.sub, stroke = 1.9,
@@ -52,6 +52,11 @@ export function Icon({
       {name === 'vibrate' && <><Rect x={8} y={4} width={8} height={16} rx={2} {...p} /><Path d="M4 9v6" {...p} /><Path d="M20 9v6" {...p} /></>}
       {name === 'sound' && <><Path d="M4 10v4h4l5 4V6L8 10z" {...p} /><Path d="M16.5 9a4 4 0 0 1 0 6" {...p} /><Path d="M19 6.5a8 8 0 0 1 0 11" {...p} /></>}
       {name === 'wifi' && <><Path d="M2.5 9a14 14 0 0 1 19 0" {...p} /><Path d="M5.5 12.5a9.5 9.5 0 0 1 13 0" {...p} /><Path d="M8.7 15.8a5 5 0 0 1 6.6 0" {...p} /><Circle cx={12} cy={19} r={0.9} {...p} /></>}
+      {name === 'call' && <Path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2" {...p} />}
+      {name === 'hangup' && <Path d="M3 14.5c5.3-4.7 12.7-4.7 18 0l-2.2 2.6-3.3-1.2-.5-2.6c-2-.7-4-.7-6 0l-.5 2.6-3.3 1.2z" {...p} />}
+      {name === 'mic-off' && <><Path d="M9 9v2a3 3 0 0 0 5.1 2.1M15 10V6a3 3 0 0 0-5.7-1.3" {...p} /><Path d="M5.5 11a6.5 6.5 0 0 0 10.6 5M18.5 11a6.5 6.5 0 0 1-.4 2.2" {...p} /><Path d="M12 17.5V21" {...p} /><Path d="M4 4l16 16" {...p} /></>}
+      {name === 'speaker' && <><Path d="M4 10v4h4l5 4V6L8 10z" {...p} /><Path d="M16.5 9a4 4 0 0 1 0 6" {...p} /><Path d="M19 6.5a8 8 0 0 1 0 11" {...p} /></>}
+      {name === 'earpiece' && <><Rect x={7} y={2.5} width={10} height={19} rx={3} {...p} /><Path d="M10 5.5h4" {...p} /></>}
       {name === 'mic' && <><Rect x={9} y={3} width={6} height={11} rx={3} {...p} /><Path d="M5.5 11a6.5 6.5 0 0 0 13 0" {...p} /><Path d="M12 17.5V21" {...p} /></>}
       {name === 'login' && <><Path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" {...p} /><Path d="M10 17l5-5-5-5" {...p} /><Path d="M15 12H4" {...p} /></>}
     </Svg>

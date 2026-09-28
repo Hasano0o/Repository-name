@@ -92,7 +92,7 @@ def api(m, **p):
     return json.load(urllib.request.urlopen(f"https://api.telegram.org/bot{tok}/{m}", data=data, timeout=15))
 r1 = api("setMyDescription", description=
   "📶 Bandly — اطلع أقوى إشارة من راوترك\n\n"
-  "🎯 وجّه الهوائي بالصوت والاهتزاز\n📊 كل أرقام 4G و 5G قدامك\n🗼 ثبّت أفضل برج وتردد\n🛠️ فني يساعدك عن بُعد\n\n"
+  "🎯 وجّه الهوائي بالصوت والاهتزاز\n📊 كل أرقام 4G و 5G قدامك\n🗼 ثبّت أفضل برج وتردد\n📞 مكالمة مع فني يشوف إشارتك حيّة\n\n"
   "اضغط «ابدأ» وحمّل التطبيق 👇")
 r2 = api("setMyShortDescription", short_description="اطلع أقوى إشارة من راوترك — وجّه الهوائي وثبّت أفضل برج 📶")
 r3 = api("setChatMenuButton", menu_button={"type": "web_app", "text": "📱 Bandly", "web_app": {"url": "https://has-host.com/bandly-app/"}})

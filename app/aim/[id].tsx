@@ -8,6 +8,8 @@ import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { NetPanel } from '../../src/ui/NetPanel';
 import { PushToTalk, playVoice, VoiceNote } from '../../src/ui/Voice';
+import { CallController, CallInfo } from '../../src/services/call';
+import { CallButton, IncomingCall, CallBar, CallEnded } from '../../src/ui/CallUI';
 import { pickSig } from '../../src/services/live';
 import { trendOf, Trend, TrendMark } from '../../src/ui/AimMeter';
 import { measureLatency } from '../../src/utils/latency';
@@ -211,6 +213,10 @@ export default function AimScreen() {
   const [sayMsg, setSayMsg] = useState<{ text: string; from: string; at: number } | null>(null);
   const [lastVoice, setLastVoice] = useState<{ url: string; from: string; dur: number } | null>(null);
   const liveRef = useRef<LiveHost | null>(null);
+  // ═══ المكالمة مع الفني ═══
+  const [callInfo, setCallInfo] = useState<CallInfo>({ state: 'idle', peer: '', muted: false, speaker: true });
+  const callRef = useRef<CallController | null>(null);
+  const endCall = () => { callRef.current?.dispose(); callRef.current = null; };
   const lastRdRef = useRef<{ cell: CellId } | null>(null);
   const pinnedRef = useRef<CellId | null>(null);
   const cmdRef = useRef<(id: number, action: CmdAction, from: string) => void>(() => {});
@@ -387,6 +393,7 @@ export default function AimScreen() {
       alive = false;
       if (timer) clearInterval(timer);
       if (liveRef.current) {
+        endCall();
         liveRef.current.end();
         liveRef.current = null;
         setLive(null);
@@ -512,12 +519,14 @@ export default function AimScreen() {
           else Vibration.vibrate();
         },
         onCmd: (cid, action, from) => cmdRef.current(cid, action, from),
+        onRtc: m => callRef.current?.handle(m),
         onVoice: v => {
           setLastVoice({ url: v.url, from: v.from, dur: v.dur });
           setSayMsg({ text: '🔊 رسالة صوتية', from: v.from, at: Date.now() });
           playVoice(v.url);
         },
         onEnd: (why, report) => {
+          endCall();
           liveRef.current = null;
           setLive(null);
           setViewers([]);
@@ -530,6 +539,12 @@ export default function AimScreen() {
         },
       });
       liveRef.current = host;
+      callRef.current = new CallController({
+        role: 'cust', peerLabel: 'الفني',
+        send: (kind, data, to) => host.rtc(kind, data, to),
+        getIce: () => host.iceServers(),
+        onChange: setCallInfo,
+      });
       setLive({ code: s.code, url: s.url });
       activateKeepAwakeAsync('bandly-live').catch(() => {});
       shareLink({ code: s.code, url: s.url });
@@ -545,6 +560,7 @@ export default function AimScreen() {
       { text: 'لا', style: 'cancel' },
       {
         text: 'أوقف', style: 'destructive', onPress: () => {
+          endCall();
           liveRef.current?.end();
           liveRef.current = null;
           setLive(null);
@@ -750,7 +766,11 @@ export default function AimScreen() {
                   {viewers.length ? `👀 ${viewers.join('، ')} يتابع قراءتك الحين` : 'بانتظار الفني يفتح الرابط…'}
                 </Text>
                 <View style={{ alignSelf: 'stretch' }}>
-                  <PushToTalk label="اضغط مطوّل وكلّم الفني" color="#0b7f99" disabled={!viewers.length}
+                  <CallButton label="اتصل بالفني" disabled={!viewers.length || callInfo.state !== 'idle'}
+                    onPress={() => callRef.current?.call()}
+                    hint={viewers.length ? 'مكالمة صوتية حيّة — الصوت يطلع من السماعة الخارجية' : 'الزر يتفعّل أول ما يفتح الفني الرابط'} />
+                  <CallEnded info={callInfo} />
+                  <PushToTalk label="أو أرسل رسالة صوتية (اضغط مطوّل)" color="#0b7f99" disabled={!viewers.length}
                     onSend={(uri, dur) => liveRef.current ? liveRef.current.voice(uri, dur) : Promise.resolve()} />
                   {!!lastVoice && <VoiceNote from={lastVoice.from} dur={lastVoice.dur} onReplay={() => playVoice(lastVoice.url)} />}
                 </View>
@@ -876,6 +896,11 @@ export default function AimScreen() {
           </>
         )}
       </ScrollView>
+
+      {/* ═══ المكالمة ═══ */}
+      <IncomingCall info={callInfo} onAccept={() => callRef.current?.accept()} onReject={() => callRef.current?.reject()} />
+      <CallBar info={callInfo} top={insets.top + 8} onHangup={() => callRef.current?.hangup()}
+        onMute={() => callRef.current?.toggleMute()} onSpeaker={() => callRef.current?.toggleSpeaker()} />
 
       {/* ═══ رسالة الفني ═══ */}
       {sayMsg && (

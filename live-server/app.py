@@ -102,6 +102,8 @@ class Session:
         self.ended = False
         self.cmd_seq = 0
         self.vtokens: dict[str, str] = {}   # توكن رفع الصوت لكل فني ← اسمه
+        self.sid_ws: dict[str, WebSocket] = {}  # رقم الفني ← اتصاله (للمكالمات)
+        self.ws_sid: dict[WebSocket, str] = {}
         self.voices = 0
 
     def alive(self) -> bool:
@@ -285,7 +287,7 @@ async def ws_pub(ws: WebSocket, code: str, token: str = ""):
     try:
         while True:
             raw = await ws.receive_text()
-            if len(raw) > 4000:
+            if len(raw) > 30000:
                 continue
             try:
                 m = json.loads(raw)
@@ -306,6 +308,16 @@ async def ws_pub(ws: WebSocket, code: str, token: str = ""):
                       "ok": bool(m.get("ok")), "msg": str(m.get("msg") or "")[:200]}
                 s.events.append(ev)
                 await to_subs(s, {"t": "cmd_result", **ev})
+            elif kind == "rtc":
+                # إشارات المكالمة من العميل ← فني محدد (to) أو كل الفنيين
+                fwd = {"t": "rtc", "kind": m.get("kind"), "data": m.get("data"), "from": "العميل"}
+                to = m.get("to")
+                if to and to in s.sid_ws:
+                    await send(s.sid_ws[to], fwd)
+                elif not to:
+                    await to_subs(s, fwd)
+                if m.get("kind") in ("call", "accept"):
+                    s.events.append({"at": int(time.time()), "e": "call", "by": "customer"})
             elif kind == "ping":
                 s.last = time.time()
                 await send(ws, {"t": "pong"})
@@ -317,6 +329,7 @@ async def ws_pub(ws: WebSocket, code: str, token: str = ""):
     finally:
         if s.pub is ws:
             s.pub = None
+            await to_subs(s, {"t": "rtc", "kind": "gone"})
             await to_subs(s, {"t": "status", "customer": False})
 
 
@@ -338,17 +351,20 @@ async def ws_sub(ws: WebSocket, code: str, key: str = "", name: str = ""):
     s.vtokens[vt] = tech_name
     s.subs.add(ws)
     s.tech_names[ws] = tech_name
+    sid = vt[:10]
+    s.sid_ws[sid] = ws
+    s.ws_sid[ws] = sid
     s.events.append({"at": int(time.time()), "e": "join", "who": tech_name})
     await send(ws, {
         "t": "hello", "label": s.label, "customer": s.pub is not None,
         "history": s.readings[-60:], "ended": s.ended, "report": s.report() if s.ended else None,
-        "say": SAY_ALLOWED, "vt": vt, "voice": True,
+        "say": SAY_ALLOWED, "vt": vt, "voice": True, "sid": sid, "call": True,
     })
     await send(s.pub, {"t": "viewers", "n": len(s.subs), "names": list(s.tech_names.values())})
     try:
         while True:
             raw = await ws.receive_text()
-            if len(raw) > 1000 or s.ended:
+            if len(raw) > 30000 or s.ended:
                 continue
             try:
                 m = json.loads(raw)
@@ -369,6 +385,15 @@ async def ws_sub(ws: WebSocket, code: str, key: str = "", name: str = ""):
                 await send(s.pub, {"t": "cmd", "id": cid, "action": m["action"], "from": tech_name})
                 await to_subs(s, {"t": "cmd_sent", "id": cid, "action": m["action"],
                                   "delivered": s.pub is not None})
+            elif kind == "rtc":
+                # إشارات المكالمة من الفني ← العميل (ومعها رقم الفني عشان العميل يرد عليه بالذات)
+                await send(s.pub, {"t": "rtc", "kind": m.get("kind"), "data": m.get("data"),
+                                   "sid": s.ws_sid.get(ws), "from": tech_name})
+                if m.get("kind") == "accept":
+                    # الفنيين الثانيين: المكالمة انأخذت
+                    for w in list(s.subs):
+                        if w is not ws:
+                            await send(w, {"t": "rtc", "kind": "taken", "from": tech_name})
             elif kind == "ping":
                 await send(ws, {"t": "pong"})
     except WebSocketDisconnect:
@@ -376,7 +401,34 @@ async def ws_sub(ws: WebSocket, code: str, key: str = "", name: str = ""):
     finally:
         s.subs.discard(ws)
         s.tech_names.pop(ws, None)
+        _sid = s.ws_sid.pop(ws, None)
+        if _sid:
+            s.sid_ws.pop(_sid, None)
+            await send(s.pub, {"t": "rtc", "kind": "gone", "sid": _sid})
         await send(s.pub, {"t": "viewers", "n": len(s.subs), "names": list(s.tech_names.values())})
+
+
+# ═══ المكالمات: خوادم ICE (STUN/TURN) ببيانات مؤقتة ═══
+import base64 as _b64
+
+
+@app.get("/live-api/ice/{code}")
+async def ice(code: str, token: str = ""):
+    s = SESSIONS.get(code)
+    if not s or s.ended:
+        raise HTTPException(404)
+    if not (secrets.compare_digest(s.token, token) or token in s.vtokens):
+        raise HTTPException(403)
+    servers = [{"urls": ["stun:stun.l.google.com:19302"]}]
+    sec = _secret("turn_secret")
+    host = os.environ.get("BANDLY_TURN_HOST", "has-host.com")
+    if sec:
+        user = f"{int(time.time()) + 3 * 3600}:{code}"
+        cred = _b64.b64encode(hmac.new(sec.encode(), user.encode(), hashlib.sha1).digest()).decode()
+        servers.insert(0, {"urls": [f"stun:{host}:3478"]})
+        servers.append({"urls": [f"turn:{host}:3478?transport=udp", f"turn:{host}:3478?transport=tcp"],
+                        "username": user, "credential": cred})
+    return {"iceServers": servers}
 
 
 # ═══ الرسائل الصوتية ═══
