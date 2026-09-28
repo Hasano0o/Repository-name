@@ -1,14 +1,14 @@
 /**
- * لوحة الشبكة — بطاقة 4G وبطاقة 5G، كل وحدة فيها ٤ عدادات (PING · SINR · RSRQ · RSRP)
- * وخانات المعلومات (Cell ID · PCI · الباند · RSSI/ARFCN · EARFCN · BW).
- * تظهر في مساعد التوجيه تحت العدادين الأصليين.
+ * لوحة الشبكة — بطاقة 4G (تركواز غامق) وبطاقة 5G (كحلي/بنفسجي)،
+ * كل وحدة فيها ٤ عدادات (RSRP · RSRQ · SINR · PING) وشبكة خانات مرتبة.
+ * تظهر في مساعد التوجيه.
  */
 import { View, Text, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { Signal } from '../drivers/types';
 import { Level, LEVEL_COLOR, rsrpLevel, sinrLevel, rsrqLevel, parseBands, parseNrBands } from '../utils/signal';
 import { Icon, IconName } from './Icon';
-import { P, shadow } from './Pro';
 
 export const pingLevel = (v?: number): Level =>
   v === undefined ? 'unknown' : v <= 40 ? 'excellent' : v <= 70 ? 'good' : v <= 120 ? 'fair' : 'poor';
@@ -22,9 +22,49 @@ const RANGES = {
 const ratio = (v: number | undefined, [lo, hi]: readonly [number, number]) =>
   v === undefined ? 0 : Math.max(0, Math.min(1, (v - lo) / (hi - lo)));
 
+// ═══ ثيم كل شبكة — 4G تركواز غامق، 5G كحلي بنفسجي ═══
+type Theme = {
+  bg: [string, string, string];
+  border: string;
+  pill: [string, string];
+  accent: string;       // لون الأرقام المميزة والأيقونات
+  accentSoft: string;   // خلفية الأيقونات
+  glow: string;         // الهالة في الزاوية
+  panel: string;        // خلفية لوح العدادات
+  tile: string;
+  tileBorder: string;
+  sub: string;
+};
+const THEMES: Record<'4G' | '5G', Theme> = {
+  '4G': {
+    bg: ['#052830', '#093a45', '#0c4d57'],
+    border: '#17606c',
+    pill: ['#14b8a6', '#0891b2'],
+    accent: '#5eead4',
+    accentSoft: 'rgba(94,234,212,0.14)',
+    glow: 'rgba(45,212,191,0.07)',
+    panel: 'rgba(255,255,255,0.05)',
+    tile: 'rgba(255,255,255,0.06)',
+    tileBorder: 'rgba(94,234,212,0.16)',
+    sub: 'rgba(204,251,241,0.65)',
+  },
+  '5G': {
+    bg: ['#0d1738', '#15245a', '#231d5e'],
+    border: '#2d3b7a',
+    pill: ['#7c4dff', '#a24bd8'],
+    accent: '#c7b8ff',
+    accentSoft: 'rgba(167,139,250,0.16)',
+    glow: 'rgba(139,92,246,0.09)',
+    panel: 'rgba(255,255,255,0.05)',
+    tile: 'rgba(255,255,255,0.06)',
+    tileBorder: 'rgba(167,139,250,0.18)',
+    sub: 'rgba(224,219,255,0.62)',
+  },
+};
+
 // ═══ عدّاد قوس صغير ═══
-function Gauge({ value, label, unit, level, r, dark }: {
-  value?: number; label: string; unit: string; level: Level; r: number; dark?: boolean;
+function Gauge({ value, label, unit, level, r }: {
+  value?: number; label: string; unit: string; level: Level; r: number;
 }) {
   const size = 72, sw = 7, c = size / 2, rad = c - sw / 2 - 1;
   const START = 135, SWEEP = 270;
@@ -37,71 +77,76 @@ function Gauge({ value, label, unit, level, r, dark }: {
     return `M ${p0.x} ${p0.y} A ${rad} ${rad} 0 ${to - from > 180 ? 1 : 0} 1 ${p1.x} ${p1.y}`;
   };
   const empty = value === undefined;
-  const col = empty ? P.faint : LEVEL_COLOR[level];
+  const col = empty ? 'rgba(255,255,255,0.35)' : LEVEL_COLOR[level];
   const end = START + Math.max(0.02, r) * SWEEP;
   const txt = empty ? '—' : Number.isInteger(value) ? String(value) : value!.toFixed(1);
   return (
     <View style={g.wrap}>
       <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
         <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-          <Path d={arc(START, START + SWEEP)} stroke={dark ? 'rgba(255,255,255,0.12)' : '#e9eef8'} strokeWidth={sw} strokeLinecap="round" fill="none" />
+          <Path d={arc(START, START + SWEEP)} stroke="rgba(255,255,255,0.12)" strokeWidth={sw} strokeLinecap="round" fill="none" />
           {!empty && <Path d={arc(START, end)} stroke={col} strokeWidth={sw} strokeLinecap="round" fill="none" />}
           {!empty && <Circle cx={pol(end).x} cy={pol(end).y} r={sw * 0.3} fill="#fff" />}
         </Svg>
-        <Text style={[g.val, { color: empty ? P.faint : dark ? '#fff' : P.text, fontSize: txt.length > 4 ? 15 : 18 }]}
+        <Text style={[g.val, { color: empty ? 'rgba(255,255,255,0.4)' : '#fff', fontSize: txt.length > 4 ? 15 : 18 }]}
           numberOfLines={1} adjustsFontSizeToFit>{txt}</Text>
       </View>
       <Text style={[g.lbl, { color: col }]}>{label}</Text>
-      <Text style={[g.unit, dark && { color: 'rgba(255,255,255,0.55)' }]}>{unit}</Text>
+      <Text style={g.unit}>{unit}</Text>
     </View>
   );
 }
 
 // ═══ خانة معلومة ═══
-function Tile({ icon, label, value, dark, accent }: {
-  icon: IconName; label: string; value?: string; dark?: boolean; accent?: string;
+function Tile({ icon, label, value, th, accent, cols }: {
+  icon: IconName; label: string; value?: string; th: Theme; accent?: boolean; cols: 2 | 3;
 }) {
   return (
-    <View style={[t.tile, dark && t.tileDark]}>
-      <View style={[t.icon, { backgroundColor: dark ? 'rgba(255,255,255,0.1)' : P.blueSoft }]}>
-        <Icon name={icon} size={14} color={dark ? '#b8c6ff' : P.blue} stroke={2.1} />
+    <View style={[t.tile, { width: cols === 3 ? '31.8%' : '48.6%', backgroundColor: th.tile, borderColor: th.tileBorder }]}>
+      <View style={t.top}>
+        <Text style={[t.lbl, { color: th.sub }]} numberOfLines={1}>{label}</Text>
+        <View style={[t.icon, { backgroundColor: th.accentSoft }]}>
+          <Icon name={icon} size={13} color={th.accent} stroke={2.2} />
+        </View>
       </View>
-      <View style={{ flex: 1, alignItems: 'flex-end' }}>
-        <Text style={[t.lbl, dark && { color: 'rgba(255,255,255,0.6)' }]} numberOfLines={1}>{label}</Text>
-        <Text style={[t.val, dark && { color: '#fff' }, !value && { color: P.faint }, !!accent && !!value && { color: accent }]}
-          numberOfLines={1} adjustsFontSizeToFit>{value || '—'}</Text>
-      </View>
+      <Text style={[t.val, { color: !value ? 'rgba(255,255,255,0.35)' : accent ? th.accent : '#fff' }]}
+        numberOfLines={1} adjustsFontSizeToFit>{value || '—'}</Text>
     </View>
   );
 }
 
-function Card({ tech, dark, active, children, badge }: {
-  tech: '4G' | '5G'; dark?: boolean; active?: boolean; children: React.ReactNode; badge?: string;
+function Card({ tech, active, children, badges }: {
+  tech: '4G' | '5G'; active?: boolean; children: React.ReactNode; badges: string[];
 }) {
+  const th = THEMES[tech];
   return (
-    <View style={[c.card, dark && c.cardDark]}>
-      <View style={c.head}>
-        <View style={[c.techPill, { backgroundColor: tech === '5G' ? P.violet : P.blue }]}>
-          <Text style={c.techTxt}>{tech}</Text>
-        </View>
-        <View style={{ flex: 1, alignItems: 'flex-end' }}>
-          <Text style={[c.title, dark && { color: '#fff' }]}>{tech === '5G' ? 'شبكة 5G' : 'شبكة 4G LTE'}</Text>
-          {!!badge && (
-            <View style={{ flexDirection: 'row-reverse', gap: 6, marginTop: 1 }}>
-              {badge.split(' · ').map((b, i) => (
-                <Text key={i} style={[c.sub, dark && { color: 'rgba(255,255,255,0.65)' }]}>{i ? `· ${b}` : b}</Text>
+    <View style={[c.shadow, { shadowColor: th.bg[1] }]}>
+      <LinearGradient colors={th.bg} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }}
+        style={[c.card, { borderColor: th.border }]}>
+        <View style={[c.glow, { backgroundColor: th.glow }]} pointerEvents="none" />
+        <View style={c.head}>
+          <LinearGradient colors={th.pill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={c.techPill}>
+            <Text style={c.techTxt}>{tech}</Text>
+          </LinearGradient>
+          <View style={{ flex: 1, alignItems: 'flex-end', gap: 5 }}>
+            <Text style={c.title}>{tech === '5G' ? 'شبكة 5G' : 'شبكة 4G LTE'}</Text>
+            <View style={{ flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 5 }}>
+              {badges.filter(Boolean).map((b, i) => (
+                <View key={i} style={[c.badge, { backgroundColor: th.accentSoft }]}>
+                  <Text style={[c.badgeTxt, { color: th.accent }]}>{b}</Text>
+                </View>
               ))}
             </View>
-          )}
+          </View>
+          <View style={[c.state, { backgroundColor: active ? 'rgba(22,199,132,0.16)' : 'rgba(255,255,255,0.08)' }]}>
+            <View style={[c.dot, { backgroundColor: active ? '#22e39a' : 'rgba(255,255,255,0.4)' }]} />
+            <Text style={[c.stateTxt, { color: active ? '#4ff0b0' : 'rgba(255,255,255,0.6)' }]}>
+              {active ? 'متصل' : 'غير نشط'}
+            </Text>
+          </View>
         </View>
-        <View style={[c.state, { backgroundColor: active ? '#16c78422' : dark ? 'rgba(255,255,255,0.08)' : P.soft }]}>
-          <View style={[c.dot, { backgroundColor: active ? '#16c784' : P.faint }]} />
-          <Text style={[c.stateTxt, { color: active ? '#0d9e66' : dark ? 'rgba(255,255,255,0.6)' : P.sub }]}>
-            {active ? 'متصل' : 'غير نشط'}
-          </Text>
-        </View>
-      </View>
-      {children}
+        {children}
+      </LinearGradient>
     </View>
   );
 }
@@ -109,44 +154,44 @@ function Card({ tech, dark, active, children, badge }: {
 export function NetPanel({ signal, ping }: { signal: Signal | null; ping?: number }) {
   if (!signal) return null;
   const s = signal;
+  const L = THEMES['4G'], N = THEMES['5G'];
   const lteBand = parseBands(s.band).filter(b => b.startsWith('B')).join('+') || s.band;
   const nrBand = parseNrBands(s.nrBand).join('+') || s.nrBand;
   const hasNr = s.nrRsrp !== undefined || !!s.nrBand;
   const bw = [s.dlBandwidth, s.ulBandwidth].filter(Boolean).join(' / ');
-  const mode = hasNr ? 'مزدوج مع 5G' : '4G فقط';
 
   return (
     <View style={{ gap: 12 }}>
-      <Card tech="4G" active={s.rsrp !== undefined} badge={`${lteBand || '—'} · ${mode}`}>
-        <View style={c.gauges}>
+      <Card tech="4G" active={s.rsrp !== undefined} badges={[lteBand || '—', hasNr ? 'مزدوج مع 5G' : '4G فقط']}>
+        <View style={[c.gauges, { backgroundColor: L.panel }]}>
           <Gauge label="RSRP" unit="dBm" value={s.rsrp} level={rsrpLevel(s.rsrp)} r={ratio(s.rsrp, RANGES.rsrp)} />
           <Gauge label="RSRQ" unit="dB" value={s.rsrq} level={rsrqLevel(s.rsrq)} r={ratio(s.rsrq, RANGES.rsrq)} />
           <Gauge label="SINR" unit="dB" value={s.sinr} level={sinrLevel(s.sinr)} r={ratio(s.sinr, RANGES.sinr)} />
           <Gauge label="PING" unit="ms" value={ping} level={pingLevel(ping)} r={ratio(ping, RANGES.ping)} />
         </View>
         <View style={c.tiles}>
-          <Tile icon="bands" label="الباند" value={lteBand} accent={P.blue} />
-          <Tile icon="tower" label="PCI" value={s.pci} />
-          <Tile icon="antenna" label="Cell ID" value={s.cellId} />
-          <Tile icon="chart" label="RSSI" value={s.rssi !== undefined ? `${s.rssi} dBm` : undefined} />
-          <Tile icon="layers" label="EARFCN" value={s.earfcn} />
-          <Tile icon="speed" label="عرض النطاق" value={bw || undefined} />
+          <Tile cols={3} th={L} icon="bands" label="الباند" value={lteBand} accent />
+          <Tile cols={3} th={L} icon="tower" label="PCI" value={s.pci} />
+          <Tile cols={3} th={L} icon="antenna" label="Cell ID" value={s.cellId} />
+          <Tile cols={3} th={L} icon="chart" label="RSSI" value={s.rssi !== undefined ? `${s.rssi} dBm` : undefined} />
+          <Tile cols={3} th={L} icon="layers" label="EARFCN" value={s.earfcn} />
+          <Tile cols={3} th={L} icon="speed" label="النطاق" value={s.dlBandwidth || bw || undefined} />
         </View>
       </Card>
 
       {hasNr && (
-        <Card tech="5G" dark active={s.nrRsrp !== undefined} badge={nrBand || '—'}>
-          <View style={c.gauges}>
-            <Gauge dark label="RSRP" unit="dBm" value={s.nrRsrp} level={rsrpLevel(s.nrRsrp)} r={ratio(s.nrRsrp, RANGES.rsrp)} />
-            <Gauge dark label="RSRQ" unit="dB" value={s.nrRsrq} level={rsrqLevel(s.nrRsrq)} r={ratio(s.nrRsrq, RANGES.rsrq)} />
-            <Gauge dark label="SINR" unit="dB" value={s.nrSinr} level={sinrLevel(s.nrSinr)} r={ratio(s.nrSinr, RANGES.sinr)} />
-            <Gauge dark label="PING" unit="ms" value={ping} level={pingLevel(ping)} r={ratio(ping, RANGES.ping)} />
+        <Card tech="5G" active={s.nrRsrp !== undefined} badges={[nrBand || '—']}>
+          <View style={[c.gauges, { backgroundColor: N.panel }]}>
+            <Gauge label="RSRP" unit="dBm" value={s.nrRsrp} level={rsrpLevel(s.nrRsrp)} r={ratio(s.nrRsrp, RANGES.rsrp)} />
+            <Gauge label="RSRQ" unit="dB" value={s.nrRsrq} level={rsrqLevel(s.nrRsrq)} r={ratio(s.nrRsrq, RANGES.rsrq)} />
+            <Gauge label="SINR" unit="dB" value={s.nrSinr} level={sinrLevel(s.nrSinr)} r={ratio(s.nrSinr, RANGES.sinr)} />
+            <Gauge label="PING" unit="ms" value={ping} level={pingLevel(ping)} r={ratio(ping, RANGES.ping)} />
           </View>
           <View style={c.tiles}>
-            <Tile dark icon="bands" label="الباند" value={nrBand} accent="#c7b8ff" />
-            <Tile dark icon="tower" label="PCI" value={s.nrPci} />
-            <Tile dark icon="layers" label="NR-ARFCN" value={s.nrArfcn} />
-            <Tile dark icon="speed" label="عرض النطاق" value={s.nrDlBandwidth} />
+            <Tile cols={2} th={N} icon="bands" label="الباند" value={nrBand} accent />
+            <Tile cols={2} th={N} icon="tower" label="PCI" value={s.nrPci} />
+            <Tile cols={2} th={N} icon="layers" label="NR-ARFCN" value={s.nrArfcn} />
+            <Tile cols={2} th={N} icon="speed" label="عرض النطاق" value={s.nrDlBandwidth} />
           </View>
         </Card>
       )}
@@ -158,30 +203,30 @@ const g = StyleSheet.create({
   wrap: { flex: 1, alignItems: 'center' },
   val: { fontWeight: '800', letterSpacing: -0.5, maxWidth: 50, textAlign: 'center' },
   lbl: { fontSize: 11.5, fontWeight: '800', marginTop: -4 },
-  unit: { fontSize: 9.5, color: P.sub, fontWeight: '600' },
+  unit: { fontSize: 9.5, color: 'rgba(255,255,255,0.55)', fontWeight: '600' },
 });
 const t = StyleSheet.create({
-  tile: {
-    width: '48.5%', flexDirection: 'row-reverse', alignItems: 'center', gap: 8,
-    backgroundColor: P.soft, borderRadius: 14, paddingVertical: 8, paddingHorizontal: 10,
-    borderWidth: 1, borderColor: P.border,
-  },
-  tileDark: { backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.1)' },
-  icon: { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  lbl: { color: P.sub, fontSize: 10.5, fontWeight: '700' },
-  val: { color: P.text, fontSize: 14.5, fontWeight: '800' },
+  tile: { borderRadius: 14, paddingVertical: 9, paddingHorizontal: 10, borderWidth: 1, gap: 4 },
+  top: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
+  icon: { width: 24, height: 24, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  lbl: { fontSize: 10.5, fontWeight: '700', flexShrink: 1, textAlign: 'right' },
+  val: { fontSize: 15, fontWeight: '800', textAlign: 'right' },
 });
 const c = StyleSheet.create({
-  card: { backgroundColor: P.card, borderRadius: 22, padding: 14, gap: 12, borderWidth: 1, borderColor: P.border, ...shadow },
-  cardDark: { backgroundColor: '#14224a', borderColor: '#24366b' },
+  shadow: {
+    borderRadius: 24, shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 6,
+  },
+  card: { borderRadius: 24, padding: 14, gap: 12, borderWidth: 1, overflow: 'hidden' },
+  glow: { position: 'absolute', width: 220, height: 220, borderRadius: 110, top: -110, left: -70 },
   head: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
-  techPill: { borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6 },
-  techTxt: { color: '#fff', fontSize: 17, fontWeight: '800' },
-  title: { color: P.text, fontSize: 15, fontWeight: '800' },
-  sub: { color: P.sub, fontSize: 11.5 },
-  state: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
+  techPill: { borderRadius: 14, paddingHorizontal: 13, paddingVertical: 7 },
+  techTxt: { color: '#fff', fontSize: 18, fontWeight: '900' },
+  title: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  badge: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 2 },
+  badgeTxt: { fontSize: 11, fontWeight: '800' },
+  state: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
   dot: { width: 7, height: 7, borderRadius: 4 },
-  stateTxt: { fontSize: 11, fontWeight: '800' },
-  gauges: { flexDirection: 'row-reverse' },
-  tiles: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
+  stateTxt: { fontSize: 11.5, fontWeight: '800' },
+  gauges: { flexDirection: 'row-reverse', borderRadius: 18, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  tiles: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 7 },
 });
