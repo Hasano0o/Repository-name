@@ -719,7 +719,11 @@ export default function AimScreen() {
     <View style={a.container}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[a.content, { paddingBottom: insets.bottom + 110 }]}
+        contentContainerStyle={[a.content, {
+          paddingBottom: insets.bottom + 110,
+          // شريط المكالمة العائم ما يغطي العنوان وأزرار الصوت/الاهتزاز
+          paddingTop: ['outgoing', 'connecting', 'active'].includes(callInfo.state) ? 92 : 10,
+        }]}
       >
         {/* ═══ Header ═══ */}
         <View style={a.header}>
