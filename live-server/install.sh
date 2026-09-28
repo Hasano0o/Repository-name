@@ -77,7 +77,7 @@ location /live-api/ {
     proxy_set_header X-Forwarded-Proto \$scheme;
     proxy_read_timeout 3600s;
     proxy_send_timeout 3600s;
-    client_max_body_size 2m;
+    client_max_body_size 12m;
 }
 location /live/ {
     proxy_pass http://127.0.0.1:$PORT;

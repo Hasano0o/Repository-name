@@ -450,6 +450,223 @@ async def get_voice(code: str, fname: str):
     return FileResponse(p, media_type=mt, headers={"Cache-Control": "private, max-age=3600"})
 
 
+# ═══ مركز Bandly (التطبيق المصغر للبوت): فنيين · إعلانات · ملاحظات · أجهزة ═══
+import hashlib, hmac
+from urllib.parse import parse_qsl
+import urllib.request as _ur
+
+HUB = DATA / "hub"
+HUB.mkdir(exist_ok=True)
+HUB_IMG = Path(os.environ.get("BANDLY_HUB_IMG", "/var/www/has-host.com/netguide-images/hub"))
+HUB_IMG_URL = os.environ.get("BANDLY_HUB_IMG_URL", "https://has-host.com/netguide-images/hub")
+MAX_IMG = 4_000_000
+HUB_TYPES = {
+    "tech": "🛠️ طلب تسجيل فني",
+    "ad": "📢 طلب إعلان",
+    "feedback": "💬 ملاحظة على التطبيق",
+    "device": "🔌 طلب إضافة جهاز",
+}
+FIELD_AR = {
+    "name": "الاسم", "phone": "الجوال/واتساب", "city": "المدينة", "areas": "الأحياء", "years": "سنوات الخبرة",
+    "services": "الخدمات", "shop": "اسم المحل", "activity": "النشاط", "whatsapp": "واتساب", "location": "الموقع",
+    "plan": "المدة", "kind": "النوع", "text": "التفاصيل", "brand": "الشركة", "model": "الموديل", "carrier": "شركة الاتصال",
+    "address": "عنوان الراوتر", "firmware": "نسخة البرنامج", "tester": "مستعد يجرب", "contact": "التواصل", "notes": "ملاحظات",
+}
+
+
+def _secret(name: str) -> str:
+    p = DATA / name
+    return p.read_text().strip() if p.exists() else ""
+
+
+def _tg(method: str, data: dict | None = None, files: dict | None = None) -> dict:
+    tok = _secret("bot_token")
+    if not tok:
+        return {"ok": False, "description": "no token"}
+    url = f"https://api.telegram.org/bot{tok}/{method}"
+    try:
+        if files:
+            boundary = "----bandly" + secrets.token_hex(8)
+            body = b""
+            for k, v in (data or {}).items():
+                body += f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode()
+            for k, (fname, content) in files.items():
+                body += f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"; filename="{fname}"\r\nContent-Type: application/octet-stream\r\n\r\n'.encode() + content + b"\r\n"
+            body += f"--{boundary}--\r\n".encode()
+            req = _ur.Request(url, data=body, headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
+        else:
+            req = _ur.Request(url, data=json.dumps(data or {}, ensure_ascii=False).encode(), headers={"Content-Type": "application/json"})
+        with _ur.urlopen(req, timeout=20) as r:
+            return json.load(r)
+    except Exception as e:
+        return {"ok": False, "description": str(e)}
+
+
+def _check_init(init_data: str) -> dict | None:
+    """نتحقق إن الطلب جاي من داخل تليجرام فعلاً (توقيع initData بتوكن البوت)."""
+    tok = _secret("bot_token")
+    if not tok or not init_data:
+        return None
+    try:
+        pairs = dict(parse_qsl(init_data, keep_blank_values=True))
+        got = pairs.pop("hash", "")
+        check = "\n".join(f"{k}={v}" for k, v in sorted(pairs.items()))
+        key = hmac.new(b"WebAppData", tok.encode(), hashlib.sha256).digest()
+        calc = hmac.new(key, check.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(calc, got):
+            return None
+        if time.time() - int(pairs.get("auth_date", "0")) > 86400:
+            return None
+        return json.loads(pairs.get("user", "{}"))
+    except Exception:
+        return None
+
+
+def _owner() -> int:
+    return int(config().get("owner_id") or 0)
+
+
+def _esc(t: str) -> str:
+    return str(t).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+HUB_HITS: dict[str, list[float]] = {}
+
+
+@app.post("/live-api/hub/submit")
+async def hub_submit(req: Request):
+    form = await req.form()
+    user = _check_init(str(form.get("initData") or ""))
+    if not user:
+        raise HTTPException(401, "افتح التطبيق من داخل البوت")
+    kind = str(form.get("type") or "")
+    if kind not in HUB_TYPES:
+        raise HTTPException(400, "نوع غير معروف")
+    uid = str(user.get("id"))
+    if not hit(HUB_HITS, uid, 8):
+        raise HTTPException(429, "أرسلت طلبات كثيرة، جرّب بعد ساعة")
+    fields = {}
+    for k in FIELD_AR:
+        v = form.get(k)
+        if isinstance(v, str) and v.strip():
+            fields[k] = v.strip()[:1500]
+    rid = f"{kind}-{int(time.time())}-{secrets.token_hex(3)}"
+    images = []
+    HUB_IMG.mkdir(parents=True, exist_ok=True)
+    for i in range(4):
+        f = form.get(f"img{i}")
+        if f is None or not hasattr(f, "read"):
+            continue
+        data = await f.read(MAX_IMG + 1)
+        if not data or len(data) > MAX_IMG:
+            continue
+        ext = (Path(getattr(f, "filename", "") or "").suffix or ".jpg").lower()
+        if ext not in (".jpg", ".jpeg", ".png", ".webp", ".txt"):
+            ext = ".jpg"
+        name = f"{rid}-{i}{ext}"
+        (HUB_IMG / name).write_bytes(data)
+        images.append({"file": name, "url": f"{HUB_IMG_URL}/{name}", "ext": ext})
+    rec = {
+        "id": rid, "type": kind, "at": int(time.time()), "status": "new", "fields": fields, "images": images,
+        "user": {"id": user.get("id"), "name": " ".join(x for x in (user.get("first_name"), user.get("last_name")) if x),
+                 "username": user.get("username")},
+    }
+    (HUB / f"{rid}.json").write_text(json.dumps(rec, ensure_ascii=False, indent=1), "utf-8")
+
+    # إشعار المالك في البوت مع أزرار القرار
+    u = rec["user"]
+    who = f'<a href="tg://user?id={u["id"]}">{_esc(u["name"] or "مستخدم")}</a>' + (f' (@{_esc(u["username"])})' if u.get("username") else "")
+    lines = [f"<b>{HUB_TYPES[kind]}</b>", f"من: {who}", ""]
+    lines += [f"• <b>{FIELD_AR[k]}:</b> {_esc(v)}" for k, v in fields.items()]
+    text = "\n".join(lines)[:3900]
+    if kind in ("tech", "ad"):
+        kb = [[{"text": "✅ قبول", "callback_data": f"hub:ok:{rid}"}, {"text": "❌ رفض", "callback_data": f"hub:no:{rid}"}]]
+    else:
+        kb = [[{"text": "✅ تم الاطلاع", "callback_data": f"hub:seen:{rid}"}, {"text": "💬 رد عليه", "url": f"tg://user?id={u['id']}"}]]
+    owner = _owner()
+    if owner:
+        _tg("sendMessage", {"chat_id": owner, "text": text, "parse_mode": "HTML", "reply_markup": {"inline_keyboard": kb},
+                            "disable_web_page_preview": True})
+        for im in images:
+            if im["ext"] == ".txt":
+                _tg("sendDocument", {"chat_id": owner, "caption": f"📎 {rid}"}, {"document": (im["file"], (HUB_IMG / im["file"]).read_bytes())})
+            else:
+                _tg("sendPhoto", {"chat_id": owner, "photo": im["url"], "caption": f"📎 {rid}"})
+    return {"ok": True, "id": rid}
+
+
+def _hub_auth(req: Request):
+    sec = _secret("hub_secret")
+    if not sec or not secrets.compare_digest(req.headers.get("x-hub-secret", ""), sec):
+        raise HTTPException(403)
+
+
+@app.get("/live-api/hub/item/{rid}")
+async def hub_item(rid: str, req: Request):
+    _hub_auth(req)
+    p = HUB / f"{Path(rid).name}.json"
+    if not p.exists():
+        raise HTTPException(404)
+    return json.loads(p.read_text("utf-8"))
+
+
+@app.post("/live-api/hub/decide/{rid}")
+async def hub_decide(rid: str, req: Request):
+    """يستدعيه البوت لما يضغط المالك قبول/رفض. يرجع نتيجة القرار."""
+    _hub_auth(req)
+    body = await req.json()
+    action = body.get("action")
+    p = HUB / f"{Path(rid).name}.json"
+    if not p.exists():
+        raise HTTPException(404, "الطلب غير موجود")
+    rec = json.loads(p.read_text("utf-8"))
+    if rec["status"] not in ("new",) and action != "seen":
+        return {"ok": False, "msg": f"الطلب {('مقبول' if rec['status'] == 'ok' else 'مرفوض')} من قبل", "rec": rec}
+    uid = rec["user"]["id"]
+    out = {"ok": True, "rec": rec}
+    if action == "no":
+        rec["status"] = "no"
+        _tg("sendMessage", {"chat_id": uid, "text": "نعتذر، ما قدرنا نقبل طلبك الحين. تقدر تتواصل مع المبرمج للتفاصيل: @hasa_n20"})
+    elif action == "seen":
+        rec["status"] = "seen"
+        _tg("sendMessage", {"chat_id": uid, "text": "شكراً لك 💙 وصلت رسالتك للمبرمج واطّلع عليها."})
+    elif action == "ok" and rec["type"] == "tech":
+        f = rec["fields"]
+        t = techs()
+        key = "T" + secrets.token_hex(4).upper()
+        t[key] = {"name": f.get("name") or rec["user"]["name"], "phone": f.get("phone", ""), "city": f.get("city", ""),
+                  "note": f.get("services", ""), "expires": int(time.time() + int(body.get("days") or 30) * 86400),
+                  "active": True, "listed": True, "created": int(time.time()), "tg": uid}
+        TECHS_FILE.write_text(json.dumps(t, ensure_ascii=False, indent=1), "utf-8")
+        rec["status"] = "ok"; rec["tech_key"] = key
+        _tg("sendMessage", {"chat_id": uid, "parse_mode": "HTML", "text":
+            "🎉 <b>تم قبولك كفني معتمد في Bandly!</b>\n\n"
+            f"مفتاح الفني حقك: <code>{key}</code>\n\n"
+            "استخدمه في «وضع الفني» داخل التطبيق أو في صفحة الفني:\nhttps://has-host.com/live/\n\n"
+            "واسمك صار يطلع للعملاء في دليل الفنيين."})
+        out["msg"] = f"انضاف الفني وأُرسل له المفتاح {key}"
+    elif action == "ok" and rec["type"] == "ad":
+        rec["status"] = "ok"
+        _tg("sendMessage", {"chat_id": uid, "text": "✅ تم قبول طلب إعلانك في Bandly! بنتواصل معك لتأكيد التفاصيل والدفع قبل النشر."})
+        out["msg"] = "تم القبول — الإعلان انضاف للقائمة (غير مفعّل) وتقدر تفعّله من لوحة الإعلانات"
+    else:
+        rec["status"] = "ok"
+    rec["decided_at"] = int(time.time())
+    p.write_text(json.dumps(rec, ensure_ascii=False, indent=1), "utf-8")
+    return out
+
+
+@app.get("/live-api/hub/stats")
+async def hub_stats(req: Request):
+    _hub_auth(req)
+    items = [json.loads(x.read_text("utf-8")) for x in HUB.glob("*.json")]
+    out: dict = {}
+    for it in items:
+        out.setdefault(it["type"], {}).setdefault(it["status"], 0)
+        out[it["type"]][it["status"]] += 1
+    return out
+
+
 # ═══ صفحة الفني (الويب) ═══
 VIEWER = (BASE / "viewer.html").read_text("utf-8")
 

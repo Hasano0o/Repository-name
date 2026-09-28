@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f6bff">
+<title>Bandly</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#e5eaf2;--card:#f3f6fa;--border:#d8e0eb;--soft:#e9eef5;--text:#0f1f45;--sub:#6b7796;--faint:#a3adc6;--blue:#2f6bff;--violet:#6a45ec;--green:#12b76a;--red:#e5484d;--amber:#b76e00}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;padding:14px 14px calc(28px + env(safe-area-inset-bottom))}
+.wrap{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.hide{display:none!important}
+.hero{border-radius:28px;padding:22px 18px 20px;color:#fff;background:linear-gradient(135deg,#2f6bff,#6a45ec);position:relative;overflow:hidden;text-align:center}
+.hero:before,.hero:after{content:"";position:absolute;border-radius:50%;background:#fff;opacity:.08}
+.hero:before{width:200px;height:200px;top:-80px;left:-60px}.hero:after{width:160px;height:160px;bottom:-70px;right:-40px}
+.logo{width:80px;height:80px;border-radius:24px;margin:0 auto 12px;box-shadow:0 10px 30px rgba(0,0,0,.25);display:block}
+.hero h1{margin:0;font-size:30px}
+.hero p{margin:6px 0 0;opacity:.92;font-size:14.5px;line-height:1.7}
+.card{background:var(--card);border:1px solid var(--border);border-radius:22px;padding:16px;box-shadow:0 6px 16px rgba(27,43,92,.07)}
+.card h2{margin:0 0 4px;font-size:16.5px}
+.card .s{margin:0 0 14px;color:var(--sub);font-size:12.5px;line-height:1.7}
+.dl{display:flex;align-items:center;gap:12px;width:100%;border:0;border-radius:18px;padding:13px 14px;font:inherit;cursor:pointer;text-align:right;transition:transform .12s}
+.dl:active,.nav:active,.btn:active{transform:scale(.97)}
+.dl+.dl{margin-top:10px}
+.dl .ic{width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.dl .t{flex:1}.dl .t b{display:block;font-size:15.5px}.dl .t small{display:block;font-size:12px;opacity:.8;margin-top:1px}
+.apk{background:linear-gradient(90deg,#12b76a,#0ea5a0);color:#fff;box-shadow:0 8px 20px rgba(18,183,106,.3)}
+.apk .ic{background:rgba(255,255,255,.2)}
+.store{background:var(--soft);color:var(--text);border:1.5px solid var(--border)}
+.store .ic{background:#0f1f45}
+.soon{font-size:10.5px;font-weight:700;background:#fdecc8;color:#8a4f00;border-radius:999px;padding:3px 9px}
+.meta{display:flex;justify-content:center;gap:14px;margin-top:10px;font-size:11.5px;color:var(--sub);font-weight:600}
+.navs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.nav{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:14px 12px;text-align:right;font:inherit;color:var(--text);cursor:pointer;box-shadow:0 6px 16px rgba(27,43,92,.06)}
+.nav .e{font-size:24px}.nav b{display:block;font-size:14px;margin-top:6px}.nav span{display:block;font-size:11.5px;color:var(--sub);margin-top:2px}
+.feats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.f{background:var(--soft);border:1px solid var(--border);border-radius:16px;padding:12px}
+.f .fi{font-size:22px}.f b{display:block;font-size:13.5px;margin-top:4px}.f span{display:block;font-size:11.5px;color:var(--sub);line-height:1.6;margin-top:2px}
+/* النماذج */
+.top{display:flex;align-items:center;gap:10px}
+.back{width:40px;height:40px;border-radius:14px;border:1.5px solid var(--border);background:var(--card);font-size:18px;cursor:pointer;color:var(--text)}
+.top h1{margin:0;font-size:20px}
+label{display:block;font-size:12.5px;font-weight:700;color:var(--sub);margin:12px 2px 6px}
+label i{font-style:normal;color:var(--red)}
+input,textarea,select{width:100%;border:1.5px solid var(--border);border-radius:14px;padding:12px 13px;font:inherit;font-size:15px;background:var(--soft);color:var(--text);outline:none}
+input:focus,textarea:focus,select:focus{border-color:var(--blue);background:#f7f9fd}
+textarea{min-height:96px;resize:vertical}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{border:1.5px solid var(--border);background:var(--soft);border-radius:999px;padding:8px 14px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)}
+.pill.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.files{display:flex;flex-wrap:wrap;gap:8px}
+.fbox{width:78px;height:78px;border-radius:14px;border:1.5px dashed var(--faint);background:var(--soft);display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--sub);cursor:pointer;position:relative;overflow:hidden}
+.fbox img{width:100%;height:100%;object-fit:cover}
+.fbox .x{position:absolute;top:3px;left:3px;background:rgba(0,0,0,.55);color:#fff;border-radius:50%;width:20px;height:20px;font-size:12px;display:flex;align-items:center;justify-content:center}
+.fname{font-size:11px;padding:4px;text-align:center;word-break:break-all}
+.hint{background:#e3ebff;color:#1b3d9c;border-radius:14px;padding:10px 12px;font-size:12.5px;line-height:1.7;margin-top:12px}
+.warn{background:#fde7ea;color:#9b1c24;border-radius:14px;padding:10px 12px;font-size:12.5px;line-height:1.7;margin-top:12px;font-weight:700}
+.btn{width:100%;border:0;border-radius:16px;padding:15px;font:inherit;font-weight:700;font-size:15.5px;cursor:pointer;margin-top:16px;background:linear-gradient(90deg,#6a45ec,#2f6bff);color:#fff}
+.btn[disabled]{opacity:.6}
+.err{color:var(--red);font-size:13px;font-weight:700;text-align:center;margin-top:10px}
+/* معاينة الإعلان */
+.adprev{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--border);border-radius:16px;padding:10px;margin-top:12px}
+.adprev .im{width:52px;height:52px;border-radius:12px;background:var(--soft);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0}
+.adprev .im img{width:100%;height:100%;object-fit:cover}
+.adprev b{display:block;font-size:14px}.adprev span{font-size:11.5px;color:var(--sub)}
+.adprev .wa{margin-right:auto;background:#12b76a;color:#fff;border-radius:10px;padding:6px 10px;font-size:12px;font-weight:700}
+/* قائمة الفنيين */
+.tech{display:flex;align-items:center;gap:12px;background:var(--soft);border:1px solid var(--border);border-radius:16px;padding:12px}
+.tech+.tech{margin-top:10px}
+.av{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#2f6bff,#6a45ec);color:#fff;font-weight:700;font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.tech .t{flex:1}.tech b{display:block;font-size:14.5px}.tech span{font-size:12px;color:var(--sub)}
+.tech a{background:#12b76a;color:#fff;border-radius:12px;padding:8px 12px;font-size:12.5px;font-weight:700;text-decoration:none}
+.empty{color:var(--sub);text-align:center;font-size:13.5px;padding:18px 6px;line-height:1.8}
+/* نجاح + نافذة */
+.done{text-align:center;padding:26px 16px}
+.done .em{font-size:60px}.done h2{margin:10px 0 6px;font-size:21px}.done p{color:var(--sub);font-size:14px;line-height:1.8;margin:0}
+.sheet{position:fixed;inset:0;background:rgba(15,31,69,.45);display:flex;align-items:flex-end;justify-content:center;z-index:20;opacity:0;pointer-events:none;transition:opacity .2s}
+.sheet.on{opacity:1;pointer-events:auto}
+.box{background:var(--card);width:100%;max-width:520px;border-radius:26px 26px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom));text-align:center;transform:translateY(40px);transition:transform .25s}
+.sheet.on .box{transform:none}
+.box .em{font-size:52px}.box h3{margin:10px 0 6px;font-size:20px}.box p{margin:0;color:var(--sub);font-size:14px;line-height:1.8}
+.box .row{display:flex;gap:10px;margin-top:18px}
+.box button{flex:1;border:0;border-radius:16px;padding:14px;font:inherit;font-weight:700;font-size:14.5px;cursor:pointer}
+.pri{background:linear-gradient(90deg,#12b76a,#0ea5a0);color:#fff}.sec{background:var(--soft);color:var(--text);border:1.5px solid var(--border)!important}
+.foot{text-align:center;color:var(--sub);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ═══════════ الرئيسية ═══════════ -->
+<section id="p-home" class="wrap" style="padding:0">
+  <div class="hero">
+    <svg class="logo" viewBox="0 0 512 512" aria-hidden="true">
+      <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b82ff"/><stop offset="1" stop-color="#1d3fc4"/></linearGradient></defs>
+      <rect width="512" height="512" rx="120" fill="url(#lg)"/>
+      <path d="M138 356a150 150 0 1 1 236 0" fill="none" stroke="#fff" stroke-width="50" stroke-linecap="round"/>
+      <rect x="175" y="262" width="42" height="70" rx="21" fill="#fff"/><rect x="234" y="210" width="42" height="122" rx="21" fill="#fff"/><rect x="293" y="158" width="42" height="174" rx="21" fill="#fff"/>
+    </svg>
+    <h1>Bandly</h1>
+    <p>اطلع أقوى إشارة من راوترك — وجّه الهوائي، ثبّت أفضل برج، وخلّ فني يساعدك عن بُعد</p>
+  </div>
+
+  <div class="card">
+    <h2>حمّل التطبيق</h2>
+    <p class="s">اختر المتجر المناسب لجوالك</p>
+    <button class="dl apk" id="apkBtn">
+      <span class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg></span>
+      <span class="t"><b>تحميل مباشر APK</b><small>لأجهزة أندرويد — متاح الحين</small></span><span>‹</span>
+    </button>
+    <button class="dl store" data-store="Google Play">
+      <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10.5 18h3"/></svg></span>
+      <span class="t"><b>Google Play</b><small>أندرويد</small></span><span class="soon">قريباً</span>
+    </button>
+    <button class="dl store" data-store="App Store">
+      <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10.5 5.5h3"/><circle cx="12" cy="18" r="1"/></svg></span>
+      <span class="t"><b>App Store</b><small>آيفون</small></span><span class="soon">قريباً</span>
+    </button>
+    <div class="meta"><span id="apkSize">📦 —</span><span id="apkDate">🗓️ —</span></div>
+  </div>
+
+  <div class="navs">
+    <button class="nav" data-go="tech"><div class="e">🛠️</div><b>سجّل كفني</b><span>انضم لدليل الفنيين</span></button>
+    <button class="nav" data-go="ad"><div class="e">📢</div><b>اطلب إعلان</b><span>إعلانك داخل التطبيق</span></button>
+    <button class="nav" data-go="device"><div class="e">🔌</div><b>أضف جهازك</b><span>ساعدنا ندعم راوترك</span></button>
+    <button class="nav" data-go="feedback"><div class="e">💬</div><b>ملاحظاتك</b><span>مشكلة أو اقتراح</span></button>
+    <button class="nav" data-go="techs"><div class="e">👷</div><b>الفنيين</b><span>فنيين معتمدين قريبين</span></button>
+    <button class="nav" id="devBtn"><div class="e">👨‍💻</div><b>المبرمج</b><span>تواصل مباشر</span></button>
+  </div>
+
+  <div class="card">
+    <h2>وش يسوي Bandly؟</h2>
+    <p class="s">كل اللي تحتاجه عشان تطلع أقوى إشارة</p>
+    <div class="feats">
+      <div class="f"><div class="fi">🎯</div><b>مساعد التوجيه</b><span>صوت واهتزاز يدلّك على أفضل اتجاه للهوائي</span></div>
+      <div class="f"><div class="fi">📶</div><b>لوحة 4G / 5G</b><span>RSRP · SINR · RSRQ · البنق</span></div>
+      <div class="f"><div class="fi">🛠️</div><b>وضع الفني</b><span>الفني يشوف إشارتك حيّة ويكلمك بالصوت</span></div>
+      <div class="f"><div class="fi">🗼</div><b>الأبراج والترددات</b><span>ثبّت على البرج والتردد الأقوى</span></div>
+      <div class="f"><div class="fi">⚡</div><b>السرعة والألعاب</b><span>قِس السرعة واختر أفضل تردد للألعاب</span></div>
+      <div class="f"><div class="fi">🔔</div><b>المراقبة</b><span>تنبيه إذا انقطع النت أو ضعفت الإشارة</span></div>
+    </div>
+  </div>
+  <div class="foot">تثبيت APK: افتح الملف بعد التحميل ← اسمح بالتثبيت ← تثبيت. التحديث ينزل فوق القديم وبياناتك محفوظة.</div>
+</section>
+
+<!-- ═══════════ سجّل كفني ═══════════ -->
+<section id="p-tech" class="hide">
+  <div class="top"><button class="back">→</button><h1>🛠️ سجّل كفني</h1></div>
+  <div class="card" style="margin-top:14px">
+    <p class="s">بعد الموافقة ينضاف اسمك لدليل الفنيين، ويوصلك <b>مفتاح وضع الفني</b> عشان تتابع إشارة عملائك حيّة وتوجههم بالصوت.</p>
+    <form data-type="tech">
+      <label>الاسم <i>*</i></label><input name="name" required maxlength="60">
+      <label>رقم الجوال / الواتساب <i>*</i></label><input name="phone" required inputmode="tel" maxlength="20" placeholder="05xxxxxxxx">
+      <label>المدينة <i>*</i></label><input name="city" required maxlength="40" placeholder="مثال: شرورة">
+      <label>الأحياء أو المناطق اللي تغطيها</label><input name="areas" maxlength="200">
+      <label>سنوات الخبرة</label>
+      <div class="pills" data-name="years"><button type="button" class="pill">أقل من سنة</button><button type="button" class="pill">١–٣</button><button type="button" class="pill">٣–٥</button><button type="button" class="pill">أكثر من ٥</button></div>
+      <label>الخدمات <i>*</i></label>
+      <div class="pills" data-name="services" data-multi><button type="button" class="pill">تركيب أنتنا</button><button type="button" class="pill">توجيه الإشارة</button><button type="button" class="pill">صيانة راوترات</button><button type="button" class="pill">تمديد شبكات</button><button type="button" class="pill">كاميرات</button></div>
+      <label>نبذة عنك (اختياري)</label><textarea name="notes" maxlength="500"></textarea>
+      <button class="btn">إرسال الطلب</button><div class="err"></div>
+    </form>
+  </div>
+</section>
+
+<!-- ═══════════ اطلب إعلان ═══════════ -->
+<section id="p-ad" class="hide">
+  <div class="top"><button class="back">→</button><h1>📢 اطلب إعلان</h1></div>
+  <div class="card" style="margin-top:14px">
+    <p class="s">إعلانك يطلع لمستخدمي Bandly أسفل شاشة الراوتر، مع زر واتساب وزر موقع.</p>
+    <form data-type="ad">
+      <label>اسم المحل / النشاط <i>*</i></label><input name="shop" required maxlength="40">
+      <label>نوع النشاط</label><input name="activity" maxlength="60" placeholder="مثال: جوالات وإكسسوارات">
+      <label>رقم الواتساب <i>*</i></label><input name="whatsapp" required inputmode="tel" maxlength="20" placeholder="05xxxxxxxx">
+      <label>رابط الموقع على الخريطة</label><input name="location" inputmode="url" maxlength="300" placeholder="https://maps.app.goo.gl/...">
+      <label>مدة الإعلان <i>*</i></label>
+      <div class="pills" data-name="plan" data-required><button type="button" class="pill">أسبوع</button><button type="button" class="pill">شهر</button><button type="button" class="pill">٣ شهور</button></div>
+      <label>صورة / شعار الإعلان <i>*</i></label>
+      <div class="files" data-max="1" data-required></div>
+      <label>معاينة</label>
+      <div class="adprev"><div class="im" id="adImg">🏪</div><div><b id="adName">اسم المحل</b><span id="adAct">إعلان</span></div><span class="wa">واتساب</span></div>
+      <label>ملاحظات (اختياري)</label><textarea name="notes" maxlength="500"></textarea>
+      <button class="btn">إرسال الطلب</button><div class="err"></div>
+    </form>
+  </div>
+</section>
+
+<!-- ═══════════ أضف جهازك ═══════════ -->
+<section id="p-device" class="hide">
+  <div class="top"><button class="back">→</button><h1>🔌 أضف جهازك</h1></div>
+  <div class="card" style="margin-top:14px">
+    <p class="s">راوترك مو مدعوم؟ ساعدنا بهالمعلومات ونضيفه لـ Bandly. <b>🎁 اللي يساعدنا في إضافة جهاز جديد ياخذ الاشتراك المدفوع ٣ شهور مجاناً</b> وينكتب اسمه في شكر المساهمين.</p>
+    <div class="warn">⚠️ لا ترسل كلمة مرور الراوتر أبداً — ما نحتاجها.</div>
+    <form data-type="device">
+      <label>شركة الراوتر <i>*</i></label><input name="brand" required maxlength="40" placeholder="مثال: Huawei، ZTE، TP-Link">
+      <label>الموديل <i>*</i></label><input name="model" required maxlength="60" placeholder="مكتوب على الملصق تحت الراوتر">
+      <label>شركة الاتصال <i>*</i></label>
+      <div class="pills" data-name="carrier" data-required><button type="button" class="pill">STC</button><button type="button" class="pill">موبايلي</button><button type="button" class="pill">زين</button><button type="button" class="pill">سلام</button><button type="button" class="pill">غيرها</button></div>
+      <label>عنوان صفحة الراوتر</label><input name="address" inputmode="url" maxlength="60" placeholder="مثال: 192.168.8.1">
+      <label>نسخة البرنامج (Firmware) إذا تعرفها</label><input name="firmware" maxlength="80">
+      <label>الصور <i>*</i></label>
+      <div class="files" data-max="4" data-required></div>
+      <div class="hint">📷 نحتاج صور لـ: <b>١)</b> الملصق تحت الراوتر · <b>٢)</b> صفحة الدخول · <b>٣)</b> صفحة الإشارة أو معلومات الجهاز.<br>
+      📋 <b>الأهم:</b> افتح Bandly ← «استكشاف جهاز غير مدعوم» ← شارك التقرير، والصقه تحت.</div>
+      <label>تقرير الاستكشاف من Bandly</label><textarea name="text" maxlength="1500" placeholder="الصق التقرير هنا"></textarea>
+      <label>مستعد تجرّب نسخة تجريبية معنا؟</label>
+      <div class="pills" data-name="tester"><button type="button" class="pill">نعم</button><button type="button" class="pill">لا</button></div>
+      <label>واتساب أو تليجرام للتواصل</label><input name="contact" maxlength="40">
+      <button class="btn">إرسال</button><div class="err"></div>
+    </form>
+  </div>
+</section>
+
+<!-- ═══════════ ملاحظاتك ═══════════ -->
+<section id="p-feedback" class="hide">
+  <div class="top"><button class="back">→</button><h1>💬 ملاحظاتك</h1></div>
+  <div class="card" style="margin-top:14px">
+    <p class="s">كل ملاحظة تقراها المبرمج بنفسه وتساعدنا نحسّن التطبيق 💙</p>
+    <form data-type="feedback">
+      <label>النوع <i>*</i></label>
+      <div class="pills" data-name="kind" data-required><button type="button" class="pill">🐞 مشكلة</button><button type="button" class="pill">💡 اقتراح</button><button type="button" class="pill">✨ ميزة جديدة</button><button type="button" class="pill">👍 شكر</button></div>
+      <label>التفاصيل <i>*</i></label><textarea name="text" required maxlength="1500" placeholder="اكتب اللي صار أو اللي تبيه…"></textarea>
+      <label>صورة (اختياري)</label><div class="files" data-max="2"></div>
+      <label>رقم للتواصل إذا تبي رد (اختياري)</label><input name="contact" maxlength="40">
+      <button class="btn">إرسال</button><div class="err"></div>
+    </form>
+  </div>
+</section>
+
+<!-- ═══════════ الفنيين ═══════════ -->
+<section id="p-techs" class="hide">
+  <div class="top"><button class="back">→</button><h1>👷 الفنيين المعتمدين</h1></div>
+  <div class="card" style="margin-top:14px">
+    <input id="citySearch" placeholder="🔎 ابحث بالمدينة أو الاسم">
+    <div id="techList" style="margin-top:12px"><div class="empty">نحمّل القائمة…</div></div>
+  </div>
+  <button class="btn" data-go="tech" style="margin-top:0">🛠️ أنت فني؟ سجّل هنا</button>
+</section>
+
+<!-- ═══════════ تم الإرسال ═══════════ -->
+<section id="p-done" class="hide">
+  <div class="card done">
+    <div class="em" id="doneEm">✅</div><h2 id="doneT">وصل طلبك!</h2><p id="doneP"></p>
+    <button class="btn" id="doneHome">الرجوع للرئيسية</button>
+  </div>
+</section>
+</div>
+
+<div class="sheet" id="sheet"><div class="box">
+  <div class="em">🚀</div><h3 id="soonTitle"></h3><p id="soonText"></p>
+  <div class="row"><button class="pri" id="soonApk">حمّل APK الحين</button><button class="sec" id="soonClose">تمام</button></div>
+</div></div>
+
+<script>
+const tg = window.Telegram && Telegram.WebApp;
+if (tg) { try { tg.ready(); tg.expand(); tg.setHeaderColor('#2f6bff'); tg.setBackgroundColor('#e5eaf2'); } catch (e) {} }
+const APK = 'https://has-host.com/dl/bandly.apk', DEV = 'https://t.me/hasa_n20';
+const $ = id => document.getElementById(id);
+const haptic = t => { try { tg.HapticFeedback.impactOccurred(t || 'light'); } catch (e) {} };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// ═══ التنقل (يدعم فتح قسم مباشرة من زر البوت: …/bandly-app/#tech) ═══
+const PAGES = ['home', 'tech', 'ad', 'device', 'feedback', 'techs', 'done'];
+function go(p, push = true) {
+  if (!PAGES.includes(p)) p = 'home';
+  PAGES.forEach(x => $('p-' + x).classList.toggle('hide', x !== p));
+  if (push) history.pushState({ p }, '', p === 'home' ? location.pathname : '#' + p);
+  window.scrollTo(0, 0);
+  if (tg && tg.BackButton) { p === 'home' ? tg.BackButton.hide() : tg.BackButton.show(); }
+  if (p === 'techs') loadTechs();
+}
+window.onpopstate = e => go((e.state && e.state.p) || location.hash.slice(1) || 'home', false);
+if (tg && tg.BackButton) tg.BackButton.onClick(() => history.length > 1 ? history.back() : go('home'));
+document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { haptic(); go(b.dataset.go); });
+document.querySelectorAll('.back').forEach(b => b.onclick = () => history.length > 1 ? history.back() : go('home'));
+const start = (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) || location.hash.slice(1);
+go(PAGES.includes(start) ? start : 'home', false);
+
+// ═══ التحميل والمتاجر ═══
+function downloadApk() { haptic('medium'); if (tg && tg.openLink) tg.openLink(APK); else location.href = APK; }
+$('apkBtn').onclick = downloadApk;
+$('devBtn').onclick = () => { haptic(); if (tg && tg.openTelegramLink) tg.openTelegramLink(DEV); else location.href = DEV; };
+const MSG = {
+  'Google Play': 'نشتغل على نشر Bandly في Google Play، وبيكون متاح قريب جداً بإذن الله 💙<br>وإلى ذاك الوقت تقدر تحمّله مباشرة بملف APK — نفس التطبيق بالضبط.',
+  'App Store': 'نسخة الآيفون في طريقها لـ App Store، وبنعلن عنها أول ما تنزل بإذن الله 🍃<br>تابع البوت عشان يوصلك التنبيه أول بأول.'
+};
+document.querySelectorAll('[data-store]').forEach(b => b.onclick = () => {
+  haptic(); const s = b.dataset.store;
+  $('soonTitle').textContent = `قريباً على ${s}`; $('soonText').innerHTML = MSG[s];
+  $('soonApk').style.display = s === 'App Store' ? 'none' : ''; $('sheet').classList.add('on');
+});
+$('soonClose').onclick = () => $('sheet').classList.remove('on');
+$('sheet').onclick = e => { if (e.target.id === 'sheet') $('sheet').classList.remove('on'); };
+$('soonApk').onclick = () => { $('sheet').classList.remove('on'); downloadApk(); };
+fetch(APK, { method: 'HEAD', cache: 'no-store' }).then(r => {
+  if (!r.ok) return;
+  const n = +r.headers.get('content-length'); if (n) $('apkSize').textContent = `📦 ${(n / 1048576).toFixed(0)} ميقا`;
+  const d = r.headers.get('last-modified'); if (d) $('apkDate').textContent = '🗓️ آخر تحديث ' + new Date(d).toLocaleDateString('ar-SA-u-ca-gregory', { day: 'numeric', month: 'long' });
+}).catch(() => {});
+
+// ═══ اختيارات (pills) ═══
+document.querySelectorAll('.pills').forEach(g => g.querySelectorAll('.pill').forEach(p => p.onclick = () => {
+  haptic();
+  if (g.hasAttribute('data-multi')) p.classList.toggle('on');
+  else { g.querySelectorAll('.pill').forEach(x => x.classList.remove('on')); p.classList.add('on'); }
+}));
+
+// ═══ الصور (نصغّرها قبل الرفع) ═══
+function shrink(file) {
+  return new Promise(res => {
+    if (!file.type.startsWith('image/')) return res(file);
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const s = Math.min(1, 1600 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = img.width * s; c.height = img.height * s;
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob(b => res(b ? new File([b], 'img.jpg', { type: 'image/jpeg' }) : file), 'image/jpeg', .85);
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = () => res(file); img.src = url;
+  });
+}
+document.querySelectorAll('.files').forEach(box => {
+  box._files = [];
+  const max = +box.dataset.max || 1;
+  const render = () => {
+    box.innerHTML = '';
+    box._files.forEach((f, i) => {
+      const d = document.createElement('div'); d.className = 'fbox';
+      d.innerHTML = f.type.startsWith('image/') ? `<img src="${URL.createObjectURL(f)}">` : `<div class="fname">📄</div>`;
+      const x = document.createElement('span'); x.className = 'x'; x.textContent = '✕';
+      x.onclick = e => { e.stopPropagation(); box._files.splice(i, 1); render(); box.dispatchEvent(new Event('change')); };
+      d.appendChild(x); box.appendChild(d);
+    });
+    if (box._files.length < max) {
+      const add = document.createElement('label'); add.className = 'fbox'; add.style.margin = '0'; add.textContent = '＋';
+      const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.hidden = true; if (max > 1) inp.multiple = true;
+      inp.onchange = async () => {
+        for (const f of [...inp.files].slice(0, max - box._files.length)) box._files.push(await shrink(f));
+        render(); box.dispatchEvent(new Event('change'));
+      };
+      add.appendChild(inp); box.appendChild(add);
+    }
+  };
+  render();
+});
+
+// ═══ معاينة الإعلان ═══
+const adForm = document.querySelector('form[data-type="ad"]');
+const upd = () => {
+  $('adName').textContent = adForm.shop.value || 'اسم المحل';
+  $('adAct').textContent = adForm.activity.value || 'إعلان';
+  const f = adForm.querySelector('.files')._files[0];
+  $('adImg').innerHTML = f ? `<img src="${URL.createObjectURL(f)}">` : '🏪';
+};
+adForm.addEventListener('input', upd); adForm.querySelector('.files').addEventListener('change', upd);
+
+// ═══ الإرسال ═══
+const DONE = {
+  tech: ['🎉', 'وصل طلبك!', 'بنراجع طلبك ويوصلك الرد هنا في البوت. إذا انقبلت يوصلك مفتاح وضع الفني مباشرة.'],
+  ad: ['📢', 'وصل طلب إعلانك!', 'بنتواصل معك على الواتساب لتأكيد التفاصيل قبل النشر.'],
+  device: ['🙏', 'شكراً لمساعدتك!', 'المبرمج بيراجع المعلومات، وإذا احتاج شي بيتواصل معك. وإذا انضاف جهازك توصلك المكافأة 🎁'],
+  feedback: ['💙', 'وصلت ملاحظتك!', 'شكراً لك — كل ملاحظة تفرق معنا.'],
+};
+document.querySelectorAll('form[data-type]').forEach(form => form.onsubmit = async e => {
+  e.preventDefault();
+  const err = form.querySelector('.err'), btn = form.querySelector('.btn'); err.textContent = '';
+  const type = form.dataset.type, fd = new FormData();
+  fd.append('initData', (tg && tg.initData) || ''); fd.append('type', type);
+  for (const el of form.querySelectorAll('input[name],textarea[name]')) {
+    if (el.required && !el.value.trim()) { err.textContent = 'عبّي الخانات المطلوبة (*)'; el.focus(); return; }
+    if (el.value.trim()) fd.append(el.name, el.value.trim());
+  }
+  for (const g of form.querySelectorAll('.pills')) {
+    const v = [...g.querySelectorAll('.pill.on')].map(p => p.textContent).join('، ');
+    if (!v && (g.hasAttribute('data-required') || g.dataset.name === 'services')) { err.textContent = 'اختر من الخيارات المطلوبة (*)'; return; }
+    if (v) fd.append(g.dataset.name, v);
+  }
+  let n = 0;
+  for (const box of form.querySelectorAll('.files')) {
+    if (box.hasAttribute('data-required') && !box._files.length) { err.textContent = 'أضف الصور المطلوبة (*)'; return; }
+    for (const f of box._files) fd.append('img' + n++, f, f.type.startsWith('image/') ? 'img.jpg' : f.name);
+  }
+  if (!tg || !tg.initData) { err.textContent = 'افتح التطبيق من داخل بوت تليجرام عشان تقدر ترسل'; return; }
+  btn.disabled = true; btn.textContent = 'نرسل…';
+  try {
+    const r = await fetch('/live-api/hub/submit', { method: 'POST', body: fd });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.detail || 'ما انرسل، جرّب مرة ثانية');
+    haptic('heavy');
+    const [em, t, p] = DONE[type]; $('doneEm').textContent = em; $('doneT').textContent = t; $('doneP').textContent = p;
+    form.reset(); form.querySelectorAll('.pill.on').forEach(x => x.classList.remove('on'));
+    go('done');
+  } catch (x) { err.textContent = x.message; }
+  finally { btn.disabled = false; btn.textContent = type === 'device' || type === 'feedback' ? 'إرسال' : 'إرسال الطلب'; }
+});
+$('doneHome').onclick = () => go('home');
+
+// ═══ دليل الفنيين ═══
+let TECHS = null;
+async function loadTechs() {
+  if (!TECHS) { try { TECHS = (await (await fetch('/live-api/techs')).json()).techs || []; } catch (e) { TECHS = []; } }
+  renderTechs();
+}
+function renderTechs() {
+  const q = $('citySearch').value.trim();
+  const list = TECHS.filter(t => !q || (t.city || '').includes(q) || (t.name || '').includes(q));
+  $('techList').innerHTML = list.length ? list.map(t => {
+    const wa = (t.phone || '').replace(/\D/g, '').replace(/^0/, '966');
+    return `<div class="tech"><div class="av">${esc((t.name || '؟').trim()[0])}</div><div class="t"><b>${esc(t.name)}</b><span>📍 ${esc(t.city || '—')}${t.note ? ' · ' + esc(t.note) : ''}</span></div>${wa ? `<a href="https://wa.me/${wa}" target="_blank">واتساب</a>` : ''}</div>`;
+  }).join('') : `<div class="empty">${TECHS.length ? 'ما فيه فني بهالاسم أو المدينة' : 'ما فيه فنيين مسجلين للحين.<br>أنت فني؟ سجّل وكن أول واحد 👇'}</div>`;
+}
+$('citySearch').oninput = renderTechs;
+</script>
+</body>
+</html>
