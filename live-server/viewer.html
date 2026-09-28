@@ -108,6 +108,23 @@ input.small{font-size:15px;letter-spacing:0;text-align:right;direction:rtl}
 .cbar button{width:44px;height:44px;border-radius:50%;border:0;display:flex;align-items:center;justify-content:center;cursor:pointer;background:rgba(255,255,255,.16);color:#fff}
 .cbar button.on{background:#fff;color:#0f1f45}
 .cbar button.end{background:#ff5a5f}
+.vbox{position:relative;width:100%;aspect-ratio:3/4;border-radius:18px;overflow:hidden;background:#000;cursor:crosshair;touch-action:manipulation}
+.vbox video{width:100%;height:100%;object-fit:cover;display:block}
+.vping{position:absolute;width:64px;height:64px;margin:-32px 0 0 -32px;pointer-events:none}
+.vping:before{content:"";position:absolute;inset:0;border-radius:50%;border:4px solid #ffd21f;animation:vp 1.1s ease-out infinite}
+.vping:after{content:"";position:absolute;left:21px;top:21px;width:14px;height:14px;border-radius:50%;border:4px solid #ffd21f;background:rgba(0,0,0,.25)}
+@keyframes vp{0%{transform:scale(.35);opacity:.95}100%{transform:scale(1.25);opacity:0}}
+.recdot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff4d4f;margin-left:6px;animation:blink 1.2s infinite}
+@keyframes blink{50%{opacity:.3}}
+.shots{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.shots img{width:54px;height:72px;object-fit:cover;border-radius:10px;cursor:pointer;background:#000}
+.btn.b{background:#e8efff;color:var(--blue);border-color:#cfdcff}
+.spd{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.spd>div{background:var(--soft);border:1px solid var(--border);border-radius:16px;padding:10px;text-align:center}
+.spd .l{font-size:12px;color:var(--sub);font-weight:700}.spd .v{font-size:22px;font-weight:700;direction:ltr}
+.spd .v small{font-size:11px;color:var(--sub)}.spd .u{font-size:11.5px;color:var(--sub);font-weight:600;direction:ltr}
+.stars{color:#f5b301;font-size:13px;letter-spacing:1px}
+.past div{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .toast{position:fixed;top:14px;left:14px;right:14px;max-width:520px;margin:0 auto;background:#0f1f45;color:#fff;border-radius:18px;padding:14px;text-align:center;font-weight:700;z-index:9;box-shadow:0 10px 30px rgba(0,0,0,.3)}
 </style>
 </head>
@@ -119,7 +136,7 @@ input.small{font-size:15px;letter-spacing:0;text-align:right;direction:rtl}
     <div class="hero">
       <div class="k">Bandly</div>
       <h1>وضع الفني</h1>
-      <p style="margin:6px 0 0;opacity:.9;font-size:13.5px">شوف إشارة راوتر العميل حيّة، وكلّمه بمكالمة صوتية وأنت في مكانك 📞</p>
+      <p style="margin:6px 0 0;opacity:.9;font-size:13.5px">شوف إشارة راوتر العميل حيّة، وكلّمه صوت وصورة 📹 وأنت في مكانك</p>
     </div>
     <div class="card">
       <h2>كود العميل</h2>
@@ -129,6 +146,11 @@ input.small{font-size:15px;letter-spacing:0;text-align:right;direction:rtl}
       <input id="nameIn" class="small" style="margin-top:10px" placeholder="اسمك (يظهر للعميل)">
       <button class="btn p" style="width:100%;margin-top:12px" id="goBtn">ابدأ المتابعة</button>
       <p id="joinErr" class="warn hide" style="margin-top:10px"></p>
+    </div>
+    <div class="card hide past" id="pastCard">
+      <h2>جلساتي السابقة</h2>
+      <p class="s" id="pastSub"></p>
+      <div id="past" class="log" style="max-height:none"></div>
     </div>
     <div class="card" id="techsCard">
       <h2>فنيين معتمدين</h2>
@@ -145,7 +167,23 @@ input.small{font-size:15px;letter-spacing:0;text-align:right;direction:rtl}
       <span class="tag" style="background:var(--card);color:var(--text);border:1px solid var(--border)"><span class="dot" id="stDot"></span><span id="stTxt">نتصل…</span></span>
     </div>
 
+    <div class="card hide" id="vidCard">
+      <div class="row sp" style="margin-bottom:10px"><h2 style="margin:0"><span class="recdot"></span>كاميرا العميل مباشرة</h2><span style="font-size:11.5px;color:var(--sub);font-weight:700">المس الصورة عشان تأشر له</span></div>
+      <div class="vbox" id="vbox"><video id="rv" autoplay playsinline muted></video><div id="vping" class="vping hide"></div></div>
+      <div class="grid" style="margin-top:10px">
+        <button class="btn b" id="vFlip">🔄 اقلب كاميرته</button>
+        <button class="btn b" id="vSnap">📸 التقط صورة</button>
+      </div>
+      <div class="shots" id="shots"></div>
+    </div>
+
     <div id="nets" style="display:flex;flex-direction:column;gap:12px"></div>
+
+    <div class="card hide" id="spCard">
+      <h2>سرعة العميل 🚀</h2>
+      <p class="s">العميل يقيسها من التطبيق قبل التوجيه وبعده</p>
+      <div class="spd" id="spBox"></div>
+    </div>
 
     <div class="card" id="bestCard">
       <div class="row sp"><h2 style="margin:0">أفضل نقطة</h2><span id="bestTxt" style="font-weight:700;direction:ltr">—</span></div>
@@ -164,6 +202,7 @@ input.small{font-size:15px;letter-spacing:0;text-align:right;direction:rtl}
       <button class="callbtn" id="callBtn" disabled><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg></span>اتصل بالعميل</button>
       <div class="chint" id="callHint">مكالمة صوتية حيّة وأنت تشوف قراءته</div>
       <div class="ended hide" id="callEnded"><span></span></div>
+      <button class="btn b hide" id="camAsk" style="width:100%;margin-bottom:10px">📹 اطلب من العميل يشغّل الكاميرا</button>
       <button class="ptt" id="ptt"><span class="mic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></span><span id="pttTxt">أو أرسل رسالة صوتية (اضغط مطوّل)</span></button>
       <div id="vnote" class="vnote hide">🔊 <span id="vnoteTxt"></span><span style="margin-right:auto">إعادة ↻</span></div>
       <div class="grid" id="sayGrid" style="margin-top:12px"></div>
@@ -186,7 +225,8 @@ input.small{font-size:15px;letter-spacing:0;text-align:right;direction:rtl}
       <div class="big" id="repGain"></div>
       <table id="repTbl"></table>
       <div class="grid" style="margin-top:12px">
-        <button class="btn p" id="waBtn">أرسل للعميل واتساب</button>
+        <button class="btn p" id="imgBtn" style="grid-column:span 2;background:linear-gradient(90deg,#0ea5a0,#12b76a)">📸 أرسل التقرير كصورة</button>
+        <button class="btn" id="waBtn">أرسل كنص واتساب</button>
         <button class="btn" id="cpBtn">نسخ التقرير</button>
       </div>
     </div>
@@ -203,6 +243,7 @@ input.small{font-size:15px;letter-spacing:0;text-align:right;direction:rtl}
 </div></div>
 <div class="cbar hide" id="cbar">
   <div class="nm"><b><span class="dotl" id="cDot"></span>العميل</b><span id="cStatus">يرن…</span></div>
+  <button id="cCam" title="الكاميرا"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="13" height="12" rx="3"/><path d="M15.5 10.5 21 7v10l-5.5-3.5"/></svg></button>
   <button id="cMute" title="كتم"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
   <button class="end" id="cHang" title="إنهاء"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14.5c5.3-4.7 12.7-4.7 18 0l-2.2 2.6-3.3-1.2-.5-2.6c-2-.7-4-.7-6 0l-.5 2.6-3.3 1.2z"/></svg></button>
 </div>
@@ -219,13 +260,14 @@ const ls={get:k=>{try{return localStorage.getItem(k)||''}catch(e){return ''}},se
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 let code=(location.pathname.match(/\/live\/(\d{6})/)||[])[1]||'';
+let speed={}, peerCam=false;
 let ws=null,hist=[],first=null,best=null,needKey=false,closedByEnd=false,retry=0,lastReport=null,vt='',customer=false,lastVoiceUrl='';
 
 async function init(){
   try{ const c=await (await fetch('/live-api/config')).json(); needKey=!!c.require_tech_key; }catch(e){}
   $('keyBox').classList.toggle('hide',!needKey);
   $('keyIn').value=ls.get('bandly_key'); $('nameIn').value=ls.get('bandly_name');
-  loadTechs();
+  loadTechs(); loadPast();
   if(code && (!needKey || ls.get('bandly_key'))) start(); else { $('codeIn').value=code; show('join'); }
 }
 function show(w){ $('join').classList.toggle('hide',w!=='join'); $('live').classList.toggle('hide',w!=='live'); }
@@ -233,8 +275,22 @@ async function loadTechs(){
   try{
     const d=await (await fetch('/live-api/techs')).json();
     if(!d.techs.length){ $('techsCard').classList.add('hide'); return; }
-    $('techs').innerHTML=d.techs.map(t=>`<div><b>${esc(t.name||'')}</b> · ${esc(t.city||'')} ${t.phone?`· <a href="https://wa.me/${esc(t.phone).replace(/^0/,'966')}">${esc(t.phone)}</a>`:''}</div>`).join('');
+    $('techs').innerHTML=d.techs.map(t=>`<div><b>${esc(t.name||'')}</b> · ${esc(t.city||'')}${t.rating_n?` <span class="stars">★ ${t.rating}</span> <span style="font-size:11px">(${t.rating_n})</span>`:''} ${t.phone?`· <a href="https://wa.me/${esc(t.phone).replace(/^0/,'966')}">${esc(t.phone)}</a>`:''}</div>`).join('');
   }catch(e){ $('techsCard').classList.add('hide'); }
+}
+async function loadPast(){
+  const k=ls.get('bandly_key'); if(!k) return;
+  try{
+    const r=await fetch('/live-api/tech/sessions?key='+encodeURIComponent(k)); if(!r.ok) return;
+    const d=await r.json(); if(!d.sessions.length&&!d.rating_n) return;
+    $('pastCard').classList.remove('hide');
+    $('pastSub').textContent=d.rating_n?`تقييمك ★ ${d.rating} من ٥ (${d.rating_n} تقييم)`:'تقييمات العملاء تطلع هنا';
+    $('past').innerHTML=d.sessions.slice(0,15).map(x=>{
+      const dt=new Date(x.at*1000).toLocaleDateString('ar-SA',{day:'numeric',month:'short'}), g=x.gain;
+      const sp=x.speed&&x.speed.before&&x.speed.after?` · <span style="direction:ltr;display:inline-block">${x.speed.before.down}→${x.speed.after.down} Mbps</span>`:'';
+      return `<div><span><b>${esc(x.label||'راوتر')}</b>${x.stars?` <span class="stars">${'★'.repeat(x.stars)}</span>`:''}<br><span style="font-size:11.5px">${dt} · ${Math.max(1,Math.round(x.dur/60))} د${sp}</span></span><b style="direction:ltr;color:${g>0?'var(--green)':g<0?'var(--red)':'var(--sub)'}">${g==null?'—':(g>0?'+':'')+g+' dB'}</b></div>`;
+    }).join('');
+  }catch(e){}
 }
 $('goBtn').onclick=()=>{
   const c=$('codeIn').value.replace(/\D/g,'');
@@ -273,8 +329,10 @@ function onMsg(m){
     (m.history||[]).forEach(addReading);
     render();
     status(m.customer?'on':'wait', m.customer?'العميل متصل':'بانتظار العميل');
+    speed=m.speed||{}; renderSpeed();
     if(m.ended && m.report) showReport(m.report,'ended');
-  } else if(m.t==='r'){ addReading(m); render(); status('on','العميل متصل'); }
+  } else if(m.t==='speed'){ speed=m.speed||{}; renderSpeed(); toast('🚀 العميل قاس السرعة'); }
+  else if(m.t==='r'){ addReading(m); render(); status('on','العميل متصل'); }
   else if(m.t==='status'){ status(m.customer?'on':'wait', m.customer?'العميل متصل':'العميل طلع من التطبيق'); }
   else if(m.t==='cmd_sent'){ log(`أرسلنا «${cmdName(m.action)}» — بانتظار موافقة العميل${m.delivered?'':' (العميل مو متصل)'}`); }
   else if(m.t==='cmd_result'){ log((m.ok?'✅ ':'❌ ')+(m.msg||'')); if(navigator.vibrate) navigator.vibrate(60); }
@@ -343,6 +401,12 @@ function nets(r){
     <div class="gs">${mini(s.nrRsrp,'RSRP','dBm',rsrpL(s.nrRsrp),R(s.nrRsrp,-120,-70),1)}${mini(s.nrRsrq,'RSRQ','dB',rsrqL(s.nrRsrq),R(s.nrRsrq,-20,-5),1)}${mini(s.nrSinr,'SINR','dB',sinrL(s.nrSinr),R(s.nrSinr,-5,25),1)}${mini(r.ping,'PING','ms',pingL(r.ping),R(r.ping,200,10),1)}</div>
     <div class="tiles">${tile('الباند',s.nrBand)}${tile('PCI',s.nrPci)}${tile('NR-ARFCN',s.nrArfcn)}${tile('عرض النطاق',s.nrDlBandwidth)}</div></div>`;
   $('nets').innerHTML=h;
+}
+function renderSpeed(){
+  const b=speed.before, a=speed.after; $('spCard').classList.toggle('hide',!b&&!a);
+  const box=(t,x,o)=>{ const pct=x&&o&&o.down>0?Math.round((x.down-o.down)/o.down*100):null;
+    return `<div><div class="l">${t}</div><div class="v">${x?x.down:'—'} <small>Mbps</small></div><div class="u">${x?`⬆ ${x.up} · ${x.ping} ms`:'بانتظار العميل'}</div>${pct!=null?`<div style="font-weight:700;direction:ltr;color:${pct>=0?'var(--green)':'var(--red)'}">${pct>0?'+':''}${pct}%</div>`:''}</div>`; };
+  $('spBox').innerHTML=box('قبل',b)+box('بعد',a,b);
 }
 function render(){ const r=hist[hist.length-1]; if(!r) return; nets(r); bestLine(r); chart(); }
 function chart(){
@@ -418,6 +482,14 @@ function cSet(st,txt){
   $('cDot').style.background= st==='active' ? '#16c784' : '#ffb020';
   if(txt) $('cStatus').textContent=txt;
   $('callBtn').disabled = !(customer && st==='idle');
+  camUi();
+}
+function camUi(){
+  const on=cs==='active'&&peerCam;
+  $('vidCard').classList.toggle('hide',!on);
+  $('camAsk').classList.toggle('hide',!(cs==='active'&&!peerCam));
+  $('cCam').classList.toggle('on',on);
+  $('cCam').classList.toggle('hide',cs!=='active');
 }
 function ring(on){
   clearInterval(ringI); ringI=null;
@@ -435,7 +507,10 @@ async function cSetup(){
   pc=new RTCPeerConnection({iceServers:ice});
   lstream.getTracks().forEach(t=>pc.addTrack(t,lstream));
   pc.onicecandidate=e=>{ if(e.candidate) rtc('ice',e.candidate.toJSON()); };
-  pc.ontrack=e=>{ const a=$('remoteAudio'); a.srcObject=e.streams[0]; a.play().catch(()=>{}); };
+  pc.ontrack=e=>{
+    if(e.track.kind==='video'){ const v=$('rv'); v.srcObject=e.streams[0]||new MediaStream([e.track]); v.play().catch(()=>{}); return; }
+    const a=$('remoteAudio'); a.srcObject=e.streams[0]; a.play().catch(()=>{});
+  };
   pc.onconnectionstatechange=()=>{
     if(pc.connectionState==='connected' && cs!=='active'){ cStart=Date.now(); cSet('active','00:00'); clearInterval(tickT);
       tickT=setInterval(()=>{ const s=Math.floor((Date.now()-cStart)/1000); $('cStatus').textContent=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); },1000);
@@ -448,7 +523,7 @@ function cEnd(reason){
   clearTimeout(ringT); clearInterval(tickT); ring(false);
   try{ lstream&&lstream.getTracks().forEach(t=>t.stop()); }catch(e){}
   try{ pc&&pc.close(); }catch(e){}
-  pc=null; lstream=null; pendIce=[]; muted=false; $('cMute').classList.remove('on');
+  pc=null; lstream=null; pendIce=[]; muted=false; $('cMute').classList.remove('on'); peerCam=false; try{ $('rv').srcObject=null; }catch(e){}
   cSet('idle');
   if(reason){ const e=$('callEnded'); e.querySelector('span').textContent='📞 '+reason; e.classList.remove('hide'); clearTimeout(e._t); e._t=setTimeout(()=>e.classList.add('hide'),4000); }
 }
@@ -464,6 +539,34 @@ $('inAccept').onclick=async()=>{ if(cs!=='incoming') return; ring(false); clearT
 $('inReject').onclick=()=>{ if(cs!=='incoming') return; rtc('reject'); cEnd('رفضت المكالمة'); };
 $('cHang').onclick=()=>cHangup();
 $('cMute').onclick=()=>{ muted=!muted; lstream&&lstream.getAudioTracks().forEach(t=>t.enabled=!muted); $('cMute').classList.toggle('on',muted); };
+function askCam(){ if(cs!=='active'||peerCam) return; rtc('camreq'); toast('طلبنا من العميل يشغّل الكاميرا 📹'); }
+$('camAsk').onclick=askCam; $('cCam').onclick=askCam;
+$('vFlip').onclick=()=>{ if(peerCam) rtc('flip'); };
+$('vbox').addEventListener('click',e=>{
+  if(!peerCam) return;
+  const b=$('vbox').getBoundingClientRect(), x=(e.clientX-b.left)/b.width, y=(e.clientY-b.top)/b.height;
+  if(x<0||x>1||y<0||y>1) return;
+  rtc('point',{x:Math.round(x*1000)/1000,y:Math.round(y*1000)/1000});
+  const p=$('vping'); p.style.left=(x*100)+'%'; p.style.top=(y*100)+'%'; p.classList.remove('hide');
+  clearTimeout(p._t); p._t=setTimeout(()=>p.classList.add('hide'),2500);
+  if(navigator.vibrate) navigator.vibrate(20);
+});
+async function shareBlob(blob,name,title){
+  const file=new File([blob],name,{type:blob.type});
+  try{ if(navigator.canShare&&navigator.canShare({files:[file]})){ await navigator.share({files:[file],title}); return; } }catch(e){ if(e&&e.name==='AbortError') return; }
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); a.remove();
+}
+$('vSnap').onclick=()=>{
+  const v=$('rv'); if(!v.videoWidth) return;
+  // نفس القص اللي يشوفه الفني (٣:٤ cover)
+  const vw=v.videoWidth, vh=v.videoHeight, ta=3/4; let sw=vw, sh=vh;
+  if(vw/vh>ta) sw=vh*ta; else sh=vw/ta;
+  const c=document.createElement('canvas'); c.width=Math.round(sw); c.height=Math.round(sh);
+  c.getContext('2d').drawImage(v,(vw-sw)/2,(vh-sh)/2,sw,sh,0,0,c.width,c.height);
+  c.toBlob(b=>{ if(!b) return; const u=URL.createObjectURL(b); const img=document.createElement('img'); img.src=u; img.title='المس للإرسال';
+    img.onclick=()=>shareBlob(b,`bandly-${code}-${Date.now()}.jpg`,'صورة من كاميرا العميل'); $('shots').prepend(img);
+    toast('📸 انحفظت الصورة — المسها عشان ترسلها'); },'image/jpeg',.9);
+};
 async function callHandle(m){
   try{
     switch(m.kind){
@@ -479,6 +582,7 @@ async function callHandle(m){
       case 'hangup': if(cs!=='idle') cEnd('انتهت المكالمة'); break;
       case 'taken': if(cs==='incoming') cEnd('ردّ فني ثاني'); break;
       case 'gone': if(cs!=='idle') cEnd('انقطع العميل'); break;
+      case 'cam': peerCam=!!(m.data&&m.data.on); camUi(); if(peerCam){ toast('📹 العميل شغّل الكاميرا'); $('rv').play().catch(()=>{}); } break;
     }
   }catch(x){ fail(x); }
 }
@@ -499,8 +603,56 @@ function showReport(rep,why){
 function reportText(){
   const r=lastReport; if(!r) return '';
   const f=x=>x?`⁦${x.rsrp} dBm⁩${x.band?' ('+x.band+(x.pci?' · PCI '+x.pci:'')+')':''}`:'—';
-  return `📡 تقرير ضبط الإشارة — Bandly\n\nقبل: ${f(r.first)}\nبعد: ${f(r.last)}\nأفضل قراءة: ${f(r.best)}\nالتحسن: ${r.gain_db==null?'—':(r.gain_db>0?'+':'')+r.gain_db+' dB'}\nالمدة: ${Math.max(1,Math.round((r.duration_sec||0)/60))} دقيقة${ls.get('bandly_name')?'\nالفني: '+ls.get('bandly_name'):''}`;
+  const sp=r.speed||speed||{}, sf=x=>x?`⁦⬇ ${x.down} / ⬆ ${x.up} Mbps⁩`:'—';
+  const spd=sp.before||sp.after?`\n\n🚀 السرعة\nقبل: ${sf(sp.before)}\nبعد: ${sf(sp.after)}`:'';
+  return `📡 تقرير ضبط الإشارة — Bandly\n\nقبل: ${f(r.first)}\nبعد: ${f(r.last)}\nأفضل قراءة: ${f(r.best)}\nالتحسن: ${r.gain_db==null?'—':(r.gain_db>0?'+':'')+r.gain_db+' dB'}\nالمدة: ${Math.max(1,Math.round((r.duration_sec||0)/60))} دقيقة${ls.get('bandly_name')?'\nالفني: '+ls.get('bandly_name'):''}${spd}`;
 }
+function reportImage(){
+  const r=lastReport; if(!r) return;
+  const W=1080, c=document.createElement('canvas'); c.width=W; let x=c.getContext('2d');
+  const F=(w,s)=>`${w} ${s}px 'IBM Plex Sans Arabic',system-ui,sans-serif`;
+  const sp=r.speed||speed||{}, spG=sp.before&&sp.after&&sp.before.down>0?Math.round((sp.after.down-sp.before.down)/sp.before.down*100):null;
+  const rows=[['قوة الإشارة RSRP',r.first&&r.first.rsrp,r.last&&r.last.rsrp,'dBm',1]];
+  if((r.first&&r.first.sinr!=null)||(r.last&&r.last.sinr!=null)) rows.push(['جودة الإشارة SINR',r.first&&r.first.sinr,r.last&&r.last.sinr,'dB',1]);
+  if(sp.before||sp.after){ rows.push(['سرعة التحميل',sp.before&&sp.before.down,sp.after&&sp.after.down,'Mbps',1]); rows.push(['سرعة الرفع',sp.before&&sp.before.up,sp.after&&sp.after.up,'Mbps',1]); rows.push(['البنق',sp.before&&sp.before.ping,sp.after&&sp.after.ping,'ms',-1]); }
+  const tags=[]; if(r.best) tags.push(`أفضل قراءة \u2066${r.best.rsrp} dBm\u2069`); if(r.last&&r.last.band) tags.push(`البرج \u2066${r.last.band}${r.last.pci?' · PCI '+r.last.pci:''}\u2069`);
+  tags.push(`${Math.max(1,Math.round((r.duration_sec||0)/60))} دقيقة`); if(ls.get('bandly_name')) tags.push('الفني: '+ls.get('bandly_name'));
+  // نحسب عدد أسطر الوسوم قبل الرسم عشان نعرف طول الصورة
+  x.font=F(600,28); let lines=1, tx=W-90;
+  tags.forEach(t=>{ const w=x.measureText(t).width+44; if(tx-w<90){ lines++; tx=W-90; } tx-=w+14; });
+  const H=740+rows.length*100+lines*70+200; c.height=H; x=c.getContext('2d'); x.direction='rtl';
+  x.fillStyle='#e5eaf2'; x.fillRect(0,0,W,H);
+  const rr=(X,Y,w,h,rad,fill)=>{ x.beginPath(); x.roundRect(X,Y,w,h,rad); x.fillStyle=fill; x.fill(); };
+  const g=x.createLinearGradient(W,0,0,520); g.addColorStop(0,'#2f6bff'); g.addColorStop(1,'#6a45ec');
+  rr(40,40,W-80,520,56,g);
+  x.fillStyle='#fff'; x.textAlign='right'; x.font=F(700,44); x.fillText('Bandly',W-90,120);
+  x.textAlign='left'; x.font=F(600,30); x.globalAlpha=.85; x.fillText(new Date().toLocaleDateString('ar-SA',{year:'numeric',month:'long',day:'numeric'}),90,118); x.globalAlpha=1;
+  x.textAlign='right'; x.font=F(700,62); x.fillText('تقرير ضبط الإشارة',W-90,230);
+  x.font=F(600,34); x.globalAlpha=.85; x.fillText((r.label||'راوتر العميل').slice(0,34),W-90,285); x.globalAlpha=1;
+  const boxes=[[r.gain_db==null?'—':`${r.gain_db>0?'+':''}${r.gain_db} dB`,'تحسّن الإشارة']]; if(spG!=null) boxes.push([`${spG>0?'+':''}${spG}%`,'تحسّن السرعة']);
+  const bw=(W-180-(boxes.length-1)*30)/boxes.length;
+  boxes.forEach((b,i)=>{ const X=W-90-bw-i*(bw+30); rr(X,330,bw,190,36,'rgba(255,255,255,.16)'); x.fillStyle='#fff'; x.textAlign='center';
+    x.font=F(700,72); x.save(); x.direction='ltr'; x.fillText(b[0],X+bw/2,430); x.restore(); x.font=F(600,30); x.globalAlpha=.85; x.fillText(b[1],X+bw/2,485); x.globalAlpha=1; });
+  rr(40,590,W-80,H-630,56,'#f3f6fa');
+  x.textAlign='right'; x.fillStyle='#a3adc6'; x.font=F(600,28); x.fillText('الرقم الرمادي قبل الضبط، والغامق بعده',W-90,650);
+  let y=740;
+  rows.forEach(([l,a,b,u,dir])=>{
+    x.textAlign='right'; x.fillStyle='#6b7796'; x.font=F(600,34); x.fillText(l,W-90,y);
+    const d=a!=null&&b!=null?(b-a)*dir:0;
+    x.save(); x.direction='ltr'; x.textAlign='left';
+    x.fillStyle='#6b7796'; x.font=F(600,36); const at=a==null?'—':String(a); x.fillText(at,90,y); let X=90+x.measureText(at).width+18;
+    x.fillStyle='#a3adc6'; x.fillText('→',X,y); X+=x.measureText('→').width+18;
+    x.fillStyle=d>0.4?'#0f9d5f':d<-0.4?'#e5484d':'#0f1f45'; x.font=F(700,44); const bt=b==null?'—':String(b); x.fillText(bt,X,y); X+=x.measureText(bt).width+12;
+    x.fillStyle='#a3adc6'; x.font=F(600,26); x.fillText(u,X,y); x.restore();
+    x.fillStyle='#d8e0eb'; x.fillRect(90,y+30,W-180,2); y+=100;
+  });
+  x.font=F(600,28); tx=W-90; y+=10;
+  tags.forEach(t=>{ const w=x.measureText(t).width+44; if(tx-w<90){ tx=W-90; y+=70; } rr(tx-w,y-40,w,56,28,'#e9eef5'); x.fillStyle='#0f1f45'; x.textAlign='center'; x.fillText(t,tx-w/2,y-3); tx-=w+14; });
+  x.fillStyle='#6b7796'; x.textAlign='center'; x.font=F(600,28); x.fillText('اضبط إشارتك مجاناً مع Bandly',W/2,H-120);
+  x.save(); x.direction='ltr'; x.fillStyle='#2f6bff'; x.font=F(700,30); x.fillText('t.me/NetGuide1_bot',W/2,H-76); x.restore();
+  c.toBlob(b=>{ if(b) shareBlob(b,`bandly-report-${r.code}.png`,'تقرير Bandly'); },'image/png');
+}
+$('imgBtn').onclick=reportImage;
 $('waBtn').onclick=()=>{ location.href='https://wa.me/?text='+encodeURIComponent(reportText()); };
 $('cpBtn').onclick=async()=>{ try{ await navigator.clipboard.writeText(reportText()); $('cpBtn').textContent='✓ انتسخ'; }catch(e){ prompt('انسخ التقرير:',reportText()); } };
 

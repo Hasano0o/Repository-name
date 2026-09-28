@@ -1,6 +1,7 @@
 /**
- * مكالمة صوتية حيّة بين العميل والفني (WebRTC) — الإشارات تمر عبر نفس اتصال وضع الفني،
- * والصوت يمشي مباشرة بين الجهازين، أو عبر خادم TURN على سيرفرنا لو الشبكة تمنع الاتصال المباشر.
+ * مكالمة صوت + فيديو حيّة بين العميل والفني (WebRTC) — الإشارات تمر عبر نفس اتصال وضع الفني،
+ * والصوت/الفيديو يمشي مباشرة بين الجهازين، أو عبر خادم TURN على سيرفرنا لو الشبكة تمنع الاتصال المباشر.
+ * الكاميرا: من جهة العميل فقط، وما تشتغل إلا لما يضغط العميل بنفسه (أو يوافق على طلب الفني).
  */
 import { Platform, Vibration } from 'react-native';
 import {
@@ -16,6 +17,15 @@ export interface CallInfo {
   muted: boolean;
   speaker: boolean;
   ended?: string;        // سبب آخر إنهاء (للعرض لحظياً)
+  // ═══ الفيديو ═══
+  cam?: boolean;         // (العميل) الكاميرا شغالة
+  facing?: 'environment' | 'user';
+  localUrl?: string;     // (العميل) معاينة كاميرته
+  peerCam?: boolean;     // (الفني) كاميرا العميل شغالة
+  remoteUrl?: string;    // (الفني) بث كاميرا العميل
+  videoRev?: number;     // يتغير لما يوصل مسار فيديو جديد (نعيد رسم العرض)
+  point?: { x: number; y: number; at: number };  // (العميل) الفني أشّر هنا
+  camReq?: number;       // (العميل) الفني طلب تشغيل الكاميرا
 }
 export interface RtcMsg { kind: string; data?: any; sid?: string; from?: string }
 
@@ -27,6 +37,9 @@ export class CallController {
   private peerSid: string | undefined;
   private pendingIce: any[] = [];
   private ringTimer: ReturnType<typeof setTimeout> | null = null;
+  private vstream: MediaStream | null = null;
+  private vsender: any = null;
+  private camBusy = false;
   info: CallInfo = { state: 'idle', peer: '', muted: false, speaker: true };
 
   constructor(private o: {
@@ -86,6 +99,67 @@ export class CallController {
     this.set({ speaker: s });
   }
 
+  // ═══ الكاميرا (العميل) ═══
+  async toggleCam(): Promise<void> {
+    if (this.o.role !== 'cust' || this.info.state !== 'active' || !this.pc || this.camBusy) return;
+    this.camBusy = true;
+    try {
+      if (this.info.cam) { this.stopCam(); return; }
+      const facing = this.info.facing ?? 'environment';
+      let vs: MediaStream;
+      try {
+        vs = await mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: facing, width: 640, height: 480, frameRate: 15 } as any,
+        }) as MediaStream;
+      } catch (e: any) {
+        const msg = String(e?.message ?? e);
+        throw new Error(/permission|denied|NotAllowed/i.test(msg) ? 'اسمح للتطبيق باستخدام الكاميرا من الإعدادات' : 'ما قدرنا نشغّل الكاميرا');
+      }
+      const track: any = vs.getVideoTracks()[0];
+      this.vstream = vs;
+      if (this.vsender) {
+        await this.vsender.replaceTrack(track);
+      } else {
+        this.vsender = this.pc.addTrack(track, this.stream);
+        const offer = await this.pc.createOffer({});
+        await this.pc.setLocalDescription(offer);
+        this.tx('offer', { type: offer.type, sdp: offer.sdp });
+      }
+      this.set({ cam: true, facing, localUrl: (vs as any).toURL(), camReq: undefined });
+      this.tx('cam', { on: true });
+    } finally {
+      this.camBusy = false;
+    }
+  }
+
+  flipCam() {
+    if (!this.info.cam || !this.vstream) return;
+    const t: any = this.vstream.getVideoTracks()[0];
+    try { t._switchCamera(); } catch { return; }
+    const facing = this.info.facing === 'user' ? 'environment' : 'user';
+    this.set({ facing });
+    this.tx('cam', { on: true, facing });
+  }
+
+  clearCamReq() { this.set({ camReq: undefined }); }
+
+  private stopCam(silent = false) {
+    try { this.vsender?.replaceTrack(null); } catch {}
+    try { this.vstream?.getTracks().forEach((t: any) => t.stop()); } catch {}
+    this.vstream = null;
+    this.set({ cam: false, localUrl: undefined, point: undefined });
+    if (!silent) this.tx('cam', { on: false });
+  }
+
+  // ═══ الفيديو (الفني) ═══
+  requestCam() { if (this.o.role === 'tech' && this.info.state === 'active') this.tx('camreq'); }
+  requestFlip() { if (this.o.role === 'tech' && this.info.peerCam) this.tx('flip'); }
+  /** x,y من ٠ إلى ١ على صورة الكاميرا */
+  point(x: number, y: number) {
+    if (this.o.role === 'tech' && this.info.peerCam) this.tx('point', { x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000 });
+  }
+
   // ═══ الرسائل الواردة ═══
   async handle(m: RtcMsg) {
     const st = this.info.state;
@@ -127,6 +201,27 @@ export class CallController {
           if (this.pc && this.pc.remoteDescription) await this.pc.addIceCandidate(new RTCIceCandidate(m.data));
           else this.pendingIce.push(m.data);
           break;
+        case 'cam':
+          if (this.o.role === 'tech') this.set({ peerCam: !!m.data?.on });
+          break;
+        case 'camreq':
+          if (this.o.role === 'cust' && st === 'active' && !this.info.cam) {
+            Vibration.vibrate(Platform.OS === 'android' ? [0, 120, 80, 120] : 10);
+            this.set({ camReq: Date.now() });
+          }
+          break;
+        case 'flip':
+          if (this.o.role === 'cust') this.flipCam();
+          break;
+        case 'point':
+          if (this.o.role === 'cust' && this.info.cam && m.data) {
+            const x = Math.max(0, Math.min(1, Number(m.data.x))), y = Math.max(0, Math.min(1, Number(m.data.y)));
+            if (Number.isFinite(x) && Number.isFinite(y)) {
+              Vibration.vibrate(Platform.OS === 'android' ? 40 : 10);
+              this.set({ point: { x, y, at: Date.now() } });
+            }
+          }
+          break;
         case 'reject': if (st === 'outgoing') this.cleanup('رفض المكالمة'); break;
         case 'busy': if (st === 'outgoing') this.cleanup('مشغول بمكالمة ثانية'); break;
         case 'taken': if (st === 'incoming') { this.stopRing(); this.cleanup('ردّ فني ثاني'); } break;
@@ -145,6 +240,11 @@ export class CallController {
     const pc: any = new RTCPeerConnection({ iceServers } as any);
     this.pc = pc;
     this.stream.getTracks().forEach((t: any) => pc.addTrack(t, this.stream));
+    pc.addEventListener('track', (e: any) => {
+      if (e.track?.kind !== 'video') return;
+      const rs = e.streams?.[0];
+      if (rs) this.set({ remoteUrl: rs.toURL(), videoRev: (this.info.videoRev ?? 0) + 1 });
+    });
     pc.addEventListener('icecandidate', (e: any) => { if (e.candidate) this.tx('ice', e.candidate.toJSON ? e.candidate.toJSON() : e.candidate); });
     pc.addEventListener('connectionstatechange', () => {
       const cs = pc.connectionState;
@@ -178,6 +278,7 @@ export class CallController {
 
   private fail(e: any) {
     const msg = String(e?.message ?? e);
+    if (this.info.state === 'active') return;   // خطأ جانبي (مثلاً إعادة تفاوض) ما يقطع مكالمة شغالة
     this.hangup(/permission|denied|NotAllowed/i.test(msg) ? 'اسمح للتطبيق باستخدام الميكروفون' : 'تعذّر بدء المكالمة');
   }
 
@@ -185,10 +286,15 @@ export class CallController {
     this.clearRingTimer();
     try { InCallManager.stopRingback(); } catch {}
     try { this.stream?.getTracks().forEach((t: any) => t.stop()); } catch {}
+    try { this.vstream?.getTracks().forEach((t: any) => t.stop()); } catch {}
+    this.vstream = null; this.vsender = null;
     try { this.pc?.close(); } catch {}
     this.pc = null; this.stream = null; this.pendingIce = []; this.peerSid = undefined;
     try { InCallManager.stop(); } catch {}
-    this.set({ state: 'idle', ended: reason, startedAt: undefined, muted: false });
+    this.set({
+      state: 'idle', ended: reason, startedAt: undefined, muted: false,
+      cam: false, localUrl: undefined, peerCam: false, remoteUrl: undefined, point: undefined, camReq: undefined,
+    });
   }
 
   dispose() { if (this.busy) this.hangup(); }

@@ -7,8 +7,11 @@ import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   LiveViewer, LiveReading, LiveReport, CmdAction, CMD_LABEL, SAY_ORDER,
-  liveConfig, checkTechKey, reportText,
+  liveConfig, checkTechKey, reportText, SpeedPair, techSessions, TechSession,
 } from '../src/services/live';
+import { RemoteVideo } from '../src/ui/VideoUI';
+import { ShareCardModal, ShareData } from '../src/ui/ShareCard';
+import { fmtMbps } from '../src/utils/speedLive';
 import { rsrpLevel, sinrLevel, Level } from '../src/utils/signal';
 import { Icon } from '../src/ui/Icon';
 import { SignalChart } from '../src/ui/SignalChart';
@@ -50,13 +53,17 @@ export default function TechScreen() {
   const endCall = () => { callRef.current?.dispose(); callRef.current = null; };
   const [lastVoice, setLastVoice] = useState<{ url: string; from: string; dur: number } | null>(null);
   const gotHello = useRef(false);
+  const [speed, setSpeed] = useState<SpeedPair>({});
+  const [shareData, setShareData] = useState<ShareData | null>(null);
+  const [past, setPast] = useState<{ sessions: TechSession[]; rating?: number; rating_n?: number } | null>(null);
+  const [pastOpen, setPastOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
       const [k, n, cfg] = await Promise.all([
         AsyncStorage.getItem(K_KEY), AsyncStorage.getItem(K_NAME), liveConfig(),
       ]);
-      if (k) setKey(k);
+      if (k) { setKey(k); techSessions(k).then(p => { if (p.sessions.length || p.rating_n) setPast(p); }); }
       if (n) setName(n);
       setNeedKey(!!cfg.require_tech_key);
     })();
@@ -79,7 +86,7 @@ export default function TechScreen() {
         if (!name.trim() && chk.name) setName(chk.name);
       }
       await AsyncStorage.multiSet([[K_KEY, key.trim()], [K_NAME, name.trim()]]);
-      setHist([]); setLogs([]); setReport(null); setCustomer(false);
+      setHist([]); setLogs([]); setReport(null); setCustomer(false); setSpeed({});
       endCall();
       viewer.current?.close();
       gotHello.current = false;
@@ -99,8 +106,10 @@ export default function TechScreen() {
           setSay(m.say || {});
           setHist(m.history || []);
           setCustomer(m.customer);
+          setSpeed(m.speed || {});
           if (m.ended && m.report) setReport({ why: 'ended', r: m.report });
         },
+        onSpeed: sp => { setSpeed(sp); addLog('العميل قاس السرعة 🚀', 'ok'); Vibration.vibrate(30); },
         onReading: r => { setHist(h => [...h, r].slice(-60)); setCustomer(true); },
         onCustomer: on => { setCustomer(on); addLog(on ? 'العميل رجع للتطبيق' : 'العميل طلع من التطبيق', on ? 'ok' : 'err'); },
         onCmdSent: (a, delivered) => addLog(`أرسلنا «${CMD_LABEL[a]}» — بانتظار موافقة العميل${delivered ? '' : ' (العميل مو متصل)'}`),
@@ -112,7 +121,10 @@ export default function TechScreen() {
           playVoice(v.url);
           Vibration.vibrate(40);
         },
-        onEnd: (why, r) => { endCall(); if (r) setReport({ why, r }); setConn('off'); },
+        onEnd: (why, r) => {
+          endCall(); if (r) setReport({ why, r }); setConn('off');
+          if (key.trim()) setTimeout(() => techSessions(key.trim()).then(p => setPast(p)), 1500);
+        },
       });
       viewer.current = v;
       callRef.current = new CallController({
@@ -132,6 +144,21 @@ export default function TechScreen() {
     viewer.current = null;
     setPhase('join');
   };
+
+  const askCam = () => {
+    if (callInfo.peerCam) return;
+    callRef.current?.requestCam();
+    addLog('طلبنا من العميل يشغّل الكاميرا — بانتظار موافقته');
+    Vibration.vibrate(20);
+  };
+  const reportImage = (rp: LiveReport) => setShareData({
+    router: label || 'راوتر العميل',
+    before: rp.first?.rsrp, after: rp.last?.rsrp, best: rp.best?.rsrp,
+    sinrBefore: rp.first?.sinr, sinrAfter: rp.last?.sinr,
+    tower: rp.last?.band ? `${rp.last.band}${rp.last.pci ? ` · PCI ${rp.last.pci}` : ''}` : undefined,
+    speed: rp.speed && (rp.speed.before || rp.speed.after) ? rp.speed : speed,
+    tech: name.trim() || undefined, minutes: Math.max(1, Math.round(rp.duration_sec / 60)),
+  });
 
   const sendSay = (k: string) => { viewer.current?.say(k); Vibration.vibrate(20); };
   const sendCmd = (a: CmdAction) => {
@@ -168,7 +195,7 @@ export default function TechScreen() {
           <Text style={s.howTitle}>كيف تشتغل؟</Text>
           {['العميل يفتح Bandly ← مساعد التوجيه ← «شارك مع فني»',
             'يرسل لك الكود أو الرابط بالواتساب',
-            'تشوف قراءته حيّة وتكلّمه بمكالمة صوتية من داخل التطبيق 📞',
+            'تشوف قراءته حيّة وتكلّمه صوت وصورة 📹 — تلمس الفيديو فيطلع له مؤشر',
             'تقدر تطلب تثبيت البرج — يتنفذ بعد موافقته'].map((t, i) => (
             <View key={i} style={s.howRow}>
               <View style={s.howNum}><Text style={s.howNumTxt}>{i + 1}</Text></View>
@@ -176,6 +203,29 @@ export default function TechScreen() {
             </View>
           ))}
         </View>
+        {!!past && (
+          <Section title="جلساتي السابقة" icon="clock" tone={P.green} toneSoft={P.greenSoft}
+            sub={past.rating_n ? `تقييمك ⭐ ${past.rating} من ٥ (${past.rating_n} تقييم)` : 'تقييمات العملاء تطلع هنا'}
+            right={past.sessions.length > 3 ? (
+              <Pressable onPress={() => setPastOpen(o => !o)} hitSlop={8}><Text style={s.more}>{pastOpen ? 'أقل' : 'الكل'}</Text></Pressable>
+            ) : undefined}>
+            {past.sessions.length === 0 && <Text style={s.log}>ما فيه جلسات للحين</Text>}
+            {past.sessions.slice(0, pastOpen ? 50 : 3).map(x => (
+              <View key={`${x.code}-${x.at}`} style={s.pastRow}>
+                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                  <Text style={s.pastTitle} numberOfLines={1}>{x.label || 'راوتر'}{x.stars ? `  ${'★'.repeat(x.stars)}` : ''}</Text>
+                  <Text style={s.pastSub}>
+                    {new Date(x.at * 1000).toLocaleDateString('ar-SA', { day: 'numeric', month: 'short' })} · {Math.max(1, Math.round(x.dur / 60))} د
+                    {x.speed?.before && x.speed?.after ? ` · ${'\u2066'}${fmtMbps(x.speed.before.down)}→${fmtMbps(x.speed.after.down)} Mbps${'\u2069'}` : ''}
+                  </Text>
+                </View>
+                <Text style={[s.pastGain, { color: (x.gain ?? 0) > 0 ? P.green : (x.gain ?? 0) < 0 ? P.red : P.sub }]}>
+                  {x.gain == null ? '—' : `${'\u2066'}${x.gain > 0 ? '+' : ''}${x.gain} dB${'\u2069'}`}
+                </Text>
+              </View>
+            ))}
+          </Section>
+        )}
       </ScrollView>
     );
   }
@@ -205,6 +255,8 @@ export default function TechScreen() {
           </View>
         </Hero>
 
+        <RemoteVideo info={callInfo} onPoint={(x, y) => callRef.current?.point(x, y)} onFlip={() => callRef.current?.requestFlip()} />
+
         {!r && !report && (
           <View style={s.waitCard}>
             <ActivityIndicator color={P.blue} />
@@ -233,6 +285,26 @@ export default function TechScreen() {
           </>
         )}
 
+        {(speed.before || speed.after) && (
+          <View style={s.card}>
+            <Text style={s.cardTitle}>سرعة العميل 🚀</Text>
+            <View style={{ flexDirection: 'row-reverse', gap: 8 }}>
+              {(['before', 'after'] as const).map(k => {
+                const x = speed[k];
+                const pct = k === 'after' && x && speed.before && speed.before.down > 0 ? Math.round(((x.down - speed.before.down) / speed.before.down) * 100) : undefined;
+                return (
+                  <View key={k} style={s.spBox}>
+                    <Text style={s.spLbl}>{k === 'before' ? 'قبل' : 'بعد'}</Text>
+                    <Text style={s.spVal}>{x ? fmtMbps(x.down) : '—'}<Text style={s.spUnit}> Mbps</Text></Text>
+                    <Text style={s.spSub}>{x ? `${'\u2066'}⬆ ${fmtMbps(x.up)} · ${x.ping} ms${'\u2069'}` : 'بانتظار العميل'}</Text>
+                    {pct !== undefined && <Text style={[s.spPct, { color: pct >= 0 ? P.green : P.red }]}>{`${'\u2066'}${pct > 0 ? '+' : ''}${pct}%${'\u2069'}`}</Text>}
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
         {!report && (
           <>
             <Section title="وجّه العميل" sub="تطلع رسالة كبيرة على جواله مع اهتزاز" icon="aim">
@@ -240,6 +312,12 @@ export default function TechScreen() {
                 onPress={() => callRef.current?.call()}
                 hint={customer ? 'مكالمة صوتية حيّة وأنت تشوف قراءته' : 'الزر يتفعّل أول ما يكون العميل متصل'} />
               <CallEnded info={callInfo} />
+              {callInfo.state === 'active' && !callInfo.peerCam && (
+                <Pressable onPress={askCam} style={s.camAsk}>
+                  <Icon name="video" size={17} color={P.blue} stroke={2.2} />
+                  <Text style={s.camAskTxt}>اطلب من العميل يشغّل الكاميرا</Text>
+                </Pressable>
+              )}
               <PushToTalk label="أو أرسل رسالة صوتية (اضغط مطوّل)" disabled={!customer}
                 onSend={(uri, dur) => viewer.current ? viewer.current.voice(uri, dur) : Promise.resolve()} />
               {!!lastVoice && <VoiceNote from={lastVoice.from} dur={lastVoice.dur} onReplay={() => playVoice(lastVoice.url)} />}
@@ -293,8 +371,11 @@ export default function TechScreen() {
                 <Text style={s.repLbl}>{l}</Text>
               </View>
             ))}
-            <PrimaryBtn text="أرسل التقرير للعميل" icon="share" style={{ marginTop: 14 }}
-              onPress={() => Share.share({ message: reportText(report.r, name.trim() || undefined) }).catch(() => {})} />
+            <PrimaryBtn text="أرسل التقرير كصورة" icon="share" style={{ marginTop: 14 }}
+              colors={['#12b76a', '#0ea5a0']} onPress={() => reportImage(report.r)} />
+            <Pressable style={s.leave} onPress={() => Share.share({ message: reportText(report.r, name.trim() || undefined) }).catch(() => {})}>
+              <Text style={s.leaveTxt}>أو أرسله كنص</Text>
+            </Pressable>
           </Section>
         )}
 
@@ -305,7 +386,9 @@ export default function TechScreen() {
       </ScrollView>
       <IncomingCall info={callInfo} onAccept={() => callRef.current?.accept()} onReject={() => callRef.current?.reject()} />
       <CallBar info={callInfo} top={8} onHangup={() => callRef.current?.hangup()}
-        onMute={() => callRef.current?.toggleMute()} onSpeaker={() => callRef.current?.toggleSpeaker()} />
+        onMute={() => callRef.current?.toggleMute()} onSpeaker={() => callRef.current?.toggleSpeaker()}
+        onCam={askCam} camOn={!!callInfo.peerCam} />
+      <ShareCardModal data={shareData} onClose={() => setShareData(null)} />
     </View>
   );
 }
@@ -371,6 +454,19 @@ const s = StyleSheet.create({
   repLbl: { color: P.sub, fontSize: 13 },
   repVal: { color: P.text, fontSize: 13.5, fontWeight: '800' },
 
+  camAsk: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: P.blueSoft, borderRadius: 16, paddingVertical: 12, marginBottom: 4 },
+  camAskTxt: { color: P.blue, fontSize: 13.5, fontWeight: '800' },
+  spBox: { flex: 1, backgroundColor: P.soft, borderRadius: 16, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: P.border },
+  spLbl: { color: P.sub, fontSize: 12, fontWeight: '800' },
+  spVal: { color: P.text, fontSize: 22, fontWeight: '800' },
+  spUnit: { color: P.sub, fontSize: 11, fontWeight: '700' },
+  spSub: { color: P.sub, fontSize: 11.5, fontWeight: '700' },
+  spPct: { fontSize: 13.5, fontWeight: '800', marginTop: 2 },
+  more: { color: P.blue, fontSize: 13, fontWeight: '800' },
+  pastRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: P.border },
+  pastTitle: { color: P.text, fontSize: 14, fontWeight: '800' },
+  pastSub: { color: P.sub, fontSize: 11.5, marginTop: 1 },
+  pastGain: { fontSize: 15, fontWeight: '800' },
   leave: { flexDirection: 'row-reverse', alignSelf: 'center', alignItems: 'center', gap: 6, padding: 12 },
   leaveTxt: { color: P.sub, fontSize: 13, fontWeight: '700' },
 });

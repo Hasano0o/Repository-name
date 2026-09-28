@@ -66,8 +66,9 @@ export function IncomingCall({ info, onAccept, onReject }: { info: CallInfo; onA
 }
 
 /** شريط المكالمة العائم (يطلع أثناء الاتصال والمكالمة) */
-export function CallBar({ info, top, onHangup, onMute, onSpeaker }: {
+export function CallBar({ info, top, onHangup, onMute, onSpeaker, onCam, camOn }: {
   info: CallInfo; top: number; onHangup: () => void; onMute: () => void; onSpeaker: () => void;
+  onCam?: () => void; camOn?: boolean;   // زر الكاميرا: العميل يشغّلها، والفني يطلبها
 }) {
   const [, tick] = useState(0);
   useEffect(() => {
@@ -87,6 +88,10 @@ export function CallBar({ info, top, onHangup, onMute, onSpeaker }: {
           </View>
           <Text style={c.barStatus}>{status}</Text>
         </View>
+        {!!onCam && info.state === 'active' && (
+          <Round icon={camOn ? 'video' : 'video-off'} size={44} bg={camOn ? '#fff' : 'rgba(255,255,255,0.16)'}
+            fg={camOn ? P.text : '#fff'} onPress={onCam} />
+        )}
         <Round icon={info.muted ? 'mic-off' : 'mic'} size={44} bg={info.muted ? '#fff' : 'rgba(255,255,255,0.16)'}
           fg={info.muted ? P.text : '#fff'} onPress={onMute} />
         <Round icon={info.speaker ? 'speaker' : 'earpiece'} size={44} bg={info.speaker ? '#fff' : 'rgba(255,255,255,0.16)'}

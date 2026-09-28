@@ -25,7 +25,8 @@
           }
         },
         "NSLocalNetworkUsageDescription": "Bandly يحتاج يوصل لراوترك على الشبكة المحلية عشان يقرأ الإشارة ويديره.",
-        "NSMicrophoneUsageDescription": "Bandly يستخدم الميكروفون عشان ترسل رسائل صوتية للفني أثناء ضبط الإشارة."
+        "NSMicrophoneUsageDescription": "Bandly يستخدم الميكروفون للمكالمات والرسائل الصوتية مع الفني أثناء ضبط الإشارة.",
+        "NSCameraUsageDescription": "Bandly يستخدم الكاميرا بس لما تشغّلها بنفسك أثناء المكالمة، عشان الفني يشوف الهوائي والراوتر ويوجّهك."
       }
     },
     "android": {
@@ -45,11 +46,11 @@
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.BLUETOOTH_CONNECT"
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.CAMERA"
       ],
       "allowBackup": false,
       "blockedPermissions": [
-        "android.permission.CAMERA",
         "android.permission.SYSTEM_ALERT_WINDOW"
       ]
     },
@@ -92,7 +93,7 @@
       [
         "@config-plugins/react-native-webrtc",
         {
-          "cameraPermission": "Bandly ما يستخدم الكاميرا.",
+          "cameraPermission": "Bandly يستخدم الكاميرا بس لما تشغّلها بنفسك أثناء المكالمة، عشان الفني يشوف الهوائي والراوتر ويوجّهك.",
           "microphonePermission": "Bandly يستخدم الميكروفون للمكالمات والرسائل الصوتية مع الفني."
         }
       ]

@@ -8,6 +8,8 @@ Bandly Live — وضع الفني
   GET  /live-api/report/{code}      ← تقرير الجلسة
   GET  /live-api/techs              ← دليل الفنيين
   GET  /live-api/config             ← هل مفتاح الفني مطلوب
+  POST /live-api/rate/{code}        ← العميل يقيّم الفني بعد الجلسة
+  GET  /live-api/tech/sessions?key= ← سجل جلسات الفني
   GET  /live/ , /live/{code}        ← صفحة الفني (تنفتح من الواتساب)
 
 الجلسات في الذاكرة فقط (تنتهي بعد ٣٠ دقيقة خمول، وحد أقصى ساعتين).
@@ -36,6 +38,9 @@ MAX_VOICE_BYTES = 1_500_000
 MAX_VOICES = 80
 CONFIG_FILE = DATA / "config.json"
 TECHS_FILE = DATA / "techs.json"
+RATINGS_FILE = DATA / "ratings.json"
+TECH_LOG = DATA / "tech_log"
+TECH_LOG.mkdir(exist_ok=True)
 PUBLIC_URL = os.environ.get("BANDLY_PUBLIC_URL", "https://has-host.com")
 
 IDLE_TTL = 30 * 60          # تنتهي الجلسة بعد نص ساعة بدون قراءات
@@ -105,6 +110,10 @@ class Session:
         self.sid_ws: dict[str, WebSocket] = {}  # رقم الفني ← اتصاله (للمكالمات)
         self.ws_sid: dict[WebSocket, str] = {}
         self.voices = 0
+        self.speed: dict = {}                   # before / after
+        self.tech_keys: dict[str, str] = {}     # مفتاح الفني ← اسمه (للتقييم والسجل)
+        self.rated = False
+        self.stars: int | None = None
 
     def alive(self) -> bool:
         now = time.time()
@@ -137,6 +146,8 @@ class Session:
             "gain_db": gain,
             "events": self.events[-50:],
             "ended": self.ended,
+            "speed": self.speed,
+            "techs": sorted(set(self.tech_keys.values())),
         }
 
 
@@ -188,8 +199,46 @@ async def end_session(s: Session, why: str):
     s.ended = True
     s.events.append({"at": int(time.time()), "e": "end", "why": why})
     rep = s.report()
+    try:
+        log_session(s, rep)
+    except Exception:
+        pass
     await to_subs(s, {"t": "end", "why": why, "report": rep})
     await send(s.pub, {"t": "end", "why": why, "report": rep})
+
+
+def _log_path(key: str) -> Path:
+    return TECH_LOG / f"{''.join(c for c in key if c.isalnum())[:24]}.json"
+
+
+def log_session(s: "Session", rep: dict):
+    """نحفظ ملخص الجلسة في سجل كل فني معتمد دخلها (آخر ١٠٠ جلسة)."""
+    if not s.tech_keys or not rep.get("first"):
+        return
+    last = rep.get("last") or {}
+    entry = {
+        "code": s.code, "label": s.label, "at": int(s.created), "dur": rep.get("duration_sec", 0),
+        "gain": rep.get("gain_db"), "first": (rep.get("first") or {}).get("rsrp"),
+        "best": (rep.get("best") or {}).get("rsrp"), "last": last.get("rsrp"), "band": last.get("band"),
+        "speed": rep.get("speed") or {}, "stars": s.stars,
+    }
+    for key in s.tech_keys:
+        p = _log_path(key)
+        lst = load_json(p, [])
+        lst = [x for x in lst if x.get("code") != s.code or x.get("at") != entry["at"]]
+        lst.insert(0, entry)
+        p.write_text(json.dumps(lst[:100], ensure_ascii=False), "utf-8")
+
+
+def ratings() -> dict:
+    return load_json(RATINGS_FILE, {})
+
+
+def rating_of(key: str) -> tuple[float | None, int]:
+    lst = ratings().get(key) or []
+    if not lst:
+        return None, 0
+    return round(sum(x["stars"] for x in lst) / len(lst), 1), len(lst)
 
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
@@ -247,15 +296,58 @@ async def get_report(code: str):
 @app.get("/live-api/techs")
 async def list_techs(city: str | None = None):
     out = []
-    for t in techs().values():
+    for key, t in techs().items():
         if not t.get("listed", True) or not t.get("active", True):
             continue
         if t.get("expires") and t["expires"] < time.time():
             continue
         if city and city not in (t.get("city") or ""):
             continue
-        out.append({k: t.get(k) for k in ("name", "city", "phone", "note")})
+        avg, n = rating_of(key)
+        out.append({**{k: t.get(k) for k in ("name", "city", "phone", "note")}, "rating": avg, "rating_n": n})
+    out.sort(key=lambda x: (-(x["rating"] or 0) * min(x["rating_n"], 5), x["name"] or ""))
     return {"techs": out}
+
+
+@app.get("/live-api/tech/sessions")
+async def tech_sessions(key: str):
+    if not tech_ok(key):
+        raise HTTPException(403, "مفتاح الفني غير صالح")
+    avg, n = rating_of(key)
+    return {"sessions": load_json(_log_path(key), [])[:50], "rating": avg, "rating_n": n}
+
+
+@app.post("/live-api/rate/{code}")
+async def rate(code: str, req: Request):
+    s = SESSIONS.get(code)
+    if not s:
+        raise HTTPException(404, "الجلسة غير موجودة")
+    body = await req.json()
+    if not secrets.compare_digest(s.token, str(body.get("token") or "")):
+        raise HTTPException(403)
+    if s.rated:
+        return {"ok": True, "dup": True}
+    try:
+        stars = int(body.get("stars"))
+    except Exception:
+        raise HTTPException(400)
+    if not 1 <= stars <= 5:
+        raise HTTPException(400)
+    s.rated = True
+    s.stars = stars
+    note = str(body.get("note") or "")[:300]
+    r = ratings()
+    for key in s.tech_keys:
+        r.setdefault(key, []).append({"stars": stars, "at": int(time.time()), "code": code, "note": note})
+        r[key] = r[key][-500:]
+        p = _log_path(key)
+        lst = load_json(p, [])
+        for x in lst:
+            if x.get("code") == code and x.get("at") == int(s.created):
+                x["stars"] = stars
+        p.write_text(json.dumps(lst, ensure_ascii=False), "utf-8")
+    RATINGS_FILE.write_text(json.dumps(r, ensure_ascii=False), "utf-8")
+    return {"ok": True}
 
 
 @app.get("/live-api/tech/check")
@@ -318,6 +410,15 @@ async def ws_pub(ws: WebSocket, code: str, token: str = ""):
                     await to_subs(s, fwd)
                 if m.get("kind") in ("call", "accept"):
                     s.events.append({"at": int(time.time()), "e": "call", "by": "customer"})
+            elif kind == "speed" and m.get("phase") in ("before", "after"):
+                try:
+                    pt = {k: round(float(m.get(k) or 0), 1) for k in ("down", "up", "ping")}
+                except Exception:
+                    continue
+                pt["at"] = int(time.time())
+                s.speed[m["phase"]] = pt
+                s.events.append({"at": pt["at"], "e": "speed", "phase": m["phase"], **pt})
+                await to_subs(s, {"t": "speed", "speed": s.speed})
             elif kind == "ping":
                 s.last = time.time()
                 await send(ws, {"t": "pong"})
@@ -347,6 +448,8 @@ async def ws_sub(ws: WebSocket, code: str, key: str = "", name: str = ""):
         await ws.close(code=4401)
         return
     tech_name = (t or {}).get("name") or name[:30] or "الفني"
+    if t:
+        s.tech_keys[key] = tech_name
     vt = secrets.token_hex(12)
     s.vtokens[vt] = tech_name
     s.subs.add(ws)
@@ -358,7 +461,7 @@ async def ws_sub(ws: WebSocket, code: str, key: str = "", name: str = ""):
     await send(ws, {
         "t": "hello", "label": s.label, "customer": s.pub is not None,
         "history": s.readings[-60:], "ended": s.ended, "report": s.report() if s.ended else None,
-        "say": SAY_ALLOWED, "vt": vt, "voice": True, "sid": sid, "call": True,
+        "say": SAY_ALLOWED, "vt": vt, "voice": True, "sid": sid, "call": True, "video": True, "speed": s.speed,
     })
     await send(s.pub, {"t": "viewers", "n": len(s.subs), "names": list(s.tech_names.values())})
     try:

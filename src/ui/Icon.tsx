@@ -7,7 +7,8 @@ export type IconName =
   | 'spark' | 'bulb' | 'lock' | 'sms' | 'speed' | 'chart' | 'user' | 'power'
   | 'eye' | 'eye-off'
   | 'antenna' | 'layers' | 'pin' | 'clock' | 'bell' | 'share'
-  | 'trash' | 'plus' | 'compass' | 'check' | 'vibrate' | 'sound' | 'wifi' | 'login' | 'mic' | 'call' | 'hangup' | 'mic-off' | 'speaker' | 'earpiece';
+  | 'trash' | 'plus' | 'compass' | 'check' | 'vibrate' | 'sound' | 'wifi' | 'login' | 'mic' | 'call' | 'hangup' | 'mic-off' | 'speaker' | 'earpiece'
+  | 'video' | 'video-off' | 'flip' | 'camera' | 'star' | 'target';
 
 export function Icon({
   name, size = 20, color = C.sub, stroke = 1.9,
@@ -59,6 +60,12 @@ export function Icon({
       {name === 'earpiece' && <><Rect x={7} y={2.5} width={10} height={19} rx={3} {...p} /><Path d="M10 5.5h4" {...p} /></>}
       {name === 'mic' && <><Rect x={9} y={3} width={6} height={11} rx={3} {...p} /><Path d="M5.5 11a6.5 6.5 0 0 0 13 0" {...p} /><Path d="M12 17.5V21" {...p} /></>}
       {name === 'login' && <><Path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" {...p} /><Path d="M10 17l5-5-5-5" {...p} /><Path d="M15 12H4" {...p} /></>}
+      {name === 'video' && <><Rect x={2.5} y={6} width={13} height={12} rx={3} {...p} /><Path d="M15.5 10.5 21 7v10l-5.5-3.5" {...p} /></>}
+      {name === 'video-off' && <><Path d="M15.5 13v2a3 3 0 0 1-3 3h-7a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3h1M10 6h2.5a3 3 0 0 1 3 3v1.5L21 7v10" {...p} /><Path d="M3 3l18 18" {...p} /></>}
+      {name === 'flip' && <><Path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5" {...p} /><Path d="M20 4v4.5h-4.5" {...p} /><Path d="M20 12a8 8 0 0 1-13.7 5.6L4 15.5" {...p} /><Path d="M4 20v-4.5h4.5" {...p} /></>}
+      {name === 'camera' && <><Path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h2l1.5-2h6l1.5 2h2A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z" {...p} /><Circle cx={12} cy={13} r={3.5} {...p} /></>}
+      {name === 'star' && <Path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" {...p} />}
+      {name === 'target' && <><Circle cx={12} cy={12} r={8} {...p} /><Path d="M12 2v4M12 18v4M2 12h4M18 12h4" {...p} /><Circle cx={12} cy={12} r={1.5} {...p} /></>}
     </Svg>
   );
 }

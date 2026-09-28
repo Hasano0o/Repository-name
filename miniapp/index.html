@@ -102,7 +102,7 @@ textarea{min-height:96px;resize:vertical}
       <rect x="175" y="262" width="42" height="70" rx="21" fill="#fff"/><rect x="234" y="210" width="42" height="122" rx="21" fill="#fff"/><rect x="293" y="158" width="42" height="174" rx="21" fill="#fff"/>
     </svg>
     <h1>Bandly</h1>
-    <p>اطلع أقوى إشارة من راوترك — وجّه الهوائي، ثبّت أفضل برج، وكلّم فني يساعدك عن بُعد 📞</p>
+    <p>اطلع أقوى إشارة من راوترك — وجّه الهوائي، ثبّت أفضل برج، وكلّم فني يشوفك بالكاميرا ويساعدك عن بُعد 📹</p>
   </div>
 
   <div class="card">
@@ -138,20 +138,20 @@ textarea{min-height:96px;resize:vertical}
     <div class="feats">
       <div class="f"><div class="fi">🎯</div><b>مساعد التوجيه</b><span>صوت واهتزاز يدلّك على أفضل اتجاه للهوائي</span></div>
       <div class="f"><div class="fi">📶</div><b>لوحة 4G / 5G</b><span>RSRP · SINR · RSRQ · البنق</span></div>
-      <div class="f"><div class="fi">📞</div><b>مكالمة مع الفني</b><span>الفني يشوف إشارتك حيّة ويكلّمك مباشرة وأنت تلف الهوائي</span></div>
+      <div class="f"><div class="fi">📹</div><b>مكالمة فيديو مع الفني</b><span>يشوف إشارتك والهوائي بالكاميرا، ويأشر لك على المكان بالضبط</span></div>
       <div class="f"><div class="fi">🗼</div><b>الأبراج والترددات</b><span>ثبّت على البرج والتردد الأقوى</span></div>
-      <div class="f"><div class="fi">⚡</div><b>السرعة والألعاب</b><span>قِس السرعة واختر أفضل تردد للألعاب</span></div>
+      <div class="f"><div class="fi">🚀</div><b>السرعة قبل وبعد</b><span>قِس قبل التوجيه وبعده، وأرسل النتيجة صورة بالواتساب</span></div>
       <div class="f"><div class="fi">🔔</div><b>المراقبة</b><span>تنبيه إذا انقطع النت أو ضعفت الإشارة</span></div>
     </div>
   </div>
-  <div class="foot">تثبيت APK: افتح الملف بعد التحميل ← اسمح بالتثبيت ← تثبيت. التحديث ينزل فوق القديم وبياناتك محفوظة.</div>
+  <div class="foot">تثبيت APK: افتح الملف بعد التحميل ← اسمح بالتثبيت ← تثبيت. التحديث ينزل فوق القديم وبياناتك محفوظة.<br>🛡️ لو طلع لك تحذير «Play Protect» هذا طبيعي لأي تطبيق من خارج المتجر — اضغط «مزيد من التفاصيل» ← «التثبيت على أي حال». التطبيق ما يستخدم الكاميرا والمايك إلا لما تشغّلهم بنفسك في المكالمة.</div>
 </section>
 
 <!-- ═══════════ سجّل كفني ═══════════ -->
 <section id="p-tech" class="hide">
   <div class="top"><button class="back">→</button><h1>🛠️ سجّل كفني</h1></div>
   <div class="card" style="margin-top:14px">
-    <p class="s">بعد الموافقة ينضاف اسمك لدليل الفنيين، ويوصلك <b>مفتاح وضع الفني</b> عشان تتابع إشارة عملائك حيّة وتكلّمهم <b>بمكالمة صوتية</b> من داخل التطبيق.</p>
+    <p class="s">بعد الموافقة ينضاف اسمك لدليل الفنيين، ويوصلك <b>مفتاح وضع الفني</b> عشان تتابع إشارة عملائك حيّة، وتكلّمهم <b>صوت وصورة 📹</b> من داخل التطبيق، وتجمع <b>تقييمات ⭐</b> تطلع لكل العملاء.</p>
     <form data-type="tech">
       <label>الاسم <i>*</i></label><input name="name" required maxlength="60">
       <label>رقم الجوال / الواتساب <i>*</i></label><input name="phone" required inputmode="tel" maxlength="20" placeholder="05xxxxxxxx">
@@ -411,7 +411,7 @@ function renderTechs() {
   const list = TECHS.filter(t => !q || (t.city || '').includes(q) || (t.name || '').includes(q));
   $('techList').innerHTML = list.length ? list.map(t => {
     const wa = (t.phone || '').replace(/\D/g, '').replace(/^0/, '966');
-    return `<div class="tech"><div class="av">${esc((t.name || '؟').trim()[0])}</div><div class="t"><b>${esc(t.name)}</b><span>📍 ${esc(t.city || '—')}${t.note ? ' · ' + esc(t.note) : ''}</span></div>${wa ? `<a href="https://wa.me/${wa}" target="_blank">واتساب</a>` : ''}</div>`;
+    return `<div class="tech"><div class="av">${esc((t.name || '؟').trim()[0])}</div><div class="t"><b>${esc(t.name)}${t.rating_n ? ` <span style="color:#f5b301;font-size:12.5px">★ ${t.rating}</span><span style="font-size:11px;opacity:.7"> (${t.rating_n})</span>` : ''}</b><span>📍 ${esc(t.city || '—')}${t.note ? ' · ' + esc(t.note) : ''}</span></div>${wa ? `<a href="https://wa.me/${wa}" target="_blank">واتساب</a>` : ''}</div>`;
   }).join('') : `<div class="empty">${TECHS.length ? 'ما فيه فني بهالاسم أو المدينة' : 'ما فيه فنيين مسجلين للحين.<br>أنت فني؟ سجّل وكن أول واحد 👇'}</div>`;
 }
 $('citySearch').oninput = renderTechs;

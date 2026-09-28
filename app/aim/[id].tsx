@@ -10,6 +10,11 @@ import { NetPanel } from '../../src/ui/NetPanel';
 import { PushToTalk, playVoice, VoiceNote } from '../../src/ui/Voice';
 import { CallController, CallInfo } from '../../src/services/call';
 import { CallButton, IncomingCall, CallBar, CallEnded } from '../../src/ui/CallUI';
+import { CamPreview, CamRequest } from '../../src/ui/VideoUI';
+import { SpeedCard } from '../../src/ui/SpeedCard';
+import { ShareCardModal, ShareData } from '../../src/ui/ShareCard';
+import { RateTech, RateTarget } from '../../src/ui/RateTech';
+import { SpeedPair } from '../../src/services/live';
 import { pickSig } from '../../src/services/live';
 import { trendOf, Trend, TrendMark } from '../../src/ui/AimMeter';
 import { measureLatency } from '../../src/utils/latency';
@@ -217,6 +222,21 @@ export default function AimScreen() {
   const [callInfo, setCallInfo] = useState<CallInfo>({ state: 'idle', peer: '', muted: false, speaker: true });
   const callRef = useRef<CallController | null>(null);
   const endCall = () => { callRef.current?.dispose(); callRef.current = null; };
+  const toggleCam = () => {
+    callRef.current?.toggleCam().catch((e: any) => { callRef.current?.clearCamReq(); Alert.alert('الكاميرا', e?.message ?? String(e)); });
+  };
+  // ═══ السرعة + التقرير كصورة + تقييم الفني ═══
+  const speedRef = useRef<SpeedPair>({});
+  const [shareData, setShareData] = useState<ShareData | null>(null);
+  const [rateTarget, setRateTarget] = useState<RateTarget | null>(null);
+  const liveTokenRef = useRef('');
+  const viewersRef = useRef<string[]>([]);
+  const sendSpeed = () => {
+    const h = liveRef.current, sp = speedRef.current;
+    if (!h) return;
+    if (sp.before) h.speed('before', sp.before);
+    if (sp.after) h.speed('after', sp.after);
+  };
   const lastRdRef = useRef<{ cell: CellId } | null>(null);
   const pinnedRef = useRef<CellId | null>(null);
   const cmdRef = useRef<(id: number, action: CmdAction, from: string) => void>(() => {});
@@ -511,8 +531,11 @@ export default function AimScreen() {
     try {
       const s = await createLiveSession(info.name);
       const host = new LiveHost(s.code, s.token, {
-        onState: st => setLiveOn(st === 'on'),
-        onViewers: (_n, names) => setViewers(names),
+        onState: st => { setLiveOn(st === 'on'); if (st === 'on') sendSpeed(); },
+        onViewers: (_n, names) => {
+          setViewers(names);
+          for (const n of names) if (!viewersRef.current.includes(n)) viewersRef.current = [...viewersRef.current, n];
+        },
         onSay: (text, from) => {
           setSayMsg({ text, from, at: Date.now() });
           if (Platform.OS === 'android') Vibration.vibrate([0, 350, 120, 350]);
@@ -539,6 +562,8 @@ export default function AimScreen() {
         },
       });
       liveRef.current = host;
+      liveTokenRef.current = s.token;
+      viewersRef.current = [];
       callRef.current = new CallController({
         role: 'cust', peerLabel: 'الفني',
         send: (kind, data, to) => host.rtc(kind, data, to),
@@ -561,6 +586,11 @@ export default function AimScreen() {
       {
         text: 'أوقف', style: 'destructive', onPress: () => {
           endCall();
+          const code = liveRef.current?.code;
+          if (code && viewersRef.current.length) {
+            const t = { code, token: liveTokenRef.current, names: viewersRef.current };
+            setTimeout(() => setRateTarget(t), 700);   // بعد ما ينحفظ ملخص الجلسة
+          }
           liveRef.current?.end();
           liveRef.current = null;
           setLive(null);
@@ -768,7 +798,7 @@ export default function AimScreen() {
                 <View style={{ alignSelf: 'stretch' }}>
                   <CallButton label="اتصل بالفني" disabled={!viewers.length || callInfo.state !== 'idle'}
                     onPress={() => callRef.current?.call()}
-                    hint={viewers.length ? 'مكالمة صوتية حيّة — الصوت يطلع من السماعة الخارجية' : 'الزر يتفعّل أول ما يفتح الفني الرابط'} />
+                    hint={viewers.length ? 'مكالمة حيّة — وتقدر تشغّل الكاميرا 📹 عشان الفني يشوف الهوائي' : 'الزر يتفعّل أول ما يفتح الفني الرابط'} />
                   <CallEnded info={callInfo} />
                   <PushToTalk label="أو أرسل رسالة صوتية (اضغط مطوّل)" color="#0b7f99" disabled={!viewers.length}
                     onSend={(uri, dur) => liveRef.current ? liveRef.current.voice(uri, dur) : Promise.resolve()} />
@@ -778,6 +808,13 @@ export default function AimScreen() {
                   colors={['#0ea5c6', '#2f6bff']} style={{ marginTop: 10, alignSelf: 'stretch' }} />
                 <Text style={a.liveHint}>خلّ التطبيق مفتوح على هذي الشاشة لين يخلص الفني — الشاشة ما راح تنطفي.</Text>
               </View>
+            )}
+
+            {/* ═══ السرعة قبل وبعد ═══ */}
+            {info && (
+              <SpeedCard routerId={info.id}
+                onPair={p => { speedRef.current = p; }}
+                onResult={(phase, r) => liveRef.current?.speed(phase, r)} />
             )}
 
             {/* ═══ Band selector ═══ */}
@@ -832,6 +869,18 @@ export default function AimScreen() {
                 {canPin && best.cell.pci && cellKey(pinned) !== cellKey(best.cell) && (
                   <PrimaryBtn small text="ثبّت على برج أفضل نقطة" icon="pin" onPress={pinBest} busy={pinBusy} style={{ marginTop: 12 }} />
                 )}
+
+                <Pressable style={a.shotBtn} onPress={() => setShareData({
+                  router: info?.name ?? 'الراوتر',
+                  before: baseline ?? undefined, after: shown, best: bestShown,
+                  sinrBefore: baselineSinr ?? undefined, sinrAfter: current?.sinr,
+                  tower: cellName(best.cell), speed: speedRef.current,
+                  tech: viewersRef.current.length ? viewersRef.current.join('، ') : undefined,
+                  minutes: readings.length > 1 ? Math.max(1, Math.round((readings[readings.length - 1].t - readings[0].t) / 60000)) : undefined,
+                })}>
+                  <Icon name="camera" size={16} color={P.green} stroke={2.2} />
+                  <Text style={a.shotTxt}>أرسل النتيجة كصورة (قبل وبعد)</Text>
+                </Pressable>
 
                 {pinned && (
                   <Pressable style={a.pinnedBtn} onPress={pinDuringAim} disabled={pinBusy}>
@@ -900,7 +949,12 @@ export default function AimScreen() {
       {/* ═══ المكالمة ═══ */}
       <IncomingCall info={callInfo} onAccept={() => callRef.current?.accept()} onReject={() => callRef.current?.reject()} />
       <CallBar info={callInfo} top={insets.top + 8} onHangup={() => callRef.current?.hangup()}
-        onMute={() => callRef.current?.toggleMute()} onSpeaker={() => callRef.current?.toggleSpeaker()} />
+        onMute={() => callRef.current?.toggleMute()} onSpeaker={() => callRef.current?.toggleSpeaker()}
+        onCam={toggleCam} camOn={!!callInfo.cam} />
+      <CamPreview info={callInfo} top={insets.top + 84} onFlip={() => callRef.current?.flipCam()} onStop={toggleCam} />
+      <CamRequest info={callInfo} onAccept={toggleCam} onReject={() => callRef.current?.clearCamReq()} />
+      <ShareCardModal data={shareData} onClose={() => setShareData(null)} />
+      <RateTech target={rateTarget} onClose={() => setRateTarget(null)} />
 
       {/* ═══ رسالة الفني ═══ */}
       {sayMsg && (
@@ -1047,6 +1101,11 @@ const a = StyleSheet.create({
     backgroundColor: P.blueSoft, borderRadius: 16, paddingVertical: 12, marginTop: 10,
   },
   pinnedTxt: { color: BLUE, fontWeight: '800', fontSize: 13 },
+  shotBtn: {
+    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 7,
+    backgroundColor: P.greenSoft, borderRadius: 16, paddingVertical: 12, marginTop: 10,
+  },
+  shotTxt: { color: '#0b7a47', fontWeight: '800', fontSize: 13 },
 
   wakeOn: {
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12,

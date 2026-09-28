@@ -28,9 +28,12 @@ export function pickSig(s?: Signal | null): Partial<Signal> | undefined {
   }
   return out;
 }
+export interface SpeedPoint { down: number; up: number; ping: number; at: number }
+export interface SpeedPair { before?: SpeedPoint; after?: SpeedPoint }
 export interface LiveReport {
   code: string; label: string; duration_sec: number; gain_db: number | null; ended: boolean;
   first: LiveReading | null; best: LiveReading | null; last: LiveReading | null;
+  speed?: SpeedPair; techs?: string[]; started?: number;
 }
 export type CmdAction = 'lock_current' | 'lock_best' | 'unlock';
 export const CMD_LABEL: Record<CmdAction, string> = {
@@ -66,7 +69,33 @@ export function reportText(r: LiveReport, tech?: string) {
   const f = (x: LiveReading | null) =>
     x ? `\u2066${x.rsrp} dBm\u2069${x.band ? ` (${x.band}${x.pci ? ` · PCI ${x.pci}` : ''})` : ''}` : '—';
   const g = r.gain_db === null ? '—' : `${r.gain_db > 0 ? '+' : ''}${r.gain_db} dB`;
-  return `📡 تقرير ضبط الإشارة — Bandly\n\nقبل: ${f(r.first)}\nبعد: ${f(r.last)}\nأفضل قراءة: ${f(r.best)}\nالتحسن: ${g}\nالمدة: ${Math.max(1, Math.round(r.duration_sec / 60))} دقيقة${tech ? `\nالفني: ${tech}` : ''}`;
+  const sp = r.speed;
+  const spd = (x?: SpeedPoint) => (x ? `\u2066⬇ ${x.down} / ⬆ ${x.up} Mbps\u2069` : '—');
+  const speed = sp && (sp.before || sp.after) ? `\n\n🚀 السرعة\nقبل: ${spd(sp.before)}\nبعد: ${spd(sp.after)}` : '';
+  return `📡 تقرير ضبط الإشارة — Bandly\n\nقبل: ${f(r.first)}\nبعد: ${f(r.last)}\nأفضل قراءة: ${f(r.best)}\nالتحسن: ${g}\nالمدة: ${Math.max(1, Math.round(r.duration_sec / 60))} دقيقة${tech ? `\nالفني: ${tech}` : ''}${speed}`;
+}
+
+/** تقييم الفني بعد الجلسة (مرة وحدة لكل جلسة) */
+export async function rateSession(code: string, token: string, stars: number, note = ''): Promise<boolean> {
+  try {
+    const r = await fetch(`${LIVE_BASE}/live-api/rate/${code}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, stars, note }),
+    });
+    return r.ok;
+  } catch { return false; }
+}
+
+export interface TechSession {
+  code: string; label: string; at: number; dur: number; gain: number | null;
+  first?: number; best?: number; last?: number; band?: string; speed?: SpeedPair; stars?: number;
+}
+/** سجل جلسات الفني (للفنيين اللي عندهم مفتاح) */
+export async function techSessions(key: string): Promise<{ sessions: TechSession[]; rating?: number; rating_n?: number }> {
+  try {
+    const r = await fetch(`${LIVE_BASE}/live-api/tech/sessions?key=${encodeURIComponent(key)}`);
+    if (r.ok) return await r.json();
+  } catch {}
+  return { sessions: [] };
 }
 
 export interface LiveVoice { url: string; from: string; role: 'cust' | 'tech'; dur: number; echo?: boolean }
@@ -180,6 +209,7 @@ export class LiveHost {
   rtc(kind: string, data?: any, to?: string) { this.link.send({ t: 'rtc', kind, data, to }); }
   iceServers() { return fetchIce(this.code, this.token); }
   result(id: number, ok: boolean, msg: string) { this.link.send({ t: 'cmd_result', id, ok, msg }); }
+  speed(phase: 'before' | 'after', r: SpeedPoint) { this.link.send({ t: 'speed', phase, down: r.down, up: r.up, ping: r.ping, at: r.at }); }
   end() { this.link.send({ t: 'end' }); setTimeout(() => this.link.close(), 800); }
   close() { this.link.close(); }
 }
@@ -190,7 +220,8 @@ export class LiveViewer {
   private vt = '';
   constructor(private code: string, key: string, name: string, h: {
     onHello?: (m: { label: string; customer: boolean; history: LiveReading[]; say: Record<string, string>;
-      ended: boolean; report: LiveReport | null }) => void;
+      ended: boolean; report: LiveReport | null; speed?: SpeedPair }) => void;
+    onSpeed?: (s: SpeedPair) => void;
     onReading?: (r: LiveReading) => void;
     onCustomer?: (online: boolean) => void;
     onCmdSent?: (action: CmdAction, delivered: boolean) => void;
@@ -208,6 +239,7 @@ export class LiveViewer {
         else if (m.t === 'voice') h.onVoice?.(m as unknown as LiveVoice);
         else if (m.t === 'rtc') h.onRtc?.(m as any);
         else if (m.t === 'r') h.onReading?.(m as LiveReading);
+        else if (m.t === 'speed') h.onSpeed?.(m.speed ?? {});
         else if (m.t === 'status') h.onCustomer?.(!!m.customer);
         else if (m.t === 'cmd_sent') h.onCmdSent?.(m.action, !!m.delivered);
         else if (m.t === 'cmd_result') h.onCmdResult?.(!!m.ok, String(m.msg ?? ''));
