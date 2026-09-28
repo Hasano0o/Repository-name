@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f6bff">
+<title>Bandly — مدير الراوترات</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#e5eaf2;--card:#f3f6fa;--border:#d8e0eb;--soft:#e9eef5;--text:#0f1f45;--sub:#6b7796;--blue:#2f6bff;--violet:#6a45ec;--green:#12b76a}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;padding:14px 14px calc(28px + env(safe-area-inset-bottom))}
+.wrap{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.hero{border-radius:28px;padding:22px 18px 20px;color:#fff;background:linear-gradient(135deg,#2f6bff,#6a45ec);position:relative;overflow:hidden;text-align:center}
+.hero:before,.hero:after{content:"";position:absolute;border-radius:50%;background:#fff;opacity:.08}
+.hero:before{width:200px;height:200px;top:-80px;left:-60px}.hero:after{width:160px;height:160px;bottom:-70px;right:-40px}
+.logo{width:84px;height:84px;border-radius:24px;margin:0 auto 12px;box-shadow:0 10px 30px rgba(0,0,0,.25);display:block}
+.hero h1{margin:0;font-size:30px;letter-spacing:.5px}
+.hero p{margin:6px 0 0;opacity:.9;font-size:14.5px;line-height:1.7}
+.chips{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin-top:12px}
+.chip{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:4px 11px;font-size:12px;font-weight:700}
+.card{background:var(--card);border:1px solid var(--border);border-radius:22px;padding:16px;box-shadow:0 6px 16px rgba(27,43,92,.07)}
+.card h2{margin:0 0 4px;font-size:16.5px}
+.card .s{margin:0 0 14px;color:var(--sub);font-size:12.5px}
+/* أزرار التحميل */
+.dl{display:flex;align-items:center;gap:12px;width:100%;border:0;border-radius:18px;padding:13px 14px;font:inherit;cursor:pointer;text-align:right;transition:transform .12s}
+.dl:active{transform:scale(.97)}
+.dl+.dl{margin-top:10px}
+.dl .ic{width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.dl .t{flex:1}
+.dl .t b{display:block;font-size:15.5px}
+.dl .t small{display:block;font-size:12px;opacity:.8;margin-top:1px}
+.dl .go{font-size:18px;opacity:.7}
+.apk{background:linear-gradient(90deg,#12b76a,#0ea5a0);color:#fff;box-shadow:0 8px 20px rgba(18,183,106,.3)}
+.apk .ic{background:rgba(255,255,255,.2)}
+.store{background:var(--soft);color:var(--text);border:1.5px solid var(--border)}
+.store .ic{background:#0f1f45}
+.soon{font-size:10.5px;font-weight:700;background:#fdecc8;color:#8a4f00;border-radius:999px;padding:3px 9px;white-space:nowrap}
+.meta{display:flex;justify-content:center;gap:14px;margin-top:10px;font-size:11.5px;color:var(--sub);font-weight:600}
+/* المميزات */
+.feats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.f{background:var(--soft);border:1px solid var(--border);border-radius:16px;padding:12px}
+.f .fi{width:36px;height:36px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:8px}
+.f b{display:block;font-size:13.5px}
+.f span{display:block;font-size:11.5px;color:var(--sub);line-height:1.6;margin-top:2px}
+/* خطوات التثبيت */
+details{background:var(--card);border:1px solid var(--border);border-radius:22px;padding:14px 16px;box-shadow:0 6px 16px rgba(27,43,92,.07)}
+summary{font-weight:700;font-size:15px;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center}
+summary::-webkit-details-marker{display:none}
+summary:after{content:"⌄";font-size:18px;color:var(--sub);transition:transform .2s}
+details[open] summary:after{transform:rotate(180deg)}
+ol{margin:12px 0 0;padding:0 18px 0 0;display:flex;flex-direction:column;gap:8px;font-size:13.5px;line-height:1.7;color:#35416a}
+.foot{text-align:center;color:var(--sub);font-size:12px;margin-top:4px}
+.foot a{color:var(--blue);font-weight:700;text-decoration:none}
+/* نافذة قريباً */
+.sheet{position:fixed;inset:0;background:rgba(15,31,69,.45);display:flex;align-items:flex-end;justify-content:center;z-index:20;opacity:0;pointer-events:none;transition:opacity .2s}
+.sheet.on{opacity:1;pointer-events:auto}
+.box{background:var(--card);width:100%;max-width:520px;border-radius:26px 26px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom));text-align:center;transform:translateY(40px);transition:transform .25s}
+.sheet.on .box{transform:none}
+.box .em{font-size:52px;line-height:1}
+.box h3{margin:10px 0 6px;font-size:20px}
+.box p{margin:0;color:var(--sub);font-size:14px;line-height:1.8}
+.box .btns{display:flex;gap:10px;margin-top:18px}
+.box button{flex:1;border:0;border-radius:16px;padding:14px;font:inherit;font-weight:700;font-size:14.5px;cursor:pointer}
+.box .pri{background:linear-gradient(90deg,#12b76a,#0ea5a0);color:#fff}
+.box .sec{background:var(--soft);color:var(--text);border:1.5px solid var(--border)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <section class="hero">
+    <svg class="logo" viewBox="0 0 512 512" aria-hidden="true">
+      <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b82ff"/><stop offset="1" stop-color="#1d3fc4"/></linearGradient></defs>
+      <rect width="512" height="512" rx="120" fill="url(#lg)"/>
+      <path d="M138 356a150 150 0 1 1 236 0" fill="none" stroke="#fff" stroke-width="50" stroke-linecap="round"/>
+      <rect x="175" y="262" width="42" height="70" rx="21" fill="#fff"/><rect x="234" y="210" width="42" height="122" rx="21" fill="#fff"/><rect x="293" y="158" width="42" height="174" rx="21" fill="#fff"/>
+    </svg>
+    <h1>Bandly</h1>
+    <p>مدير الراوترات الذكي — شوف إشارتك، وجّه الهوائي، وثبّت أفضل برج من جوالك</p>
+    <div class="chips"><span class="chip">هواوي</span><span class="chip">ZTE</span><span class="chip">4G / 5G</span><span class="chip">عربي بالكامل</span></div>
+  </section>
+
+  <section class="card">
+    <h2>حمّل التطبيق</h2>
+    <p class="s">اختر المتجر المناسب لجوالك</p>
+
+    <button class="dl apk" id="apkBtn">
+      <span class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg></span>
+      <span class="t"><b>تحميل مباشر APK</b><small>لأجهزة أندرويد — متاح الحين</small></span>
+      <span class="go">‹</span>
+    </button>
+
+    <button class="dl store" data-store="Google Play">
+      <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10.5 18h3"/></svg></span>
+      <span class="t"><b>Google Play</b><small>أندرويد</small></span>
+      <span class="soon">قريباً</span>
+    </button>
+
+    <button class="dl store" data-store="App Store">
+      <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10.5 5.5h3"/><circle cx="12" cy="18" r="1"/></svg></span>
+      <span class="t"><b>App Store</b><small>آيفون</small></span>
+      <span class="soon">قريباً</span>
+    </button>
+
+    <div class="meta"><span id="apkSize">📦 —</span><span id="apkDate">🗓️ —</span></div>
+  </section>
+
+  <section class="card">
+    <h2>وش يسوي Bandly؟</h2>
+    <p class="s">كل اللي تحتاجه عشان تطلع أقوى إشارة من راوترك</p>
+    <div class="feats">
+      <div class="f"><div class="fi" style="background:#e3ebff">🎯</div><b>مساعد التوجيه</b><span>صوت واهتزاز يدلّك على أفضل اتجاه للهوائي</span></div>
+      <div class="f"><div class="fi" style="background:#ece6ff">📶</div><b>لوحة 4G / 5G</b><span>كل الأرقام: RSRP · SINR · RSRQ · البنق</span></div>
+      <div class="f"><div class="fi" style="background:#dff5ec">🛠️</div><b>وضع الفني</b><span>الفني يشوف إشارتك حيّة ويوجهك بالصوت</span></div>
+      <div class="f"><div class="fi" style="background:#fff0d6">🗼</div><b>الأبراج والترددات</b><span>ثبّت على البرج والتردد الأقوى بضغطة</span></div>
+      <div class="f"><div class="fi" style="background:#e1f4fb">⚡</div><b>السرعة والألعاب</b><span>قِس السرعة والبنق واختر أفضل تردد للألعاب</span></div>
+      <div class="f"><div class="fi" style="background:#fde7ea">🔔</div><b>المراقبة</b><span>تنبيه إذا انقطع النت أو ضعفت الإشارة</span></div>
+    </div>
+  </section>
+
+  <details>
+    <summary>طريقة تثبيت ملف APK</summary>
+    <ol>
+      <li>اضغط <b>تحميل مباشر APK</b> وانتظر ينزل الملف.</li>
+      <li>افتح الملف من الإشعارات أو من مجلد التنزيلات.</li>
+      <li>إذا طلب إذن، اضغط <b>الإعدادات</b> وفعّل <b>السماح من هذا المصدر</b>.</li>
+      <li>ارجع واضغط <b>تثبيت</b>. التحديث الجديد يتثبت فوق القديم وبياناتك محفوظة.</li>
+    </ol>
+  </details>
+
+  <div class="foot">للاستفسار والدعم: <a href="https://t.me/hasa_n20" id="support">تواصل معنا</a></div>
+</div>
+
+<!-- نافذة: قريباً على المتجر -->
+<div class="sheet" id="sheet">
+  <div class="box">
+    <div class="em">🚀</div>
+    <h3 id="soonTitle">قريباً على المتجر</h3>
+    <p id="soonText"></p>
+    <div class="btns">
+      <button class="pri" id="soonApk">حمّل APK الحين</button>
+      <button class="sec" id="soonClose">تمام</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const tg = window.Telegram && Telegram.WebApp;
+if (tg) { try { tg.ready(); tg.expand(); tg.setHeaderColor('#2f6bff'); tg.setBackgroundColor('#e5eaf2'); } catch (e) {} }
+const APK = 'https://has-host.com/dl/bandly.apk';
+const $ = id => document.getElementById(id);
+const haptic = (t) => { try { tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred(t || 'light'); } catch (e) {} };
+
+// تحميل الـ APK — نفتحه خارج تليجرام عشان التنزيل يشتغل
+function downloadApk() {
+  haptic('medium');
+  if (tg && tg.openLink) tg.openLink(APK); else location.href = APK;
+}
+$('apkBtn').onclick = downloadApk;
+
+// المتاجر: رسالة «قريباً»
+const MSG = {
+  'Google Play': 'نشتغل على نشر Bandly في Google Play، وبيكون متاح قريب جداً بإذن الله 💙<br>وإلى ذاك الوقت تقدر تحمّله مباشرة بملف APK — نفس التطبيق بالضبط.',
+  'App Store': 'نسخة الآيفون في طريقها لـ App Store، وبنعلن عنها أول ما تنزل بإذن الله 🍃<br>تابع البوت عشان يوصلك التنبيه أول بأول.'
+};
+document.querySelectorAll('[data-store]').forEach(b => b.onclick = () => {
+  haptic('light');
+  const s = b.dataset.store;
+  $('soonTitle').textContent = `قريباً على ${s}`;
+  $('soonText').innerHTML = MSG[s];
+  $('soonApk').style.display = s === 'App Store' ? 'none' : '';
+  $('sheet').classList.add('on');
+});
+$('soonClose').onclick = () => $('sheet').classList.remove('on');
+$('sheet').onclick = e => { if (e.target.id === 'sheet') $('sheet').classList.remove('on'); };
+$('soonApk').onclick = () => { $('sheet').classList.remove('on'); downloadApk(); };
+$('support').onclick = e => { if (tg && tg.openTelegramLink) { e.preventDefault(); tg.openTelegramLink('https://t.me/hasa_n20'); } };
+
+// حجم الملف وتاريخ آخر تحديث من السيرفر
+fetch(APK, { method: 'HEAD', cache: 'no-store' }).then(r => {
+  if (!r.ok) return;
+  const n = +r.headers.get('content-length'); if (n) $('apkSize').textContent = `📦 ${(n / 1048576).toFixed(0)} ميقا`;
+  const d = r.headers.get('last-modified');
+  if (d) $('apkDate').textContent = '🗓️ آخر تحديث ' + new Date(d).toLocaleDateString('ar-SA-u-ca-gregory', { day: 'numeric', month: 'long' });
+}).catch(() => {});
+</script>
+</body>
+</html>
