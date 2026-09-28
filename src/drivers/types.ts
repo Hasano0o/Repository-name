@@ -66,6 +66,7 @@ export interface CellLockState {
   pci?: string;
   band?: number;
   arfcn?: string;
+  tech?: 'LTE' | 'NR';
 }
 export interface BandConfig {
   supported: number[];
@@ -186,8 +187,11 @@ export interface RouterDriver {
   getBandConfig?(): Promise<BandConfig>;
   setBand?(bands: number[], nrBands?: number[]): Promise<void>;
   lockCell?(target: CellLockTarget): Promise<void>;
-  unlockCell?(): Promise<void>;
+  /** بدون tech = يفك كل التثبيتات. مع tech = يفك تثبيت 4G أو 5G بس */
+  unlockCell?(tech?: 'LTE' | 'NR'): Promise<void>;
   getCellLock?(): Promise<CellLockState | null>;
+  /** كل التثبيتات الحالية (بعض الراوترات تثبّت 4G و 5G مع بعض) */
+  getCellLocks?(): Promise<CellLockState[]>;
   getActiveLock?(): Promise<ActiveLock | null>;
   getDataPlan?(): Promise<DataPlan>;
   setDataPlan?(plan: DataPlan): Promise<void>;

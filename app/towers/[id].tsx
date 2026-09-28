@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, RefreshControl, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -49,9 +49,9 @@ function Chip({ label, value, color }: { label: string; value?: number; color?: 
 }
 
 /** بطاقة برج واحد — مضغوطة: سطر العنوان + شريط الجودة + سطر القيم وزر التثبيت */
-function TowerGroupCard({ g, rank, lockedHere, canPin, busy, onLock }: {
+function TowerGroupCard({ g, rank, lockedHere, canPin, busy, onLock, note }: {
   g: TowerGroup; rank?: number; lockedHere: boolean; canPin: boolean; busy: boolean;
-  onLock: (g: TowerGroup) => void;
+  onLock: (g: TowerGroup) => void; note?: { text: string; ok: boolean };
 }) {
   const gr = cellGrade(g.best);
   const color = GRADE_COLOR[gr];
@@ -87,6 +87,12 @@ function TowerGroupCard({ g, rank, lockedHere, canPin, busy, onLock }: {
 
       <QualityBar q={cellQuality(g.best)} color={color} />
 
+      {!!note && (
+        <View style={[s.pinNote, { backgroundColor: note.ok ? '#e8f8f0' : '#fff4e0' }]}>
+          <Text style={[s.pinNoteText, { color: note.ok ? '#0b7a47' : '#a15c00' }]}>{note.text}</Text>
+        </View>
+      )}
+
       <View style={s.foot}>
         <View style={s.chips}>
           <Chip label="SINR" value={g.best.sinr} />
@@ -105,7 +111,7 @@ function TowerGroupCard({ g, rank, lockedHere, canPin, busy, onLock }: {
             hitSlop={6}
           >
             <Text style={[s.pinBtnText, lockedHere && { color: C.onAccent }]}>
-              {lockedHere ? 'فك' : '📌 ثبّت'}
+              {lockedHere ? 'فك التثبيت' : '📌 ثبّت'}
             </Text>
           </Pressable>
         )}
@@ -168,7 +174,10 @@ export default function TowersScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
-  const [cellLock, setCellLock] = useState<CellLockState | null>(null);
+  const [locks, setLocks] = useState<CellLockState[]>([]);
+  const alive = useRef(true);
+  const reloadTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => { alive.current = false; reloadTimers.current.forEach(clearTimeout); }, []);
   const [canLock, setCanLock] = useState(false);
   const [bandCfg, setBandCfg] = useState<BandConfig | null>(null);
   const [trialCount, setTrialCount] = useState(0);
@@ -176,13 +185,17 @@ export default function TowersScreen() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
 
+  const lockOf = (g: TowerGroup) => locks.find(l => !!g.pci && l.pci === g.pci && (!l.tech || l.tech === g.tech));
+
   const load = useCallback(async (r: SavedRouter) => {
     setError('');
     try {
       // بالتسلسل: بعض الراوترات (ZTE) ما تحب الطلبات المتوازية
       const [list, lock, supports, sig, cfg] = await withSession(r, async d => [
         d.getCells ? await d.getCells() : ([] as CellTower[]),
-        d.getCellLock ? await d.getCellLock().catch(() => null) : null,
+        d.getCellLocks
+          ? await d.getCellLocks().catch(() => [] as CellLockState[])
+          : d.getCellLock ? await d.getCellLock().then(x => (x ? [x] : [])).catch(() => [] as CellLockState[]) : [],
         typeof d.lockCell === 'function' && typeof d.unlockCell === 'function',
         d.getSignal ? await d.getSignal().catch(() => null) : null,
         d.getBandConfig && d.setBand ? await d.getBandConfig().catch(() => null) : null,
@@ -192,7 +205,7 @@ export default function TowersScreen() {
       setConfirmed(next);
       setCells(list);
       setNrAvail(sig?.nrAvailable);
-      setCellLock(lock);
+      setLocks(lock);
       setCanLock(supports);
       setBandCfg(cfg);
       setTrialCount((await loadTrials(r.id)).length);
@@ -221,6 +234,12 @@ export default function TowersScreen() {
     setRefreshing(false);
   };
 
+  /** بعد التثبيت/الفك الراوتر يحتاج وقت ينتقل — نعيد القراءة تلقائياً كم مرة */
+  const followUp = (r: SavedRouter) => {
+    reloadTimers.current.forEach(clearTimeout);
+    reloadTimers.current = [12000, 35000, 70000].map(ms => setTimeout(() => { if (alive.current) load(r); }, ms));
+  };
+
   /** يجرب التغيير بأمان: يقيس قبل وبعد ويرجع لو صار أسوأ */
   const runSafe = async (o: Omit<Parameters<typeof safeApply>[0], 'r' | 'onStatus'>) => {
     if (!info) return;
@@ -231,6 +250,7 @@ export default function TowersScreen() {
       const m = trialMessage(res, o.label);
       Alert.alert(m.title, m.body);
       await load(info);
+      followUp(info);
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
@@ -239,9 +259,10 @@ export default function TowersScreen() {
     }
   };
 
-  const onUnlock = () => {
+  const onUnlock = (tech?: 'LTE' | 'NR') => {
     if (!info) return;
-    Alert.alert('فك التثبيت', 'بنرجع الراوتر يختار البرج بنفسه ويرجع يدمج الترددات. ممكن النت ينقطع دقيقة.', [
+    const what = tech ? (tech === 'NR' ? 'تثبيت 5G' : 'تثبيت 4G') : 'كل التثبيتات';
+    Alert.alert(`فك ${what}`, 'بنرجع الراوتر يختار البرج بنفسه ويرجع يدمج الترددات. ممكن النت ينقطع دقيقة.', [
       { text: 'إلغاء', style: 'cancel' },
       {
         text: 'فك', onPress: async () => {
@@ -249,8 +270,9 @@ export default function TowersScreen() {
           setError('');
           setStatus('نفك التثبيت...');
           try {
-            await withSession(info, d => d.unlockCell!(), false);
+            await withSession(info, d => d.unlockCell!(tech), false);
             await load(info);
+            followUp(info);
             Alert.alert('تم', 'انفك التثبيت — الراوتر رجع يختار بنفسه');
           } catch (e: any) {
             setError(e?.message ?? String(e));
@@ -265,7 +287,8 @@ export default function TowersScreen() {
 
   const onLock = async (g: TowerGroup) => {
     if (!info) return;
-    if (cellLock && g.pci && cellLock.pci === g.pci) { onUnlock(); return; }
+    const mine = lockOf(g);
+    if (mine) { onUnlock(mine.tech ?? g.tech); return; }
 
     // نختار الخلية اللي عندها رقم تردد (ARFCN) — التثبيت يحتاجه
     const tower = g.cells.find(c => c === g.best && c.arfcn) ?? g.cells.find(c => c.arfcn) ?? g.best;
@@ -279,6 +302,8 @@ export default function TowersScreen() {
     const cellKey = `cell:${tower.tech}:${tower.pci}:${tower.arfcn ?? tower.band ?? ''}`;
     const bandKey = `band:${tower.tech}:${tower.band}`;
     const [tCell, tBand] = await Promise.all([lastTrial(info.id, cellKey), lastTrial(info.id, bandKey)]);
+    // لو فيه تثبيت سابق على نفس النوع (4G/5G) نرجّعه لو التجربة طلعت أسوأ — وما نلمس تثبيت النوع الثاني
+    const prevSame = locks.find(l => (l.tech ?? 'LTE') === tower.tech && l.pci);
 
     const opts: LockOpt[] = [];
 
@@ -294,7 +319,9 @@ export default function TowersScreen() {
           label: `التثبيت على ${towerTitle(tower)}`,
           withNr: isNr,
           apply: d => d.lockCell!({ tech: tower.tech, band: tower.band, arfcn: tower.arfcn, pci: tower.pci! }),
-          revert: d => d.unlockCell!(),
+          revert: d => (prevSame
+            ? d.lockCell!({ tech: tower.tech, band: prevSame.band, arfcn: prevSame.arfcn, pci: prevSame.pci! })
+            : d.unlockCell!(tower.tech)),
         }),
       });
     }
@@ -409,14 +436,17 @@ export default function TowersScreen() {
   const groups = groupTowers(cells, confirmed);
   const nrNow = cells.find(c => c.tech === 'NR' && (c.kind === 'serving' || c.kind === 'secondary'));
   const primary = groups.find(g => g.role === 'primary');
-  const inUse = groups.filter(g => g.inUse);
-  const others = groups.filter(g => !g.inUse);
+  const pinnedGroups = groups.filter(g => !!lockOf(g));
+  const inUse = groups.filter(g => g.inUse && !lockOf(g));
+  const others = groups.filter(g => !g.inUse && !lockOf(g));
+  // تثبيت على برج ما ظهر في القراءة الحالية
+  const orphanLocks = locks.filter(l => !groups.some(g => lockOf(g) === l));
   const bestOther = others[0];
   const currentScore = primary ? rankScore(primary.best) : 0;
   const worthIt = !!bestOther && bestOther.score > currentScore + 0.08;
   const lowCand = !!bestOther && isLowBand(bestOther.best);
   const canPin = canLock || !!bandCfg;
-  const isPinned = (g: TowerGroup) => !!cellLock && !!g.pci && cellLock.pci === g.pci;
+  const isPinned = (g: TowerGroup) => !!lockOf(g);
 
   return (
     <LinearGradient colors={[C.bgTop, C.bgBottom]} style={{ flex: 1 }}>
@@ -461,18 +491,48 @@ export default function TowersScreen() {
           </Pressable>
         )}
 
-        {!loading && cellLock && (
-          <View style={s.pinBanner}>
-            <Pressable style={[s.unlockBtn, busy && { opacity: 0.5 }]} onPress={onUnlock} disabled={busy}>
-              <Text style={s.unlockText}>فك التثبيت</Text>
-            </Pressable>
-            <View style={{ flex: 1 }}>
-              <Text style={s.pinBannerTitle}>📌 مثبّت على برج {cellLock.pci}</Text>
-              <Text style={s.pinBannerSub}>
-                {cellLock.band ? `B${cellLock.band} · ` : ''}{cellLock.arfcn ? `EARFCN ${cellLock.arfcn}` : 'الراوتر ما يتنقل لبرج ثاني'}
-              </Text>
-            </View>
-          </View>
+        {!loading && (pinnedGroups.length > 0 || orphanLocks.length > 0) && (
+          <GlassCard
+            title={pinnedGroups.length + orphanLocks.length > 1 ? `الأبراج المثبّتة (${pinnedGroups.length + orphanLocks.length})` : 'البرج المثبّت'}
+            icon="📌" tint={C.blueSoft} collapsible={false}
+          >
+            {pinnedGroups.map(g => (
+              <TowerGroupCard key={'pin' + g.key} g={g} lockedHere canPin={canPin} busy={busy} onLock={onLock}
+                note={g.inUse
+                  ? { ok: true, text: '✓ مثبّت والراوتر متصل عليه الحين' }
+                  : { ok: false, text: '⏳ مثبّت، بس الراوتر للحين ما انتقل له — ينتقل خلال دقيقة أو بعد إعادة التشغيل. نحدّث القراءة تلقائياً.' }} />
+            ))}
+            {orphanLocks.map(l => (
+              <View key={`orph-${l.tech}-${l.pci}`} style={[s.tower, s.towerLocked]}>
+                <View style={s.head}>
+                  <View style={[s.avatar, { backgroundColor: C.blueSoft }]}><Text style={s.avatarRank}>📌</Text></View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <View style={s.titleRow}>
+                      <Text style={s.towerName}>برج {l.pci}</Text>
+                      <View style={[s.techTag, l.tech === 'NR' && { backgroundColor: C.violet }]}>
+                        <Text style={s.techTagText}>{l.tech === 'NR' ? '5G' : '4G'}</Text>
+                      </View>
+                    </View>
+                    <Text style={s.role}>{l.band ? `${l.tech === 'NR' ? 'n' : 'B'}${l.band} · ` : ''}{l.arfcn ? `ARFCN ${l.arfcn}` : ''}</Text>
+                  </View>
+                </View>
+                <View style={[s.pinNote, { backgroundColor: '#fff4e0' }]}>
+                  <Text style={[s.pinNoteText, { color: '#a15c00' }]}>⏳ مثبّت، بس البرج ما ظهر في القراءة الحالية — الراوتر يحاول يتصل عليه.</Text>
+                </View>
+                <View style={s.foot}>
+                  <View style={s.chips} />
+                  <Pressable style={[s.pinBtn, s.pinBtnOn, busy && { opacity: 0.6 }]} onPress={() => onUnlock(l.tech)} disabled={busy}>
+                    <Text style={[s.pinBtnText, { color: C.onAccent }]}>فك التثبيت</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+            {pinnedGroups.length + orphanLocks.length > 1 && (
+              <Pressable style={[s.unlockAll, busy && { opacity: 0.5 }]} onPress={() => onUnlock()} disabled={busy}>
+                <Text style={s.unlockAllText}>فك كل التثبيتات</Text>
+              </Pressable>
+            )}
+          </GlassCard>
         )}
 
         {!loading && (canLock || !!bandCfg) && primary && (
@@ -603,6 +663,10 @@ const s = StyleSheet.create({
   retryBtn: { alignSelf: 'flex-end', backgroundColor: C.red, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
   retryText: { color: '#fff', fontWeight: '700' },
 
+  pinNote: { borderRadius: 12, paddingVertical: 7, paddingHorizontal: 10 },
+  pinNoteText: { fontSize: 12, fontWeight: '700', textAlign: 'right', lineHeight: 18 },
+  unlockAll: { alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 16 },
+  unlockAllText: { color: C.red, fontWeight: '800', fontSize: 13 },
   tower: {
     backgroundColor: C.card, borderRadius: 16, borderWidth: 1, borderColor: '#e7eefb', padding: 12, gap: 9,
     shadowColor: C.shadow, shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 1,

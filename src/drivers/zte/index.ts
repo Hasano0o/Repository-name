@@ -732,15 +732,20 @@ export class ZteDriver implements RouterDriver {
 
   // ─── التثبيت على برج (Cell Lock) ───
 
-  async getCellLock(): Promise<CellLockState | null> {
+  async getCellLocks(): Promise<CellLockState[]> {
     await this.ensure();
     const r = await this.get(['lte_pci_lock', 'lte_earfcn_lock', 'nr5g_cell_lock']);
+    const out: CellLockState[] = [];
     const pci = (r.lte_pci_lock || '').trim();
     const ear = (r.lte_earfcn_lock || '').trim();
-    if (pci && ear && ear !== '0') return { pci, arfcn: ear, band: lteBandOf(num(ear)) };
+    if (pci && ear && ear !== '0') out.push({ tech: 'LTE', pci, arfcn: ear, band: lteBandOf(num(ear)) });
     const nr = (r.nr5g_cell_lock || '').split(',').map(x => x.trim());
-    if (nr.length >= 2 && nr[1] && nr[1] !== '0') return { pci: nr[0], arfcn: nr[1], band: bandNum(nr[2]) };
-    return null;
+    if (nr.length >= 2 && nr[1] && nr[1] !== '0') out.push({ tech: 'NR', pci: nr[0], arfcn: nr[1], band: bandNum(nr[2]) });
+    return out;
+  }
+
+  async getCellLock(): Promise<CellLockState | null> {
+    return (await this.getCellLocks())[0] ?? null;
   }
 
   private async servingPci(tech: 'LTE' | 'NR'): Promise<string | undefined> {
@@ -793,13 +798,14 @@ export class ZteDriver implements RouterDriver {
     await this.rebootAndWait();
   }
 
-  async unlockCell(): Promise<void> {
+  async unlockCell(tech?: 'LTE' | 'NR'): Promise<void> {
     await this.ensure();
-    const had = await this.getCellLock().catch(() => null);
-    const o1 = await this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: '0', lte_earfcn_lock: '0' });
-    const o2 = await this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: '0,0,0,0' }).catch(() => '');
-    if (!/success/i.test(o1) && !/success/i.test(o2)) throw this.rejected('فك التثبيت', o1);
-    if (had && rebootToApply.has(this.host)) await this.rebootAndWait();
+    const had = (await this.getCellLocks().catch(() => [] as CellLockState[])).filter(h => !tech || h.tech === tech);
+    let o1 = '', o2 = '';
+    if (!tech || tech === 'LTE') o1 = await this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: '0', lte_earfcn_lock: '0' });
+    if (!tech || tech === 'NR') o2 = await this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: '0,0,0,0' }).catch(() => '');
+    if (!/success/i.test(o1) && !/success/i.test(o2)) throw this.rejected('فك التثبيت', o1 || o2);
+    if (had.length && rebootToApply.has(this.host)) await this.rebootAndWait();
   }
 
   async reboot(): Promise<void> {

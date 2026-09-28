@@ -658,16 +658,20 @@ export class HuaweiDriver implements RouterDriver {
       return { lte: '', nr: '' };
     }
   }
-  async getCellLock(): Promise<CellLockState | null> {
+  async getCellLocks(): Promise<CellLockState[]> {
     const raw = await this.readCellLockRaw();
-    for (const sec of [raw.lte, raw.nr]) {
+    const out: CellLockState[] = [];
+    for (const [tech, sec] of [['LTE', raw.lte], ['NR', raw.nr]] as const) {
       if (!sec || (tag(sec, 'lock_mode') ?? '0') === '0') continue;
       const pci = (tag(sec, 'pci') ?? '').trim();
       if (!pci) continue;
       const band = parseInt(tag(sec, 'band') ?? '', 10);
-      return { pci, band: Number.isFinite(band) ? band : undefined, arfcn: (tag(sec, 'freq') ?? '').trim() || undefined };
+      out.push({ tech, pci, band: Number.isFinite(band) ? band : undefined, arfcn: (tag(sec, 'freq') ?? '').trim() || undefined });
     }
-    return null;
+    return out;
+  }
+  async getCellLock(): Promise<CellLockState | null> {
+    return (await this.getCellLocks())[0] ?? null;
   }
   async getActiveLock(): Promise<ActiveLock | null> {
     const lf = await this.readLockFreq();
