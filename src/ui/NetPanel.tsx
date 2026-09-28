@@ -37,28 +37,28 @@ type Theme = {
 };
 const THEMES: Record<'4G' | '5G', Theme> = {
   '4G': {
-    bg: ['#052830', '#093a45', '#0c4d57'],
-    border: '#17606c',
-    pill: ['#14b8a6', '#0891b2'],
-    accent: '#5eead4',
-    accentSoft: 'rgba(94,234,212,0.14)',
+    bg: ['#13727d', '#1a8290', '#217796'],
+    border: '#3a9aa6',
+    pill: ['#0a5a66', '#0c4f6e'],
+    accent: '#b8fff2',
+    accentSoft: 'rgba(255,255,255,0.16)',
     glow: 'rgba(45,212,191,0.07)',
-    panel: 'rgba(255,255,255,0.05)',
-    tile: 'rgba(255,255,255,0.06)',
-    tileBorder: 'rgba(94,234,212,0.16)',
-    sub: 'rgba(204,251,241,0.65)',
+    panel: 'rgba(255,255,255,0.08)',
+    tile: 'rgba(255,255,255,0.10)',
+    tileBorder: 'rgba(255,255,255,0.16)',
+    sub: 'rgba(230,255,251,0.8)',
   },
   '5G': {
-    bg: ['#0d1738', '#15245a', '#231d5e'],
-    border: '#2d3b7a',
+    bg: ['#2d3a8f', '#3a3f9f', '#4a3aa6'],
+    border: '#5a63c0',
     pill: ['#7c4dff', '#a24bd8'],
-    accent: '#c7b8ff',
-    accentSoft: 'rgba(167,139,250,0.16)',
+    accent: '#e2d9ff',
+    accentSoft: 'rgba(255,255,255,0.15)',
     glow: 'rgba(139,92,246,0.09)',
-    panel: 'rgba(255,255,255,0.05)',
-    tile: 'rgba(255,255,255,0.06)',
-    tileBorder: 'rgba(167,139,250,0.18)',
-    sub: 'rgba(224,219,255,0.62)',
+    panel: 'rgba(255,255,255,0.08)',
+    tile: 'rgba(255,255,255,0.10)',
+    tileBorder: 'rgba(255,255,255,0.15)',
+    sub: 'rgba(236,232,255,0.78)',
   },
 };
 
@@ -84,14 +84,14 @@ function Gauge({ value, label, unit, level, r }: {
     <View style={g.wrap}>
       <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
         <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-          <Path d={arc(START, START + SWEEP)} stroke="rgba(255,255,255,0.12)" strokeWidth={sw} strokeLinecap="round" fill="none" />
+          <Path d={arc(START, START + SWEEP)} stroke="rgba(255,255,255,0.2)" strokeWidth={sw} strokeLinecap="round" fill="none" />
           {!empty && <Path d={arc(START, end)} stroke={col} strokeWidth={sw} strokeLinecap="round" fill="none" />}
           {!empty && <Circle cx={pol(end).x} cy={pol(end).y} r={sw * 0.3} fill="#fff" />}
         </Svg>
         <Text style={[g.val, { color: empty ? 'rgba(255,255,255,0.4)' : '#fff', fontSize: txt.length > 4 ? 15 : 18 }]}
           numberOfLines={1} adjustsFontSizeToFit>{txt}</Text>
       </View>
-      <Text style={[g.lbl, { color: col }]}>{label}</Text>
+      <Text style={g.lbl}>{label}</Text>
       <Text style={g.unit}>{unit}</Text>
     </View>
   );
@@ -138,9 +138,9 @@ function Card({ tech, active, children, badges }: {
               ))}
             </View>
           </View>
-          <View style={[c.state, { backgroundColor: active ? 'rgba(22,199,132,0.16)' : 'rgba(255,255,255,0.08)' }]}>
-            <View style={[c.dot, { backgroundColor: active ? '#22e39a' : 'rgba(255,255,255,0.4)' }]} />
-            <Text style={[c.stateTxt, { color: active ? '#4ff0b0' : 'rgba(255,255,255,0.6)' }]}>
+          <View style={[c.state, { backgroundColor: 'rgba(255,255,255,0.16)' }]}>
+            <View style={[c.dot, { backgroundColor: active ? '#3dff9e' : 'rgba(255,255,255,0.4)' }]} />
+            <Text style={[c.stateTxt, { color: active ? '#fff' : 'rgba(255,255,255,0.7)' }]}>
               {active ? 'متصل' : 'غير نشط'}
             </Text>
           </View>
@@ -202,8 +202,8 @@ export function NetPanel({ signal, ping }: { signal: Signal | null; ping?: numbe
 const g = StyleSheet.create({
   wrap: { flex: 1, alignItems: 'center' },
   val: { fontWeight: '800', letterSpacing: -0.5, maxWidth: 50, textAlign: 'center' },
-  lbl: { fontSize: 11.5, fontWeight: '800', marginTop: -4 },
-  unit: { fontSize: 9.5, color: 'rgba(255,255,255,0.55)', fontWeight: '600' },
+  lbl: { fontSize: 11.5, fontWeight: '800', marginTop: -4, color: '#fff' },
+  unit: { fontSize: 9.5, color: 'rgba(255,255,255,0.75)', fontWeight: '600' },
 });
 const t = StyleSheet.create({
   tile: { borderRadius: 14, paddingVertical: 9, paddingHorizontal: 10, borderWidth: 1, gap: 4 },
@@ -214,12 +214,12 @@ const t = StyleSheet.create({
 });
 const c = StyleSheet.create({
   shadow: {
-    borderRadius: 24, shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 6,
+    borderRadius: 24, shadowOpacity: 0.22, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 6,
   },
   card: { borderRadius: 24, padding: 14, gap: 12, borderWidth: 1, overflow: 'hidden' },
   glow: { position: 'absolute', width: 220, height: 220, borderRadius: 110, top: -110, left: -70 },
   head: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
-  techPill: { borderRadius: 14, paddingHorizontal: 13, paddingVertical: 7 },
+  techPill: { borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', paddingHorizontal: 13, paddingVertical: 7 },
   techTxt: { color: '#fff', fontSize: 18, fontWeight: '900' },
   title: { color: '#fff', fontSize: 16, fontWeight: '800' },
   badge: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 2 },
