@@ -156,12 +156,16 @@ export function NetPanel({ signal, ping, pingTo }: { signal: Signal | null; ping
   const nrBand = parseNrBands(s.nrBand).join('+') || s.nrBand;
   const hasNr = s.nrRsrp !== undefined || !!s.nrBand;
   const bw = [s.dlBandwidth, s.ulBandwidth].filter(Boolean).join(' / ');
+  const hasLte = s.rsrp !== undefined || !!s.band;
   const mode = hasNr ? 'مزدوج مع 5G' : '4G فقط';
+  // في 5G NSA: الـ 4G هو الأساسي (ماسك الاتصال) والـ 5G ثانوي للسرعة
+  const lteRole = hasNr ? '⭐ أساسي' : '';
+  const nrRole = hasLte ? 'ثانوي للسرعة' : '⭐ أساسي (5G SA)';
 
   return (
     <View style={{ gap: 12 }}>
       <PingBar ping={ping} to={pingTo} />
-      <Card tech="4G" active={s.rsrp !== undefined} badge={`${lteBand || '—'} · ${mode}`}>
+      <Card tech="4G" active={s.rsrp !== undefined} badge={`${lteBand || '—'}${lteRole ? ` · ${lteRole}` : ''} · ${mode}`}>
         <View style={c.gauges}>
           <Gauge icon="antenna" label="RSRP" unit="dBm" value={s.rsrp} level={rsrpLevel(s.rsrp)} r={ratio(s.rsrp, RANGES.rsrp)} />
           <Gauge icon="chart" label="RSRQ" unit="dB" value={s.rsrq} level={rsrqLevel(s.rsrq)} r={ratio(s.rsrq, RANGES.rsrq)} />
@@ -179,7 +183,7 @@ export function NetPanel({ signal, ping, pingTo }: { signal: Signal | null; ping
       </Card>
 
       {hasNr && (
-        <Card tech="5G" dark active={s.nrRsrp !== undefined} badge={nrBand || '—'}>
+        <Card tech="5G" dark active={s.nrRsrp !== undefined} badge={`${nrBand || '—'} · ${nrRole}`}>
           <View style={c.gauges}>
             <Gauge dark icon="antenna" label="RSRP" unit="dBm" value={s.nrRsrp} level={rsrpLevel(s.nrRsrp)} r={ratio(s.nrRsrp, RANGES.rsrp)} />
             <Gauge dark icon="chart" label="RSRQ" unit="dB" value={s.nrRsrq} level={rsrqLevel(s.nrRsrq)} r={ratio(s.nrRsrq, RANGES.rsrq)} />

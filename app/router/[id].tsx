@@ -513,7 +513,7 @@ export default function RouterDashboard() {
                   <View style={s.heroCell}>
                     <Text style={s.heroCellLbl}>الترددات</Text>
                     <Text style={s.heroCellVal} numberOfLines={1} adjustsFontSizeToFit>{allBands.length ? allBands.join(' + ') : '—'}</Text>
-                    <Text style={s.heroCellSub}>{netLabel}</Text>
+                    <Text style={s.heroCellSub}>{bands.length ? `الأساسي ${bands[0]}` : netLabel}</Text>
                   </View>
                 </Pressable>
                 {!!traffic && <Text style={s.heroSub}>السرعة الحين {fmtRate(traffic.downBytesPerSec)}</Text>}
