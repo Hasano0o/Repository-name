@@ -49,6 +49,8 @@ export default function GameScreen() {
   const [region, setRegion] = useState(REGIONS[0].id);
   const [regionRes, setRegionRes] = useState<Record<string, LatencyResult>>({});
   const [regionWarn, setRegionWarn] = useState('');
+  const [regionAt, setRegionAt] = useState<number | null>(null);
+  const [regionNow, setRegionNow] = useState('');
   const [check, setCheck] = useState<{ game: LatencyResult; wifi: LatencyResult | null; dx: Diagnosis; note?: string } | null>(null);
   const [periods, setPeriods] = useState<PeriodStat[]>([]);
   const [weekly, setWeekly] = useState<string[]>([]);
@@ -70,6 +72,14 @@ export default function GameScreen() {
   useEffect(() => {
     mounted.current = true;
     AsyncStorage.getItem(REGION_KEY).then(v => { if (v && mounted.current) setRegion(regionById(v).id); }).catch(() => {});
+    // آخر نتيجة «أي سيرفر أقرب لك؟» — تظهر لحالها بدل ما تختفي كل ما تفتح الشاشة
+    AsyncStorage.getItem('bandly.regionCompare').then(v => {
+      if (!v || !mounted.current) return;
+      try {
+        const j = JSON.parse(v);
+        if (j?.res && Date.now() - j.at < 7 * 86400000) { setRegionRes(j.res); setRegionAt(j.at); setRegionWarn(j.warn ?? ''); }
+      } catch {}
+    }).catch(() => {});
     return () => { mounted.current = false; cancel.current = true; };
   }, []);
 
@@ -219,30 +229,42 @@ export default function GameScreen() {
     setBusy(true);
     setRegionRes({});
     setRegionWarn('');
+    setRegionAt(null);
+    // قراءة الراوتر بمهلة — ما نخلي القياس يعلق لو الراوتر مشغول
     const readDown = () => (info
-      ? withSession(info, async d => (d.getTraffic ? d.getTraffic() : null)).then(t => t?.downBytesPerSec).catch(() => undefined)
+      ? Promise.race([
+          withSession(info, async d => (d.getTraffic ? d.getTraffic() : null)).then(t => t?.downBytesPerSec).catch(() => undefined),
+          sleep(4000).then(() => undefined),
+        ])
       : Promise.resolve(undefined));
+    const all: Record<string, LatencyResult> = {};
+    let warn = '';
     const downs: number[] = [];
     const got: LatencyResult[] = [];
     try {
       for (const r of REGIONS) {
         if (!mounted.current) return;
         setStatus(`نقيس ${r.name}...`);
+        setRegionNow(r.name);
         const [res, dn] = await Promise.all([measureUrl(regionUrls(r), 8), readDown()]);
         if (typeof dn === 'number') downs.push(dn);
         if (res.samples) got.push(res);
+        all[r.id] = res;
         if (mounted.current) setRegionRes(p => ({ ...p, [r.id]: res }));
       }
       // تحقق من صحة القياس: تحميل شغال، أو أرقام متساوية بشكل غير منطقي
       const heavy = downs.length ? Math.max(...downs) : 0;
       const meds = got.map(g => g.median);
       if (heavy > 1024 * 1024) {
-        setRegionWarn(`⚠️ الراوتر كان يحمّل ${(heavy / 1048576).toFixed(1)} ميقابايت/ث وقت القياس — الأرقام أعلى من الحقيقة. وقّف التحميل وقِس مرة ثانية`);
+        warn = `⚠️ الراوتر كان يحمّل ${(heavy / 1048576).toFixed(1)} ميقابايت/ث وقت القياس — الأرقام أعلى من الحقيقة. وقّف التحميل وقِس مرة ثانية`;
       } else if (meds.length >= 3 && Math.max(...meds) - Math.min(...meds) < 30 && Math.min(...meds) > 120) {
-        setRegionWarn('⚠️ كل المناطق طلعت متقاربة بشكل غريب — غالباً فيه تحميل شغال أو الشبكة مزحومة الحين. قِس مرة ثانية بعد شوي');
+        warn = '⚠️ كل المناطق طلعت متقاربة بشكل غريب — غالباً فيه تحميل شغال أو الشبكة مزحومة الحين. قِس مرة ثانية بعد شوي';
       }
+      const at = Date.now();
+      if (mounted.current) { setRegionWarn(warn); setRegionAt(at); }
+      AsyncStorage.setItem('bandly.regionCompare', JSON.stringify({ at, res: all, warn })).catch(() => {});
     } finally {
-      if (mounted.current) { setBusy(false); setStatus(''); }
+      if (mounted.current) { setBusy(false); setStatus(''); setRegionNow(''); }
     }
   };
 
@@ -655,8 +677,17 @@ export default function GameScreen() {
                 </Pressable>
               );
             })}
+            {!!regionNow && (
+              <View style={s.inlineStatus}>
+                <ActivityIndicator color={C.blue} />
+                <Text style={s.inlineStatusTxt}>نقيس {regionNow}... ({Object.keys(regionRes).length}/{REGIONS.length})</Text>
+              </View>
+            )}
+            {!regionNow && !!regionAt && (
+              <Text style={s.hint}>آخر قياس: {new Date(regionAt).toLocaleString('ar-SA', { weekday: 'long', hour: 'numeric', minute: '2-digit' })}</Text>
+            )}
             <Pressable style={[s.btnGhost, { borderColor: C.blue }, (busy || running) && s.dim]} onPress={compareRegions} disabled={busy || running}>
-              <Text style={[s.btnGhostText, { color: C.blue }]}>{sortedRegions.length ? 'قِس مرة ثانية' : 'قِس كل المناطق'}</Text>
+              <Text style={[s.btnGhostText, { color: C.blue }]}>{regionNow ? 'نقيس...' : sortedRegions.length ? 'قِس مرة ثانية' : 'قِس كل المناطق (30 ثانية تقريباً)'}</Text>
             </Pressable>
           </GlassCard>
         )}
@@ -733,6 +764,8 @@ function Stat({ v, u, l, c }: { v: string; u: string; l: string; c: string }) {
 }
 
 const s = StyleSheet.create({
+  inlineStatus: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, justifyContent: 'center', paddingVertical: 4 },
+  inlineStatusTxt: { color: C.blue, fontWeight: '800', fontSize: 13 },
   fallbackNote: { color: '#b45309', fontSize: 12, textAlign: 'right', lineHeight: 19, backgroundColor: C.amberSoft, borderRadius: 12, padding: 10 },
   weekLine: { color: C.text, fontSize: 13, textAlign: 'right', lineHeight: 21 },
   consentRow: { flexDirection: 'row', gap: 8 },
