@@ -536,7 +536,7 @@ export default function RouterDashboard() {
             <TileGrid>
               <ToolTile icon="speed" color="#12b76a" title="السرعة" sub="تنزيل ورفع"
                 onPress={() => router.push(`/speed/${info.id}` as Href)} />
-              <ToolTile icon="game" color="#ec4899" title="البنق" sub="للألعاب"
+              <ToolTile icon="game" color="#ec4899" title="الألعاب" sub="أفضل بنق للعبتك"
                 onPress={() => router.push(`/ping/${info.id}` as Href)} />
               <ToolTile icon="chart" color="#0891b2" title="التفاصيل" sub="كل الأرقام"
                 onPress={() => router.push(`/details/${info.id}` as Href)} />
