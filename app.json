@@ -76,7 +76,11 @@
         "expo-build-properties",
         {
           "android": {
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": true,
+            "buildArchs": [
+              "arm64-v8a",
+              "armeabi-v7a"
+            ]
           }
         }
       ],
@@ -107,6 +111,15 @@
         "projectId": "94d7f449-28a0-4938-a3fc-d3572e1bd58e"
       }
     },
-    "owner": "hassan14161"
+    "owner": "hassan14161",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/94d7f449-28a0-4938-a3fc-d3572e1bd58e",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    }
   }
 }

@@ -9,7 +9,7 @@ import { withSession } from '../../src/store/sessions';
 import { safeApply, trialMessage } from '../../src/utils/safeLock';
 import { BandConfig, CellTower, RouterDriver } from '../../src/drivers/types';
 import {
-  LatencyResult, REGIONS, REGION_KEY, regionById, measureUrl, measureWifi,
+  LatencyResult, REGIONS, REGION_KEY, regionById, regionUrls, measureUrl, measureWifi,
   gameScore, scoreWord, scoreLight, diagnose, Diagnosis, Light,
 } from '../../src/utils/latency';
 import { saveProfile } from '../../src/store/profiles';
@@ -164,7 +164,7 @@ export default function GameScreen() {
       setStatus(`نقيس البنق لسيرفرات ${reg.name}...`);
       // نقرأ استهلاك الراوتر أثناء القياس — نكشف لو فيه جهاز ثاني يحمّل
       const readDown = () => withSession(info, async d => (d.getTraffic ? d.getTraffic() : null)).then(t => t?.downBytesPerSec).catch(() => undefined);
-      const [game, down1] = await Promise.all([measureUrl(reg.url, 20), sleep(1500).then(readDown)]);
+      const [game, down1] = await Promise.all([measureUrl(regionUrls(reg), 20), sleep(1500).then(readDown)]);
       let sinr: number | undefined;
       let down2: number | undefined;
       try {
@@ -199,7 +199,7 @@ export default function GameScreen() {
       for (const r of REGIONS) {
         if (!mounted.current) return;
         setStatus(`نقيس ${r.name}...`);
-        const res = await measureUrl(r.url, 10);
+        const res = await measureUrl(regionUrls(r), 10);
         if (mounted.current) setRegionRes(p => ({ ...p, [r.id]: res }));
       }
     } finally {
@@ -267,8 +267,8 @@ export default function GameScreen() {
             upd(i, { note: `نقيس البنق لـ${reg.name}...` });
             await sleep(3000);
           }
-          const res = await measureUrl(reg.url, 20);
-          if (!res.samples) { upd(i, { status: 'failed', note: 'ما وصلنا للسيرفر' }); }
+          const res = await measureUrl(regionUrls(reg), 20);
+          if (!res.samples) { upd(i, { status: 'failed', note: res.error ? `ما وصلنا للسيرفر — ${res.error}` : 'ما وصلنا للسيرفر' }); }
           else {
             const score = gameScore(res);
             upd(i, { status: 'done', res, score, note: undefined });
@@ -595,7 +595,9 @@ export default function GameScreen() {
                     </Text>
                     <Text style={s.rowName}>{i === 0 && res.samples ? '⭐ ' : ''}{r.name}</Text>
                   </View>
-                  {res.samples > 0 && <Text style={s.rowVals}>تذبذب {res.jitter}ms · فقد {res.lossPct}% · {r.hint}</Text>}
+                  {res.samples > 0
+                    ? <Text style={s.rowVals}>تذبذب {res.jitter}ms · فقد {res.lossPct}% · {r.hint}{res.via ? ` · عبر خادم بديل` : ''}</Text>
+                    : <Text style={[s.rowVals, { color: C.red }]}>{res.error ?? 'الخادم ما رد'}</Text>}
                 </Pressable>
               );
             })}

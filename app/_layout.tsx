@@ -13,6 +13,7 @@ import {
 } from '@expo-google-fonts/ibm-plex-sans-arabic';
 import { applyGlobalFont, FONT } from '../src/ui/fonts';
 import { C } from '../src/ui/theme';
+import { UpdateBanner } from '../src/ui/UpdateBanner';
 import { initNotificationHandler } from '../src/utils/notify';
 import '../src/tasks/monitor'; // يسجّل تعريف مهمة المراقبة الخلفية عند الإقلاع
 
@@ -97,6 +98,7 @@ export default function RootLayout() {
           />
         ))}
       </Stack>
+      <UpdateBanner />
     </>
   );
 }

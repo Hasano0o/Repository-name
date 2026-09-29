@@ -8,7 +8,7 @@ import { useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router'
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { Signal, Traffic } from '../../src/drivers/types';
-import { REGIONS, REGION_KEY, regionById, pingOnce, wifiOnce } from '../../src/utils/latency';
+import { REGIONS, REGION_KEY, regionById, regionUrls, pingOnce, wifiOnce } from '../../src/utils/latency';
 import {
   PingSample, RouterSample, Gap, LagReport, Cause, CAUSE_TEXT,
   baseline, isSpike, findIncidents, buildReport, listLagSessions, saveLagSession, fmtClock, fmtDur,
@@ -99,6 +99,12 @@ export default function LagScreen() {
     setRunning(true);
     activateKeepAwakeAsync(KEEP_TAG).catch(() => {});
 
+    // نختار أول خادم يرد من خوادم المنطقة
+    let target = reg.url;
+    for (const u of regionUrls(reg)) {
+      if ((await pingOnce(u, 3000)) !== null) { target = u; break; }
+    }
+
     let last = Date.now();
     let lastRouter = 0;
     let routerBusy = false;
@@ -117,7 +123,7 @@ export default function LagScreen() {
         pollRouter(info).then(s => { lastSample = s; }).catch(() => {}).finally(() => { routerBusy = false; });
       }
 
-      const ms = await pingOnce(reg.url, 2000);
+      const ms = await pingOnce(target, 2000);
       pings.current.push({ t: t0, ms });
       if (pings.current.length > 7200) pings.current.shift();
 

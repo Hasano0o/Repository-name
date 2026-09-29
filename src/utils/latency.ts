@@ -4,49 +4,69 @@ export interface LatencyResult {
   jitter: number;
   lossPct: number;
   samples: number;
+  /** سبب الفشل بالعربي لو ما وصلنا للخادم أبداً */
+  error?: string;
+  /** الخادم اللي فعلاً قسنا عليه (لو استخدمنا البديل) */
+  via?: string;
 }
 
 const ENDPOINT = 'https://speed.cloudflare.com/__down?bytes=0';
 
 /* ═══ مناطق سيرفرات الألعاب ═══
  * نقيس لنقطة داخل نفس منطقة الاستضافة (AWS) اللي تستضيف عليها أغلب الألعاب سيرفراتها.
- * أي رد (حتى لو خطأ) يكفينا — اللي يهمنا زمن الرحلة فقط. */
+ * أي رد (حتى لو خطأ 403) يكفينا — اللي يهمنا زمن الرحلة فقط.
+ * لكل منطقة خادم بديل لو الأول محجوب. */
 export interface GameRegion {
   id: string;
   name: string;
   hint: string;
   url: string;
+  alt: string[];
 }
 
 export const REGIONS: GameRegion[] = [
-  { id: 'bh', name: 'البحرين', hint: 'سيرفرات الشرق الأوسط لأغلب الألعاب', url: 'https://dynamodb.me-south-1.amazonaws.com/ping' },
-  { id: 'ae', name: 'الإمارات', hint: 'بعض سيرفرات الخليج', url: 'https://dynamodb.me-central-1.amazonaws.com/ping' },
-  { id: 'eu', name: 'فرانكفورت', hint: 'سيرفرات أوروبا', url: 'https://dynamodb.eu-central-1.amazonaws.com/ping' },
-  { id: 'cf', name: 'أقرب سيرفر', hint: 'Cloudflare — للمقارنة العامة', url: ENDPOINT },
+  { id: 'bh', name: 'البحرين', hint: 'سيرفرات الشرق الأوسط لأغلب الألعاب', url: 'https://dynamodb.me-south-1.amazonaws.com/ping', alt: ['https://s3.me-south-1.amazonaws.com/', 'https://ec2.me-south-1.amazonaws.com/ping'] },
+  { id: 'ae', name: 'الإمارات', hint: 'بعض سيرفرات الخليج', url: 'https://dynamodb.me-central-1.amazonaws.com/ping', alt: ['https://s3.me-central-1.amazonaws.com/', 'https://ec2.me-central-1.amazonaws.com/ping'] },
+  { id: 'eu', name: 'فرانكفورت', hint: 'سيرفرات أوروبا', url: 'https://dynamodb.eu-central-1.amazonaws.com/ping', alt: ['https://s3.eu-central-1.amazonaws.com/', 'https://ec2.eu-central-1.amazonaws.com/ping'] },
+  { id: 'cf', name: 'أقرب سيرفر', hint: 'Cloudflare — للمقارنة العامة', url: ENDPOINT, alt: ['https://www.cloudflare.com/cdn-cgi/trace', 'https://1.1.1.1/cdn-cgi/trace'] },
 ];
 
 export const REGION_KEY = 'bandly.gameRegion';
 
 export const regionById = (id?: string) => REGIONS.find(r => r.id === id) ?? REGIONS[0];
 
-async function once(url: string, timeoutMs: number, method: 'GET' | 'HEAD'): Promise<number | null> {
+interface Hit { ms: number | null; err?: string }
+
+function reason(e: any, timeoutMs: number): string {
+  const name = String(e?.name ?? '');
+  const msg = String(e?.message ?? e ?? '');
+  if (name === 'AbortError' || /abort/i.test(msg)) return `انتهت المهلة — الخادم ما رد خلال ${Math.round(timeoutMs / 1000)} ثواني`;
+  if (/network request failed/i.test(msg)) return 'الشبكة رفضت الاتصال (ممكن حاجب إعلانات أو DNS خاص أو VPN)';
+  if (/ssl|certificate|handshake/i.test(msg)) return 'فشل الاتصال الآمن (شهادة)';
+  return msg ? `خطأ: ${msg.slice(0, 80)}` : 'خطأ غير معروف';
+}
+
+async function hit(url: string, timeoutMs: number, method: 'GET' | 'HEAD'): Promise<Hit> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  const start = Date.now();
   try {
     const sep = url.includes('?') ? '&' : '?';
-    const r = await fetch(method === 'GET' ? `${url}${sep}r=${Math.random()}` : url, {
-      method,
-      signal: ctrl.signal,
-      cache: 'no-store' as RequestCache,
-    });
-    if (method === 'GET') await r.text();
-    return Date.now() - start;
-  } catch {
-    return null;
+    const target = method === 'GET' ? `${url}${sep}r=${Math.random().toString(36).slice(2, 8)}` : url;
+    const start = Date.now();
+    const r = await fetch(target, { method, signal: ctrl.signal, headers: { 'Cache-Control': 'no-cache' } });
+    // نحسب الوقت لحد وصول رأس الرد — قراءة الجسم ما تدخل في البنق
+    const ms = Date.now() - start;
+    if (method === 'GET') { try { await r.text(); } catch {} }
+    return { ms };
+  } catch (e) {
+    return { ms: null, err: reason(e, timeoutMs) };
   } finally {
     clearTimeout(t);
   }
+}
+
+async function once(url: string, timeoutMs: number, method: 'GET' | 'HEAD'): Promise<number | null> {
+  return (await hit(url, timeoutMs, method)).ms;
 }
 
 /** قياس واحد — null إذا ما رد */
@@ -56,28 +76,42 @@ export const wifiOnce = (host: string, timeoutMs = 1200) => {
   return once(base.replace(/\/+$/, '') + '/', timeoutMs, 'HEAD');
 };
 
-/** يقيس زمن الاستجابة لأي رابط: تسخين، ثم n قياسات */
+const hostOf = (u: string) => u.replace(/^https?:\/\//, '').split('/')[0];
+
+/**
+ * يقيس زمن الاستجابة: يجرب الخادم الأول، ولو ما رد يجرب البدائل بالترتيب.
+ * تسخينتين (أول اتصال فيه فتح الاتصال الآمن وما ينحسب)، بعدها n قياسات.
+ */
 export async function measureUrl(
-  url: string,
+  urls: string | string[],
   n = 12,
   timeoutMs = 3000,
   method: 'GET' | 'HEAD' = 'GET',
   gapMs = 120,
 ): Promise<LatencyResult> {
+  const list = Array.isArray(urls) ? urls : [urls];
+  let url = '';
+  let lastErr = '';
+  for (const u of list) {
+    const w = await hit(u, timeoutMs, method);
+    if (w.ms !== null) { url = u; break; }
+    lastErr = w.err ?? lastErr;
+  }
+  if (!url) return { median: 0, min: 0, jitter: 0, lossPct: 100, samples: 0, error: lastErr || 'الخادم ما رد' };
+  await hit(url, timeoutMs, method);
+
   const values: number[] = [];
   let lost = 0;
-
-  await once(url, timeoutMs, method);
-
+  let err = '';
   for (let i = 0; i < n; i++) {
-    const v = await once(url, timeoutMs, method);
-    if (v === null) lost += 1;
-    else values.push(v);
+    const v = await hit(url, timeoutMs, method);
+    if (v.ms === null) { lost += 1; err = v.err ?? err; }
+    else values.push(v.ms);
     await new Promise(r => setTimeout(r, gapMs));
   }
 
   if (!values.length) {
-    return { median: 0, min: 0, jitter: 0, lossPct: 100, samples: 0 };
+    return { median: 0, min: 0, jitter: 0, lossPct: 100, samples: 0, error: err || 'الخادم ما رد' };
   }
 
   const sorted = [...values].sort((a, b) => a - b);
@@ -94,11 +128,15 @@ export async function measureUrl(
     jitter,
     lossPct: Math.round((lost / n) * 100),
     samples: values.length,
+    via: url !== list[0] ? hostOf(url) : undefined,
   };
 }
 
+/** كل روابط المنطقة: الأساسي ثم البدائل */
+export const regionUrls = (r: GameRegion) => [r.url, ...r.alt];
+
 export function measureLatency(n = 12, timeoutMs = 3000): Promise<LatencyResult> {
-  return measureUrl(ENDPOINT, n, timeoutMs);
+  return measureUrl(regionUrls(REGIONS[3]), n, timeoutMs);
 }
 
 /** بين الجوال والراوتر فقط — يكشف هل المشكلة من الواي فاي */
@@ -162,7 +200,7 @@ export function diagnose(game: LatencyResult, wifi: LatencyResult | null, sinr?:
     if (wifi && wifi.samples === 0) {
       return { light: 'red', score: 0, title: 'ما وصلنا للإنترنت', cause: 'جوالك مو متصل بواي فاي الراوتر', fix: 'اتصل بواي فاي الراوتر وأعد الفحص' };
     }
-    return { light: 'red', score: 0, title: 'ما وصلنا للسيرفر', cause: 'النت مقطوع أو السيرفر ما رد', fix: 'تأكد إن النت شغال وأعد الفحص' };
+    return { light: 'red', score: 0, title: 'ما وصلنا للسيرفر', cause: game.error ?? 'النت مقطوع أو السيرفر ما رد', fix: 'افتح «أي سيرفر أقرب لك؟» تحت وشوف أي خادم يرد. لو كلها ما ترد: طفّ حاجب الإعلانات أو الـ DNS الخاص في إعدادات الجوال' };
   }
 
   const wifiBad = !!wifi && wifi.samples > 0 && (wifi.lossPct > 0 || wifi.jitter > 12 || wifi.min > 25);
