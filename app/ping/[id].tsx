@@ -47,6 +47,7 @@ export default function GameScreen() {
   const [rows, setRows] = useState<Row[]>([]);
   const [region, setRegion] = useState(REGIONS[0].id);
   const [regionRes, setRegionRes] = useState<Record<string, LatencyResult>>({});
+  const [regionWarn, setRegionWarn] = useState('');
   const [check, setCheck] = useState<{ game: LatencyResult; wifi: LatencyResult | null; dx: Diagnosis; note?: string } | null>(null);
   const [periods, setPeriods] = useState<PeriodStat[]>([]);
   const [weekly, setWeekly] = useState<string[]>([]);
@@ -207,12 +208,28 @@ export default function GameScreen() {
   const compareRegions = async () => {
     setBusy(true);
     setRegionRes({});
+    setRegionWarn('');
+    const readDown = () => (info
+      ? withSession(info, async d => (d.getTraffic ? d.getTraffic() : null)).then(t => t?.downBytesPerSec).catch(() => undefined)
+      : Promise.resolve(undefined));
+    const downs: number[] = [];
+    const got: LatencyResult[] = [];
     try {
       for (const r of REGIONS) {
         if (!mounted.current) return;
         setStatus(`نقيس ${r.name}...`);
-        const res = await measureUrl(regionUrls(r), 10);
+        const [res, dn] = await Promise.all([measureUrl(regionUrls(r), 8), readDown()]);
+        if (typeof dn === 'number') downs.push(dn);
+        if (res.samples) got.push(res);
         if (mounted.current) setRegionRes(p => ({ ...p, [r.id]: res }));
+      }
+      // تحقق من صحة القياس: تحميل شغال، أو أرقام متساوية بشكل غير منطقي
+      const heavy = downs.length ? Math.max(...downs) : 0;
+      const meds = got.map(g => g.median);
+      if (heavy > 1024 * 1024) {
+        setRegionWarn(`⚠️ الراوتر كان يحمّل ${(heavy / 1048576).toFixed(1)} ميقابايت/ث وقت القياس — الأرقام أعلى من الحقيقة. وقّف التحميل وقِس مرة ثانية`);
+      } else if (meds.length >= 3 && Math.max(...meds) - Math.min(...meds) < 30 && Math.min(...meds) > 120) {
+        setRegionWarn('⚠️ كل المناطق طلعت متقاربة بشكل غريب — غالباً فيه تحميل شغال أو الشبكة مزحومة الحين. قِس مرة ثانية بعد شوي');
       }
     } finally {
       if (mounted.current) { setBusy(false); setStatus(''); }
@@ -608,6 +625,7 @@ export default function GameScreen() {
         {!loading && (
           <GlassCard title="أي سيرفر أقرب لك؟" icon="🌍" tint={C.blueSoft} defaultOpen={false}>
             <Text style={s.hint}>نقيس البنق لكل منطقة — اختار داخل اللعبة السيرفر الأقل بنق</Text>
+            {!!regionWarn && <Text style={s.fallbackNote}>{regionWarn}</Text>}
             {sortedRegions.map((r, i) => {
               const res = regionRes[r.id];
               const sc = gameScore(res);

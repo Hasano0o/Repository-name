@@ -27,7 +27,14 @@ export interface GameRegion {
 export const REGIONS: GameRegion[] = [
   // البحرين (me-south-1) متوقفة من 2026 بعد استهداف مراكز بيانات AWS — شلناها
   { id: 'ae', name: 'الإمارات', hint: 'الأقرب لسيرفرات الشرق الأوسط', url: 'https://dynamodb.me-central-1.amazonaws.com/ping', alt: ['https://s3.me-central-1.amazonaws.com/', 'https://ec2.me-central-1.amazonaws.com/ping'] },
-  { id: 'eu', name: 'فرانكفورت', hint: 'سيرفرات أوروبا', url: 'https://dynamodb.eu-central-1.amazonaws.com/ping', alt: ['https://s3.eu-central-1.amazonaws.com/', 'https://ec2.eu-central-1.amazonaws.com/ping'] },
+  { id: 'in', name: 'الهند', hint: 'سيرفرات آسيا الغربية (مومباي)', url: 'https://dynamodb.ap-south-1.amazonaws.com/ping', alt: ['https://s3.ap-south-1.amazonaws.com/', 'https://ec2.ap-south-1.amazonaws.com/ping'] },
+  { id: 'it', name: 'إيطاليا', hint: 'سيرفرات جنوب أوروبا (ميلان)', url: 'https://dynamodb.eu-south-1.amazonaws.com/ping', alt: ['https://s3.eu-south-1.amazonaws.com/', 'https://ec2.eu-south-1.amazonaws.com/ping'] },
+  { id: 'eu', name: 'ألمانيا', hint: 'سيرفرات أوروبا (فرانكفورت)', url: 'https://dynamodb.eu-central-1.amazonaws.com/ping', alt: ['https://s3.eu-central-1.amazonaws.com/', 'https://ec2.eu-central-1.amazonaws.com/ping'] },
+  { id: 'fr', name: 'فرنسا', hint: 'سيرفرات أوروبا (باريس)', url: 'https://dynamodb.eu-west-3.amazonaws.com/ping', alt: ['https://s3.eu-west-3.amazonaws.com/', 'https://ec2.eu-west-3.amazonaws.com/ping'] },
+  { id: 'uk', name: 'بريطانيا', hint: 'سيرفرات أوروبا (لندن)', url: 'https://dynamodb.eu-west-2.amazonaws.com/ping', alt: ['https://s3.eu-west-2.amazonaws.com/', 'https://ec2.eu-west-2.amazonaws.com/ping'] },
+  { id: 'se', name: 'السويد', hint: 'سيرفرات شمال أوروبا (ستوكهولم)', url: 'https://dynamodb.eu-north-1.amazonaws.com/ping', alt: ['https://s3.eu-north-1.amazonaws.com/', 'https://ec2.eu-north-1.amazonaws.com/ping'] },
+  { id: 'sg', name: 'سنغافورة', hint: 'سيرفرات آسيا', url: 'https://dynamodb.ap-southeast-1.amazonaws.com/ping', alt: ['https://s3.ap-southeast-1.amazonaws.com/', 'https://ec2.ap-southeast-1.amazonaws.com/ping'] },
+  { id: 'us', name: 'أمريكا', hint: 'سيرفرات أمريكا الشرقية (فرجينيا)', url: 'https://dynamodb.us-east-1.amazonaws.com/ping', alt: ['https://s3.us-east-1.amazonaws.com/', 'https://ec2.us-east-1.amazonaws.com/ping'] },
   { id: 'cf', name: 'أقرب سيرفر', hint: 'Cloudflare — للمقارنة العامة', url: ENDPOINT, alt: ['https://www.cloudflare.com/cdn-cgi/trace', 'https://1.1.1.1/cdn-cgi/trace'] },
 ];
 
