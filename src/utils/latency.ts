@@ -1,3 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 export interface LatencyResult {
   median: number;
   min: number;
@@ -142,8 +144,14 @@ export async function measureUrl(
 /** كل روابط المنطقة: الأساسي ثم البدائل */
 export const regionUrls = (r: GameRegion) => [r.url, ...r.alt];
 
-export function measureLatency(n = 12, timeoutMs = 3000): Promise<LatencyResult> {
-  return measureUrl(regionUrls(regionById('cf')), n, timeoutMs);
+/** المنطقة اللي اختارها المستخدم في شاشة الألعاب (الافتراضي الإمارات) */
+export async function selectedRegion(): Promise<GameRegion> {
+  try { return regionById((await AsyncStorage.getItem(REGION_KEY)) ?? undefined); } catch { return REGIONS[0]; }
+}
+
+/** البنق في كل التطبيق (التوجيه، التقرير، مختبر الدمج) = لسيرفر اللعبة المختار */
+export async function measureLatency(n = 12, timeoutMs = 3000): Promise<LatencyResult> {
+  return measureUrl(regionUrls(await selectedRegion()), n, timeoutMs);
 }
 
 /** بين الجوال والراوتر فقط — يكشف هل المشكلة من الواي فاي */
