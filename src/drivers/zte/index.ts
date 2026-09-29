@@ -26,6 +26,17 @@ const pciDec = (v?: string): string | undefined => {
   return n === undefined ? v.trim() : String(n);
 };
 
+/** ZTE يعطي PCI البرج الحالي (4G و5G) بالـ hex دايماً حتى لو كله أرقام: "107" = 263 */
+const hexPci = (v?: string): string | undefined => {
+  if (v === undefined || v === '') return undefined;
+  const t = v.trim().replace(/^0x/i, '');
+  if (/^[0-9a-f]+$/i.test(t)) {
+    const n = parseInt(t, 16);
+    if (n >= 0 && n <= 1007) return String(n);
+  }
+  return pciDec(v);
+};
+
 /** رقم التردد 4G من EARFCN */
 const LTE_EARFCN: [number, number, number][] = [
   [1, 0, 599], [3, 1200, 1949], [7, 2750, 3449], [8, 3450, 3799], [20, 6150, 6449],
@@ -475,7 +486,7 @@ export class ZteDriver implements RouterDriver {
       band: caBandString(r),
       nrAvailable: !nrOn && nsa ? 3 : undefined,
       cellId: pciDec(pick(r, 'cell_id')),
-      pci: pciDec(pick(r, 'lte_pci')),
+      pci: hexPci(pick(r, 'lte_pci')),
       earfcn: pick(r, 'wan_active_channel', 'lte_ca_pcell_freq'),
       dlBandwidth: pick(r, 'lte_ca_pcell_bandwidth'),
       rsrp: num(pick(r, 'lte_rsrp', 'rsrp')),
@@ -483,7 +494,7 @@ export class ZteDriver implements RouterDriver {
       sinr: num(pick(r, 'lte_snr')),
       rssi: num(pick(r, 'lte_rssi', 'rssi')),
       nrBand: nrOn ? nrBandVal : undefined,
-      nrPci: nrOn ? pciDec(nrPciVal) : undefined,
+      nrPci: nrOn ? hexPci(nrPciVal) : undefined,
       nrArfcn: nrArfcnVal,
       nrDlBandwidth: nrBwVal,
       nrRsrp: num(nrRsrpVal),
