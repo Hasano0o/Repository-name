@@ -8,6 +8,8 @@ import {
 import { overallLevel, LEVEL_LABEL, parseNrBands, Level } from '../utils/signal';
 import { notify } from '../utils/notify';
 import { Signal, NetworkInfo, Usage, DataPlan } from '../drivers/types';
+import { reportOutage } from '../services/community';
+import { buildWeekly, weeklyLines, weeklyDue, markWeeklySent } from '../utils/weekly';
 
 export const MONITOR_TASK = 'bandly-monitor-v1';
 
@@ -59,6 +61,16 @@ export async function runMonitorCheck(): Promise<boolean> {
       const online = net?.connected ?? true;
       next.online = online;
 
+      // ═══ المجتمع: نحفظ البرج، ولما يرجع النت نبلّغ عن فترة الانقطاع ═══
+      const tw = sig?.enodebId || sig?.cellId;
+      if (tw) { next.tower = String(tw); next.operator = net?.operator ?? prev.operator; }
+      if (!online && !prev.offlineSince) next.offlineSince = Date.now();
+      if (online && prev.offlineSince) {
+        const tower = next.tower ?? prev.tower;
+        if (tower) await reportOutage({ tower, operator: next.operator ?? prev.operator ?? '' }, prev.offlineSince, Date.now()).catch(() => {});
+        next.offlineSince = undefined;
+      }
+
       // انقطاع الاتصال
       if (a.disconnect && prev.online === true && !online) {
         notify('انقطع الاتصال', `راوتر ${r.name} فقد الاتصال بالشبكة.`, r.id);
@@ -107,6 +119,20 @@ export async function runMonitorCheck(): Promise<boolean> {
       }
 
       states[r.id] = next;
+
+      // ═══ الملخص الأسبوعي — مساءً، مرة بالأسبوع، لو فيه بيانات ═══
+      const hr = new Date().getHours();
+      if (hr >= 17 && hr <= 23 && (await weeklyDue(r.id))) {
+        const w = await buildWeekly(r.id);
+        if (w.checks >= 3 || w.sessions >= 1) {
+          const lines = weeklyLines(w);
+          if (lines.length) {
+            notify('📅 أسبوعك مع Bandly', `${r.name}: ${lines.slice(0, 3).join(' · ')}`, r.id);
+            fired = true;
+          }
+          await markWeeklySent(r.id);
+        }
+      }
     } catch {
       // نتجاهل هذا الراوتر ونكمل الباقي
     }

@@ -3,15 +3,18 @@ import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { safeApply, trialMessage } from '../../src/utils/safeLock';
 import { BandConfig, CellTower, RouterDriver } from '../../src/drivers/types';
 import {
-  LatencyResult, REGIONS, regionById, measureUrl, measureWifi,
+  LatencyResult, REGIONS, REGION_KEY, regionById, measureUrl, measureWifi,
   gameScore, scoreWord, scoreLight, diagnose, Diagnosis, Light,
 } from '../../src/utils/latency';
+import { saveProfile } from '../../src/store/profiles';
+import { buildWeekly, weeklyLines } from '../../src/utils/weekly';
+import { Consent, TowerRef, TowerInfo, getConsent, setConsent, currentTower, fetchTower, reportTest } from '../../src/services/community';
 import { addGameLog, listGameLog, periodStats, PeriodStat } from '../../src/store/gameLog';
 import { bandLabel, freqLabel } from '../../src/utils/bands';
 import { C } from '../../src/ui/theme';
@@ -27,7 +30,6 @@ interface Row extends Target {
   score?: number;
 }
 
-const REGION_KEY = 'bandly.gameRegion';
 const LTE_ONLY = '03';
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -47,6 +49,11 @@ export default function GameScreen() {
   const [regionRes, setRegionRes] = useState<Record<string, LatencyResult>>({});
   const [check, setCheck] = useState<{ game: LatencyResult; wifi: LatencyResult | null; dx: Diagnosis } | null>(null);
   const [periods, setPeriods] = useState<PeriodStat[]>([]);
+  const [weekly, setWeekly] = useState<string[]>([]);
+  const [consent, setConsentState] = useState<Consent>(null);
+  const [tower, setTower] = useState<TowerRef | null>(null);
+  const [community, setCommunity] = useState<TowerInfo | null>(null);
+  const [commLoading, setCommLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
@@ -72,10 +79,38 @@ export default function GameScreen() {
 
   const refreshPeriods = useCallback(async (r: SavedRouter, rid: string) => {
     const list = await listGameLog(r.id);
-    if (mounted.current) setPeriods(periodStats(list, rid));
+    const w = await buildWeekly(r.id).catch(() => null);
+    if (mounted.current) {
+      setPeriods(periodStats(list, rid));
+      setWeekly(w && (w.checks >= 2 || w.sessions >= 1) ? weeklyLines(w) : []);
+    }
   }, []);
 
   useEffect(() => { if (info) refreshPeriods(info, region); }, [info, region, refreshPeriods]);
+
+  const refreshCommunity = useCallback(async (r: SavedRouter, rid: string) => {
+    const c = await getConsent();
+    if (!mounted.current) return;
+    setConsentState(c);
+    if (c !== 'on') return;
+    setCommLoading(true);
+    try {
+      const t = await currentTower(r);
+      if (!mounted.current) return;
+      setTower(t);
+      setCommunity(t ? await fetchTower(t, rid) : null);
+    } finally {
+      if (mounted.current) setCommLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { if (info && !running) refreshCommunity(info, region); }, [info, region, running, refreshCommunity]);
+
+  const answerConsent = async (v: 'on' | 'off') => {
+    await setConsent(v);
+    setConsentState(v);
+    if (v === 'on' && info) refreshCommunity(info, region);
+  };
 
   const load = useCallback(async (r: SavedRouter) => {
     try {
@@ -127,13 +162,22 @@ export default function GameScreen() {
       setStatus('نفحص الواي فاي...');
       const wifi = await measureWifi(info.host, 10).catch(() => null);
       setStatus(`نقيس البنق لسيرفرات ${reg.name}...`);
-      const game = await measureUrl(reg.url, 20);
+      // نقرأ استهلاك الراوتر أثناء القياس — نكشف لو فيه جهاز ثاني يحمّل
+      const readDown = () => withSession(info, async d => (d.getTraffic ? d.getTraffic() : null)).then(t => t?.downBytesPerSec).catch(() => undefined);
+      const [game, down1] = await Promise.all([measureUrl(reg.url, 20), sleep(1500).then(readDown)]);
       let sinr: number | undefined;
+      let down2: number | undefined;
       try {
-        const sig = await withSession(info, async d => (d.getSignal ? d.getSignal() : null));
+        const [sig, tr] = await withSession(info, async d => Promise.all([
+          d.getSignal ? d.getSignal() : Promise.resolve(null),
+          d.getTraffic ? d.getTraffic().catch(() => null) : Promise.resolve(null),
+        ]));
         sinr = sig?.sinr ?? sig?.nrSinr;
+        down2 = tr?.downBytesPerSec;
       } catch {}
-      const dx = diagnose(game, wifi, sinr);
+      const downs = [down1, down2].filter((x): x is number => typeof x === 'number');
+      const down = downs.length ? Math.max(...downs) : undefined;
+      const dx = diagnose(game, wifi, sinr, down);
       if (!mounted.current) return;
       setCheck({ game, wifi, dx });
       if (game.samples) {
@@ -193,6 +237,7 @@ export default function GameScreen() {
     if (!targets.length) { Alert.alert('اختر', 'حدد خياراً واحداً على الأقل'); return; }
 
     const orig = cfg;
+    const scanTower = (await getConsent()) === 'on' ? await currentTower(info) : null;
     let modeChanged = false;
     let bandChanged = false;
     cancel.current = false;
@@ -228,6 +273,9 @@ export default function GameScreen() {
             const score = gameScore(res);
             upd(i, { status: 'done', res, score, note: undefined });
             await addGameLog(info.id, { at: Date.now(), region: reg.id, score, median: res.median, jitter: res.jitter, lossPct: res.lossPct, setup: t.label });
+            if (scanTower && t.kind !== 'base') {
+              reportTest(scanTower, { setup: t.label, region: reg.id, score, ping: res.median, jitter: res.jitter, loss: res.lossPct }).catch(() => {});
+            }
           }
         } catch (e: any) {
           upd(i, { status: 'failed', note: e?.message ?? 'خطأ' });
@@ -282,7 +330,17 @@ export default function GameScreen() {
               });
               await load(info);
               const m = trialMessage(res, label);
-              Alert.alert(m.title, m.body);
+              let saved = false;
+              if (res.kept) {
+                try {
+                  const now = await withSession(info, async d => (d.getBandConfig ? d.getBandConfig() : null));
+                  if (now) {
+                    await saveProfile({ routerId: info.id, name: 'وضع الألعاب', bands: now.locked, nrBands: now.nrLocked, mode: now.mode, role: 'game' });
+                    saved = true;
+                  }
+                } catch {}
+              }
+              Alert.alert(m.title, m.body + (saved ? '\n\n🎮 انحفظ كـ«وضع الألعاب» — ترجع له بضغطة من صفحة الراوتر.' : ''));
             } catch (e: any) {
               Alert.alert('ما تم', e?.message ?? String(e));
             } finally {
@@ -354,6 +412,11 @@ export default function GameScreen() {
                     </Text>
                     {!!check.dx.cause && <Text style={s.verdictCause}>{check.dx.cause}</Text>}
                     {!!check.dx.fix && <Text style={s.verdictFix}>💡 {check.dx.fix}</Text>}
+                    {!!check.dx.action && info && (
+                      <Pressable onPress={() => router.push(`/${check.dx.action === 'devices' ? 'device' : 'aim'}/${info.id}` as Href)}>
+                        <Text style={s.verdictLink}>{check.dx.action === 'devices' ? 'افتح الأجهزة ‹' : 'افتح مساعد التوجيه ‹'}</Text>
+                      </Pressable>
+                    )}
                   </View>
                 </View>
                 <View style={s.statRow}>
@@ -373,6 +436,16 @@ export default function GameScreen() {
               <Text style={s.btnText}>{busy ? 'نفحص...' : check ? 'افحص مرة ثانية' : 'افحص الحين'}</Text>
             </Pressable>
           </GlassCard>
+        )}
+
+        {!loading && info && (
+          <Pressable style={s.lagLink} onPress={() => router.push(`/lag/${info.id}` as Href)} disabled={running}>
+            <Text style={s.lagArrow}>‹</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.lagTitle}>🕵️ كاشف اللاق</Text>
+              <Text style={s.lagSub}>شغّله وأنت تلعب، ويقولك بعد الجيم متى صار اللاق وليش</Text>
+            </View>
+          </Pressable>
         )}
 
         {!loading && avail.length > 1 && !cfg && (
@@ -457,6 +530,57 @@ export default function GameScreen() {
           </GlassCard>
         )}
 
+        {!loading && info && (
+          <GlassCard title="على برجك" icon="👥" tint={C.cyanSoft} collapsible={false}>
+            {consent === null && (
+              <>
+                <Text style={s.hint}>
+                  شارك نتائج فحصك بدون أي بيانات شخصية — رقم البرج والنتيجة بس. وبالمقابل تشوف وش نجح عند غيرك على نفس برجك، وتعرف إذا الانقطاع عند الكل أو عندك بس
+                </Text>
+                <View style={s.consentRow}>
+                  <Pressable style={[s.btnGhost, { flex: 1, borderColor: C.sub }]} onPress={() => answerConsent('off')}>
+                    <Text style={[s.btnGhostText, { color: C.sub }]}>لا شكراً</Text>
+                  </Pressable>
+                  <Pressable style={[s.btn, { flex: 1 }]} onPress={() => answerConsent('on')}>
+                    <Text style={s.btnText}>شارك</Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
+            {consent === 'off' && (
+              <Pressable onPress={() => answerConsent('on')}>
+                <Text style={s.hint}>المشاركة مقفلة. اضغط هنا لو تبي تشوف نتائج غيرك على نفس برجك وتشارك نتائجك</Text>
+              </Pressable>
+            )}
+            {consent === 'on' && (
+              commLoading ? <ActivityIndicator color={C.blue} /> :
+              !tower ? <Text style={s.hint}>راوترك ما يعطينا رقم البرج، فما نقدر نربطك بغيرك</Text> :
+              <>
+                {(community?.outages ?? []).filter(o => o.to > Date.now() - 20 * 60000).map(o => (
+                  <View key={o.from} style={s.outage}>
+                    <Text style={s.outageText}>⚠️ {o.users} {o.users > 2 ? 'مستخدمين' : 'مستخدم'} على نفس برجك انقطع عندهم النت من الساعة {new Date(o.from).toLocaleTimeString('ar-SA', { hour: 'numeric', minute: '2-digit' })} — غالباً المشكلة من البرج مو من عندك</Text>
+                  </View>
+                ))}
+                {(community?.outages ?? []).filter(o => o.to <= Date.now() - 20 * 60000).length > 0 && (
+                  <Text style={s.hint}>صار انقطاع على هالبرج خلال آخر ٦ ساعات عند أكثر من مستخدم</Text>
+                )}
+                <Text style={s.hint}>برج {tower.tower}{tower.operator ? ` · ${tower.operator}` : ''} · {community?.users ?? 0} مستخدم فحصوا عليه آخر شهر</Text>
+                {community?.best.length ? community.best.map((b, i) => (
+                  <View key={b.setup} style={[s.row, i === 0 && s.rowBest]}>
+                    <View style={s.rowHead}>
+                      <Text style={[s.rowScore, { color: scoreColor(b.score), fontSize: 16 }]}>{b.score}<Text style={s.rowScoreOf}>/100</Text></Text>
+                      <Text style={s.rowName}>{i === 0 ? '⭐ ' : ''}{b.setup}</Text>
+                    </View>
+                    <Text style={s.rowVals}>بنق {b.ping}ms · تذبذب {b.jitter}ms · {b.tests} فحص من {b.users} مستخدم</Text>
+                  </View>
+                )) : (
+                  <Text style={s.hint}>ما فيه نتائج على هذا البرج للحين — شغّل مُحسّن اللعبة، ونتيجتك تساعد اللي بعدك</Text>
+                )}
+              </>
+            )}
+          </GlassCard>
+        )}
+
         {!loading && (
           <GlassCard title="أي سيرفر أقرب لك؟" icon="🌍" tint={C.blueSoft} defaultOpen={false}>
             <Text style={s.hint}>نقيس البنق لكل منطقة — اختار داخل اللعبة السيرفر الأقل بنق</Text>
@@ -478,6 +602,12 @@ export default function GameScreen() {
             <Pressable style={[s.btnGhost, { borderColor: C.blue }, (busy || running) && s.dim]} onPress={compareRegions} disabled={busy || running}>
               <Text style={[s.btnGhostText, { color: C.blue }]}>{sortedRegions.length ? 'قِس مرة ثانية' : 'قِس كل المناطق'}</Text>
             </Pressable>
+          </GlassCard>
+        )}
+
+        {!loading && weekly.length > 0 && (
+          <GlassCard title="أسبوعك" icon="📅" tint={C.mintSoft} defaultOpen={false}>
+            {weekly.map(l => <Text key={l} style={s.weekLine}>• {l}</Text>)}
           </GlassCard>
         )}
 
@@ -547,6 +677,14 @@ function Stat({ v, u, l, c }: { v: string; u: string; l: string; c: string }) {
 }
 
 const s = StyleSheet.create({
+  weekLine: { color: C.text, fontSize: 13, textAlign: 'right', lineHeight: 21 },
+  consentRow: { flexDirection: 'row', gap: 8 },
+  outage: { backgroundColor: C.redSoft, borderRadius: 14, padding: 10, borderWidth: 1, borderColor: C.red },
+  outageText: { color: C.red, fontWeight: '800', fontSize: 12, textAlign: 'right', lineHeight: 19 },
+  lagLink: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.card, borderColor: C.pink, borderWidth: 1.5, borderRadius: 18, padding: 14 },
+  lagArrow: { color: C.pink, fontSize: 26, fontWeight: '800' },
+  lagTitle: { color: C.text, fontWeight: '900', fontSize: 15, textAlign: 'right' },
+  lagSub: { color: C.sub, fontSize: 12, textAlign: 'right', marginTop: 2 },
   note: { color: C.muted, fontSize: 11, textAlign: 'center', paddingHorizontal: 20, marginTop: 4, lineHeight: 17 },
   page: { padding: 16, gap: 14 },
   center: { alignItems: 'center', paddingVertical: 40 },
@@ -565,6 +703,7 @@ const s = StyleSheet.create({
   verdictScore: { fontSize: 34, fontWeight: '900', minWidth: 58, textAlign: 'center' },
   verdictTitle: { fontWeight: '900', fontSize: 16, textAlign: 'right' },
   verdictCause: { color: C.text, fontSize: 12, textAlign: 'right', lineHeight: 19, marginTop: 4 },
+  verdictLink: { color: C.blue, fontWeight: '800', fontSize: 13, textAlign: 'right', marginTop: 6 },
   verdictFix: { color: C.sub, fontSize: 12, textAlign: 'right', lineHeight: 19, marginTop: 2 },
   statRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 6 },
   stat: { flex: 1, alignItems: 'center', backgroundColor: C.rowBg, borderRadius: 14, paddingVertical: 10, borderWidth: 1, borderColor: C.cardBorder },

@@ -10,7 +10,7 @@ die(){ echo "  ✗ $*"; exit 1; }
 
 echo "📦 نسخ الملفات..."
 mkdir -p "$DST/data"
-cp "$SRC/app.py" "$SRC/viewer.html" "$SRC/admin.py" "$SRC/requirements.txt" "$DST/"
+cp "$SRC/app.py" "$SRC/community.py" "$SRC/viewer.html" "$SRC/admin.py" "$SRC/requirements.txt" "$DST/"
 ok "$DST"
 
 echo "🎙  ffmpeg (للرسائل الصوتية)..."

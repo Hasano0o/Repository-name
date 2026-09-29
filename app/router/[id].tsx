@@ -15,6 +15,7 @@ import {
 import { fmtRate, fmtDuration, fmtBytes } from '../../src/utils/format';
 import {addSample, stability } from '../../src/store/history';
 import { C } from '../../src/ui/theme';
+import { ModeChips } from '../../src/ui/ModeChips';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { SignalRing } from '../../src/ui/SignalRing';
 import { ArcGauge } from '../../src/ui/ArcGauge';
@@ -521,6 +522,7 @@ export default function RouterDashboard() {
 
         {!loading && info && (
           <>
+            {feat.bands && <ModeChips r={info} onApplied={() => loadAll(info)} />}
             <GroupTitle title="حسّن اتصالك" color="#2f6bff" />
             <TileGrid>
               <ToolTile wide icon="aim" color="#2f6bff" title="التوجيه" sub="لقّط أقوى إشارة"

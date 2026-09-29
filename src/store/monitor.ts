@@ -58,6 +58,11 @@ export interface RouterMonState {
   online?: boolean;
   usageBucket?: number; // أعلى عتبة استهلاك تم التنبيه عنها (0/70/90/100)
   at?: number;
+  /** متى انقطع (لو لسا مقطوع) — عشان نبلّغ المجتمع لما يرجع */
+  offlineSince?: number;
+  /** آخر برج معروف */
+  tower?: string;
+  operator?: string;
   /** آخر مرة فشل الدخول للراوتر — لتجنّب محاولات متكررة في الخلفية */
   authFailedAt?: number;
 }

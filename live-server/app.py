@@ -243,6 +243,9 @@ def rating_of(key: str) -> tuple[float | None, int]:
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
+from community import router as community_router  # noqa: E402
+app.include_router(community_router)
+
 
 @app.on_event("startup")
 async def _janitor():

@@ -4,7 +4,7 @@ import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { BandConfig } from '../../src/drivers/types';
-import { Profile, listProfiles, saveProfile, deleteProfile, profileSummary } from '../../src/store/profiles';
+import { Profile, Role, ROLES, listProfiles, saveProfile, deleteProfile, profileSummary, setProfileRole } from '../../src/store/profiles';
 import { C } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { fmtTime } from '../../src/utils/format';
@@ -42,9 +42,10 @@ export default function ProfilesScreen() {
     return () => { alive = false; };
   }, [id, reload]));
 
-  const saveCurrent = async () => {
+  const saveCurrent = async (role?: Role) => {
     if (!info || !cfg) return;
-    const title = name.trim() || `ملف ${items.length + 1}`;
+    const meta = role ? ROLES.find(r => r.id === role) : undefined;
+    const title = meta ? `وضع ${meta.name}` : name.trim() || `ملف ${items.length + 1}`;
     setBusy(true); setError('');
     try {
       await saveProfile({
@@ -53,6 +54,7 @@ export default function ProfilesScreen() {
         bands: cfg.locked,
         nrBands: cfg.nrLocked,
         mode: cfg.mode,
+        role,
       });
       setName('');
       await reload(info);
@@ -127,9 +129,38 @@ export default function ProfilesScreen() {
           placeholder="مثلاً: ألعاب، أو ليلي، أو مطر"
           placeholderTextColor={C.muted}
         />
-        <Pressable style={[s.btn, (busy || !cfg) && s.btnOff]} disabled={busy || !cfg} onPress={saveCurrent}>
+        <Pressable style={[s.btn, (busy || !cfg) && s.btnOff]} disabled={busy || !cfg} onPress={() => saveCurrent()}>
           {busy ? <ActivityIndicator color={C.onAccent} /> : <Text style={s.btnTxt}>احفظ الوضع الحالي</Text>}
         </Pressable>
+      </GlassCard>
+
+      <GlassCard title="الأوضاع بضغطة" icon="⚡" tint={C.goldSoft} collapsible={false}>
+        <Text style={s.sub}>احفظ لكل استخدام أفضل إعداد له، وبعدها تبدّل بينها بضغطة من صفحة الراوتر</Text>
+        {ROLES.map(m => {
+          const p = items.find(x => x.role === m.id);
+          return (
+            <View key={m.id} style={s.row}>
+              <Pressable
+                style={[s.apply, (busy || !cfg) && s.btnOff]} disabled={busy || !cfg}
+                onPress={() => Alert.alert(`${m.icon} وضع ${m.name}`, `نحفظ إعدادك الحالي (${current}) كوضع ${m.name}؟`, [
+                  { text: 'إلغاء', style: 'cancel' },
+                  { text: 'احفظ', onPress: () => saveCurrent(m.id) },
+                ])}
+              >
+                <Text style={s.applyTxt}>{p ? 'حدّثه' : 'احفظ الحالي'}</Text>
+              </Pressable>
+              {p && (
+                <Pressable style={s.apply} disabled={busy} onPress={() => apply(p)}>
+                  <Text style={s.applyTxt}>طبّق</Text>
+                </Pressable>
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={s.rowTitle}>{m.icon} {m.name}</Text>
+                <Text style={s.rowSub}>{p ? profileSummary(p) : m.hint}</Text>
+              </View>
+            </View>
+          );
+        })}
       </GlassCard>
 
       <GlassCard title="ملفاتي" icon="🗂️" tint={C.violet} collapsible={false}>
@@ -142,8 +173,17 @@ export default function ProfilesScreen() {
             <Pressable style={s.apply} disabled={busy} onPress={() => apply(p)}>
               <Text style={s.applyTxt}>طبّق</Text>
             </Pressable>
+            <Pressable
+              style={s.del} hitSlop={8}
+              onPress={() => info && Alert.alert('خلّه وضع', `تخلي «${p.name}» وضع بضغطة؟`, [
+                ...ROLES.map(m => ({ text: `${m.icon} ${m.name}`, onPress: async () => { await setProfileRole(info.id, p.id, m.id); await reload(info); } })),
+                { text: 'إلغاء', style: 'cancel' as const },
+              ])}
+            >
+              <Text style={[s.delTxt, { color: C.blue }]}>وضع</Text>
+            </Pressable>
             <View style={{ flex: 1 }}>
-              <Text style={s.rowTitle}>{p.name}</Text>
+              <Text style={s.rowTitle}>{p.role ? `${ROLES.find(r => r.id === p.role)?.icon} ` : ''}{p.name}</Text>
               <Text style={s.rowSub}>{profileSummary(p)} · {fmtTime(p.createdAt)}</Text>
             </View>
           </View>

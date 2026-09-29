@@ -25,6 +25,8 @@ export const REGIONS: GameRegion[] = [
   { id: 'cf', name: 'أقرب سيرفر', hint: 'Cloudflare — للمقارنة العامة', url: ENDPOINT },
 ];
 
+export const REGION_KEY = 'bandly.gameRegion';
+
 export const regionById = (id?: string) => REGIONS.find(r => r.id === id) ?? REGIONS[0];
 
 async function once(url: string, timeoutMs: number, method: 'GET' | 'HEAD'): Promise<number | null> {
@@ -46,6 +48,13 @@ async function once(url: string, timeoutMs: number, method: 'GET' | 'HEAD'): Pro
     clearTimeout(t);
   }
 }
+
+/** قياس واحد — null إذا ما رد */
+export const pingOnce = (url: string, timeoutMs = 2000) => once(url, timeoutMs, 'GET');
+export const wifiOnce = (host: string, timeoutMs = 1200) => {
+  const base = /^https?:\/\//.test(host) ? host : `http://${host}`;
+  return once(base.replace(/\/+$/, '') + '/', timeoutMs, 'HEAD');
+};
 
 /** يقيس زمن الاستجابة لأي رابط: تسخين، ثم n قياسات */
 export async function measureUrl(
@@ -137,13 +146,15 @@ export interface Diagnosis {
   title: string;
   cause?: string;
   fix?: string;
+  /** شاشة تحل المشكلة */
+  action?: 'devices' | 'aim';
 }
 
 /**
  * «جاهز للعب؟» — يجمع قياس الواي فاي وقياس السيرفر والإشارة ويطلع السبب.
  * wifi = بين الجوال والراوتر، game = للسيرفر، sinr = نقاء إشارة الراوتر (إن توفر)
  */
-export function diagnose(game: LatencyResult, wifi: LatencyResult | null, sinr?: number): Diagnosis {
+export function diagnose(game: LatencyResult, wifi: LatencyResult | null, sinr?: number, downBps?: number): Diagnosis {
   const score = gameScore(game);
   const light = scoreLight(score);
 
@@ -178,11 +189,23 @@ export function diagnose(game: LatencyResult, wifi: LatencyResult | null, sinr?:
     };
   }
 
+  const heavy = downBps !== undefined && downBps > 1.5 * 1024 * 1024;
+  if (heavy && (light !== 'green' || game.jitter > 12)) {
+    return {
+      light: light === 'green' ? 'yellow' : light, score,
+      title: 'فيه جهاز ثاني ياكل النت',
+      cause: `الراوتر يحمّل الحين ${(downBps! / 1048576).toFixed(1)} ميقابايت/ث غير لعبتك — هذا يرفع البنق والتذبذب`,
+      fix: 'وقّف التحميل أو افصل الجهاز وقت اللعب',
+      action: 'devices',
+    };
+  }
+
   if (sinr !== undefined && sinr < 5 && (game.jitter > 15 || game.lossPct > 0)) {
     return {
       light, score, title: 'الإشارة مشوشة',
       cause: `نقاء الإشارة ضعيف (SINR ${sinr.toFixed(1)}) فالبيانات تتعاد وتتأخر`,
       fix: 'وجّه الأنتنا من مساعد التوجيه، أو شغّل مُحسّن اللعبة تحت',
+      action: 'aim',
     };
   }
 
