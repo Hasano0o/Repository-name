@@ -17,16 +17,18 @@ function ago(t: number): string {
 }
 
 /** القفل اليدوي: تكتب رقم القناة والخلية، أو تختار من خلايا شفناها قبل */
-export function ManualLock({ seen, visible, busy, onLock }: {
+export function ManualLock({ seen, visible, busy, onLock, initial }: {
+  /** أرقام منسوخة من برج في القائمة */
+  initial?: { tech: 'LTE' | 'NR'; arfcn: string; pci: string };
   seen: SeenCell[];
   /** مفاتيح الخلايا الظاهرة الحين — ما نكررها في «شفتها قبل» */
   visible: Set<string>;
   busy: boolean;
   onLock: (t: ManualTarget) => void;
 }) {
-  const [tech, setTech] = useState<'LTE' | 'NR'>('LTE');
-  const [arfcn, setArfcn] = useState('');
-  const [pci, setPci] = useState('');
+  const [tech, setTech] = useState<'LTE' | 'NR'>(initial?.tech ?? 'LTE');
+  const [arfcn, setArfcn] = useState(initial?.arfcn ?? '');
+  const [pci, setPci] = useState(initial?.pci ?? '');
   const chk = checkManual(tech, arfcn, pci);
 
   const past = useMemo(
@@ -44,7 +46,8 @@ export function ManualLock({ seen, visible, busy, onLock }: {
   };
 
   return (
-    <GlassCard title="القفل اليدوي" icon="🔐" tint={C.violetSoft} defaultOpen={false}>
+    <GlassCard title="القفل اليدوي" icon="🔐" tint={C.violetSoft} defaultOpen={!!initial}>
+      {!!initial && <Text style={s.copied}>📋 نسخنا أرقام برج {initial.pci} — راجعها واضغط «ثبّت»، أو عدّلها</Text>}
       <Text style={s.hint}>
         تقفل على خلية تعرف أرقامها، حتى لو ما هي ظاهرة في القائمة الحين. اكتب رقم القناة والخلية، والتردد يطلع لحاله.
       </Text>
@@ -107,6 +110,7 @@ export function ManualLock({ seen, visible, busy, onLock }: {
 }
 
 const s = StyleSheet.create({
+  copied: { color: C.violet, fontWeight: '800', fontSize: 12, textAlign: 'right', backgroundColor: C.card, borderRadius: 10, padding: 8 },
   hint: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 19 },
   seg: { flexDirection: 'row', gap: 8 },
   segBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 12, backgroundColor: C.rowBg, borderWidth: 1, borderColor: C.cardBorder },

@@ -491,11 +491,34 @@ export default function RouterDashboard() {
           <LinearGradient colors={HERO_BG[disconnected ? 'poor' : level]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.heroX}>
             <ArcGauge score={signalScore(primary)} label={LEVEL_LABEL[level]} color={LEVEL_COLOR[level]} size={172} />
             <Text style={s.heroLine}>{disconnected ? 'الراوتر غير متصل' : `اتصالك ${LEVEL_LABEL[level]}`}</Text>
-            <Text style={s.heroSub}>
-              {disconnected
-                ? 'ما فيه إشارة الآن'
-                : `${netLabel}${allBands.length ? '  ·  ' + allBands.join(' + ') : ''}${traffic ? '  ·  ' + fmtRate(traffic.downBytesPerSec) : ''}`}
-            </Text>
+            {disconnected ? (
+              <Text style={s.heroSub}>ما فيه إشارة الآن</Text>
+            ) : (
+              <>
+                <Pressable style={s.heroBox} onPress={() => router.push(`/towers/${info.id}` as Href)}>
+                  <View style={s.heroCell}>
+                    <Text style={s.heroCellLbl}>البرج</Text>
+                    <Text style={s.heroCellVal} numberOfLines={1}>{signal?.pci ?? signal?.nrPci ?? '—'}</Text>
+                    {!!signal?.pci && !!signal?.nrPci && <Text style={s.heroCellSub}>5G: {signal.nrPci}</Text>}
+                  </View>
+                  <View style={s.heroDiv} />
+                  <View style={s.heroCell}>
+                    <Text style={s.heroCellLbl}>الدمج</Text>
+                    <Text style={[s.heroCellVal, { color: allBands.length > 1 ? C.green : C.sub }]} numberOfLines={1}>
+                      {allBands.length > 1 ? '🔗 مدموج' : '◻️ تردد واحد'}
+                    </Text>
+                    {allBands.length > 1 && <Text style={s.heroCellSub}>{allBands.length} ترددات</Text>}
+                  </View>
+                  <View style={s.heroDiv} />
+                  <View style={s.heroCell}>
+                    <Text style={s.heroCellLbl}>الترددات</Text>
+                    <Text style={s.heroCellVal} numberOfLines={1} adjustsFontSizeToFit>{allBands.length ? allBands.join(' + ') : '—'}</Text>
+                    <Text style={s.heroCellSub}>{netLabel}</Text>
+                  </View>
+                </Pressable>
+                {!!traffic && <Text style={s.heroSub}>السرعة الحين {fmtRate(traffic.downBytesPerSec)}</Text>}
+              </>
+            )}
             {!!traffic && traffic.connectedSecs > 0 && (
               <View style={s.sinceRow}>
                 <SyncIcon active={syncing} />
@@ -531,15 +554,15 @@ export default function RouterDashboard() {
                 onPress={() => router.push(`/towers/${info.id}` as Href)} />
               <ToolTile wide icon="spark" color="#7c5cff" title="أفضل تردد" sub="أسرع نت وأقل بنق"
                 onPress={() => router.push(`/finder/${info.id}` as Href)} />
-              <ToolTile wide icon="antenna" color="#f97316" title="الأنتنا" sub="تحتاجها؟ وأي نوع"
-                onPress={() => router.push(`/antenna/${info.id}` as Href)} />
+              <ToolTile wide icon="game" color="#ec4899" title="مُحسّن الألعاب" sub="أقل بنق للعبتك"
+                onPress={() => router.push(`/ping/${info.id}` as Href)} />
             </TileGrid>
             <GroupTitle title="قِس وتابع" color="#12b76a" />
             <TileGrid>
               <ToolTile icon="speed" color="#12b76a" title="السرعة" sub="تنزيل ورفع"
                 onPress={() => router.push(`/speed/${info.id}` as Href)} />
-              <ToolTile icon="game" color="#ec4899" title="الألعاب" sub="أفضل بنق للعبتك"
-                onPress={() => router.push(`/ping/${info.id}` as Href)} />
+              <ToolTile icon="antenna" color="#f97316" title="الأنتنا" sub="تحتاجها؟"
+                onPress={() => router.push(`/antenna/${info.id}` as Href)} />
               <ToolTile icon="chart" color="#0891b2" title="التفاصيل" sub="كل الأرقام"
                 onPress={() => router.push(`/details/${info.id}` as Href)} />
               <ToolTile icon="phone" color="#8b5cf6" title="الأجهزة" sub="المتصلين"
@@ -825,6 +848,12 @@ const s = StyleSheet.create({
   fabDanger: { borderColor: C.cardBorder },
   fabText: { fontWeight: '800', fontSize: 15 },
   heroLine: { color: C.text, fontSize: 18, fontWeight: '800', textAlign: 'center', marginTop: 4 },
+  heroBox: { flexDirection: 'row-reverse', alignSelf: 'stretch', backgroundColor: '#ffffffb3', borderRadius: 18, borderWidth: 1, borderColor: '#ffffff', paddingVertical: 10, paddingHorizontal: 6, marginTop: 6 },
+  heroCell: { flex: 1, alignItems: 'center', gap: 2, minWidth: 0 },
+  heroDiv: { width: 1, backgroundColor: C.line, marginVertical: 4 },
+  heroCellLbl: { color: C.muted, fontSize: 11, fontWeight: '700' },
+  heroCellVal: { color: C.text, fontSize: 15, fontWeight: '900' },
+  heroCellSub: { color: C.sub, fontSize: 10.5, fontWeight: '700' },
   heroSub: { color: C.sub, fontSize: 12.5, fontWeight: '700', textAlign: 'center', marginTop: 1 },
   cta: { height: 54, borderRadius: 16, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 9 },
   ctaSolid: { backgroundColor: C.blue },

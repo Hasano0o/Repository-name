@@ -52,10 +52,11 @@ function Chip({ label, value, color }: { label: string; value?: number; color?: 
 }
 
 /** بطاقة برج واحد — مضغوطة: سطر العنوان + شريط الجودة + سطر القيم وزر التثبيت */
-function TowerGroupCard({ g, rank, lockedHere, canPin, busy, onLock, note }: {
+function TowerGroupCard({ g, rank, lockedHere, canPin, busy, onLock, onCopy, note }: {
   g: TowerGroup; rank?: number; lockedHere: boolean; canPin: boolean; busy: boolean;
-  onLock: (g: TowerGroup) => void; note?: { text: string; ok: boolean };
+  onLock: (g: TowerGroup) => void; onCopy?: (g: TowerGroup) => void; note?: { text: string; ok: boolean };
 }) {
+  const copyable = !!onCopy && canPin && !!g.pci && g.cells.some(c => !!c.arfcn);
   const gr = cellGrade(g.best);
   const color = GRADE_COLOR[gr];
   const freq = freqName(g.best);
@@ -106,6 +107,11 @@ function TowerGroupCard({ g, rank, lockedHere, canPin, busy, onLock, note }: {
             </View>
           )}
         </View>
+        {copyable && (
+          <Pressable style={({ pressed }) => [s.copyBtn, pressed && { opacity: 0.6 }]} onPress={() => onCopy!(g)} hitSlop={6}>
+            <Text style={s.copyBtnText}>📋 انسخ</Text>
+          </Pressable>
+        )}
         {canPin && (
           <Pressable
             style={({ pressed }) => [s.pinBtn, lockedHere && s.pinBtnOn, (busy || pressed) && { opacity: 0.6 }]}
@@ -185,6 +191,9 @@ export default function TowersScreen() {
   const [bandCfg, setBandCfg] = useState<BandConfig | null>(null);
   const [trialCount, setTrialCount] = useState(0);
   const [seen, setSeen] = useState<SeenCell[]>([]);
+  const [prefill, setPrefill] = useState<{ tech: 'LTE' | 'NR'; arfcn: string; pci: string; n: number } | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const manualY = useRef(0);
   const [sheet, setSheet] = useState<{ title: string; sub: string; opts: LockOpt[] } | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
@@ -288,6 +297,14 @@ export default function TowersScreen() {
         },
       },
     ]);
+  };
+
+  /** ينسخ أرقام البرج لبطاقة القفل اليدوي وينزل لها */
+  const onCopy = (g: TowerGroup) => {
+    const c = g.cells.find(x => x === g.best && x.arfcn) ?? g.cells.find(x => x.arfcn);
+    if (!c?.arfcn || !g.pci) return;
+    setPrefill({ tech: c.tech, arfcn: c.arfcn, pci: g.pci, n: Date.now() });
+    setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, manualY.current - 12), animated: true }), 150);
   };
 
   /** القفل اليدوي — نفس الأمان: قياس قبل وبعد ورجوع تلقائي */
@@ -477,6 +494,7 @@ export default function TowersScreen() {
   return (
     <LinearGradient colors={[C.bgTop, C.bgBottom]} style={{ flex: 1 }}>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 40 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.blue} colors={[C.blue]} />}
       >
@@ -630,7 +648,7 @@ export default function TowersScreen() {
             icon="🗼" tint={C.greenSoft} collapsible={false}
           >
             {inUse.map(g => (
-              <TowerGroupCard key={g.key} g={g} lockedHere={isPinned(g)} canPin={canPin} busy={busy} onLock={onLock} />
+              <TowerGroupCard key={g.key} g={g} lockedHere={isPinned(g)} canPin={canPin} busy={busy} onLock={onLock} onCopy={onCopy} />
             ))}
           </GlassCard>
         )}
@@ -643,7 +661,7 @@ export default function TowersScreen() {
               </Text>
             )}
             {others.map((g, i) => (
-              <TowerGroupCard key={g.key} g={g} rank={i + 1} lockedHere={isPinned(g)} canPin={canPin} busy={busy} onLock={onLock} />
+              <TowerGroupCard key={g.key} g={g} rank={i + 1} lockedHere={isPinned(g)} canPin={canPin} busy={busy} onLock={onLock} onCopy={onCopy} />
             ))}
             {others.length > 0 && (
               <Text style={s.hint}>مرتّبة حسب الجودة الفعلية (القوة + الجودة + نوع التردد)، مو القوة لحالها. ◻️ الأبراج اللي ظهرت على تردد واحد غالباً ما تدمج.</Text>
@@ -652,12 +670,16 @@ export default function TowersScreen() {
         )}
 
         {!loading && canLock && (
+          <View onLayout={e => { manualY.current = e.nativeEvent.layout.y; }}>
           <ManualLock
+            key={prefill?.n ?? 0}
+            initial={prefill ?? undefined}
             seen={seen}
             visible={new Set(cells.filter(c => c.pci && c.arfcn).map(c => seenKey({ tech: c.tech, pci: c.pci!, arfcn: c.arfcn! })))}
             busy={busy}
             onLock={onManualLock}
           />
+          </View>
         )}
 
         {!loading && (
@@ -687,6 +709,8 @@ export default function TowersScreen() {
 }
 
 const s = StyleSheet.create({
+  copyBtn: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, backgroundColor: C.violetSoft },
+  copyBtnText: { color: C.violet, fontWeight: '800', fontSize: 12 },
   page: { padding: 16, gap: 14 },
   center: { alignItems: 'center', gap: 10, paddingVertical: 30 },
   muted: { color: C.sub, textAlign: 'center', lineHeight: 22 },
