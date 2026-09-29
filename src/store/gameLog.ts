@@ -51,7 +51,7 @@ export interface PeriodStat {
   bestSetup?: string;
 }
 
-function periodOf(h: number): string {
+export function periodOf(h: number): string {
   for (const p of PERIODS) {
     if (p.from < p.to ? h >= p.from && h < p.to : h >= p.from || h < p.to) return p.id;
   }

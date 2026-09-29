@@ -10,6 +10,8 @@ import { notify } from '../utils/notify';
 import { Signal, NetworkInfo, Usage, DataPlan } from '../drivers/types';
 import { reportOutage } from '../services/community';
 import { buildWeekly, weeklyLines, weeklyDue, markWeeklySent } from '../utils/weekly';
+import { runAutomation } from './automation';
+import { getAutoState } from '../store/automation';
 
 export const MONITOR_TASK = 'bandly-monitor-v1';
 
@@ -64,7 +66,9 @@ export async function runMonitorCheck(): Promise<boolean> {
       // ═══ المجتمع: نحفظ البرج، ولما يرجع النت نبلّغ عن فترة الانقطاع ═══
       const tw = sig?.enodebId || sig?.cellId;
       if (tw) { next.tower = String(tw); next.operator = net?.operator ?? prev.operator; }
-      if (!online && !prev.offlineSince) next.offlineSince = Date.now();
+      // انقطاع بسبب الصيانة الليلية (إعادة تشغيل متعمدة) ما نبلّغ عنه ولا ننبه
+      const rebooting = await getAutoState(r.id).then(a => !!a.pending && Date.now() - a.pending.at < 20 * 60000).catch(() => false);
+      if (!online && !prev.offlineSince && !rebooting) next.offlineSince = Date.now();
       if (online && prev.offlineSince) {
         const tower = next.tower ?? prev.tower;
         if (tower) await reportOutage({ tower, operator: next.operator ?? prev.operator ?? '' }, prev.offlineSince, Date.now()).catch(() => {});
@@ -72,7 +76,7 @@ export async function runMonitorCheck(): Promise<boolean> {
       }
 
       // انقطاع الاتصال
-      if (a.disconnect && prev.online === true && !online) {
+      if (a.disconnect && prev.online === true && !online && !rebooting) {
         notify('انقطع الاتصال', `راوتر ${r.name} فقد الاتصال بالشبكة.`, r.id);
         fired = true;
       }
@@ -119,6 +123,9 @@ export async function runMonitorCheck(): Promise<boolean> {
       }
 
       states[r.id] = next;
+
+      // ═══ الوضع الذكي والصيانة الليلية ═══
+      if (await runAutomation(r, sig).catch(() => false)) fired = true;
 
       // ═══ الملخص الأسبوعي — مساءً، مرة بالأسبوع، لو فيه بيانات ═══
       const hr = new Date().getHours();

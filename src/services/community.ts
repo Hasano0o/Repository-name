@@ -9,6 +9,7 @@ import { withSession } from '../store/sessions';
 
 const CONSENT_KEY = 'bandly.community.consent';
 const DEVICE_KEY = 'bandly.deviceId';
+const AREA_KEY = 'bandly.area';
 
 export type Consent = 'on' | 'off' | null;
 
@@ -40,6 +41,28 @@ async function deviceId(): Promise<string> {
 
 export interface TowerRef { tower: string; operator: string }
 
+/* ═══ الحي — يكتبه المستخدم بنفسه (ما نستخدم GPS) ═══ */
+export async function getArea(): Promise<string> {
+  try { return (await AsyncStorage.getItem(AREA_KEY)) ?? ''; } catch { return ''; }
+}
+export async function setArea(v: string): Promise<void> {
+  try { await AsyncStorage.setItem(AREA_KEY, v.trim()); } catch {}
+}
+
+/** المشغّل ورقم البرج (لو متوفر) — للمقارنة بين الشرائح */
+export async function currentNet(r: SavedRouter): Promise<{ tower?: string; operator: string } | null> {
+  try {
+    const [sig, net] = await withSession(r, async d => Promise.all([
+      d.getSignal ? d.getSignal().catch(() => null) : Promise.resolve(null),
+      d.getNetworkInfo ? d.getNetworkInfo().catch(() => null) : Promise.resolve(null),
+    ]));
+    const tower = sig?.enodebId || sig?.cellId;
+    return { tower: tower ? String(tower) : undefined, operator: net?.operator ?? '' };
+  } catch {
+    return null;
+  }
+}
+
 /** رقم البرج الفعلي (eNodeB) أو رقم الخلية، مع اسم المشغّل */
 export async function currentTower(r: SavedRouter): Promise<TowerRef | null> {
   try {
@@ -68,9 +91,27 @@ async function post(path: string, body: object): Promise<void> {
   } catch {} finally { clearTimeout(t); }
 }
 
-export async function reportTest(t: TowerRef, x: { setup: string; region: string; score: number; ping: number; jitter: number; loss: number }) {
+export async function reportTest(t: { tower?: string; operator: string }, x: { setup: string; region: string; score: number; ping: number; jitter: number; loss: number }) {
   if ((await getConsent()) !== 'on') return;
-  await post('report', { device: await deviceId(), tower: t.tower, operator: t.operator, ...x });
+  await post('report', { device: await deviceId(), tower: t.tower ?? '', operator: t.operator, area: await getArea(), ...x });
+}
+
+export interface AreaOp { operator: string; score: number | null; ping: number | null; jitter: number | null; tests: number; users: number; mine: boolean }
+
+export async function fetchArea(area: string, region?: string): Promise<AreaOp[] | null> {
+  if (!area.trim()) return null;
+  const ctrl = new AbortController();
+  const tm = setTimeout(() => ctrl.abort(), 8000);
+  try {
+    const q = new URLSearchParams({ area, region: region ?? '', device: await deviceId() });
+    const r = await fetch(`${LIVE_BASE}/live-api/community/area?${q.toString()}`, { signal: ctrl.signal });
+    if (!r.ok) return null;
+    return ((await r.json()) as { operators: AreaOp[] }).operators;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(tm);
+  }
 }
 
 export async function reportOutage(t: TowerRef, from: number, to: number) {

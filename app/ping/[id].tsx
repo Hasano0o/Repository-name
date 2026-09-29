@@ -14,7 +14,8 @@ import {
 } from '../../src/utils/latency';
 import { saveProfile } from '../../src/store/profiles';
 import { buildWeekly, weeklyLines } from '../../src/utils/weekly';
-import { Consent, TowerRef, TowerInfo, getConsent, setConsent, currentTower, fetchTower, reportTest } from '../../src/services/community';
+import { Consent, TowerRef, TowerInfo, getConsent, setConsent, currentTower, currentNet, fetchTower, reportTest } from '../../src/services/community';
+import { AreaCompare } from '../../src/ui/AreaCompare';
 import { addGameLog, listGameLog, periodStats, PeriodStat } from '../../src/store/gameLog';
 import { bandLabel, freqLabel } from '../../src/utils/bands';
 import { C } from '../../src/ui/theme';
@@ -55,6 +56,7 @@ export default function GameScreen() {
   const [tower, setTower] = useState<TowerRef | null>(null);
   const [community, setCommunity] = useState<TowerInfo | null>(null);
   const [commLoading, setCommLoading] = useState(false);
+  const [areaTick, setAreaTick] = useState(0);
   const [running, setRunning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
@@ -195,6 +197,14 @@ export default function GameScreen() {
       setCheck({ game, wifi, dx, note });
       if (game.samples) {
         await addGameLog(info.id, { at: Date.now(), region: used.id, score: dx.score, median: game.median, jitter: game.jitter, lossPct: game.lossPct });
+        // للمقارنة بين الشرائح في الحي (لو المستخدم مفعّل المشاركة)
+        if ((await getConsent()) === 'on') {
+          const net = await currentNet(info);
+          if (net?.operator) {
+            await reportTest(net, { setup: '_check', region: used.id, score: dx.score, ping: game.median, jitter: game.jitter, loss: game.lossPct }).catch(() => {});
+            setAreaTick(t => t + 1);
+          }
+        }
         refreshPeriods(info, reg.id);
       }
     } catch (e: any) {
@@ -621,6 +631,8 @@ export default function GameScreen() {
             )}
           </GlassCard>
         )}
+
+        {!loading && info && <AreaCompare consent={consent} region={reg.id} regionName={reg.name} refresh={areaTick} />}
 
         {!loading && (
           <GlassCard title="أي سيرفر أقرب لك؟" icon="🌍" tint={C.blueSoft} defaultOpen={false}>

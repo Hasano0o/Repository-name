@@ -601,6 +601,14 @@ export default function RouterDashboard() {
                 </View>
                 <Text style={s.moreLbl}>الملفات</Text>
               </Pressable>
+              {feat.bands && (
+                <Pressable style={[s.moreTile, { backgroundColor: '#7c5cff12', borderColor: '#7c5cff30' }]} onPress={() => router.push(`/auto/${info.id}` as Href)}>
+                  <View style={[s.moreIcon, { backgroundColor: '#7c5cff' }]}>
+                    <Icon name="spark" size={18} color="#fff" />
+                  </View>
+                  <Text style={s.moreLbl}>الوضع الذكي</Text>
+                </Pressable>
+              )}
               <Pressable style={[s.moreTile, { backgroundColor: '#f43f5e12', borderColor: '#f43f5e30' }]} onPress={() => router.push('/monitor' as Href)}>
                 <View style={[s.moreIcon, { backgroundColor: '#f43f5e' }]}>
                   <Icon name="bell" size={18} color="#fff" />

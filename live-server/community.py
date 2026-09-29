@@ -32,13 +32,43 @@ def _db() -> sqlite3.Connection:
         score INTEGER, ping INTEGER, jitter INTEGER, loss INTEGER)""")
     c.execute("""CREATE TABLE IF NOT EXISTS outages(
         at INTEGER, tower TEXT, op TEXT, dev TEXT, t_from INTEGER, t_to INTEGER)""")
+    cols = {r[1] for r in c.execute("PRAGMA table_info(tests)")}
+    if "area" not in cols:
+        c.execute("ALTER TABLE tests ADD COLUMN area TEXT DEFAULT ''")
     c.execute("CREATE INDEX IF NOT EXISTS i_tests ON tests(tower, op, at)")
+    c.execute("CREATE INDEX IF NOT EXISTS i_area ON tests(area, at)")
     c.execute("CREATE INDEX IF NOT EXISTS i_out ON outages(tower, op, t_to)")
     return c
 
 
 def _clean(v, n=40) -> str:
     return re.sub(r"[^\w؀-ۿ +.\-]", "", str(v or ""))[:n].strip()
+
+
+def _area(v) -> str:
+    """«شرورة - حي الفيصلية» ← «شرورة/الفيصلية» — عشان نفس الحي ينكتب بأكثر من شكل"""
+    t = re.sub(r"[^\w؀-ۿ /\-]", "", str(v or "")).strip()
+    t = re.sub(r"\bحي\s+", "", t)
+    parts = [re.sub(r"\s+", " ", x).strip() for x in re.split(r"[/\-،,]", t) if x.strip()]
+    return "/".join(parts)[:60]
+
+
+def _op(v) -> str:
+    """أسماء المشغّل تختلف بين الراوترات — نوحّدها"""
+    t = str(v or "").lower()
+    if "stc" in t or "saudi telecom" in t or "aljawal" in t or "الاتصالات" in t:
+        return "STC"
+    if "mobily" in t or "etisalat" in t or "موبايلي" in t:
+        return "موبايلي"
+    if "zain" in t or "زين" in t:
+        return "زين"
+    if "salam" in t or "سلام" in t:
+        return "سلام"
+    if "virgin" in t or "فيرجن" in t:
+        return "فيرجن"
+    if "lebara" in t or "ليبارا" in t:
+        return "ليبارا"
+    return _clean(v, 30) or "غير معروف"
 
 
 def _dev(v) -> str:
@@ -78,13 +108,14 @@ async def report(req: Request):
     _limit(dev)
     tower, op = _clean(b.get("tower"), 24), _clean(b.get("operator"), 30)
     setup = _clean(b.get("setup"), 30)
-    if not tower or not setup:
+    area = _area(b.get("area"))
+    if not setup or not (tower or area):
         raise HTTPException(400, "missing")
-    row = (int(time.time()), tower, op, dev, setup, _clean(b.get("region"), 6),
+    row = (int(time.time()), tower or "-", op, dev, setup, _clean(b.get("region"), 6),
            _int(b.get("score"), 0, 100), _int(b.get("ping"), 0, 5000),
-           _int(b.get("jitter"), 0, 5000), _int(b.get("loss"), 0, 100))
+           _int(b.get("jitter"), 0, 5000), _int(b.get("loss"), 0, 100), area)
     with _db() as c:
-        c.execute("INSERT INTO tests VALUES (?,?,?,?,?,?,?,?,?,?)", row)
+        c.execute("INSERT INTO tests(at,tower,op,dev,setup,region,score,ping,jitter,loss,area) VALUES (?,?,?,?,?,?,?,?,?,?,?)", row)
         if int(time.time()) % 20 == 0:
             _prune(c)
     return {"ok": True}
@@ -120,7 +151,7 @@ async def tower_info(tower: str, operator: str = "", region: str = "", device: s
     now = int(time.time())
     since = now - 30 * 86400
     with _db() as c:
-        q = "SELECT setup, AVG(score), AVG(ping), AVG(jitter), COUNT(*), COUNT(DISTINCT dev) FROM tests WHERE tower=? AND op=? AND at>=?"
+        q = "SELECT setup, AVG(score), AVG(ping), AVG(jitter), COUNT(*), COUNT(DISTINCT dev) FROM tests WHERE tower=? AND op=? AND at>=? AND setup NOT LIKE '\\_%' ESCAPE '\\'"
         args: list = [tw, op, since]
         if region:
             q += " AND region=?"
@@ -152,3 +183,34 @@ async def tower_info(tower: str, operator: str = "", region: str = "", device: s
         for s, a, p, j, n, u in rows if u >= 1
     ][:6]
     return {"tower": tw, "users": users, "best": best, "outages": outages[-5:]}
+
+
+@router.get("/area")
+async def area_info(area: str, region: str = "", device: str = ""):
+    """أي شريحة أفضل في الحي: متوسط فحوصات «جاهز للعب؟» لكل مشغّل"""
+    ar = _area(area)
+    if not ar:
+        raise HTTPException(400, "missing")
+    me = _dev(device) if device else ""
+    since = int(time.time()) - 30 * 86400
+    q = "SELECT op, score, ping, jitter, dev FROM tests WHERE area=? AND at>=? AND setup='_check'"
+    args: list = [ar, since]
+    if region:
+        q += " AND region=?"
+        args.append(_clean(region, 6))
+    with _db() as c:
+        rows = c.execute(q, args).fetchall()
+    ops: dict[str, dict] = {}
+    for op, sc, pg, jt, dv in rows:
+        o = ops.setdefault(_op(op), {"s": [], "p": [], "j": [], "d": set(), "mine": False})
+        o["s"].append(sc); o["p"].append(pg); o["j"].append(jt); o["d"].add(dv)
+        if dv == me:
+            o["mine"] = True
+    avg = lambda xs: round(sum(xs) / len(xs)) if xs else None
+    out = [
+        {"operator": k, "score": avg(v["s"]), "ping": avg(v["p"]), "jitter": avg(v["j"]),
+         "tests": len(v["s"]), "users": len(v["d"]), "mine": v["mine"]}
+        for k, v in ops.items()
+    ]
+    out.sort(key=lambda x: -(x["score"] or 0))
+    return {"area": ar, "operators": out}
