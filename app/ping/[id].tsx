@@ -47,7 +47,7 @@ export default function GameScreen() {
   const [rows, setRows] = useState<Row[]>([]);
   const [region, setRegion] = useState(REGIONS[0].id);
   const [regionRes, setRegionRes] = useState<Record<string, LatencyResult>>({});
-  const [check, setCheck] = useState<{ game: LatencyResult; wifi: LatencyResult | null; dx: Diagnosis } | null>(null);
+  const [check, setCheck] = useState<{ game: LatencyResult; wifi: LatencyResult | null; dx: Diagnosis; note?: string } | null>(null);
   const [periods, setPeriods] = useState<PeriodStat[]>([]);
   const [weekly, setWeekly] = useState<string[]>([]);
   const [consent, setConsentState] = useState<Consent>(null);
@@ -164,7 +164,19 @@ export default function GameScreen() {
       setStatus(`نقيس البنق لسيرفرات ${reg.name}...`);
       // نقرأ استهلاك الراوتر أثناء القياس — نكشف لو فيه جهاز ثاني يحمّل
       const readDown = () => withSession(info, async d => (d.getTraffic ? d.getTraffic() : null)).then(t => t?.downBytesPerSec).catch(() => undefined);
-      const [game, down1] = await Promise.all([measureUrl(regionUrls(reg), 20), sleep(1500).then(readDown)]);
+      let [game, down1] = await Promise.all([measureUrl(regionUrls(reg), 20), sleep(1500).then(readDown)]);
+      // المنطقة المختارة ما ردت؟ نجرب باقي المناطق بدل ما نطلع صفر
+      let used = reg;
+      let note: string | undefined;
+      if (!game.samples) {
+        for (const r2 of REGIONS) {
+          if (r2.id === reg.id) continue;
+          setStatus(`خوادم ${reg.name} ما ردت — نجرب ${r2.name}...`);
+          const g2 = await measureUrl(regionUrls(r2), 20);
+          if (g2.samples) { game = g2; used = r2; break; }
+        }
+        if (used !== reg) note = `خوادم ${reg.name} ما ترد من شبكتك الحين (${game.error ?? 'انتهت المهلة'}) — قسنا على ${used.name} بدالها`;
+      }
       let sinr: number | undefined;
       let down2: number | undefined;
       try {
@@ -179,9 +191,9 @@ export default function GameScreen() {
       const down = downs.length ? Math.max(...downs) : undefined;
       const dx = diagnose(game, wifi, sinr, down);
       if (!mounted.current) return;
-      setCheck({ game, wifi, dx });
+      setCheck({ game, wifi, dx, note });
       if (game.samples) {
-        await addGameLog(info.id, { at: Date.now(), region: reg.id, score: dx.score, median: game.median, jitter: game.jitter, lossPct: game.lossPct });
+        await addGameLog(info.id, { at: Date.now(), region: used.id, score: dx.score, median: game.median, jitter: game.jitter, lossPct: game.lossPct });
         refreshPeriods(info, reg.id);
       }
     } catch (e: any) {
@@ -238,6 +250,17 @@ export default function GameScreen() {
 
     const orig = cfg;
     const scanTower = (await getConsent()) === 'on' ? await currentTower(info) : null;
+    // نتأكد إن خوادم المنطقة ترد قبل ما نقطع النت — وإلا نختار منطقة ترد
+    let scanReg = reg;
+    setStatus(`نتأكد إن خوادم ${reg.name} ترد...`);
+    if (!(await measureUrl(regionUrls(reg), 2)).samples) {
+      for (const r2 of REGIONS) {
+        if (r2.id !== reg.id && (await measureUrl(regionUrls(r2), 2)).samples) { scanReg = r2; break; }
+      }
+      if (scanReg === reg) { setStatus(''); Alert.alert('ما فيه خادم يرد', 'ولا منطقة ردت من شبكتك الحين — تأكد إن النت شغال وجرب بعد شوي'); return; }
+      Alert.alert('غيّرنا المنطقة', `خوادم ${reg.name} ما ترد من شبكتك الحين، فبنقيس على ${scanReg.name} بدالها`);
+    }
+    setStatus('');
     let modeChanged = false;
     let bandChanged = false;
     cancel.current = false;
@@ -264,17 +287,17 @@ export default function GameScreen() {
             const ok = await waitOnline(info, 35000);
             if (cancel.current) { upd(i, { status: 'pending', note: undefined }); break; }
             if (!ok) { upd(i, { status: 'failed', note: 'ما اتصل على هذا الإعداد' }); continue; }
-            upd(i, { note: `نقيس البنق لـ${reg.name}...` });
+            upd(i, { note: `نقيس البنق لـ${scanReg.name}...` });
             await sleep(3000);
           }
-          const res = await measureUrl(regionUrls(reg), 20);
+          const res = await measureUrl(regionUrls(scanReg), 20);
           if (!res.samples) { upd(i, { status: 'failed', note: res.error ? `ما وصلنا للسيرفر — ${res.error}` : 'ما وصلنا للسيرفر' }); }
           else {
             const score = gameScore(res);
             upd(i, { status: 'done', res, score, note: undefined });
-            await addGameLog(info.id, { at: Date.now(), region: reg.id, score, median: res.median, jitter: res.jitter, lossPct: res.lossPct, setup: t.label });
+            await addGameLog(info.id, { at: Date.now(), region: scanReg.id, score, median: res.median, jitter: res.jitter, lossPct: res.lossPct, setup: t.label });
             if (scanTower && t.kind !== 'base') {
-              reportTest(scanTower, { setup: t.label, region: reg.id, score, ping: res.median, jitter: res.jitter, loss: res.lossPct }).catch(() => {});
+              reportTest(scanTower, { setup: t.label, region: scanReg.id, score, ping: res.median, jitter: res.jitter, loss: res.lossPct }).catch(() => {});
             }
           }
         } catch (e: any) {
@@ -298,7 +321,7 @@ export default function GameScreen() {
         setRunning(false);
         setStatus('');
         await load(info);
-        refreshPeriods(info, reg.id);
+        refreshPeriods(info, scanReg.id);
       }
     }
   };
@@ -404,6 +427,7 @@ export default function GameScreen() {
           <GlassCard title="جاهز للعب؟" icon="🎮" tint={C.greenSoft} collapsible={false}>
             {check ? (
               <>
+                {!!check.note && <Text style={s.fallbackNote}>⚠️ {check.note}</Text>}
                 <View style={[s.verdict, { borderColor: lightColor(check.dx.light) }]}>
                   <Text style={[s.verdictScore, { color: lightColor(check.dx.light) }]}>{check.dx.score}</Text>
                   <View style={{ flex: 1 }}>
@@ -424,8 +448,8 @@ export default function GameScreen() {
                   <Stat v={`${check.game.jitter}`} u="ms" l="التذبذب" c={check.game.jitter < 10 ? C.green : check.game.jitter < 25 ? '#e0a100' : C.red} />
                   <Stat v={`${check.game.lossPct}`} u="%" l="الفقد" c={check.game.lossPct === 0 ? C.green : C.red} />
                   <Stat
-                    v={check.wifi && check.wifi.samples ? `${check.wifi.median}` : '—'} u="ms" l="الواي فاي"
-                    c={!check.wifi || !check.wifi.samples ? C.sub : check.wifi.jitter > 12 || check.wifi.lossPct ? C.red : C.green}
+                    v={check.wifi && check.wifi.samples ? `${check.wifi.min}` : '—'} u="ms" l="الراوتر"
+                    c={!check.wifi || !check.wifi.samples ? C.sub : check.wifi.lossPct >= 20 || check.wifi.min > 60 ? C.red : C.green}
                   />
                 </View>
               </>
@@ -679,6 +703,7 @@ function Stat({ v, u, l, c }: { v: string; u: string; l: string; c: string }) {
 }
 
 const s = StyleSheet.create({
+  fallbackNote: { color: '#b45309', fontSize: 12, textAlign: 'right', lineHeight: 19, backgroundColor: C.amberSoft, borderRadius: 12, padding: 10 },
   weekLine: { color: C.text, fontSize: 13, textAlign: 'right', lineHeight: 21 },
   consentRow: { flexDirection: 'row', gap: 8 },
   outage: { backgroundColor: C.redSoft, borderRadius: 14, padding: 10, borderWidth: 1, borderColor: C.red },

@@ -25,8 +25,8 @@ export interface GameRegion {
 }
 
 export const REGIONS: GameRegion[] = [
-  { id: 'bh', name: 'البحرين', hint: 'سيرفرات الشرق الأوسط لأغلب الألعاب', url: 'https://dynamodb.me-south-1.amazonaws.com/ping', alt: ['https://s3.me-south-1.amazonaws.com/', 'https://ec2.me-south-1.amazonaws.com/ping'] },
-  { id: 'ae', name: 'الإمارات', hint: 'بعض سيرفرات الخليج', url: 'https://dynamodb.me-central-1.amazonaws.com/ping', alt: ['https://s3.me-central-1.amazonaws.com/', 'https://ec2.me-central-1.amazonaws.com/ping'] },
+  // البحرين (me-south-1) متوقفة من 2026 بعد استهداف مراكز بيانات AWS — شلناها
+  { id: 'ae', name: 'الإمارات', hint: 'الأقرب لسيرفرات الشرق الأوسط', url: 'https://dynamodb.me-central-1.amazonaws.com/ping', alt: ['https://s3.me-central-1.amazonaws.com/', 'https://ec2.me-central-1.amazonaws.com/ping'] },
   { id: 'eu', name: 'فرانكفورت', hint: 'سيرفرات أوروبا', url: 'https://dynamodb.eu-central-1.amazonaws.com/ping', alt: ['https://s3.eu-central-1.amazonaws.com/', 'https://ec2.eu-central-1.amazonaws.com/ping'] },
   { id: 'cf', name: 'أقرب سيرفر', hint: 'Cloudflare — للمقارنة العامة', url: ENDPOINT, alt: ['https://www.cloudflare.com/cdn-cgi/trace', 'https://1.1.1.1/cdn-cgi/trace'] },
 ];
@@ -40,7 +40,7 @@ interface Hit { ms: number | null; err?: string }
 function reason(e: any, timeoutMs: number): string {
   const name = String(e?.name ?? '');
   const msg = String(e?.message ?? e ?? '');
-  if (name === 'AbortError' || /abort/i.test(msg)) return `انتهت المهلة — الخادم ما رد خلال ${Math.round(timeoutMs / 1000)} ثواني`;
+  if (name === 'AbortError' || /abort|cancel/i.test(msg)) return `انتهت المهلة — الخادم ما رد خلال ${Math.round(timeoutMs / 1000)} ثواني من شبكتك`;
   if (/network request failed/i.test(msg)) return 'الشبكة رفضت الاتصال (ممكن حاجب إعلانات أو DNS خاص أو VPN)';
   if (/ssl|certificate|handshake/i.test(msg)) return 'فشل الاتصال الآمن (شهادة)';
   return msg ? `خطأ: ${msg.slice(0, 80)}` : 'خطأ غير معروف';
@@ -136,7 +136,7 @@ export async function measureUrl(
 export const regionUrls = (r: GameRegion) => [r.url, ...r.alt];
 
 export function measureLatency(n = 12, timeoutMs = 3000): Promise<LatencyResult> {
-  return measureUrl(regionUrls(REGIONS[3]), n, timeoutMs);
+  return measureUrl(regionUrls(regionById('cf')), n, timeoutMs);
 }
 
 /** بين الجوال والراوتر فقط — يكشف هل المشكلة من الواي فاي */
@@ -158,7 +158,8 @@ export function gamingGrade(r: LatencyResult): { label: string; score: number } 
 /** درجة اللعب من 100 — التذبذب والفقد يوزنون أكثر من البنق لأنهم سبب اللاق الحقيقي */
 export function gameScore(r: LatencyResult): number {
   if (!r.samples) return 0;
-  const p = Math.max(0, r.median - 15) * 0.45 + r.jitter * 1.6 + r.lossPct * 9;
+  // القياس عبر HTTPS أعلى من بنق اللعبة (UDP) بشوي، فالعقوبة تبدأ بعد 30ms
+  const p = Math.max(0, r.median - 30) * 0.3 + r.jitter * 1.0 + r.lossPct * 8;
   return Math.max(0, Math.min(100, Math.round(100 - p)));
 }
 
@@ -203,7 +204,9 @@ export function diagnose(game: LatencyResult, wifi: LatencyResult | null, sinr?:
     return { light: 'red', score: 0, title: 'ما وصلنا للسيرفر', cause: game.error ?? 'النت مقطوع أو السيرفر ما رد', fix: 'افتح «أي سيرفر أقرب لك؟» تحت وشوف أي خادم يرد. لو كلها ما ترد: طفّ حاجب الإعلانات أو الـ DNS الخاص في إعدادات الجوال' };
   }
 
-  const wifiBad = !!wifi && wifi.samples > 0 && (wifi.lossPct > 0 || wifi.jitter > 12 || wifi.min > 25);
+  // نقيس الراوتر عبر صفحة إدارته، وهي بطيئة ومتذبذبة بطبيعتها (معالج الراوتر مشغول)
+  // فما نحكم على الواي فاي إلا بالفقد أو لو حتى أسرع رد كان بطيء جداً
+  const wifiBad = !!wifi && wifi.samples > 0 && (wifi.lossPct >= 20 || wifi.min > 60);
   const wifiMissing = !!wifi && wifi.samples === 0;
 
   if (light === 'green' && !wifiBad) {
@@ -222,7 +225,9 @@ export function diagnose(game: LatencyResult, wifi: LatencyResult | null, sinr?:
     return {
       light: light === 'green' ? 'yellow' : light, score,
       title: 'المشكلة من الواي فاي',
-      cause: `الاتصال بين جوالك والراوتر متذبذب (${wifi!.jitter}ms${wifi!.lossPct ? ` وفقد ${wifi!.lossPct}%` : ''})`,
+      cause: wifi!.lossPct >= 20
+        ? `الراوتر ما يرد على جوالك بثبات (فقد ${wifi!.lossPct}%)`
+        : `حتى أسرع رد من الراوتر أخذ ${wifi!.min}ms — الواي فاي ضعيف`,
       fix: 'قرّب من الراوتر، أو اتصل بشبكة 5GHz، أو استخدم كيبل للجهاز',
     };
   }
