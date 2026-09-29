@@ -16,6 +16,9 @@ import { C } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { trafficBurst, collectNr, mb } from '../../src/utils/nrprobe';
 import { safeApply, lastTrial, trialNote, trialMessage, loadTrials } from '../../src/utils/safeLock';
+import { SeenCell, rememberSeen, seenKey } from '../../src/store/seenCells';
+import { ManualLock, ManualTarget } from '../../src/ui/ManualLock';
+import { bandLabel } from '../../src/utils/bands';
 
 const BADGE_BG: Record<TowerGroup['badge'], string> = {
   active: '#e8f8f0', confirmed: '#e8f8f0', likely: '#eaf0ff', single: '#f3f4fb',
@@ -181,6 +184,7 @@ export default function TowersScreen() {
   const [canLock, setCanLock] = useState(false);
   const [bandCfg, setBandCfg] = useState<BandConfig | null>(null);
   const [trialCount, setTrialCount] = useState(0);
+  const [seen, setSeen] = useState<SeenCell[]>([]);
   const [sheet, setSheet] = useState<{ title: string; sub: string; opts: LockOpt[] } | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
@@ -204,6 +208,7 @@ export default function TowersScreen() {
       const next = await rememberActive(r.id, list, known);
       setConfirmed(next);
       setCells(list);
+      setSeen(await rememberSeen(r.id, list));
       setNrAvail(sig?.nrAvailable);
       setLocks(lock);
       setCanLock(supports);
@@ -281,6 +286,27 @@ export default function TowersScreen() {
             setStatus('');
           }
         },
+      },
+    ]);
+  };
+
+  /** القفل اليدوي — نفس الأمان: قياس قبل وبعد ورجوع تلقائي */
+  const onManualLock = (t: ManualTarget) => {
+    if (!info) return;
+    const prevSame = locks.find(l => (l.tech ?? 'LTE') === t.tech && l.pci);
+    const name = `${bandLabel(t.tech, t.band)} · خلية ${t.pci} · قناة ${t.arfcn}`;
+    Alert.alert('القفل اليدوي', `بنثبّت الراوتر على ${name}.\n\nإذا الخلية مو موجودة عندك أو صارت أسوأ، نرجّع إعدادك لحاله. ممكن الراوتر يعيد التشغيل (دقيقة إلى دقيقتين).`, [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'ثبّت', onPress: () => runSafe({
+          key: `cell:${t.tech}:${t.pci}:${t.arfcn}`,
+          label: `التثبيت اليدوي على ${name}`,
+          withNr: t.tech === 'NR',
+          apply: d => d.lockCell!({ tech: t.tech, band: t.band, arfcn: t.arfcn, pci: t.pci }),
+          revert: d => (prevSame
+            ? d.lockCell!({ tech: t.tech, band: prevSame.band, arfcn: prevSame.arfcn, pci: prevSame.pci! })
+            : d.unlockCell!(t.tech)),
+        }),
       },
     ]);
   };
@@ -623,6 +649,15 @@ export default function TowersScreen() {
               <Text style={s.hint}>مرتّبة حسب الجودة الفعلية (القوة + الجودة + نوع التردد)، مو القوة لحالها. ◻️ الأبراج اللي ظهرت على تردد واحد غالباً ما تدمج.</Text>
             )}
           </GlassCard>
+        )}
+
+        {!loading && canLock && (
+          <ManualLock
+            seen={seen}
+            visible={new Set(cells.filter(c => c.pci && c.arfcn).map(c => seenKey({ tech: c.tech, pci: c.pci!, arfcn: c.arfcn! })))}
+            busy={busy}
+            onLock={onManualLock}
+          />
         )}
 
         {!loading && (
