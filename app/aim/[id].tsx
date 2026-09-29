@@ -17,7 +17,7 @@ import { RateTech, RateTarget } from '../../src/ui/RateTech';
 import { SpeedPair } from '../../src/services/live';
 import { pickSig } from '../../src/services/live';
 import { trendOf, Trend, TrendMark } from '../../src/ui/AimMeter';
-import { measureLatency } from '../../src/utils/latency';
+import { measureLatency, selectedRegion } from '../../src/utils/latency';
 import { LiveHost, createLiveSession, CmdAction, CMD_LABEL, LIVE_BASE } from '../../src/services/live';
 import Svg, { Circle, Path, Line, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { Icon, IconName } from '../../src/ui/Icon';
@@ -197,9 +197,11 @@ export default function AimScreen() {
   const [pinned, setPinned] = useState<CellId | null>(null);
   // ═══ البنق (كل ١٥ ثانية، ٣ عينات) ═══
   const [ping, setPing] = useState<number | undefined>(undefined);
+  const [pingTo, setPingTo] = useState<string | undefined>(undefined);
   const pingRef = useRef<number | undefined>(undefined);
   useFocusEffect(useCallback(() => {
     let alive = true;
+    selectedRegion().then(r => { if (alive) setPingTo(r.name); }).catch(() => {});
     const run = async () => {
       try {
         const r = await measureLatency(3, 2500);
@@ -772,7 +774,7 @@ export default function AimScreen() {
             </View>
 
             {/* ═══ لوحة الشبكة 4G / 5G ═══ */}
-            <NetPanel signal={signal} ping={ping} />
+            <NetPanel signal={signal} ping={ping} pingTo={pingTo} />
 
             {/* ═══ وضع الفني: شارك مع فني ═══ */}
             {!live ? (

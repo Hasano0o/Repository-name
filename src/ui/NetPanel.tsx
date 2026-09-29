@@ -13,7 +13,11 @@ import { P, shadow } from './Pro';
 export const pingLevel = (v?: number): Level =>
   v === undefined ? 'unknown' : v <= 40 ? 'excellent' : v <= 70 ? 'good' : v <= 120 ? 'fair' : 'poor';
 
+const cqiLevel = (v?: number): Level =>
+  v === undefined ? 'fair' : v >= 12 ? 'excellent' : v >= 9 ? 'good' : v >= 6 ? 'fair' : 'poor';
+
 const RANGES = {
+  cqi: [0, 15] as const,
   ping: [200, 10] as const,   // الأقل أفضل
   sinr: [-5, 25] as const,
   rsrq: [-20, -5] as const,
@@ -114,7 +118,38 @@ function Card({ tech, dark, active, children, badge }: {
   );
 }
 
-export function NetPanel({ signal, ping }: { signal: Signal | null; ping?: number }) {
+/** البنق مرة وحدة فوق البطاقتين — النت يمشي على 4G و5G مع بعض فالبنق واحد */
+function PingBar({ ping, to }: { ping?: number; to?: string }) {
+  const lv = pingLevel(ping);
+  const col = ping === undefined ? P.faint : LEVEL_COLOR[lv];
+  return (
+    <View style={pb.bar}>
+      <View style={pb.valBox}>
+        <Text style={[pb.val, { color: col }]}>{ping ?? '…'}</Text>
+        <Text style={pb.unit}>ms</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={pb.title}>البنق{to ? ` لسيرفرات ${to}` : ''}</Text>
+        <Text style={pb.sub}>واحد للشبكتين — النت يمشي على 4G و5G مع بعض</Text>
+      </View>
+      <View style={[pb.icon, { backgroundColor: col + '22' }]}>
+        <Icon name="speed" size={18} color={col} />
+      </View>
+    </View>
+  );
+}
+
+const pb = StyleSheet.create({
+  bar: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#ffffff', borderRadius: 20, paddingVertical: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: P.soft },
+  valBox: { flexDirection: 'row', alignItems: 'baseline', gap: 3, minWidth: 74 },
+  val: { fontSize: 30, fontWeight: '900', letterSpacing: -0.5 },
+  unit: { fontSize: 12, color: P.sub, fontWeight: '700' },
+  title: { fontSize: 14, fontWeight: '800', color: P.text, textAlign: 'right' },
+  sub: { fontSize: 11, color: P.sub, textAlign: 'right', marginTop: 2 },
+  icon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+});
+
+export function NetPanel({ signal, ping, pingTo }: { signal: Signal | null; ping?: number; pingTo?: string }) {
   if (!signal) return null;
   const s = signal;
   const lteBand = parseBands(s.band).filter(b => b.startsWith('B')).join('+') || s.band;
@@ -125,12 +160,13 @@ export function NetPanel({ signal, ping }: { signal: Signal | null; ping?: numbe
 
   return (
     <View style={{ gap: 12 }}>
+      <PingBar ping={ping} to={pingTo} />
       <Card tech="4G" active={s.rsrp !== undefined} badge={`${lteBand || '—'} · ${mode}`}>
         <View style={c.gauges}>
           <Gauge icon="antenna" label="RSRP" unit="dBm" value={s.rsrp} level={rsrpLevel(s.rsrp)} r={ratio(s.rsrp, RANGES.rsrp)} />
           <Gauge icon="chart" label="RSRQ" unit="dB" value={s.rsrq} level={rsrqLevel(s.rsrq)} r={ratio(s.rsrq, RANGES.rsrq)} />
           <Gauge icon="spark" label="SINR" unit="dB" value={s.sinr} level={sinrLevel(s.sinr)} r={ratio(s.sinr, RANGES.sinr)} />
-          <Gauge icon="speed" label="PING" unit="ms" value={ping} level={pingLevel(ping)} r={ratio(ping, RANGES.ping)} />
+          {s.cqi !== undefined && <Gauge icon="speed" label="CQI" unit="0–15" value={s.cqi} level={cqiLevel(s.cqi)} r={ratio(s.cqi, RANGES.cqi)} />}
         </View>
         <View style={c.tiles}>
           <Tile icon="bands" label="الباند" value={lteBand} accent={P.blue} />
@@ -148,7 +184,7 @@ export function NetPanel({ signal, ping }: { signal: Signal | null; ping?: numbe
             <Gauge dark icon="antenna" label="RSRP" unit="dBm" value={s.nrRsrp} level={rsrpLevel(s.nrRsrp)} r={ratio(s.nrRsrp, RANGES.rsrp)} />
             <Gauge dark icon="chart" label="RSRQ" unit="dB" value={s.nrRsrq} level={rsrqLevel(s.nrRsrq)} r={ratio(s.nrRsrq, RANGES.rsrq)} />
             <Gauge dark icon="spark" label="SINR" unit="dB" value={s.nrSinr} level={sinrLevel(s.nrSinr)} r={ratio(s.nrSinr, RANGES.sinr)} />
-            <Gauge dark icon="speed" label="PING" unit="ms" value={ping} level={pingLevel(ping)} r={ratio(ping, RANGES.ping)} />
+            {s.nrCqi !== undefined && <Gauge dark icon="speed" label="CQI" unit="0–15" value={s.nrCqi} level={cqiLevel(s.nrCqi)} r={ratio(s.nrCqi, RANGES.cqi)} />}
           </View>
           <View style={c.tiles}>
             <Tile dark icon="bands" label="الباند" value={nrBand} accent="#c7b8ff" />
