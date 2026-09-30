@@ -133,7 +133,7 @@ export default function ComboScreen() {
                   if (orig.mode !== LTE_ONLY && d.setNetworkMode) await d.setNetworkMode(LTE_ONLY);
                   await d.setBand!(lte, orig.nrLocked);
                 } else {
-                  if (orig.mode === LTE_ONLY && d.setNetworkMode) await d.setNetworkMode('00');
+                  if ((orig.mode === LTE_ONLY || orig.mode === '08') && d.setNetworkMode) await d.setNetworkMode('00');
                   await d.setBand!(lte, nrBands);
                 }
               },
@@ -186,7 +186,7 @@ export default function ComboScreen() {
           setBusy(true);
           try {
             await withSession(info, async d => {
-              if (cfg.mode === LTE_ONLY && d.setNetworkMode) await d.setNetworkMode('00');
+              if ((cfg.mode === LTE_ONLY || cfg.mode === '08') && d.setNetworkMode) await d.setNetworkMode('00');
               await d.setBand!([], []);
             }, false);
             setPrimary(null); setExtra([]); setNr('any'); setVerdict(null);
@@ -208,13 +208,80 @@ export default function ComboScreen() {
   const lteList = cfg ? sortBands(cfg.supported, lteSeen) : [];
   const nrList = cfg ? sortBands(cfg.nrSupported, nrSeen) : [];
 
-  const BandChip = ({ tech, b, on, onPress, seen }: { tech: 'LTE' | 'NR'; b: number; on: boolean; onPress: () => void; seen?: number }) => (
-    <Pressable style={[s.band, on && s.bandOn, seen === undefined && !on && s.bandFaint]} onPress={onPress} disabled={busy}>
-      <Text style={[s.bandName, on && { color: C.onAccent }]}>{bandLabel(tech, b)}</Text>
-      <Text style={[s.bandSub, on && { color: C.onAccent }]}>{freqLabel(tech, b) || ' '}</Text>
-      <Text style={[s.bandSig, { color: on ? C.onAccent : rsrpCol(seen) }]}>{seen !== undefined ? `${seen} dBm` : 'مو ظاهر'}</Text>
+  /** نفس تصميم أزرار شاشة الترددات: مربع صح + الاسم والتردد — وتحتها قوة الإشارة */
+  const Tile = ({ label, sub, sig, on, onPress, color, faint }: {
+    label: string; sub?: string; sig?: number; on: boolean; onPress: () => void; color: string; faint?: boolean;
+  }) => (
+    <Pressable
+      style={[s.tile, on && { backgroundColor: color, borderColor: color }, faint && !on && s.tileFaint, busy && s.dim]}
+      onPress={onPress}
+      disabled={busy}
+    >
+      <View style={[s.miniCheck, on && s.miniCheckOn]}>
+        {on && <Text style={[s.checkMark, { color }]}>✓</Text>}
+      </View>
+      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+        <Text style={[s.tileName, on && { color: C.onAccent }]} numberOfLines={1}>{label}</Text>
+        {!!sub && <Text style={[s.tileSub, on && { color: C.onAccentSoft }]} numberOfLines={1}>{sub}</Text>}
+        {sig !== undefined && <Text style={[s.tileSig, { color: on ? C.onAccent : rsrpCol(sig) }]}>{sig} dBm</Text>}
+      </View>
     </Pressable>
   );
+
+  const SA_COLOR = '#0ea5a4';
+  const hasSa = !!cfg?.modes.some(m => m.value === '08');
+  const onSa = cfg?.mode === '08';
+
+  const applySa = (toSa: boolean) => {
+    if (!info || !cfg) return;
+    const orig = cfg;
+    const target = toSa ? '08' : (orig.modes.some(m => m.value === '0803') ? '0803' : '00');
+    const label = toSa ? '5G فقط (SA)' : '4G + 5G (NSA)';
+    Alert.alert(label, toSa
+      ? 'بنحوّل الراوتر لـ 5G لحاله — الـ 5G يصير هو الأساسي.\n\nإذا برجك أو شريحتك ما تدعم SA بينقطع النت، ونرجّعك لحالك على 4G + 5G خلال دقيقة تقريباً.'
+      : 'بنرجّع الراوتر لـ 4G + 5G.', [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'جرّب', onPress: async () => {
+          setBusy(true);
+          setError('');
+          setVerdict(null);
+          try {
+            const res = await safeApply({
+              r: info,
+              key: `mode:${target}`,
+              label,
+              withNr: true,
+              onStatus: t => mounted.current && setStatus(t),
+              apply: d => d.setNetworkMode!(target),
+              revert: d => d.setNetworkMode!(orig.mode),
+            });
+            if (!res.kept) {
+              const m = trialMessage(res, label);
+              Alert.alert(toSa ? 'SA ما اشتغل عندك' : m.title, toSa
+                ? 'رجّعناك على 4G + 5G. غالباً برجك أو شريحتك ما تدعم 5G SA للحين.'
+                : m.body);
+              return;
+            }
+            const list = await readCa(info);
+            if (!mounted.current) return;
+            setCarriers(list);
+            const pcc = list.find(c => c.role === 'PCC');
+            setVerdict({
+              ok: toSa ? !!pcc && pcc.tech === 'NR' : true,
+              text: toSa
+                ? (pcc && pcc.tech === 'NR' ? `✓ صرت على 5G SA — الأساسي ${bandLabel('NR', pcc.band)}` : '• انتقل الوضع، بس ما قدرنا نقرأ الأساسي — شوف «الدمج الحين»')
+                : '✓ رجعت على 4G + 5G',
+            });
+          } catch (e: any) {
+            if (mounted.current) setError(e?.message ?? String(e));
+          } finally {
+            if (mounted.current) { setBusy(false); setStatus(''); await load(info); }
+          }
+        },
+      },
+    ]);
+  };
 
   return (
     <LinearGradient colors={[C.bgTop, C.bgBottom]} style={{ flex: 1 }}>
@@ -232,6 +299,22 @@ export default function ComboScreen() {
 
         {!loading && cfg && (
           <>
+            {hasSa && (
+              <View style={[s.saCard, onSa && { borderColor: SA_COLOR }]}>
+                <View style={s.saHead}>
+                  <View style={[s.saBadge, { backgroundColor: SA_COLOR }]}><Text style={s.saBadgeTxt}>جديد</Text></View>
+                  <Text style={s.saTitle}>وضع الشبكة</Text>
+                </View>
+                <Text style={s.hint}>
+                  {onSa ? 'أنت الحين على 5G لحاله — الـ 5G هو الأساسي' : 'أنت على 4G + 5G: الأساسي 4G والـ 5G ثانوي. جرّب SA عشان يصير الـ 5G هو الأساسي'}
+                </Text>
+                <View style={s.grid}>
+                  <Tile label="4G + 5G" sub="NSA — الحالي عند أغلب الناس" on={!onSa} color={C.blue} onPress={() => onSa && applySa(false)} />
+                  <Tile label="5G فقط" sub="SA — الـ 5G أساسي" on={onSa} color={SA_COLOR} onPress={() => !onSa && applySa(true)} />
+                </View>
+              </View>
+            )}
+
             <GlassCard title="الدمج الحين" icon="🔗" tint={C.greenSoft} collapsible={false}>
               {carriers === null ? (
                 <Text style={s.hint}>اضغط «افحص» — نشغّل تحميل قصير لأن البرج يفعّل الدمج بس وقت الاستخدام</Text>
@@ -257,7 +340,8 @@ export default function ComboScreen() {
               <Text style={s.hint}>التردد اللي يمسك الاتصال. القوة تحت كل تردد من الأبراج اللي يشوفها راوترك الحين</Text>
               <View style={s.grid}>
                 {lteList.map(b => (
-                  <BandChip key={b} tech="LTE" b={b} seen={lteSeen.get(b)} on={primary === b}
+                  <Tile key={b} label={bandLabel('LTE', b)} sub={freqLabel('LTE', b) || undefined} sig={lteSeen.get(b)} faint={!lteSeen.has(b)}
+                    color={C.blue} on={primary === b}
                     onPress={() => { setPrimary(b); setExtra(x => x.filter(y => y !== b)); }} />
                 ))}
               </View>
@@ -267,7 +351,8 @@ export default function ComboScreen() {
               <Text style={s.hint}>ترددات 4G ثانية يُسمح للبرج يدمجها مع الأساسي. ⚠️ لما تسمح بأكثر من تردد، ممكن الراوتر يختار واحد منها كأساسي بدل اللي اخترته</Text>
               <View style={s.grid}>
                 {lteList.filter(b => b !== primary).map(b => (
-                  <BandChip key={b} tech="LTE" b={b} seen={lteSeen.get(b)} on={extra.includes(b)}
+                  <Tile key={b} label={bandLabel('LTE', b)} sub={freqLabel('LTE', b) || undefined} sig={lteSeen.get(b)} faint={!lteSeen.has(b)}
+                    color="#e08a00" on={extra.includes(b)}
                     onPress={() => setExtra(x => (x.includes(b) ? x.filter(y => y !== b) : [...x, b]))} />
                 ))}
               </View>
@@ -276,18 +361,13 @@ export default function ComboScreen() {
             <GlassCard title="٣. الثانوي (5G)" icon="⚡" tint={C.violetSoft} collapsible={false}>
               <Text style={s.hint}>التردد اللي ينضاف للسرعة. البرج هو اللي يقرر يشغّله — نقدر نسمح أو نمنع بس</Text>
               <View style={s.grid}>
-                <Pressable style={[s.band, nr === 'any' && s.bandOn]} onPress={() => setNr('any')} disabled={busy}>
-                  <Text style={[s.bandName, nr === 'any' && { color: C.onAccent }]}>أي 5G</Text>
-                  <Text style={[s.bandSub, nr === 'any' && { color: C.onAccent }]}>تلقائي</Text>
-                </Pressable>
+                <Tile label="أي 5G" sub="تلقائي" color={C.violet} on={nr === 'any'} onPress={() => setNr('any')} />
                 {nrList.map(b => (
-                  <BandChip key={b} tech="NR" b={b} seen={nrSeen.get(b)} on={nr === b} onPress={() => setNr(b)} />
+                  <Tile key={b} label={bandLabel('NR', b)} sub={freqLabel('NR', b) || undefined} sig={nrSeen.get(b)} faint={!nrSeen.has(b)}
+                    color={C.violet} on={nr === b} onPress={() => setNr(b)} />
                 ))}
                 {nrModes && (
-                  <Pressable style={[s.band, nr === 'none' && s.bandOn]} onPress={() => setNr('none')} disabled={busy}>
-                    <Text style={[s.bandName, nr === 'none' && { color: C.onAccent }]}>بدون 5G</Text>
-                    <Text style={[s.bandSub, nr === 'none' && { color: C.onAccent }]}>4G فقط</Text>
-                  </Pressable>
+                  <Tile label="بدون 5G" sub="4G فقط" color={C.sub} on={nr === 'none'} onPress={() => setNr('none')} />
                 )}
               </View>
             </GlassCard>
@@ -325,12 +405,23 @@ const s = StyleSheet.create({
   statusBox: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 10, backgroundColor: C.blueSoft, borderRadius: 14, padding: 12 },
   statusText: { color: C.blue, fontWeight: '700', textAlign: 'right', flexShrink: 1 },
   grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
-  band: { flexBasis: '30%', flexGrow: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 14, backgroundColor: C.rowBg, borderWidth: 1, borderColor: C.cardBorder },
-  bandOn: { backgroundColor: C.blue, borderColor: C.blue },
-  bandFaint: { opacity: 0.55 },
-  bandName: { color: C.text, fontWeight: '900', fontSize: 16 },
-  bandSub: { color: C.sub, fontSize: 10, marginTop: 1 },
-  bandSig: { fontSize: 10.5, fontWeight: '800', marginTop: 2 },
+  tile: {
+    flexBasis: '31%', flexGrow: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: 6,
+    paddingVertical: 8, paddingHorizontal: 9, borderRadius: 14,
+    backgroundColor: C.rowBg, borderWidth: 1.5, borderColor: C.line,
+  },
+  tileFaint: { opacity: 0.55 },
+  miniCheck: { width: 18, height: 18, borderRadius: 5, borderWidth: 1.8, borderColor: C.line, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center' },
+  miniCheckOn: { borderColor: C.card },
+  checkMark: { fontWeight: '900', fontSize: 12, lineHeight: 13 },
+  tileName: { color: C.text, fontWeight: '800', fontSize: 14, lineHeight: 16 },
+  tileSub: { color: C.muted, fontSize: 10, marginTop: 1 },
+  tileSig: { fontSize: 10, fontWeight: '800', marginTop: 1 },
+  saCard: { backgroundColor: C.card, borderRadius: 20, borderWidth: 2, borderColor: '#0ea5a455', padding: 14, gap: 10 },
+  saHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  saTitle: { color: C.text, fontWeight: '900', fontSize: 16, textAlign: 'right' },
+  saBadge: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
+  saBadgeTxt: { color: '#fff', fontWeight: '800', fontSize: 11 },
   carr: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, backgroundColor: C.rowBg, borderRadius: 12, padding: 10 },
   carrRole: { color: C.sub, fontWeight: '800', fontSize: 12, minWidth: 64, textAlign: 'right' },
   carrName: { flex: 1, color: C.text, fontWeight: '900', fontSize: 15, textAlign: 'right' },

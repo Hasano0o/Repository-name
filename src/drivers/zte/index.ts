@@ -46,6 +46,9 @@ const LTE_EARFCN: [number, number, number][] = [
 const lteBandOf = (earfcn?: number) =>
   earfcn === undefined ? undefined : LTE_EARFCN.find(([, a, b]) => earfcn >= a && earfcn <= b)?.[0];
 
+const CODE_TO_ZTE: Record<string, string> = { '00': 'WL_AND_5G', '0803': 'LTE_AND_5G', '03': 'Only_LTE', '08': 'Only_5G' };
+const ZTE_TO_CODE: Record<string, string> = Object.fromEntries(Object.entries(CODE_TO_ZTE).map(([k, v]) => [v, k]));
+
 /** ترددات MU5001 المعروفة — لو الراوتر ما قال غير كذا */
 const DEFAULT_LTE = [1, 3, 7, 8, 20, 28, 40, 41];
 // كل ترددات 5G الشائعة في راوترات ZTE — كانت ٣ بس فكان «عرض الكل» يطلّع n40/n41/n78 فقط
@@ -658,7 +661,31 @@ export class ZteDriver implements RouterDriver {
     const locked = lte.length === 0 || supported.every(b => lte.includes(b)) ? [] : lte;
     // نفس القاعدة القديمة: لو فيها n40+n41+n78 كلها نعتبرها غير مثبّتة (قائمة الراوتر الأصلية تختلف من جهاز لجهاز)
     const nrLocked = nr.length === 0 || SAFE_NR.every(b => nr.includes(b)) ? [] : nr;
-    return { supported, locked, nrSupported, nrLocked, mode: 'auto', modes: [] };
+    // وضع الشبكة (net_select) — نحوّله لنفس أكواد هواوي عشان الشاشات تشتغل على الاثنين
+    let mode = 'auto';
+    let modes: { value: string; label: string }[] = [];
+    try {
+      const r = await this.get(['net_select']);
+      const raw = (r.net_select || '').trim();
+      if (raw) {
+        mode = ZTE_TO_CODE[raw] ?? raw;
+        modes = [
+          { value: '00', label: 'تلقائي' },
+          { value: '0803', label: '4G + 5G' },
+          { value: '03', label: '4G فقط' },
+          { value: '08', label: '5G فقط (SA)' },
+        ];
+      }
+    } catch {}
+    return { supported, locked, nrSupported, nrLocked, mode, modes };
+  }
+
+  /** وضع الشبكة: 00 تلقائي، 0803 = 4G+5G، 03 = 4G فقط، 08 = 5G فقط (SA) — أو القيمة الأصلية كما هي */
+  async setNetworkMode(mode: string): Promise<void> {
+    await this.ensure();
+    const v = CODE_TO_ZTE[mode] ?? mode;
+    const out = await this.act({ goformId: 'SET_BEARER_PREFERENCE', BearerPreference: v });
+    if (!/success/i.test(out)) throw this.rejected('تغيير وضع الشبكة', out);
   }
 
   async setBand(bands: number[], nrBands?: number[]): Promise<void> {
