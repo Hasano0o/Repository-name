@@ -19,6 +19,9 @@ import { safeApply, lastTrial, trialNote, trialMessage, loadTrials } from '../..
 import { SeenCell, rememberSeen, seenKey } from '../../src/store/seenCells';
 import { ManualLock, ManualTarget } from '../../src/ui/ManualLock';
 import { bandLabel } from '../../src/utils/bands';
+import { TowerPing, loadTowerPings, saveTowerPing, towerPingKey, pingAgo } from '../../src/store/towerPing';
+import { measureUrl, regionUrls, selectedRegion, gameScore } from '../../src/utils/latency';
+import { withRouterLock } from '../../src/store/sessions';
 
 const BADGE_BG: Record<TowerGroup['badge'], string> = {
   active: tBg('#e8f8f0'), confirmed: tBg('#e8f8f0'), likely: tBg('#eaf0ff'), single: tBg('#f3f4fb'),
@@ -42,6 +45,8 @@ function QualityBar({ q, color }: { q?: number; color: string }) {
   );
 }
 
+const pingCol = (p: TowerPing) => (p.score >= 70 ? C.green : p.score >= 45 ? '#e0a100' : C.red);
+
 function Chip({ label, value, color }: { label: string; value?: number; color?: string }) {
   return (
     <View style={s.chip}>
@@ -52,9 +57,10 @@ function Chip({ label, value, color }: { label: string; value?: number; color?: 
 }
 
 /** بطاقة برج واحد — مضغوطة: سطر العنوان + شريط الجودة + سطر القيم وزر التثبيت */
-function TowerGroupCard({ g, rank, lockedHere, canPin, busy, onLock, onCopy, note }: {
+function TowerGroupCard({ g, rank, lockedHere, canPin, busy, onLock, onCopy, note, ping }: {
   g: TowerGroup; rank?: number; lockedHere: boolean; canPin: boolean; busy: boolean;
   onLock: (g: TowerGroup) => void; onCopy?: (g: TowerGroup) => void; note?: { text: string; ok: boolean };
+  ping?: TowerPing;
 }) {
   const copyable = !!onCopy && canPin && !!g.pci && g.cells.some(c => !!c.arfcn);
   const gr = cellGrade(g.best);
@@ -99,6 +105,12 @@ function TowerGroupCard({ g, rank, lockedHere, canPin, busy, onLock, onCopy, not
 
       <View style={s.foot}>
         <View style={s.chips}>
+          {!!ping && (
+            <View style={[s.pingChip, { borderColor: pingCol(ping) }]}>
+              <Text style={[s.pingVal, { color: pingCol(ping) }]}>⚡ {ping.ping}ms</Text>
+              <Text style={s.pingAgo}>{pingAgo(ping.at)}</Text>
+            </View>
+          )}
           <Chip label="SINR" value={g.best.sinr} />
           <Chip label="RSRQ" value={g.best.rsrq} />
           {(g.badge === 'active' || g.badge === 'confirmed') && (
@@ -191,6 +203,10 @@ export default function TowersScreen() {
   const [bandCfg, setBandCfg] = useState<BandConfig | null>(null);
   const [trialCount, setTrialCount] = useState(0);
   const [seen, setSeen] = useState<SeenCell[]>([]);
+  const [pings, setPings] = useState<Record<string, TowerPing>>({});
+  const [scan, setScan] = useState<{ i: number; n: number; name: string; step: string } | null>(null);
+  const [scanDone, setScanDone] = useState<string[]>([]);
+  const scanCancel = useRef(false);
   const [prefill, setPrefill] = useState<{ tech: 'LTE' | 'NR'; arfcn: string; pci: string; n: number } | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const manualY = useRef(0);
@@ -218,6 +234,7 @@ export default function TowersScreen() {
       setConfirmed(next);
       setCells(list);
       setSeen(await rememberSeen(r.id, list));
+      setPings(await loadTowerPings(r.id));
       setNrAvail(sig?.nrAvailable);
       setLocks(lock);
       setCanLock(supports);
@@ -237,9 +254,117 @@ export default function TowersScreen() {
       setInfo(r);
       await load(r);
       if (alive) setLoading(false);
+      if (alive) measureCurrent(r);
     })();
     return () => { alive = false; };
   }, [id, load]));
+
+  const pingOf = (g: TowerGroup) => (g.pci ? pings[towerPingKey(g.tech, g.pci)] : undefined);
+
+  /** بنق البرج الحالي — نقيسه بدون أي تغيير */
+  const measureCurrent = async (r: SavedRouter) => {
+    try {
+      const [region, cur] = await Promise.all([
+        selectedRegion(),
+        withSession(r, async d => (d.getSignal ? d.getSignal() : null)).catch(() => null),
+      ]);
+      if (!cur) return;
+      const res = await measureUrl(regionUrls(region), 8);
+      if (!res.samples) return;
+      const p: TowerPing = { ping: res.median, jitter: res.jitter, loss: res.lossPct, score: gameScore(res), region: region.id, at: Date.now() };
+      let all = pings;
+      if (cur.pci) all = await saveTowerPing(r.id, towerPingKey('LTE', String(cur.pci)), p);
+      if (cur.nrPci) all = await saveTowerPing(r.id, towerPingKey('NR', String(cur.nrPci)), p);
+      if (alive.current) setPings(all);
+    } catch {}
+  };
+
+  const waitOnline = async (r: SavedRouter, ms: number) => {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      if (scanCancel.current) return false;
+      await new Promise(x => setTimeout(x, 4000));
+      try {
+        const ok = await withSession(r, async d => (d.isConnected ? d.isConnected() : true));
+        if (ok) return true;
+      } catch {}
+    }
+    return false;
+  };
+
+  /** يقفل على كل برج بالدور ويقيس البنق، وبعدها يرجّع التثبيت اللي كان */
+  const scanPings = async (cands: TowerGroup[]) => {
+    if (!info) return;
+    const r = info;
+    scanCancel.current = false;
+    setScanDone([]);
+    setBusy(true);
+    setError('');
+    const prev = [...locks];
+    const touched = new Set<'LTE' | 'NR'>();
+    const region = await selectedRegion();
+    try {
+      await withRouterLock(r.id, async () => {
+        for (let i = 0; i < cands.length; i++) {
+          if (scanCancel.current || !alive.current) break;
+          const g = cands[i];
+          const cell = g.cells.find(c => c === g.best && c.arfcn) ?? g.cells.find(c => c.arfcn);
+          if (!cell?.arfcn || !g.pci) continue;
+          const name = `برج ${g.pci} · ${bandName(cell)}`;
+          setScan({ i: i + 1, n: cands.length, name, step: 'نثبّت عليه...' });
+          try {
+            await withSession(r, d => d.lockCell!({ tech: cell.tech, band: cell.band, arfcn: cell.arfcn, pci: g.pci! }), false);
+            touched.add(cell.tech);
+          } catch {
+            setScanDone(x => [...x, `${name}: ما قبل التثبيت`]);
+            continue;
+          }
+          setScan({ i: i + 1, n: cands.length, name, step: 'ننتظر الاتصال...' });
+          if (!(await waitOnline(r, 120000))) {
+            setScanDone(x => [...x, `${name}: ما اتصل`]);
+            continue;
+          }
+          await new Promise(x => setTimeout(x, 3000));
+          // نتأكد إن الراوتر فعلاً على البرج المطلوب — وإلا القياس بيكون لبرج ثاني
+          const now = await withSession(r, async d => (d.getSignal ? d.getSignal() : null)).catch(() => null);
+          const nowPci = cell.tech === 'NR' ? now?.nrPci : now?.pci;
+          if (now && nowPci && String(nowPci) !== String(g.pci)) {
+            setScanDone(x => [...x, `${name}: الراوتر راح لبرج ${nowPci} بداله`]);
+            continue;
+          }
+          setScan({ i: i + 1, n: cands.length, name, step: `نقيس البنق لـ${region.name}...` });
+          const res = await measureUrl(regionUrls(region), 12);
+          if (!res.samples) {
+            setScanDone(x => [...x, `${name}: ما وصل للإنترنت`]);
+            continue;
+          }
+          const p: TowerPing = { ping: res.median, jitter: res.jitter, loss: res.lossPct, score: gameScore(res), region: region.id, at: Date.now() };
+          const all = await saveTowerPing(r.id, towerPingKey(g.tech, g.pci), p);
+          if (alive.current) setPings(all);
+          setScanDone(x => [...x, `${name}: ${res.median}ms`]);
+        }
+
+        // نرجّع التثبيت اللي كان قبل الفحص
+        setScan(s0 => (s0 ? { ...s0, step: 'نرجّع إعدادك السابق...' } : { i: 0, n: 0, name: '', step: 'نرجّع إعدادك السابق...' }));
+        for (const tech of touched) {
+          const was = prev.find(l => (l.tech ?? 'LTE') === tech && l.pci);
+          try {
+            await withSession(r, d => (was
+              ? d.lockCell!({ tech, band: was.band, arfcn: was.arfcn, pci: was.pci! })
+              : d.unlockCell!(tech)), false);
+          } catch {}
+        }
+        if (touched.size) await waitOnline(r, 120000);
+      });
+    } finally {
+      if (alive.current) {
+        setScan(null);
+        setBusy(false);
+        await load(r);
+        followUp(r);
+      }
+    }
+  };
 
   const onRefresh = async () => {
     if (!info) return;
@@ -648,10 +773,64 @@ export default function TowersScreen() {
             icon="🗼" tint={C.greenSoft} collapsible={false}
           >
             {inUse.map(g => (
-              <TowerGroupCard key={g.key} g={g} lockedHere={isPinned(g)} canPin={canPin} busy={busy} onLock={onLock} onCopy={onCopy} />
+              <TowerGroupCard key={g.key} g={g} lockedHere={isPinned(g)} canPin={canPin} busy={busy} onLock={onLock} onCopy={onCopy} ping={pingOf(g)} />
             ))}
           </GlassCard>
         )}
+
+        {!loading && canLock && others.some(g => g.pci && g.cells.some(c => c.arfcn)) && (() => {
+          const cands = others.filter(g => g.pci && g.cells.some(c => c.arfcn)).slice(0, 5);
+          const tested = groups.filter(g => pingOf(g)).sort((a, b) => pingOf(b)!.score - pingOf(a)!.score);
+          const best = tested[0];
+          const bestIsCurrent = !!best && (best.inUse || !!lockOf(best));
+          return (
+            <GlassCard title="بنق كل برج" icon="⚡" tint={C.pinkSoft} collapsible={false}>
+              <Text style={s.muted}>
+                نثبّت على كل برج بالدور، ونقيس البنق لسيرفر لعبتك، وبعدها نرجّع إعدادك. يظهر البنق جنب كل برج تحت. النت بينقطع أثناء الفحص، وكل برج ياخذ دقيقة إلى دقيقتين.
+              </Text>
+              {scan ? (
+                <>
+                  <View style={s.scanRow}>
+                    <ActivityIndicator color={C.blue} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.scanTitle}>{scan.n ? `${scan.i}/${scan.n} — ${scan.name}` : scan.name}</Text>
+                      <Text style={s.muted}>{scan.step}</Text>
+                    </View>
+                  </View>
+                  <Pressable style={s.scanStop} onPress={() => { scanCancel.current = true; }}>
+                    <Text style={s.scanStopTxt}>إيقاف ورجّع إعدادي</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <Pressable
+                  style={[s.scanBtn, busy && { opacity: 0.5 }]}
+                  disabled={busy}
+                  onPress={() => Alert.alert('بنق كل برج', `بنجرب ${cands.length} أبراج، تقريباً ${cands.length * 2} دقائق. النت بينقطع أثناءها، وممكن الراوتر يعيد التشغيل. وبعدها نرجّع إعدادك.`, [
+                    { text: 'إلغاء', style: 'cancel' },
+                    { text: 'ابدأ', onPress: () => scanPings(cands) },
+                  ])}
+                >
+                  <Text style={s.scanBtnTxt}>قيس بنق الأبراج ({cands.length})</Text>
+                </Pressable>
+              )}
+              {scanDone.map(t => <Text key={t} style={s.scanLine}>• {t}</Text>)}
+              {!scan && best && pingOf(best) && (
+                <View style={s.scanBest}>
+                  <Text style={s.scanBestTxt}>
+                    ⭐ أقل بنق: برج {best.pci} · {bandName(best.best)} — {pingOf(best)!.ping}ms
+                  </Text>
+                  {bestIsCurrent ? (
+                    <Text style={s.muted}>وهو البرج اللي أنت عليه الحين 👌</Text>
+                  ) : (
+                    <Pressable style={[s.scanBtn, busy && { opacity: 0.5 }]} disabled={busy} onPress={() => onLock(best)}>
+                      <Text style={s.scanBtnTxt}>📌 ثبّت عليه</Text>
+                    </Pressable>
+                  )}
+                </View>
+              )}
+            </GlassCard>
+          );
+        })()}
 
         {!loading && (
           <GlassCard title={`الأبراج حولك (${others.length})`} icon="📡" tint={C.blueSoft}>
@@ -661,7 +840,7 @@ export default function TowersScreen() {
               </Text>
             )}
             {others.map((g, i) => (
-              <TowerGroupCard key={g.key} g={g} rank={i + 1} lockedHere={isPinned(g)} canPin={canPin} busy={busy} onLock={onLock} onCopy={onCopy} />
+              <TowerGroupCard key={g.key} g={g} rank={i + 1} lockedHere={isPinned(g)} canPin={canPin} busy={busy} onLock={onLock} onCopy={onCopy} ping={pingOf(g)} />
             ))}
             {others.length > 0 && (
               <Text style={s.hint}>مرتّبة حسب الجودة الفعلية (القوة + الجودة + نوع التردد)، مو القوة لحالها. ◻️ الأبراج اللي ظهرت على تردد واحد غالباً ما تدمج.</Text>
@@ -709,6 +888,18 @@ export default function TowersScreen() {
 }
 
 const s = StyleSheet.create({
+  pingChip: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 3, backgroundColor: C.card },
+  pingVal: { fontWeight: '900', fontSize: 12 },
+  pingAgo: { color: C.sub, fontSize: 9.5, fontWeight: '700' },
+  scanRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, backgroundColor: C.rowBg, borderRadius: 14, padding: 10 },
+  scanTitle: { color: C.text, fontWeight: '800', fontSize: 13, textAlign: 'right' },
+  scanBtn: { backgroundColor: C.blue, borderRadius: 14, padding: 12, alignItems: 'center' },
+  scanBtnTxt: { color: C.onAccent, fontWeight: '800', fontSize: 14 },
+  scanStop: { borderWidth: 1, borderColor: C.red, borderRadius: 14, padding: 11, alignItems: 'center' },
+  scanStopTxt: { color: C.red, fontWeight: '800', fontSize: 13 },
+  scanLine: { color: C.sub, fontSize: 12, textAlign: 'right' },
+  scanBest: { borderTopWidth: 1, borderTopColor: C.cardBorder, paddingTop: 10, gap: 8 },
+  scanBestTxt: { color: C.green, fontWeight: '900', fontSize: 14, textAlign: 'right' },
   copyBtn: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, backgroundColor: C.violetSoft },
   copyBtnText: { color: C.violet, fontWeight: '800', fontSize: 12 },
   page: { padding: 16, gap: 14 },
