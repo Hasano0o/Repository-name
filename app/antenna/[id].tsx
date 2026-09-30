@@ -168,7 +168,7 @@ export default function AntennaAdvisor() {
           <View style={g.headerIcon}>
             <Icon name="antenna" size={20} color={PURPLE} />
           </View>
-          <View style={{ flex: 1, alignItems: 'flex-end' }}>
+          <View style={{ backgroundColor: "#0b0e1a",  flex: 1, alignItems: 'flex-end' }}>
             <Text style={g.title}>مستشار الأنتنا</Text>
             <Text style={g.subtitle}>هل تحتاج أنتنا خارجية؟ — تحليل تلقائي</Text>
           </View>
