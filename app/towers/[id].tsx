@@ -12,7 +12,7 @@ import {
   TowerGroup, groupTowers, loadConfirmed, rememberActive, rankScore, cellGrade, cellQuality,
   GRADE_LABEL, GRADE_COLOR, BADGE_LABEL, isLowBand, bandName, freqName,
 } from '../../src/utils/towers';
-import { C } from '../../src/ui/theme';
+import { C, tBd, tBg, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { trafficBurst, collectNr, mb } from '../../src/utils/nrprobe';
 import { safeApply, lastTrial, trialNote, trialMessage, loadTrials } from '../../src/utils/safeLock';
@@ -92,8 +92,8 @@ function TowerGroupCard({ g, rank, lockedHere, canPin, busy, onLock, onCopy, not
       <QualityBar q={cellQuality(g.best)} color={color} />
 
       {!!note && (
-        <View style={[s.pinNote, { backgroundColor: note.ok ? '#e8f8f0' : '#fff4e0' }]}>
-          <Text style={[s.pinNoteText, { color: note.ok ? '#0b7a47' : '#a15c00' }]}>{note.text}</Text>
+        <View style={[s.pinNote, { backgroundColor: note.ok ? tBg('#e8f8f0') : tBg('#fff4e0') }]}>
+          <Text style={[s.pinNoteText, { color: note.ok ? tFg('#0b7a47') : tFg('#a15c00') }]}>{note.text}</Text>
         </View>
       )}
 
@@ -531,7 +531,7 @@ export default function TowersScreen() {
 
         {!loading && info && trialCount > 0 && (
           <Pressable style={[s.carrLink, { backgroundColor: C.goldSoft }]} onPress={() => router.push(`/trials/${info.id}` as Href)}>
-            <Text style={[s.carrLinkText, { color: '#b76e00' }]}>⭐ وش نجح عندي — نتائج {trialCount} تجربة تثبيت سابقة ‹</Text>
+            <Text style={[s.carrLinkText, { color: tFg('#b76e00') }]}>⭐ وش نجح عندي — نتائج {trialCount} تجربة تثبيت سابقة ‹</Text>
           </Pressable>
         )}
 
@@ -560,8 +560,8 @@ export default function TowersScreen() {
                     <Text style={s.role}>{l.band ? `${l.tech === 'NR' ? 'n' : 'B'}${l.band} · ` : ''}{l.arfcn ? `ARFCN ${l.arfcn}` : ''}</Text>
                   </View>
                 </View>
-                <View style={[s.pinNote, { backgroundColor: '#fff4e0' }]}>
-                  <Text style={[s.pinNoteText, { color: '#a15c00' }]}>⏳ مثبّت، بس البرج ما ظهر في القراءة الحالية — الراوتر يحاول يتصل عليه.</Text>
+                <View style={[s.pinNote, { backgroundColor: tBg('#fff4e0') }]}>
+                  <Text style={[s.pinNoteText, { color: tFg('#a15c00') }]}>⏳ مثبّت، بس البرج ما ظهر في القراءة الحالية — الراوتر يحاول يتصل عليه.</Text>
                 </View>
                 <View style={s.foot}>
                   <View style={s.chips} />
@@ -715,47 +715,47 @@ const s = StyleSheet.create({
   center: { alignItems: 'center', gap: 10, paddingVertical: 30 },
   muted: { color: C.sub, textAlign: 'center', lineHeight: 22 },
   hint: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 19 },
-  lowNote: { color: '#b76e00', fontSize: 12, textAlign: 'right', lineHeight: 19, fontWeight: '700' },
+  lowNote: { color: tFg('#b76e00'), fontSize: 12, textAlign: 'right', lineHeight: 19, fontWeight: '700' },
   link: { color: C.blue, fontSize: 12.5, textAlign: 'center', fontWeight: '700', marginTop: 2 },
   errorCard: { backgroundColor: C.redSoft, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 16, padding: 14, gap: 10 },
   errorText: { color: C.red, fontWeight: '700', textAlign: 'right' },
   retryBtn: { alignSelf: 'flex-end', backgroundColor: C.red, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
-  retryText: { color: '#fff', fontWeight: '700' },
+  retryText: { color: tFg('#fff'), fontWeight: '700' },
 
   pinNote: { borderRadius: 12, paddingVertical: 7, paddingHorizontal: 10 },
   pinNoteText: { fontSize: 12, fontWeight: '700', textAlign: 'right', lineHeight: 18 },
   unlockAll: { alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 16 },
   unlockAllText: { color: C.red, fontWeight: '800', fontSize: 13 },
   tower: {
-    backgroundColor: C.card, borderRadius: 16, borderWidth: 1, borderColor: '#e7eefb', padding: 12, gap: 9,
+    backgroundColor: C.card, borderRadius: 16, borderWidth: 1, borderColor: tBd('#e7eefb'), padding: 12, gap: 9,
     shadowColor: C.shadow, shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 1,
   },
   towerInUse: { borderColor: C.green, borderWidth: 1.5 },
-  towerLocked: { borderColor: C.blue, borderWidth: 2, backgroundColor: '#f5f8ff' },
+  towerLocked: { borderColor: C.blue, borderWidth: 2, backgroundColor: tBg('#f5f8ff') },
   head: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
   avatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   avatarRank: { fontWeight: '900', fontSize: 13 },
   titleRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
   towerName: { color: C.text, fontWeight: '800', fontSize: 16.5, textAlign: 'right', flexShrink: 1 },
   techTag: { backgroundColor: C.blue, borderRadius: 7, paddingHorizontal: 7, paddingVertical: 1 },
-  techTagText: { color: '#fff', fontWeight: '800', fontSize: 10.5 },
+  techTagText: { color: tFg('#fff'), fontWeight: '800', fontSize: 10.5 },
   role: { color: C.sub, fontSize: 12, textAlign: 'right', marginTop: 3 },
   rsrpBox: { alignItems: 'center', minWidth: 54 },
   rsrpVal: { fontWeight: '900', fontSize: 20, lineHeight: 24 },
   rsrpUnit: { fontSize: 10.5, fontWeight: '800' },
   foot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   pinBtn: {
-    borderRadius: 999, borderWidth: 1.5, borderColor: C.blue, backgroundColor: '#f5f8ff',
+    borderRadius: 999, borderWidth: 1.5, borderColor: C.blue, backgroundColor: tBg('#f5f8ff'),
     paddingHorizontal: 14, paddingVertical: 6,
   },
   pinBtnOn: { backgroundColor: C.blue },
   pinBtnText: { color: C.blue, fontWeight: '800', fontSize: 12.5 },
-  qTrack: { height: 6, borderRadius: 3, backgroundColor: '#edf1f8', overflow: 'hidden', flexDirection: 'row-reverse' },
+  qTrack: { height: 6, borderRadius: 3, backgroundColor: tBg('#edf1f8'), overflow: 'hidden', flexDirection: 'row-reverse' },
   qFill: { height: 6, borderRadius: 3 },
   chips: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   chip: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 5,
-    backgroundColor: C.rowBg, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: '#e7eefb',
+    backgroundColor: C.rowBg, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: tBd('#e7eefb'),
   },
   chipLabel: { color: C.muted, fontSize: 10.5, fontWeight: '700' },
   chipVal: { color: C.text, fontSize: 12, fontWeight: '800' },
@@ -766,24 +766,24 @@ const s = StyleSheet.create({
 
   pinBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: '#eef3ff', borderColor: C.blue, borderWidth: 1.5, borderRadius: 18, padding: 14,
+    backgroundColor: tBg('#eef3ff'), borderColor: C.blue, borderWidth: 1.5, borderRadius: 18, padding: 14,
   },
   pinBannerTitle: { color: C.text, fontWeight: '900', fontSize: 15, textAlign: 'right' },
   pinBannerSub: { color: C.sub, fontSize: 12, textAlign: 'right', marginTop: 2 },
 
-  backdrop: { flex: 1, backgroundColor: 'rgba(13,35,80,0.35)' },
+  backdrop: { flex: 1, backgroundColor: tBg('rgba(13,35,80,0.35)') },
   sheet: {
     backgroundColor: C.card, borderTopLeftRadius: 26, borderTopRightRadius: 26,
     paddingHorizontal: 16, paddingTop: 10, gap: 10,
   },
-  grabber: { alignSelf: 'center', width: 42, height: 5, borderRadius: 3, backgroundColor: '#d9e1ef', marginBottom: 4 },
+  grabber: { alignSelf: 'center', width: 42, height: 5, borderRadius: 3, backgroundColor: tBg('#d9e1ef'), marginBottom: 4 },
   sheetTitle: { color: C.text, fontWeight: '900', fontSize: 18, textAlign: 'right' },
   sheetSub: { color: C.sub, fontSize: 12.5, textAlign: 'right', lineHeight: 19, marginBottom: 2 },
-  opt: { borderRadius: 16, borderWidth: 1, borderColor: '#e7eefb', backgroundColor: C.rowBg, padding: 12, gap: 4 },
-  optMain: { borderColor: C.blue, borderWidth: 1.5, backgroundColor: '#f5f8ff' },
+  opt: { borderRadius: 16, borderWidth: 1, borderColor: tBd('#e7eefb'), backgroundColor: C.rowBg, padding: 12, gap: 4 },
+  optMain: { borderColor: C.blue, borderWidth: 1.5, backgroundColor: tBg('#f5f8ff') },
   optHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   optTitle: { flex: 1, color: C.text, fontWeight: '800', fontSize: 15, textAlign: 'right' },
-  optTag: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, backgroundColor: '#e7eefb' },
+  optTag: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, backgroundColor: tBg('#e7eefb') },
   optTagText: { color: C.sub, fontWeight: '800', fontSize: 10.5 },
   optDesc: { color: C.sub, fontSize: 12, textAlign: 'right', lineHeight: 18 },
   optNote: { color: C.violet, fontSize: 11.5, textAlign: 'right', fontWeight: '700' },

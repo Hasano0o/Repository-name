@@ -10,7 +10,7 @@ import { BandConfig, Signal, CellTower } from '../../src/drivers/types';
 import { LEVEL_COLOR, LEVEL_LABEL, overallLevel, parseBands, signalScore } from '../../src/utils/signal';
 import { bandFreq, SCAN_PREFERRED, bandLabel, freqLabel, nrFreq } from '../../src/utils/bands';
 import { fmtTime } from '../../src/utils/format';
-import { C, R, S, T } from '../../src/ui/theme';
+import { C, R, S, T, tFg } from '../../src/ui/theme';
 import { HeroCard, MetricCard } from '../../src/ui/Cards';
 import { Icon } from '../../src/ui/Icon';
 import { Skeleton, ErrorCard } from '../../src/ui/States';
@@ -926,7 +926,7 @@ const s = StyleSheet.create({
   // المرحلة ١
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: S.md },
   pill: { borderRadius: R.pill, paddingHorizontal: S.md, paddingVertical: 5 },
-  pillText: { color: '#fff', fontWeight: '800', fontSize: T.label },
+  pillText: { color: tFg('#fff'), fontWeight: '800', fontSize: T.label },
   heroBand: { color: C.text, fontWeight: '800', fontSize: T.h1 },
   heroFreq: { color: C.sub, fontSize: T.label, marginTop: 2 },
   statRow: { flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: C.card, borderRadius: R.md, paddingVertical: S.sm },
@@ -954,7 +954,7 @@ const s = StyleSheet.create({
   barBg: { height: 7, borderRadius: 4, backgroundColor: C.track, overflow: 'hidden' },
   bar: { height: 7, borderRadius: 4 },
   tag: { backgroundColor: C.green, borderRadius: R.pill, paddingHorizontal: 7, paddingVertical: 2 },
-  tagText: { color: '#fff', fontWeight: '800', fontSize: T.tiny },
+  tagText: { color: tFg('#fff'), fontWeight: '800', fontSize: T.tiny },
   dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.green },
 
   // المرحلة ٣

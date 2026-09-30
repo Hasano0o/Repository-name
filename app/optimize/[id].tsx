@@ -8,7 +8,7 @@ import { BandConfig, CellTower } from '../../src/drivers/types';
 import { OptTarget, buildCandidates } from '../../src/utils/optimize';
 import { bandLabel, freqLabel } from '../../src/utils/bands';
 import { saveProfile } from '../../src/store/profiles';
-import { C } from '../../src/ui/theme';
+import { C, tBg, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import {
   testBand, scoreResult, testLabel, verdictText,
@@ -282,7 +282,7 @@ export default function OptimizeScreen() {
               <Text style={s.btnTxt}>ابدأ التحسين</Text>
             </Pressable>
             <Pressable
-              style={[s.btn, { backgroundColor: '#9333ea', marginTop: 8 }]}
+              style={[s.btn, { backgroundColor: tBg('#9333ea'), marginTop: 8 }]}
               onPress={() => router.push(`/anchor/${id}` as Href)}
             >
               <Text style={s.btnTxt}>🔍 مرساة 5G — أي تردد يفتح 5G؟</Text>
@@ -370,7 +370,7 @@ const s = StyleSheet.create({
   },
   modeBtnOn: { backgroundColor: C.violet, borderColor: C.violet },
   modeTxt: { color: C.text, fontWeight: '800', fontSize: 13 },
-  modeTxtOn: { color: '#ffffff' },
+  modeTxtOn: { color: tFg('#ffffff') },
   modeSub: { color: C.muted, fontSize: 10.5, marginTop: 2 },
   btn: { backgroundColor: C.violet, borderRadius: 14, paddingVertical: 13, alignItems: 'center', marginTop: 12 },
   btnRed: { backgroundColor: C.red },

@@ -7,7 +7,7 @@ import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { BandConfig, Carrier, CellTower } from '../../src/drivers/types';
 import { snapshot, waitOnline, trialMessage, Snapshot, safeApply } from '../../src/utils/safeLock';
-import { C, R, S } from '../../src/ui/theme';
+import { C, R, S, tFg } from '../../src/ui/theme';
 
 const ACCENT = '#f59e0b';
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -276,7 +276,7 @@ const s = StyleSheet.create({
   title: { color: C.text, fontWeight: '800', fontSize: 17, textAlign: 'right' },
   body: { color: C.sub, fontSize: 13, lineHeight: 21, textAlign: 'right' },
   meta: { color: C.text, fontSize: 13, fontWeight: '700', textAlign: 'right' },
-  warn: { color: '#d97706', fontSize: 12, textAlign: 'right', fontWeight: '700', lineHeight: 18 },
+  warn: { color: tFg('#d97706'), fontSize: 12, textAlign: 'right', fontWeight: '700', lineHeight: 18 },
   btn: { backgroundColor: ACCENT, borderRadius: R.md, paddingVertical: 13, alignItems: 'center', marginTop: 4 },
   btnText: { color: C.onAccent, fontWeight: '800', fontSize: 14 },
   statusText: { color: ACCENT, fontSize: 12.5, fontWeight: '700', textAlign: 'right' },

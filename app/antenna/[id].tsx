@@ -15,6 +15,7 @@ import { adviseAntenna, AntennaAdvice, Need } from '../../src/utils/antenna';
 import { Icon } from '../../src/ui/Icon';
 import { Level, LEVEL_COLOR, LEVEL_LABEL, rsrpLevel, rsrqLevel, sinrLevel, rssiLevel } from '../../src/utils/signal';
 
+import { tBg, tFg } from '../../src/ui/theme';
 const { width: SCREEN_W } = Dimensions.get('window');
 
 // ═══ Design tokens (هوية Bandly) ═══
@@ -185,7 +186,7 @@ export default function AntennaAdvisor() {
           <>
             {/* ═══ البطاقة الرئيسية: التوصية ═══ */}
             <LinearGradient
-              colors={[theme.soft, '#FFFFFF']}
+              colors={[theme.soft, tBg('#FFFFFF')]}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
               style={[g.mainCard, { borderColor: theme.main + '60' }]}
@@ -213,8 +214,8 @@ export default function AntennaAdvisor() {
               )}
 
               {!!adv.otherCause && (
-                <View style={[g.otherBox, { backgroundColor: '#FFFBEB', borderColor: WARN + '50' }]}>
-                  <Text style={[g.otherTxt, { color: '#92400E' }]}>💡 {adv.otherCause}</Text>
+                <View style={[g.otherBox, { backgroundColor: tBg('#FFFBEB'), borderColor: WARN + '50' }]}>
+                  <Text style={[g.otherTxt, { color: tFg('#92400E') }]}>💡 {adv.otherCause}</Text>
                 </View>
               )}
             </LinearGradient>
@@ -309,7 +310,7 @@ export default function AntennaAdvisor() {
                   style={[g.toggleBtn, hasAnt && g.toggleBtnOn]}
                   onPress={toggleAnt}
                 >
-                  <Text style={[g.toggleTxt, hasAnt && { color: '#FFF' }]}>
+                  <Text style={[g.toggleTxt, hasAnt && { color: tFg('#FFF') }]}>
                     {hasAnt ? '✓ عندي أنتنا' : 'عندي أنتنا؟'}
                   </Text>
                 </Pressable>
@@ -346,7 +347,7 @@ export default function AntennaAdvisor() {
                   end={{ x: 1, y: 0 }}
                   style={g.cta}
                 >
-                  <Icon name="antenna" size={20} color="#FFF" />
+                  <Icon name="antenna" size={20} color={tFg('#FFF')} />
                   <Text style={g.ctaTxt}>🔊 وجّه الأنتنا بوضع الصوت</Text>
                 </LinearGradient>
               </Pressable>
@@ -412,7 +413,7 @@ const g = StyleSheet.create({
   },
   metricCard: {
     flexBasis: '47%', flexGrow: 1,
-    backgroundColor: '#E9EEF5', borderRadius: 14,
+    backgroundColor: tBg('#E9EEF5'), borderRadius: 14,
     borderWidth: 1, borderColor: BORDER,
     paddingVertical: 12, paddingHorizontal: 10, gap: 6,
   },
@@ -441,7 +442,7 @@ const g = StyleSheet.create({
   },
   ringsHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   ringsIcon: {
-    width: 32, height: 32, borderRadius: 10, backgroundColor: '#E1F5FF',
+    width: 32, height: 32, borderRadius: 10, backgroundColor: tBg('#E1F5FF'),
     alignItems: 'center', justifyContent: 'center',
   },
   ringsTitle: { color: TEXT, fontSize: 15, fontWeight: '900', textAlign: 'right' },
@@ -478,7 +479,7 @@ const g = StyleSheet.create({
     width: 20, height: 20, borderRadius: 10,
     alignItems: 'center', justifyContent: 'center', marginTop: 1,
   },
-  checkDotTxt: { color: '#FFF', fontSize: 11, fontWeight: '900' },
+  checkDotTxt: { color: tFg('#FFF'), fontSize: 11, fontWeight: '900' },
   checkTxt: { flex: 1, color: TEXT, fontSize: 12.5, lineHeight: 20, textAlign: 'right' },
 
   emptyTxt: { color: MUTED, fontSize: 12.5, textAlign: 'right', marginTop: 4 },
@@ -492,7 +493,7 @@ const g = StyleSheet.create({
     shadowRadius: 14, shadowOffset: { width: 0, height: 6 },
     elevation: 5,
   },
-  ctaTxt: { color: '#FFF', fontWeight: '900', fontSize: 15 },
+  ctaTxt: { color: tFg('#FFF'), fontWeight: '900', fontSize: 15 },
 
   footNote: { color: MUTED, fontSize: 11.5, textAlign: 'center', lineHeight: 18, marginTop: 4 },
 });

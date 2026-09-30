@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import * as Updates from 'expo-updates';
-import { C } from './theme';
+import { C, tFg } from './theme';
 
 /**
  * تحديث عن بُعد — التطبيق ينزّل التحديث بالخلفية عند الفتح،
@@ -42,8 +42,8 @@ const s = StyleSheet.create({
     backgroundColor: C.text, borderRadius: 18, paddingVertical: 10, paddingHorizontal: 14,
     shadowColor: C.shadow, shadowOpacity: 0.25, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8,
   },
-  text: { flex: 1, color: '#fff', fontWeight: '700', fontSize: 13, textAlign: 'right' },
+  text: { flex: 1, color: tFg('#fff'), fontWeight: '700', fontSize: 13, textAlign: 'right' },
   btn: { backgroundColor: C.blue, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12 },
-  btnText: { color: '#fff', fontWeight: '800', fontSize: 13 },
-  later: { color: '#c9d4ee', fontSize: 12, fontWeight: '700' },
+  btnText: { color: tFg('#fff'), fontWeight: '800', fontSize: 13 },
+  later: { color: tFg('#c9d4ee'), fontSize: 12, fontWeight: '700' },
 });

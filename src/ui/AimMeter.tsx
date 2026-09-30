@@ -8,15 +8,16 @@ import Svg, { Circle, Path, Line, Defs, LinearGradient as SvgLinearGradient, Sto
 import { Icon } from './Icon';
 import { P, Hero } from './Pro';
 
+import { tBd, tBg, tFg } from './theme';
 export type Trend = 'up' | 'down' | 'flat';
 export const trendOf = (now?: number, prev?: number): Trend =>
   now !== undefined && prev !== undefined ? (now > prev + 0.5 ? 'up' : now < prev - 0.5 ? 'down' : 'flat') : 'flat';
 
 export function TrendMark({ t, light }: { t: Trend; light?: boolean }) {
-  if (t === 'flat') return <View style={[a.flat, light && { backgroundColor: 'rgba(255,255,255,0.6)' }]} />;
+  if (t === 'flat') return <View style={[a.flat, light && { backgroundColor: tBg('rgba(255,255,255,0.6)') }]} />;
   return (
-    <View style={[a.trend, { backgroundColor: t === 'up' ? '#16c784' : '#ff5a5f' }]}>
-      <Icon name={t} size={11} color="#fff" stroke={3} />
+    <View style={[a.trend, { backgroundColor: t === 'up' ? tBg('#16c784') : tBg('#ff5a5f') }]}>
+      <Icon name={t} size={11} color={tFg('#fff')} stroke={3} />
     </View>
   );
 }
@@ -74,10 +75,10 @@ export function AimMeter({ value, best, delta, sinr, trend, levelLabel, cellLabe
   cellLabel?: string; isNr?: boolean; hint: string; hintColor?: string; right?: ReactNode;
 }) {
   return (
-    <Hero colors={isNr ? ['#6a45ec', '#a24bd8'] : [P.heroA, P.heroB]} style={{ paddingVertical: 14 }}>
+    <Hero colors={isNr ? [tBg('#6a45ec'), tBg('#a24bd8')] : [P.heroA, P.heroB]} style={{ paddingVertical: 14 }}>
       <View style={a.mTop}>
         <View style={a.mTag}>
-          <Icon name="tower" size={13} color="#fff" stroke={2.2} />
+          <Icon name="tower" size={13} color={tFg('#fff')} stroke={2.2} />
           <Text style={a.mTagTxt} numberOfLines={1}>{cellLabel || (isNr ? '5G' : '4G')}</Text>
         </View>
         <View style={{ flex: 1 }} />
@@ -105,7 +106,7 @@ export function AimMeter({ value, best, delta, sinr, trend, levelLabel, cellLabe
       <View style={a.mStats}>
         <View style={a.mStat}>
           <Text style={a.mStatLbl}>عن البداية</Text>
-          <Text style={[a.mStatVal, delta !== undefined && delta > 0.5 && { color: '#7dffc4' }, delta !== undefined && delta < -0.5 && { color: '#ffb3b5' }]}>
+          <Text style={[a.mStatVal, delta !== undefined && delta > 0.5 && { color: tFg('#7dffc4') }, delta !== undefined && delta < -0.5 && { color: tFg('#ffb3b5') }]}>
             {delta === undefined ? '—' : `${delta > 0.5 ? '+' : ''}${Math.round(delta)} dB`}
           </Text>
         </View>
@@ -125,7 +126,7 @@ export function AimMeter({ value, best, delta, sinr, trend, levelLabel, cellLabe
       </View>
 
       <View style={a.mHint}>
-        <View style={[a.mDot, { backgroundColor: hintColor || 'rgba(255,255,255,0.5)' }]} />
+        <View style={[a.mDot, { backgroundColor: hintColor || tBg('rgba(255,255,255,0.5)') }]} />
         <Text style={a.mHintTxt} numberOfLines={1}>{hint}</Text>
       </View>
     </Hero>
@@ -136,34 +137,34 @@ const a = StyleSheet.create({
   mTop: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   mTag: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 6, flexShrink: 1,
-    backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 999, paddingHorizontal: 11, height: 30,
+    backgroundColor: tBg('rgba(255,255,255,0.18)'), borderRadius: 999, paddingHorizontal: 11, height: 30,
   },
-  mTagTxt: { color: '#fff', fontSize: 12.5, fontWeight: '800' },
+  mTagTxt: { color: tFg('#fff'), fontSize: 12.5, fontWeight: '800' },
   mBtn: {
     width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.16)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: tBg('rgba(255,255,255,0.16)'), borderWidth: 1, borderColor: tBd('rgba(255,255,255,0.25)'),
   },
-  mBtnOn: { backgroundColor: '#fff', borderColor: '#fff' },
+  mBtnOn: { backgroundColor: tBg('#fff'), borderColor: tBd('#fff') },
   mGauge: { alignItems: 'center', marginTop: 6 },
   mCenter: { position: 'absolute', bottom: 6, alignItems: 'center' },
   mNumRow: { flexDirection: 'row', alignItems: 'baseline' },
-  mNum: { color: '#fff', fontSize: 50, fontWeight: '800', letterSpacing: -2, lineHeight: 56 },
-  mUnit: { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: '700', marginLeft: 4 },
+  mNum: { color: tFg('#fff'), fontSize: 50, fontWeight: '800', letterSpacing: -2, lineHeight: 56 },
+  mUnit: { color: tFg('rgba(255,255,255,0.8)'), fontSize: 14, fontWeight: '700', marginLeft: 4 },
   mChips: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
-  mLevel: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  mLevel: { color: tFg('#fff'), fontSize: 13, fontWeight: '800' },
   mScale: { flexDirection: 'row', justifyContent: 'space-between', width: 250, marginTop: -2 },
-  mScaleTxt: { color: 'rgba(255,255,255,0.6)', fontSize: 10.5, fontWeight: '700' },
+  mScaleTxt: { color: tFg('rgba(255,255,255,0.6)'), fontSize: 10.5, fontWeight: '700' },
   mStats: {
-    flexDirection: 'row-reverse', marginTop: 10, backgroundColor: 'rgba(255,255,255,0.14)',
-    borderRadius: 16, paddingVertical: 9, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+    flexDirection: 'row-reverse', marginTop: 10, backgroundColor: tBg('rgba(255,255,255,0.14)'),
+    borderRadius: 16, paddingVertical: 9, borderWidth: 1, borderColor: tBd('rgba(255,255,255,0.18)'),
   },
   mStat: { flex: 1, alignItems: 'center', gap: 1 },
-  mSep: { width: 1, backgroundColor: 'rgba(255,255,255,0.22)', marginVertical: 3 },
-  mStatLbl: { color: 'rgba(255,255,255,0.75)', fontSize: 10.5, fontWeight: '700' },
-  mStatVal: { color: '#fff', fontSize: 15, fontWeight: '800' },
-  mBestDot: { width: 8, height: 3, borderRadius: 2, backgroundColor: '#ffd166' },
+  mSep: { width: 1, backgroundColor: tBg('rgba(255,255,255,0.22)'), marginVertical: 3 },
+  mStatLbl: { color: tFg('rgba(255,255,255,0.75)'), fontSize: 10.5, fontWeight: '700' },
+  mStatVal: { color: tFg('#fff'), fontSize: 15, fontWeight: '800' },
+  mBestDot: { width: 8, height: 3, borderRadius: 2, backgroundColor: tBg('#ffd166') },
   mHint: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10 },
-  mHintTxt: { color: '#fff', fontSize: 12.5, fontWeight: '700' },
+  mHintTxt: { color: tFg('#fff'), fontSize: 12.5, fontWeight: '700' },
 
   mDot: { width: 8, height: 8, borderRadius: 4 },
   trend: { width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },

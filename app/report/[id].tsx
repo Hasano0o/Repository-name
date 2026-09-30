@@ -11,7 +11,7 @@ import { loadHistory } from '../../src/store/history';
 import { measureLatency, LatencyResult } from '../../src/utils/latency';
 import { buildSummary, reportToText, ReportInput, ReportSummary } from '../../src/utils/report';
 import { overallLevel, LEVEL_COLOR, LEVEL_LABEL, parseBands, parseNrBands } from '../../src/utils/signal';
-import { C } from '../../src/ui/theme';
+import { C, tBg } from '../../src/ui/theme';
 import { Icon } from '../../src/ui/Icon';
 import { GlassCard } from '../../src/ui/GlassCard';
 
@@ -109,7 +109,7 @@ export default function ReportScreen() {
       {/* البطاقة القابلة للمشاركة كصورة */}
       {input && sum && (
         <View ref={shotRef} collapsable={false} style={s.shot}>
-          <LinearGradient colors={['#f4f8ff', '#eaf2ff', '#e8f8f1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.shotInner}>
+          <LinearGradient colors={[tBg('#f4f8ff'), tBg('#eaf2ff'), tBg('#e8f8f1')]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.shotInner}>
             <View style={s.shotHead}>
               <View style={s.brandDot}><Icon name="tower" size={16} color={C.onAccent} /></View>
               <Text style={s.brand}>موجة</Text>
@@ -233,7 +233,7 @@ const s = StyleSheet.create({
   shotRouter: { color: C.text, fontSize: 13.5, fontWeight: '700', textAlign: 'right' },
   shotMetrics: {
     flexDirection: 'row-reverse', alignItems: 'center',
-    backgroundColor: '#ffffffcc', borderRadius: 16, paddingVertical: 12, paddingHorizontal: 8,
+    backgroundColor: tBg('#ffffffcc'), borderRadius: 16, paddingVertical: 12, paddingHorizontal: 8,
   },
   shotMetric: { flex: 1, alignItems: 'center', gap: 3 },
   shotVal: { color: C.text, fontSize: 19, fontWeight: '900' },

@@ -51,6 +51,7 @@ import { Level, LEVEL_COLOR, overallLevel, signalScore, parseBands, parseNrBands
 import { trafficBurst } from '../../src/utils/nrprobe';
 import { AimBeeper } from '../../src/utils/aimSound';
 
+import { tBd, tBg, tFg } from '../../src/ui/theme';
 // ═══ Design tokens ═══
 const BLUE = P.blue;
 const PURPLE = P.violet;
@@ -125,7 +126,7 @@ function LineChart({ values, min, max, color, width }: { values: number[]; min: 
       </Defs>
       {[-70, -90, -110].map((v, i) => {
         const y = pad.top + innerH - ((v - min) / range) * innerH;
-        return <Line key={i} x1={0} y1={y} x2={width} y2={y} stroke="#edf1f8" strokeWidth={1} strokeDasharray="4 5" />;
+        return <Line key={i} x1={0} y1={y} x2={width} y2={y} stroke={tBd('#edf1f8')} strokeWidth={1} strokeDasharray="4 5" />;
       })}
       <Path d={area} fill="url(#area)" />
       <Path d={line} stroke={color} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
@@ -755,18 +756,18 @@ export default function AimScreen() {
             {/* ═══ شريط التوجيه: الصوت والاهتزاز + وين أنت من أفضل نقطة ═══ */}
             <View style={a.aimBar}>
               <Pressable onPress={() => setSound(v => !v)} style={[a.aimTgl, sound && { backgroundColor: PURPLE, borderColor: PURPLE }]}>
-                <Icon name="sound" size={16} color={sound ? '#fff' : MUTED} stroke={2.2} />
-                <Text style={[a.aimTglTxt, sound && { color: '#fff' }]}>الصوت</Text>
+                <Icon name="sound" size={16} color={sound ? tFg('#fff') : MUTED} stroke={2.2} />
+                <Text style={[a.aimTglTxt, sound && { color: tFg('#fff') }]}>الصوت</Text>
               </Pressable>
               <Pressable onPress={() => setHaptics(v => !v)} style={[a.aimTgl, haptics && { backgroundColor: SUCCESS, borderColor: SUCCESS }]}>
-                <Icon name="vibrate" size={16} color={haptics ? '#fff' : MUTED} stroke={2.2} />
-                <Text style={[a.aimTglTxt, haptics && { color: '#fff' }]}>الاهتزاز</Text>
+                <Icon name="vibrate" size={16} color={haptics ? tFg('#fff') : MUTED} stroke={2.2} />
+                <Text style={[a.aimTglTxt, haptics && { color: tFg('#fff') }]}>الاهتزاز</Text>
               </Pressable>
               <View style={[a.aimState, {
                 backgroundColor: gapToBest === undefined ? P.soft : gapToBest <= 1 ? P.greenSoft : gapToBest >= 5 ? P.redSoft : P.amberSoft,
               }]}>
                 <Text numberOfLines={1} style={[a.aimStateTxt, {
-                  color: gapToBest === undefined ? MUTED : gapToBest <= 1 ? SUCCESS : gapToBest >= 5 ? DANGER : '#b76e00',
+                  color: gapToBest === undefined ? MUTED : gapToBest <= 1 ? SUCCESS : gapToBest >= 5 ? DANGER : tFg('#b76e00'),
                 }]}>
                   {gapToBest === undefined ? 'نجمع القراءات…' : gapToBest <= 1 ? 'على أفضل نقطة ✓' : `أقل من الأفضل بـ ${gapToBest} dB`}
                 </Text>
@@ -781,7 +782,7 @@ export default function AimScreen() {
               <Section title="شارك مع فني" sub="الفني يشوف قراءتك حيّة ويوجّهك وهو في مكانه" icon="share"
                 tone={P.cyan} toneSoft={P.cyanSoft}>
                 <PrimaryBtn small text="شارك قراءتي مع فني" icon="share" onPress={startShare} busy={liveBusy}
-                  colors={['#0ea5c6', '#2f6bff']} style={{ marginTop: 12 }} />
+                  colors={[tBg('#0ea5c6'), tBg('#2f6bff')]} style={{ marginTop: 12 }} />
                 <Pressable onPress={() => Linking.openURL(`${LIVE_BASE}/live/`).catch(() => {})} style={a.linkRow}>
                   <Text style={a.linkTxt}>ما عندك فني؟ شوف الفنيين المعتمدين</Text>
                 </Pressable>
@@ -789,7 +790,7 @@ export default function AimScreen() {
             ) : (
               <View style={a.liveCard}>
                 <View style={a.liveHead}>
-                  <View style={[a.liveDot, { backgroundColor: liveOn ? '#16c784' : '#ffb020' }]} />
+                  <View style={[a.liveDot, { backgroundColor: liveOn ? tBg('#16c784') : tBg('#ffb020') }]} />
                   <Text style={a.liveTitle}>{liveOn ? 'المشاركة شغالة' : 'نعيد الاتصال…'}</Text>
                   <View style={{ flex: 1 }} />
                   <Pressable onPress={stopShare} hitSlop={8} style={a.liveStop}>
@@ -806,12 +807,12 @@ export default function AimScreen() {
                     onPress={() => callRef.current?.call()}
                     hint={viewers.length ? 'مكالمة حيّة — وتقدر تشغّل الكاميرا 📹 عشان الفني يشوف الهوائي' : 'الزر يتفعّل أول ما يفتح الفني الرابط'} />
                   <CallEnded info={callInfo} />
-                  <PushToTalk label="أو أرسل رسالة صوتية (اضغط مطوّل)" color="#0b7f99" disabled={!viewers.length}
+                  <PushToTalk label="أو أرسل رسالة صوتية (اضغط مطوّل)" color={tFg('#0b7f99')} disabled={!viewers.length}
                     onSend={(uri, dur) => liveRef.current ? liveRef.current.voice(uri, dur) : Promise.resolve()} />
                   {!!lastVoice && <VoiceNote from={lastVoice.from} dur={lastVoice.dur} onReplay={() => playVoice(lastVoice.url)} />}
                 </View>
                 <PrimaryBtn small text="أرسل الرابط للفني" icon="share" onPress={() => shareLink()}
-                  colors={['#0ea5c6', '#2f6bff']} style={{ marginTop: 10, alignSelf: 'stretch' }} />
+                  colors={[tBg('#0ea5c6'), tBg('#2f6bff')]} style={{ marginTop: 10, alignSelf: 'stretch' }} />
                 <Text style={a.liveHint}>خلّ التطبيق مفتوح على هذي الشاشة لين يخلص الفني — الشاشة ما راح تنطفي.</Text>
               </View>
             )}
@@ -835,7 +836,7 @@ export default function AimScreen() {
                       onPress={() => !disabled && switchTech(t)}
                       disabled={disabled}
                     >
-                      <Text style={[a.segTxt, on && { color: '#FFF' }]}>{t === 'NR' ? '5G' : '4G LTE'}</Text>
+                      <Text style={[a.segTxt, on && { color: tFg('#FFF') }]}>{t === 'NR' ? '5G' : '4G LTE'}</Text>
                     </Pressable>
                   );
                 })}
@@ -850,7 +851,7 @@ export default function AimScreen() {
                     return (
                       <View key={b} style={[a.chip, on && { backgroundColor: col, borderColor: col }]}>
                         {on && <View style={a.chipDot} />}
-                        <Text style={[a.chipTxt, { color: on ? '#FFF' : col }]}>{b}</Text>
+                        <Text style={[a.chipTxt, { color: on ? tFg('#FFF') : col }]}>{b}</Text>
                       </View>
                     );
                   })}
@@ -913,7 +914,7 @@ export default function AimScreen() {
                   </Pressable>
                 ) : (
                   <PrimaryBtn small text="ابحث عن 5G" icon="spark" onPress={wake5g}
-                    colors={['#6a45ec', '#a24bd8']} style={{ marginTop: 12 }} />
+                    colors={[tBg('#6a45ec'), tBg('#a24bd8')]} style={{ marginTop: 12 }} />
                 )}
               </Section>
             )}
@@ -921,7 +922,7 @@ export default function AimScreen() {
             {/* ═══ Chart ═══ */}
             {readings.length > 3 && (
               <Section title="تاريخ قوة الإشارة" sub={`آخر ${Math.min(30, readings.length)} قراءة`} icon="chart"
-                right={<Chip text={`${shown ?? '—'} dBm`} color="#fff" bg={lvlColor} />}>
+                right={<Chip text={`${shown ?? '—'} dBm`} color={tFg('#fff')} bg={lvlColor} />}>
                 <View style={{ marginTop: 12 }} onLayout={e => setChartW(e.nativeEvent.layout.width)}>
                   <LineChart values={chartValues} min={-125} max={-60} color={lvlColor} width={chartW} />
                 </View>
@@ -1006,34 +1007,34 @@ const a = StyleSheet.create({
   mTop: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   mTag: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 6, flexShrink: 1,
-    backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 999, paddingHorizontal: 11, height: 30,
+    backgroundColor: tBg('rgba(255,255,255,0.18)'), borderRadius: 999, paddingHorizontal: 11, height: 30,
   },
-  mTagTxt: { color: '#fff', fontSize: 12.5, fontWeight: '800' },
+  mTagTxt: { color: tFg('#fff'), fontSize: 12.5, fontWeight: '800' },
   mBtn: {
     width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.16)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: tBg('rgba(255,255,255,0.16)'), borderWidth: 1, borderColor: tBd('rgba(255,255,255,0.25)'),
   },
-  mBtnOn: { backgroundColor: '#fff', borderColor: '#fff' },
+  mBtnOn: { backgroundColor: tBg('#fff'), borderColor: tBd('#fff') },
   mGauge: { alignItems: 'center', marginTop: 6 },
   mCenter: { position: 'absolute', bottom: 6, alignItems: 'center' },
   mNumRow: { flexDirection: 'row', alignItems: 'baseline' },
-  mNum: { color: '#fff', fontSize: 50, fontWeight: '800', letterSpacing: -2, lineHeight: 56 },
-  mUnit: { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: '700', marginLeft: 4 },
+  mNum: { color: tFg('#fff'), fontSize: 50, fontWeight: '800', letterSpacing: -2, lineHeight: 56 },
+  mUnit: { color: tFg('rgba(255,255,255,0.8)'), fontSize: 14, fontWeight: '700', marginLeft: 4 },
   mChips: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
-  mLevel: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  mLevel: { color: tFg('#fff'), fontSize: 13, fontWeight: '800' },
   mScale: { flexDirection: 'row', justifyContent: 'space-between', width: 250, marginTop: -2 },
-  mScaleTxt: { color: 'rgba(255,255,255,0.6)', fontSize: 10.5, fontWeight: '700' },
+  mScaleTxt: { color: tFg('rgba(255,255,255,0.6)'), fontSize: 10.5, fontWeight: '700' },
   mStats: {
-    flexDirection: 'row-reverse', marginTop: 10, backgroundColor: 'rgba(255,255,255,0.14)',
-    borderRadius: 16, paddingVertical: 9, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+    flexDirection: 'row-reverse', marginTop: 10, backgroundColor: tBg('rgba(255,255,255,0.14)'),
+    borderRadius: 16, paddingVertical: 9, borderWidth: 1, borderColor: tBd('rgba(255,255,255,0.18)'),
   },
   mStat: { flex: 1, alignItems: 'center', gap: 1 },
-  mSep: { width: 1, backgroundColor: 'rgba(255,255,255,0.22)', marginVertical: 3 },
-  mStatLbl: { color: 'rgba(255,255,255,0.75)', fontSize: 10.5, fontWeight: '700' },
-  mStatVal: { color: '#fff', fontSize: 15, fontWeight: '800' },
-  mBestDot: { width: 8, height: 3, borderRadius: 2, backgroundColor: '#ffd166' },
+  mSep: { width: 1, backgroundColor: tBg('rgba(255,255,255,0.22)'), marginVertical: 3 },
+  mStatLbl: { color: tFg('rgba(255,255,255,0.75)'), fontSize: 10.5, fontWeight: '700' },
+  mStatVal: { color: tFg('#fff'), fontSize: 15, fontWeight: '800' },
+  mBestDot: { width: 8, height: 3, borderRadius: 2, backgroundColor: tBg('#ffd166') },
   mHint: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10 },
-  mHintTxt: { color: '#fff', fontSize: 12.5, fontWeight: '700' },
+  mHintTxt: { color: tFg('#fff'), fontSize: 12.5, fontWeight: '700' },
   heroCard: {
     backgroundColor: P.card, borderRadius: 24, padding: 14, gap: 12,
     borderWidth: 1, borderColor: P.border, ...shadow,
@@ -1053,28 +1054,28 @@ const a = StyleSheet.create({
   heroTop: { flexDirection: 'row-reverse', justifyContent: 'space-between', gap: 8 },
   heroTag: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 6, flexShrink: 1,
-    backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 999, paddingHorizontal: 10, height: 28,
+    backgroundColor: tBg('rgba(255,255,255,0.18)'), borderRadius: 999, paddingHorizontal: 10, height: 28,
   },
-  heroTagTxt: { color: '#fff', fontSize: 11.5, fontWeight: '800' },
+  heroTagTxt: { color: tFg('#fff'), fontSize: 11.5, fontWeight: '800' },
   stabDot: { width: 8, height: 8, borderRadius: 4 },
-  ringLbl: { color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '800', letterSpacing: 1 },
-  ringVal: { color: '#fff', fontSize: 50, fontWeight: '800', letterSpacing: -2, lineHeight: 58 },
-  ringUnit: { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: '700' },
+  ringLbl: { color: tFg('rgba(255,255,255,0.75)'), fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+  ringVal: { color: tFg('#fff'), fontSize: 50, fontWeight: '800', letterSpacing: -2, lineHeight: 58 },
+  ringUnit: { color: tFg('rgba(255,255,255,0.8)'), fontSize: 14, fontWeight: '700' },
   ringRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
-  ringLevel: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  ringLevel: { color: tFg('#fff'), fontSize: 13, fontWeight: '800' },
   deltaPill: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4, marginTop: -6 },
-  deltaTxt: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  deltaTxt: { color: tFg('#fff'), fontSize: 12, fontWeight: '800' },
 
   gRow: {
-    flexDirection: 'row-reverse', marginTop: 14, backgroundColor: 'rgba(255,255,255,0.14)',
-    borderRadius: 18, paddingVertical: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+    flexDirection: 'row-reverse', marginTop: 14, backgroundColor: tBg('rgba(255,255,255,0.14)'),
+    borderRadius: 18, paddingVertical: 10, borderWidth: 1, borderColor: tBd('rgba(255,255,255,0.18)'),
   },
   gStat: { flex: 1, alignItems: 'center', gap: 2, paddingHorizontal: 4 },
-  gSep: { width: 1, backgroundColor: 'rgba(255,255,255,0.22)', marginVertical: 4 },
-  gLbl: { color: 'rgba(255,255,255,0.78)', fontSize: 11, fontWeight: '700' },
-  gVal: { color: '#fff', fontSize: 19, fontWeight: '800' },
-  gUnit: { color: 'rgba(255,255,255,0.8)', fontSize: 10.5, fontWeight: '700' },
-  heroHint: { color: 'rgba(255,255,255,0.85)', fontSize: 11.5, textAlign: 'center', marginTop: 10 },
+  gSep: { width: 1, backgroundColor: tBg('rgba(255,255,255,0.22)'), marginVertical: 4 },
+  gLbl: { color: tFg('rgba(255,255,255,0.78)'), fontSize: 11, fontWeight: '700' },
+  gVal: { color: tFg('#fff'), fontSize: 19, fontWeight: '800' },
+  gUnit: { color: tFg('rgba(255,255,255,0.8)'), fontSize: 10.5, fontWeight: '700' },
+  heroHint: { color: tFg('rgba(255,255,255,0.85)'), fontSize: 11.5, textAlign: 'center', marginTop: 10 },
 
   trend: { width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   flat: { width: 8, height: 8, borderRadius: 4, backgroundColor: P.faint, marginHorizontal: 4 },
@@ -1090,7 +1091,7 @@ const a = StyleSheet.create({
     height: 34, paddingHorizontal: 16, borderRadius: 17,
     backgroundColor: P.card, borderWidth: 1.5, borderColor: P.border,
   },
-  chipDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff' },
+  chipDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: tBg('#fff') },
   chipTxt: { fontWeight: '800', fontSize: 12.5 },
 
   dirBody: { flexDirection: 'row-reverse', gap: 8, marginTop: 14 },
@@ -1111,7 +1112,7 @@ const a = StyleSheet.create({
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 7,
     backgroundColor: P.greenSoft, borderRadius: 16, paddingVertical: 12, marginTop: 10,
   },
-  shotTxt: { color: '#0b7a47', fontWeight: '800', fontSize: 13 },
+  shotTxt: { color: tFg('#0b7a47'), fontWeight: '800', fontSize: 13 },
 
   wakeOn: {
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12,
@@ -1127,7 +1128,7 @@ const a = StyleSheet.create({
   tipRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, paddingVertical: 5 },
   tipNum: { width: 22, height: 22, borderRadius: 11, backgroundColor: P.amberSoft, alignItems: 'center', justifyContent: 'center' },
   tipNumTxt: { color: WARN, fontSize: 11, fontWeight: '800' },
-  tipTxt: { flex: 1, textAlign: 'right', color: '#4b5675', fontSize: 13, lineHeight: 20 },
+  tipTxt: { flex: 1, textAlign: 'right', color: tFg('#4b5675'), fontSize: 13, lineHeight: 20 },
 
   footer: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -1141,24 +1142,24 @@ const a = StyleSheet.create({
   linkRow: { alignSelf: 'center', paddingTop: 10 },
   linkTxt: { color: P.cyan, fontSize: 12.5, fontWeight: '700' },
   liveCard: {
-    backgroundColor: '#eaf8fc', borderRadius: 22, padding: 16, borderWidth: 1.5, borderColor: '#bfeaf5', alignItems: 'center',
+    backgroundColor: tBg('#eaf8fc'), borderRadius: 22, padding: 16, borderWidth: 1.5, borderColor: tBd('#bfeaf5'), alignItems: 'center',
   },
   liveHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, alignSelf: 'stretch' },
   liveDot: { width: 10, height: 10, borderRadius: 5 },
   liveTitle: { color: TEXT, fontSize: 14.5, fontWeight: '800' },
-  liveStop: { backgroundColor: '#ffeef0', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 },
+  liveStop: { backgroundColor: tBg('#ffeef0'), borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 },
   liveStopTxt: { color: DANGER, fontWeight: '800', fontSize: 12.5 },
   liveLbl: { color: MUTED, fontSize: 12, fontWeight: '700', marginTop: 12 },
   liveCode: { color: TEXT, fontSize: 40, fontWeight: '800', letterSpacing: 4 },
-  liveViewers: { color: '#0b7f99', fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  liveViewers: { color: tFg('#0b7f99'), fontSize: 13, fontWeight: '700', textAlign: 'center' },
   liveHint: { color: MUTED, fontSize: 11.5, textAlign: 'center', marginTop: 10, lineHeight: 17 },
   sayWrap: { position: 'absolute', left: 16, right: 16, zIndex: 50 },
   sayBox: {
-    backgroundColor: '#0f1f45', borderRadius: 22, paddingVertical: 18, paddingHorizontal: 16, alignItems: 'center',
+    backgroundColor: tBg('#0f1f45'), borderRadius: 22, paddingVertical: 18, paddingHorizontal: 16, alignItems: 'center',
     shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 12,
   },
-  sayFrom: { color: 'rgba(255,255,255,0.7)', fontSize: 12.5, fontWeight: '700' },
-  sayTxt: { color: '#fff', fontSize: 26, fontWeight: '800', textAlign: 'center', marginTop: 4 },
+  sayFrom: { color: tFg('rgba(255,255,255,0.7)'), fontSize: 12.5, fontWeight: '700' },
+  sayTxt: { color: tFg('#fff'), fontSize: 26, fontWeight: '800', textAlign: 'center', marginTop: 4 },
 
   err: { color: DANGER, fontSize: 12, textAlign: 'center' },
 });

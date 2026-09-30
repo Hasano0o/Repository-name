@@ -10,6 +10,7 @@ import { Level, LEVEL_COLOR, rsrpLevel, sinrLevel, rsrqLevel, parseBands, parseN
 import { Icon, IconName } from './Icon';
 import { P, shadow } from './Pro';
 
+import { tBd, tBg, tFg } from './theme';
 export const pingLevel = (v?: number): Level =>
   v === undefined ? 'unknown' : v <= 40 ? 'excellent' : v <= 70 ? 'good' : v <= 120 ? 'fair' : 'poor';
 
@@ -52,14 +53,14 @@ function Gauge({ value, label, unit, level, r, dark, icon }: {
           {!empty && <Path d={arc(START, end)} stroke={col} strokeWidth={sw} strokeLinecap="round" fill="none" />}
           {!empty && <Circle cx={pol(end).x} cy={pol(end).y} r={sw * 0.3} fill="#fff" />}
         </Svg>
-        <Text style={[g.val, { color: empty ? P.faint : dark ? '#fff' : P.text, fontSize: txt.length > 4 ? 15 : 18 }]}
+        <Text style={[g.val, { color: empty ? P.faint : dark ? tFg('#fff') : P.text, fontSize: txt.length > 4 ? 15 : 18 }]}
           numberOfLines={1} adjustsFontSizeToFit>{txt}</Text>
       </View>
       <View style={g.lblRow}>
         <Text style={[g.lbl, { color: col }]}>{label}</Text>
         <Icon name={icon} size={11} color={col} stroke={2.4} />
       </View>
-      <Text style={[g.unit, dark && { color: 'rgba(255,255,255,0.55)' }]}>{unit}</Text>
+      <Text style={[g.unit, dark && { color: tFg('rgba(255,255,255,0.55)') }]}>{unit}</Text>
     </View>
   );
 }
@@ -70,12 +71,12 @@ function Tile({ icon, label, value, dark, accent }: {
 }) {
   return (
     <View style={[t.tile, dark && t.tileDark]}>
-      <View style={[t.icon, { backgroundColor: dark ? 'rgba(255,255,255,0.1)' : P.blueSoft }]}>
-        <Icon name={icon} size={14} color={dark ? '#b8c6ff' : P.blue} stroke={2.1} />
+      <View style={[t.icon, { backgroundColor: dark ? tBg('rgba(255,255,255,0.1)') : P.blueSoft }]}>
+        <Icon name={icon} size={14} color={dark ? tFg('#b8c6ff') : P.blue} stroke={2.1} />
       </View>
       <View style={{ flex: 1, alignItems: 'flex-end' }}>
-        <Text style={[t.lbl, dark && { color: 'rgba(255,255,255,0.6)' }]} numberOfLines={1}>{label}</Text>
-        <Text style={[t.val, dark && { color: '#fff' }, !value && { color: P.faint }, !!accent && !!value && { color: accent }]}
+        <Text style={[t.lbl, dark && { color: tFg('rgba(255,255,255,0.6)') }]} numberOfLines={1}>{label}</Text>
+        <Text style={[t.val, dark && { color: tFg('#fff') }, !value && { color: P.faint }, !!accent && !!value && { color: accent }]}
           numberOfLines={1} adjustsFontSizeToFit>{value || '—'}</Text>
       </View>
     </View>
@@ -86,29 +87,29 @@ function Card({ tech, dark, active, children, badge }: {
   tech: '4G' | '5G'; dark?: boolean; active?: boolean; children: React.ReactNode; badge?: string;
 }) {
   return (
-    <View style={[c.card, dark && c.cardDark, { borderColor: tech === '5G' ? 'rgba(160,120,255,0.55)' : 'rgba(47,107,255,0.35)' }]}>
+    <View style={[c.card, dark && c.cardDark, { borderColor: tech === '5G' ? tBd('rgba(160,120,255,0.55)') : tBd('rgba(47,107,255,0.35)') }]}>
       <View style={c.head}>
         <View style={[c.techPill, { backgroundColor: tech === '5G' ? P.violet : P.blue }]}>
           <Text style={c.techTxt}>{tech}</Text>
         </View>
         <View style={{ flex: 1, alignItems: 'flex-end' }}>
           <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6 }}>
-            <View style={[c.hIcon, { backgroundColor: dark ? 'rgba(160,120,255,0.18)' : P.blueSoft }]}>
-              <Icon name={tech === '5G' ? 'spark' : 'tower'} size={14} color={dark ? '#c7b8ff' : P.blue} stroke={2.2} />
+            <View style={[c.hIcon, { backgroundColor: dark ? tBg('rgba(160,120,255,0.18)') : P.blueSoft }]}>
+              <Icon name={tech === '5G' ? 'spark' : 'tower'} size={14} color={dark ? tFg('#c7b8ff') : P.blue} stroke={2.2} />
             </View>
-            <Text style={[c.title, dark && { color: '#fff' }]}>{tech === '5G' ? 'شبكة 5G' : 'شبكة 4G LTE'}</Text>
+            <Text style={[c.title, dark && { color: tFg('#fff') }]}>{tech === '5G' ? 'شبكة 5G' : 'شبكة 4G LTE'}</Text>
           </View>
           {!!badge && (
             <View style={{ flexDirection: 'row-reverse', gap: 6, marginTop: 1 }}>
               {badge.split(' · ').map((b, i) => (
-                <Text key={i} style={[c.sub, dark && { color: 'rgba(255,255,255,0.65)' }]}>{i ? `· ${b}` : b}</Text>
+                <Text key={i} style={[c.sub, dark && { color: tFg('rgba(255,255,255,0.65)') }]}>{i ? `· ${b}` : b}</Text>
               ))}
             </View>
           )}
         </View>
-        <View style={[c.state, { backgroundColor: active ? '#16c78422' : dark ? 'rgba(255,255,255,0.08)' : P.soft }]}>
-          <View style={[c.dot, { backgroundColor: active ? '#16c784' : P.faint }]} />
-          <Text style={[c.stateTxt, { color: active ? '#0d9e66' : dark ? 'rgba(255,255,255,0.6)' : P.sub }]}>
+        <View style={[c.state, { backgroundColor: active ? tBg('#16c78422') : dark ? tBg('rgba(255,255,255,0.08)') : P.soft }]}>
+          <View style={[c.dot, { backgroundColor: active ? tBg('#16c784') : P.faint }]} />
+          <Text style={[c.stateTxt, { color: active ? tFg('#0d9e66') : dark ? tFg('rgba(255,255,255,0.6)') : P.sub }]}>
             {active ? 'متصل' : 'غير نشط'}
           </Text>
         </View>
@@ -140,7 +141,7 @@ function PingBar({ ping, to }: { ping?: number; to?: string }) {
 }
 
 const pb = StyleSheet.create({
-  bar: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#ffffff', borderRadius: 20, paddingVertical: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: P.soft },
+  bar: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: tBg('#ffffff'), borderRadius: 20, paddingVertical: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: P.soft },
   valBox: { flexDirection: 'row', alignItems: 'baseline', gap: 3, minWidth: 74 },
   val: { fontSize: 30, fontWeight: '900', letterSpacing: -0.5 },
   unit: { fontSize: 12, color: P.sub, fontWeight: '700' },
@@ -215,7 +216,7 @@ const t = StyleSheet.create({
     backgroundColor: P.soft, borderRadius: 14, paddingVertical: 8, paddingHorizontal: 10,
     borderWidth: 1, borderColor: P.border,
   },
-  tileDark: { backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.1)' },
+  tileDark: { backgroundColor: tBg('rgba(255,255,255,0.06)'), borderColor: tBd('rgba(255,255,255,0.1)') },
   icon: { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   lbl: { color: P.sub, fontSize: 10.5, fontWeight: '700' },
   val: { color: P.text, fontSize: 14.5, fontWeight: '800' },
@@ -223,10 +224,10 @@ const t = StyleSheet.create({
 const c = StyleSheet.create({
   card: { backgroundColor: P.card, borderRadius: 22, padding: 14, gap: 12, borderWidth: 1.5, borderColor: P.border, ...shadow },
   hIcon: { width: 26, height: 26, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  cardDark: { backgroundColor: '#14224a', borderColor: '#24366b' },
+  cardDark: { backgroundColor: tBg('#14224a'), borderColor: tBd('#24366b') },
   head: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   techPill: { borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6 },
-  techTxt: { color: '#fff', fontSize: 17, fontWeight: '800' },
+  techTxt: { color: tFg('#fff'), fontSize: 17, fontWeight: '800' },
   title: { color: P.text, fontSize: 15, fontWeight: '800' },
   sub: { color: P.sub, fontSize: 11.5 },
   state: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },

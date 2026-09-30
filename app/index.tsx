@@ -16,6 +16,7 @@ import {
   lvlColor, lvlSoft, lvlLabel, ratioOf, RANGE,
 } from '../src/ui/Pro';
 
+import { tBd, tBg, tFg, THEME_PREF, ThemePref, setThemePref } from '../src/ui/theme';
 interface Status {
   loading: boolean;
   online?: boolean;
@@ -180,7 +181,7 @@ export default function RoutersList() {
               <View style={s.statSep} />
               <View style={s.stat}>
                 {anyLoading && onlineCount === 0
-                  ? <ActivityIndicator size="small" color="#fff" style={{ height: 26 }} />
+                  ? <ActivityIndicator size="small" color={tFg('#fff')} style={{ height: 26 }} />
                   : <Text style={s.statVal}>{onlineCount}</Text>}
                 <Text style={s.statLbl}>متصل الآن</Text>
               </View>
@@ -201,12 +202,12 @@ export default function RoutersList() {
         ListFooterComponent={
           <View style={{ gap: 12 }}>
           <Pressable style={({ pressed }) => [s.tech, pressed && { opacity: 0.85 }]} onPress={() => router.push('/tech' as Href)}>
-            <View style={s.flip}><Icon name="chevron" size={16} color="#fff" /></View>
+            <View style={s.flip}><Icon name="chevron" size={16} color={tFg('#fff')} /></View>
             <View style={{ flex: 1, alignItems: 'flex-end' }}>
               <Text style={s.techTitle}>وضع الفني</Text>
               <Text style={s.techSub}>تابع إشارة عميل حيّة ووجّهه عن بُعد</Text>
             </View>
-            <View style={s.techIcon}><Icon name="aim" size={20} color="#fff" /></View>
+            <View style={s.techIcon}><Icon name="aim" size={20} color={tFg('#fff')} /></View>
           </Pressable>
           <Pressable style={({ pressed }) => [s.explore, pressed && { opacity: 0.8 }]} onPress={explore}>
             <View style={s.flip}><Icon name="chevron" size={16} color={P.violet} /></View>
@@ -218,6 +219,7 @@ export default function RoutersList() {
               <Icon name="compass" size={20} color={P.violet} />
             </View>
           </Pressable>
+          <ThemePicker />
           </View>
         }
         renderItem={({ item }) => {
@@ -244,7 +246,7 @@ export default function RoutersList() {
                   start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                   style={s.avatar}
                 >
-                  <Icon name="tower" size={22} color="#fff" stroke={2.1} />
+                  <Icon name="tower" size={22} color={tFg('#fff')} stroke={2.1} />
                 </LinearGradient>
                 <View style={{ flex: 1, alignItems: 'flex-end', gap: 5 }}>
                   <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
@@ -312,7 +314,7 @@ export default function RoutersList() {
                   icon={hasPw ? 'login' : 'lock'}
                   busy={loading}
                   disabled={loading}
-                  colors={hasPw ? [P.heroA, P.heroB] : [P.amber, '#f97316']}
+                  colors={hasPw ? [P.heroA, P.heroB] : [P.amber, tBg('#f97316')]}
                   onPress={() => (hasPw ? open(item.id) : edit(item.id))}
                 />
                 <Pressable style={s.iconBtn} onPress={() => edit(item.id)} hitSlop={4}>
@@ -336,28 +338,67 @@ export default function RoutersList() {
   );
 }
 
+const THEMES: { id: ThemePref; label: string; icon: string }[] = [
+  { id: 'light', label: 'فاتح', icon: '☀️' },
+  { id: 'dark', label: 'داكن', icon: '🌙' },
+  { id: 'system', label: 'حسب الجوال', icon: '📱' },
+];
+
+function ThemePicker() {
+  const pick = (t: ThemePref) => {
+    if (t === THEME_PREF) return;
+    Alert.alert('المظهر', 'التطبيق بيعيد التشغيل عشان يطبّق الألوان الجديدة.', [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'طبّق', onPress: () => { setThemePref(t); } },
+    ]);
+  };
+  return (
+    <View style={s.theme}>
+      <Text style={s.themeTitle}>المظهر</Text>
+      <View style={s.themeRow}>
+        {THEMES.map(t => {
+          const on = t.id === THEME_PREF;
+          return (
+            <Pressable key={t.id} onPress={() => pick(t.id)} style={[s.themeOpt, on && s.themeOn]}>
+              <Text style={s.themeIcon}>{t.icon}</Text>
+              <Text style={[s.themeTxt, on && { color: P.blue }]}>{t.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
+  theme: { backgroundColor: P.card, borderColor: P.border, borderWidth: 1, borderRadius: 18, padding: 12, gap: 10 },
+  themeTitle: { color: P.text, fontWeight: '800', fontSize: 14, textAlign: 'right' },
+  themeRow: { flexDirection: 'row-reverse', gap: 8 },
+  themeOpt: { flex: 1, alignItems: 'center', gap: 4, paddingVertical: 10, borderRadius: 14, backgroundColor: P.soft, borderWidth: 1.5, borderColor: P.soft },
+  themeOn: { borderColor: P.blue, backgroundColor: P.blueSoft },
+  themeIcon: { fontSize: 18 },
+  themeTxt: { color: P.sub, fontWeight: '800', fontSize: 12 },
   list: { padding: 16, gap: 14 },
   flip: { transform: [{ scaleX: -1 }] },
 
   heroTop: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
-  hello: { color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '700', letterSpacing: 1.5 },
-  heroTitle: { color: '#fff', fontSize: 28, fontWeight: '800', textAlign: 'right', marginTop: -2 },
+  hello: { color: tFg('rgba(255,255,255,0.75)'), fontSize: 12, fontWeight: '700', letterSpacing: 1.5 },
+  heroTitle: { color: tFg('#fff'), fontSize: 28, fontWeight: '800', textAlign: 'right', marginTop: -2 },
   addBtn: {
-    height: 40, borderRadius: 14, backgroundColor: '#fff', paddingHorizontal: 14,
+    height: 40, borderRadius: 14, backgroundColor: tBg('#fff'), paddingHorizontal: 14,
     flexDirection: 'row-reverse', alignItems: 'center', gap: 6,
   },
   addTxt: { color: P.blue, fontSize: 14, fontWeight: '800' },
 
   stats: {
-    flexDirection: 'row-reverse', marginTop: 18, backgroundColor: 'rgba(255,255,255,0.14)',
-    borderRadius: 18, paddingVertical: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+    flexDirection: 'row-reverse', marginTop: 18, backgroundColor: tBg('rgba(255,255,255,0.14)'),
+    borderRadius: 18, paddingVertical: 12, borderWidth: 1, borderColor: tBd('rgba(255,255,255,0.18)'),
   },
   stat: { flex: 1, alignItems: 'center', gap: 2 },
-  statSep: { width: 1, backgroundColor: 'rgba(255,255,255,0.22)', marginVertical: 4 },
-  statVal: { color: '#fff', fontSize: 20, fontWeight: '800', lineHeight: 26 },
-  statUnit: { color: 'rgba(255,255,255,0.8)', fontSize: 10.5, fontWeight: '700' },
-  statLbl: { color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: '600' },
+  statSep: { width: 1, backgroundColor: tBg('rgba(255,255,255,0.22)'), marginVertical: 4 },
+  statVal: { color: tFg('#fff'), fontSize: 20, fontWeight: '800', lineHeight: 26 },
+  statUnit: { color: tFg('rgba(255,255,255,0.8)'), fontSize: 10.5, fontWeight: '700' },
+  statLbl: { color: tFg('rgba(255,255,255,0.8)'), fontSize: 11, fontWeight: '600' },
 
   card: { backgroundColor: P.card, borderRadius: 24, padding: 14, gap: 12, borderWidth: 1, borderColor: P.border, ...shadow },
   row: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
@@ -379,21 +420,21 @@ const s = StyleSheet.create({
     width: 46, height: 46, borderRadius: 15, backgroundColor: P.soft,
     borderWidth: 1, borderColor: P.border, alignItems: 'center', justifyContent: 'center',
   },
-  delBtn: { backgroundColor: P.redSoft, borderColor: '#ffdde2' },
+  delBtn: { backgroundColor: P.redSoft, borderColor: tBd('#ffdde2') },
   pwRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: -4 },
   pwTxt: { color: P.faint, fontSize: 10.5, fontWeight: '600' },
 
   tech: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 12, marginTop: 4,
-    borderRadius: 20, padding: 14, backgroundColor: '#0ea5c6',
+    borderRadius: 20, padding: 14, backgroundColor: tBg('#0ea5c6'),
   },
-  techIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
-  techTitle: { color: '#fff', fontSize: 14.5, fontWeight: '800' },
-  techSub: { color: 'rgba(255,255,255,0.85)', fontSize: 11.5, marginTop: 1 },
+  techIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: tBg('rgba(255,255,255,0.2)'), alignItems: 'center', justifyContent: 'center' },
+  techTitle: { color: tFg('#fff'), fontSize: 14.5, fontWeight: '800' },
+  techSub: { color: tFg('rgba(255,255,255,0.85)'), fontSize: 11.5, marginTop: 1 },
   explore: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 12,
-    borderRadius: 20, padding: 14, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#cfc3fb',
-    backgroundColor: '#faf8ff',
+    borderRadius: 20, padding: 14, borderWidth: 1.5, borderStyle: 'dashed', borderColor: tBd('#cfc3fb'),
+    backgroundColor: tBg('#faf8ff'),
   },
   exploreIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: P.violetSoft, alignItems: 'center', justifyContent: 'center' },
   exploreTitle: { color: P.violet, fontSize: 14, fontWeight: '800' },

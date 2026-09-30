@@ -8,9 +8,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-svg';
 import { Icon, IconName } from './Icon';
 import { Level, LEVEL_COLOR, LEVEL_LABEL, LEVEL_SOFT } from '../utils/signal';
+import { C, isDark, tBd, tBg, tFg } from './theme';
 
 // ═══ الألوان ═══
-export const P = {
+const P_LIGHT = {
   bg: '#e5eaf2',
   card: '#f3f6fa',
   border: '#d8e0eb',
@@ -33,6 +34,32 @@ export const P = {
   heroA: '#2f6bff',
   heroB: '#6a45ec',
 };
+
+const P_DARK: typeof P_LIGHT = {
+  bg: C.bg,
+  card: C.card,
+  border: C.cardBorder,
+  soft: C.rowBg,
+  text: C.text,
+  sub: C.sub,
+  faint: '#5f6b88',
+  blue: '#4d82ff',
+  blueSoft: '#1c2c4d',
+  violet: '#9a7cf5',
+  violetSoft: '#27204a',
+  green: '#2fcf85',
+  greenSoft: '#14322a',
+  amber: '#f7b23b',
+  amberSoft: '#352a15',
+  red: '#ff6b6f',
+  redSoft: '#3a1c22',
+  cyan: '#3cc3e0',
+  cyanSoft: '#12303a',
+  heroA: '#2f5fe0',
+  heroB: '#5b3cc9',
+};
+
+export const P = isDark ? P_DARK : P_LIGHT;
 
 export const shadow: ViewStyle = {
   shadowColor: '#1b2b5c',
@@ -72,10 +99,10 @@ export function GlassBtn({ icon, onPress, busy, label }: {
   return (
     <Pressable onPress={onPress} hitSlop={8}
       style={({ pressed }) => [st.glass, !!label && { paddingHorizontal: 14, width: undefined }, pressed && { opacity: 0.7 }]}>
-      {busy ? <ActivityIndicator size="small" color="#fff" /> : (
+      {busy ? <ActivityIndicator size="small" color={tFg('#fff')} /> : (
         <>
           {!!label && <Text style={st.glassTxt}>{label}</Text>}
-          {!!icon && <Icon name={icon} size={18} color="#fff" stroke={2.1} />}
+          {!!icon && <Icon name={icon} size={18} color={tFg('#fff')} stroke={2.1} />}
         </>
       )}
     </Pressable>
@@ -241,7 +268,7 @@ export function ToggleCard({ on, label, onLabel, icon, color, onPress }: {
       </View>
       <Text style={[st.toggleTxt, on && { color }]} numberOfLines={1}>{on ? onLabel : label}</Text>
       <View style={[st.toggleIcon, { backgroundColor: on ? color : P.soft }]}>
-        <Icon name={icon} size={15} color={on ? '#fff' : P.sub} stroke={2.1} />
+        <Icon name={icon} size={15} color={on ? tFg('#fff') : P.sub} stroke={2.1} />
       </View>
     </Pressable>
   );
@@ -257,7 +284,7 @@ export function PrimaryBtn({ text, icon, onPress, busy, disabled, colors = [P.he
       style={({ pressed }) => [{ borderRadius: 16, overflow: 'hidden' }, style, pressed && { opacity: 0.88 }, disabled && { opacity: 0.5 }]}>
       <LinearGradient colors={colors} start={{ x: 1, y: 0 }} end={{ x: 0, y: 0 }}
         style={[st.primary, small && { paddingVertical: 11 }]}>
-        {busy ? <ActivityIndicator size="small" color="#fff" /> : !!icon && <Icon name={icon} size={small ? 16 : 19} color="#fff" stroke={2.2} />}
+        {busy ? <ActivityIndicator size="small" color={tFg('#fff')} /> : !!icon && <Icon name={icon} size={small ? 16 : 19} color={tFg('#fff')} stroke={2.2} />}
         <Text style={[st.primaryTxt, small && { fontSize: 13.5 }]}>{text}</Text>
       </LinearGradient>
     </Pressable>
@@ -287,13 +314,13 @@ export function Collapse({ title, icon, tone, toneSoft, children, defaultOpen = 
 
 const st = StyleSheet.create({
   hero: { borderRadius: 28, padding: 18, overflow: 'hidden' },
-  blob: { position: 'absolute', borderRadius: 999, backgroundColor: '#ffffff', opacity: 0.1 },
+  blob: { position: 'absolute', borderRadius: 999, backgroundColor: tBg('#ffffff'), opacity: 0.1 },
   glass: {
-    height: 40, width: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
+    height: 40, width: 40, borderRadius: 14, backgroundColor: tBg('rgba(255,255,255,0.18)'),
+    borderWidth: 1, borderColor: tBd('rgba(255,255,255,0.25)'),
     alignItems: 'center', justifyContent: 'center', flexDirection: 'row-reverse', gap: 6,
   },
-  glassTxt: { color: '#fff', fontSize: 13.5, fontWeight: '800' },
+  glassTxt: { color: tFg('#fff'), fontSize: 13.5, fontWeight: '800' },
 
   section: { backgroundColor: P.card, borderRadius: 22, padding: 16, borderWidth: 1, borderColor: P.border, ...shadow },
   secHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
@@ -326,9 +353,9 @@ const st = StyleSheet.create({
   },
   toggleIcon: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   toggleTxt: { flex: 1, color: P.text, fontSize: 12.5, fontWeight: '800', textAlign: 'right' },
-  switch: { width: 34, height: 20, borderRadius: 10, backgroundColor: '#d6ddec', justifyContent: 'center' },
-  knob: { position: 'absolute', width: 16, height: 16, borderRadius: 8, backgroundColor: '#fff' },
+  switch: { width: 34, height: 20, borderRadius: 10, backgroundColor: tBg('#d6ddec'), justifyContent: 'center' },
+  knob: { position: 'absolute', width: 16, height: 16, borderRadius: 8, backgroundColor: tBg('#fff') },
 
   primary: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 15, paddingHorizontal: 16 },
-  primaryTxt: { color: '#fff', fontSize: 15.5, fontWeight: '800' },
+  primaryTxt: { color: tFg('#fff'), fontSize: 15.5, fontWeight: '800' },
 });

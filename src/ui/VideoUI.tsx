@@ -15,6 +15,7 @@ import { Icon, IconName } from './Icon';
 import { P } from './Pro';
 import { CallInfo } from '../services/call';
 
+import { tBg, tFg } from './theme';
 /** دائرة نابضة مكان المؤشر */
 function Ping({ x, y, w, h, color = '#ffd21f', label }: { x: number; y: number; w: number; h: number; color?: string; label?: string }) {
   const a = useRef(new Animated.Value(0)).current;
@@ -32,7 +33,7 @@ function Ping({ x, y, w, h, color = '#ffd21f', label }: { x: number; y: number; 
         opacity: a.interpolate({ inputRange: [0, 1], outputRange: [0.95, 0] }),
         transform: [{ scale: a.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1.25] }) }],
       }} />
-      <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 4, borderColor: color, backgroundColor: 'rgba(0,0,0,0.25)' }} />
+      <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 4, borderColor: color, backgroundColor: tBg('rgba(0,0,0,0.25)') }} />
       {!!label && (
         <View style={v.pingLbl}><Text style={v.pingLblTxt}>{label}</Text></View>
       )}
@@ -42,8 +43,8 @@ function Ping({ x, y, w, h, color = '#ffd21f', label }: { x: number; y: number; 
 
 function Mini({ icon, onPress, on, label }: { icon: IconName; onPress: () => void; on?: boolean; label?: string }) {
   return (
-    <Pressable onPress={onPress} hitSlop={6} style={({ pressed }) => [v.mini, on && { backgroundColor: '#fff' }, pressed && { opacity: 0.7 }]}>
-      <Icon name={icon} size={17} color={on ? P.text : '#fff'} stroke={2.2} />
+    <Pressable onPress={onPress} hitSlop={6} style={({ pressed }) => [v.mini, on && { backgroundColor: tBg('#fff') }, pressed && { opacity: 0.7 }]}>
+      <Icon name={icon} size={17} color={on ? P.text : tFg('#fff')} stroke={2.2} />
       {!!label && <Text style={[v.miniTxt, on && { color: P.text }]}>{label}</Text>}
     </Pressable>
   );
@@ -67,7 +68,7 @@ export function CamPreview({ info, top, onFlip, onStop }: { info: CallInfo; top:
   const mirror = info.facing === 'user';
   return (
     <View style={[v.float, { top, width: w }, big ? { left: 12 } : { right: 12 }]}>
-      <Pressable onPress={() => setBig(b => !b)} style={{ width: w, height: h, borderRadius: 20, overflow: 'hidden', backgroundColor: '#000' }}>
+      <Pressable onPress={() => setBig(b => !b)} style={{ width: w, height: h, borderRadius: 20, overflow: 'hidden', backgroundColor: tBg('#000') }}>
         <RTCView streamURL={info.localUrl} objectFit="cover" mirror={mirror} style={{ width: w, height: h }} />
         {pt && <Ping x={mirror ? 1 - pt.x : pt.x} y={pt.y} w={w} h={h} label={big ? 'الفني يأشر هنا' : undefined} />}
         <View style={v.liveTag}><View style={v.recDot} /><Text style={v.liveTagTxt}>الفني يشوف</Text></View>
@@ -91,8 +92,8 @@ export function CamRequest({ info, onAccept, onReject }: { info: CallInfo; onAcc
           <Text style={v.reqTitle}>{info.peer} يبغى يشوف الكاميرا</Text>
           <Text style={v.reqSub}>وجّه الكاميرا الخلفية على الهوائي أو الراوتر عشان يوجّهك بدقة. تقدر توقفها أي وقت.</Text>
           <Pressable onPress={onAccept} style={{ alignSelf: 'stretch', marginTop: 16, borderRadius: 16, overflow: 'hidden' }}>
-            <LinearGradient colors={['#2f6bff', '#6a45ec']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 0 }} style={v.reqOk}>
-              <Icon name="video" size={18} color="#fff" stroke={2.2} />
+            <LinearGradient colors={[tBg('#2f6bff'), tBg('#6a45ec')]} start={{ x: 1, y: 0 }} end={{ x: 0, y: 0 }} style={v.reqOk}>
+              <Icon name="video" size={18} color={tFg('#fff')} stroke={2.2} />
               <Text style={v.reqOkTxt}>شغّل الكاميرا</Text>
             </LinearGradient>
           </Pressable>
@@ -142,11 +143,11 @@ export function RemoteVideo({ info, onPoint, onFlip }: { info: CallInfo; onPoint
             setTap({ x, y, at: Date.now() });
             onPoint(x, y);
           }}
-          style={{ width: w, height: h, borderRadius: 18, overflow: 'hidden', backgroundColor: '#000' }}>
+          style={{ width: w, height: h, borderRadius: 18, overflow: 'hidden', backgroundColor: tBg('#000') }}>
           <View ref={shotRef} collapsable={false} style={{ width: w, height: h }}>
             <RTCView key={info.videoRev} streamURL={info.remoteUrl} objectFit="cover" style={{ width: w, height: h }} />
           </View>
-          {tap && <Ping x={tap.x} y={tap.y} w={w} h={h} color="#ffd21f" />}
+          {tap && <Ping x={tap.x} y={tap.y} w={w} h={h} color={tFg('#ffd21f')} />}
         </Pressable>
       )}
       <View style={v.row}>
@@ -172,22 +173,22 @@ export function RemoteVideo({ info, onPoint, onFlip }: { info: CallInfo; onPoint
 
 const v = StyleSheet.create({
   float: { position: 'absolute', zIndex: 55, alignItems: 'center' },
-  ctrls: { flexDirection: 'row-reverse', gap: 8, marginTop: 8, backgroundColor: '#0f1f45', borderRadius: 999, padding: 5 },
-  mini: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, minWidth: 36, height: 36, borderRadius: 18, paddingHorizontal: 9, justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.14)' },
-  miniTxt: { color: '#fff', fontSize: 12.5, fontWeight: '800' },
-  liveTag: { position: 'absolute', top: 8, right: 8, flexDirection: 'row-reverse', alignItems: 'center', gap: 5, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
-  liveTagTxt: { color: '#fff', fontSize: 11, fontWeight: '800' },
-  recDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#ff4d4f' },
-  pingLbl: { position: 'absolute', top: 58, backgroundColor: '#ffd21f', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3, minWidth: 110, alignItems: 'center' },
-  pingLblTxt: { color: '#1b1b1b', fontSize: 12, fontWeight: '800' },
+  ctrls: { flexDirection: 'row-reverse', gap: 8, marginTop: 8, backgroundColor: tBg('#0f1f45'), borderRadius: 999, padding: 5 },
+  mini: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, minWidth: 36, height: 36, borderRadius: 18, paddingHorizontal: 9, justifyContent: 'center', backgroundColor: tBg('rgba(255,255,255,0.14)') },
+  miniTxt: { color: tFg('#fff'), fontSize: 12.5, fontWeight: '800' },
+  liveTag: { position: 'absolute', top: 8, right: 8, flexDirection: 'row-reverse', alignItems: 'center', gap: 5, backgroundColor: tBg('rgba(0,0,0,0.5)'), borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
+  liveTagTxt: { color: tFg('#fff'), fontSize: 11, fontWeight: '800' },
+  recDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: tBg('#ff4d4f') },
+  pingLbl: { position: 'absolute', top: 58, backgroundColor: tBg('#ffd21f'), borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3, minWidth: 110, alignItems: 'center' },
+  pingLblTxt: { color: tFg('#1b1b1b'), fontSize: 12, fontWeight: '800' },
 
-  dim: { flex: 1, backgroundColor: 'rgba(8,15,40,0.55)', justifyContent: 'center', padding: 24 },
+  dim: { flex: 1, backgroundColor: tBg('rgba(8,15,40,0.55)'), justifyContent: 'center', padding: 24 },
   reqBox: { backgroundColor: P.card, borderRadius: 26, padding: 22, alignItems: 'center' },
   reqIc: { width: 64, height: 64, borderRadius: 32, backgroundColor: P.blueSoft, alignItems: 'center', justifyContent: 'center' },
   reqTitle: { color: P.text, fontSize: 18, fontWeight: '800', marginTop: 12, textAlign: 'center' },
   reqSub: { color: P.sub, fontSize: 13, textAlign: 'center', marginTop: 6, lineHeight: 20 },
   reqOk: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14 },
-  reqOkTxt: { color: '#fff', fontSize: 15.5, fontWeight: '800' },
+  reqOkTxt: { color: tFg('#fff'), fontSize: 15.5, fontWeight: '800' },
   reqNo: { padding: 12, marginTop: 4 },
   reqNoTxt: { color: P.sub, fontSize: 14, fontWeight: '700' },
 
@@ -199,6 +200,6 @@ const v = StyleSheet.create({
   btn: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: P.blueSoft, borderRadius: 14, paddingVertical: 12 },
   btnTxt: { color: P.blue, fontSize: 13, fontWeight: '800' },
   shots: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6, marginTop: 10, alignItems: 'center' },
-  shot: { width: 54, height: 72, borderRadius: 10, overflow: 'hidden', backgroundColor: '#000' },
+  shot: { width: 54, height: 72, borderRadius: 10, overflow: 'hidden', backgroundColor: tBg('#000') },
   shotHint: { color: P.sub, fontSize: 11, fontWeight: '700' },
 });

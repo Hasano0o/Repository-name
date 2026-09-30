@@ -11,6 +11,7 @@ import { Icon } from './Icon';
 import { P } from './Pro';
 import { SpeedPair } from '../services/live';
 
+import { tBd, tBg, tFg } from './theme';
 export interface ShareData {
   router: string;
   before?: number; after?: number; best?: number;   // RSRP
@@ -34,7 +35,7 @@ function Row({ label, a, b, unit, better }: { label: string; a?: number; b?: num
       <View style={c.rowVals}>
         <Text style={c.rowA}>{LTR(`${f1(a)}`)}</Text>
         <Icon name="chevron" size={14} color={P.faint} stroke={2.4} />
-        <Text style={[c.rowB, good && { color: '#0f9d5f' }, bad && { color: P.red }]}>{LTR(`${f1(b)}`)}</Text>
+        <Text style={[c.rowB, good && { color: tFg('#0f9d5f') }, bad && { color: P.red }]}>{LTR(`${f1(b)}`)}</Text>
         <Text style={c.rowUnit}>{unit}</Text>
       </View>
     </View>
@@ -48,9 +49,9 @@ export function ShareCardView({ d }: { d: ShareData }) {
   const date = new Date().toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' });
   return (
     <View style={c.card}>
-      <LinearGradient colors={['#2f6bff', '#6a45ec']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={c.head}>
+      <LinearGradient colors={[tBg('#2f6bff'), tBg('#6a45ec')]} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={c.head}>
         <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
-          <View style={c.logo}><Icon name="tower" size={16} color="#fff" stroke={2.2} /></View>
+          <View style={c.logo}><Icon name="tower" size={16} color={tFg('#fff')} stroke={2.2} /></View>
           <Text style={c.brand}>Bandly</Text>
           <View style={{ flex: 1 }} />
           <Text style={c.date}>{date}</Text>
@@ -84,7 +85,7 @@ export function ShareCardView({ d }: { d: ShareData }) {
           {d.best != null && <View style={c.tag}><Text style={c.tagTxt}>أفضل قراءة {LTR(`${Math.round(d.best)} dBm`)}</Text></View>}
           {!!d.tower && <View style={c.tag}><Text style={c.tagTxt}>البرج {LTR(d.tower)}</Text></View>}
           {!!d.minutes && <View style={c.tag}><Text style={c.tagTxt}>{d.minutes} دقيقة</Text></View>}
-          {!!d.tech && <View style={[c.tag, { backgroundColor: P.greenSoft }]}><Text style={[c.tagTxt, { color: '#0b7a47' }]}>الفني: {d.tech}</Text></View>}
+          {!!d.tech && <View style={[c.tag, { backgroundColor: P.greenSoft }]}><Text style={[c.tagTxt, { color: tFg('#0b7a47') }]}>الفني: {d.tech}</Text></View>}
         </View>
       </View>
       <View style={c.foot}>
@@ -114,8 +115,8 @@ export function ShareCardModal({ data, onClose }: { data: ShareData | null; onCl
         <ScrollView contentContainerStyle={{ padding: 18, paddingTop: 50 }}>
           {data && <View ref={ref} collapsable={false} style={{ backgroundColor: P.bg, borderRadius: 26 }}><ShareCardView d={data} /></View>}
           <Pressable onPress={share} style={{ marginTop: 14, borderRadius: 18, overflow: 'hidden' }}>
-            <LinearGradient colors={['#12b76a', '#0ea5a0']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 0 }} style={c.btn}>
-              {busy ? <ActivityIndicator color="#fff" /> : <Icon name="share" size={18} color="#fff" stroke={2.2} />}
+            <LinearGradient colors={[tBg('#12b76a'), tBg('#0ea5a0')]} start={{ x: 1, y: 0 }} end={{ x: 0, y: 0 }} style={c.btn}>
+              {busy ? <ActivityIndicator color={tFg('#fff')} /> : <Icon name="share" size={18} color={tFg('#fff')} stroke={2.2} />}
               <Text style={c.btnTxt}>أرسل الصورة (واتساب وغيره)</Text>
             </LinearGradient>
           </Pressable>
@@ -129,15 +130,15 @@ export function ShareCardModal({ data, onClose }: { data: ShareData | null; onCl
 const c = StyleSheet.create({
   card: { backgroundColor: P.card, borderRadius: 26, overflow: 'hidden', borderWidth: 1, borderColor: P.border },
   head: { padding: 18, paddingBottom: 16 },
-  logo: { width: 30, height: 30, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' },
-  brand: { color: '#fff', fontSize: 17, fontWeight: '800' },
-  date: { color: 'rgba(255,255,255,0.8)', fontSize: 11.5, fontWeight: '700' },
-  title: { color: '#fff', fontSize: 22, fontWeight: '800', textAlign: 'right', marginTop: 14 },
-  router: { color: 'rgba(255,255,255,0.85)', fontSize: 13, textAlign: 'right', marginTop: 2 },
+  logo: { width: 30, height: 30, borderRadius: 10, backgroundColor: tBg('rgba(255,255,255,0.22)'), alignItems: 'center', justifyContent: 'center' },
+  brand: { color: tFg('#fff'), fontSize: 17, fontWeight: '800' },
+  date: { color: tFg('rgba(255,255,255,0.8)'), fontSize: 11.5, fontWeight: '700' },
+  title: { color: tFg('#fff'), fontSize: 22, fontWeight: '800', textAlign: 'right', marginTop: 14 },
+  router: { color: tFg('rgba(255,255,255,0.85)'), fontSize: 13, textAlign: 'right', marginTop: 2 },
   bigRow: { flexDirection: 'row-reverse', gap: 10, marginTop: 14 },
-  big: { flex: 1, backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 18, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
-  bigVal: { color: '#fff', fontSize: 28, fontWeight: '800' },
-  bigLbl: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '700', marginTop: 2 },
+  big: { flex: 1, backgroundColor: tBg('rgba(255,255,255,0.16)'), borderRadius: 18, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: tBd('rgba(255,255,255,0.2)') },
+  bigVal: { color: tFg('#fff'), fontSize: 28, fontWeight: '800' },
+  bigLbl: { color: tFg('rgba(255,255,255,0.85)'), fontSize: 12, fontWeight: '700', marginTop: 2 },
   body: { padding: 16, paddingTop: 12 },
   colTxt: { color: P.faint, fontSize: 11.5, fontWeight: '700', textAlign: 'right', marginBottom: 2 },
   row: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: P.border },
@@ -151,9 +152,9 @@ const c = StyleSheet.create({
   tagTxt: { color: P.text, fontSize: 11.5, fontWeight: '700' },
   foot: { backgroundColor: P.soft, paddingVertical: 10, alignItems: 'center' },
   footTxt: { color: P.sub, fontSize: 11.5, fontWeight: '700' },
-  dim: { flex: 1, backgroundColor: 'rgba(8,15,40,0.6)' },
+  dim: { flex: 1, backgroundColor: tBg('rgba(8,15,40,0.6)') },
   btn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 15 },
-  btnTxt: { color: '#fff', fontSize: 15.5, fontWeight: '800' },
+  btnTxt: { color: tFg('#fff'), fontSize: 15.5, fontWeight: '800' },
   close: { alignSelf: 'center', padding: 14 },
-  closeTxt: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  closeTxt: { color: tFg('#fff'), fontSize: 14, fontWeight: '700' },
 });

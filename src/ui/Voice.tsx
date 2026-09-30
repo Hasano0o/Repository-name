@@ -11,6 +11,7 @@ import {
 import { Icon } from './Icon';
 import { P } from './Pro';
 
+import { tBd, tBg, tFg } from './theme';
 const PRESET: RecordingOptions = {
   ...RecordingPresets.HIGH_QUALITY,
   sampleRate: 22050,
@@ -134,7 +135,7 @@ export function PushToTalk({ onSend, label = 'اضغط مطوّل وتكلّم',
   const recOn = state === 'rec';
   return (
     <Pressable onPressIn={onIn} onPressOut={onOut} disabled={disabled || state === 'send'}
-      style={[v.btn, { borderColor: color + '55', backgroundColor: color + '12' }, recOn && { backgroundColor: '#ff5a5f', borderColor: '#ff5a5f' }, disabled && { opacity: 0.5 }]}>
+      style={[v.btn, { borderColor: color + '55', backgroundColor: color + '12' }, recOn && { backgroundColor: tBg('#ff5a5f'), borderColor: tBd('#ff5a5f') }, disabled && { opacity: 0.5 }]}>
       {state === 'send' ? (
         <>
           <ActivityIndicator size="small" color={color} />
@@ -143,12 +144,12 @@ export function PushToTalk({ onSend, label = 'اضغط مطوّل وتكلّم',
       ) : recOn ? (
         <>
           <View style={v.recDot} />
-          <Text style={[v.txt, { color: '#fff' }]}>يسجّل… {Math.floor(sec)}ث — اترك الزر للإرسال</Text>
+          <Text style={[v.txt, { color: tFg('#fff') }]}>يسجّل… {Math.floor(sec)}ث — اترك الزر للإرسال</Text>
         </>
       ) : (
         <>
           <View style={[v.mic, { backgroundColor: color }]}>
-            <Icon name="mic" size={16} color="#fff" stroke={2.2} />
+            <Icon name="mic" size={16} color={tFg('#fff')} stroke={2.2} />
           </View>
           <Text style={[v.txt, { color }]}>{label}</Text>
         </>
@@ -162,7 +163,7 @@ export function VoiceNote({ from, dur, onReplay }: { from: string; dur: number; 
   return (
     <Pressable onPress={onReplay} style={v.note}>
       <View style={[v.mic, { backgroundColor: P.green }]}>
-        <Icon name="sound" size={15} color="#fff" stroke={2.2} />
+        <Icon name="sound" size={15} color={tFg('#fff')} stroke={2.2} />
       </View>
       <Text style={v.noteTxt} numberOfLines={1}>رسالة صوتية من {from}{dur ? ` · ${Math.round(dur)}ث` : ''}</Text>
       <Text style={v.noteReplay}>إعادة ↻</Text>
@@ -176,12 +177,12 @@ const v = StyleSheet.create({
     borderRadius: 18, borderWidth: 1.5, paddingVertical: 14, paddingHorizontal: 14, marginTop: 12,
   },
   mic: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  recDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#fff' },
+  recDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: tBg('#fff') },
   txt: { fontSize: 14, fontWeight: '800' },
   note: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 8, marginTop: 10,
     backgroundColor: P.greenSoft, borderRadius: 14, paddingVertical: 8, paddingHorizontal: 10,
   },
-  noteTxt: { flex: 1, color: '#0b7a47', fontSize: 13, fontWeight: '700', textAlign: 'right' },
-  noteReplay: { color: '#0b7a47', fontSize: 12, fontWeight: '800' },
+  noteTxt: { flex: 1, color: tFg('#0b7a47'), fontSize: 13, fontWeight: '700', textAlign: 'right' },
+  noteReplay: { color: tFg('#0b7a47'), fontSize: 12, fontWeight: '800' },
 });

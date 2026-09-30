@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { C } from './theme';
+import { C, tFg } from './theme';
 import { Level, LEVEL_COLOR, LEVEL_LABEL } from '../utils/signal';
 
 export interface RingSpec {
@@ -59,7 +59,7 @@ export function MetricRing({ spec, size = 62 }: { spec: RingSpec; size?: number 
             : has ? LEVEL_LABEL[spec.level] : '—')}
         </Text>
         {spec.delta !== undefined && Math.round(spec.delta) !== 0 && (
-          <Text style={[s.delta, { color: spec.delta > 0 ? '#12b76a' : '#e5484d' }]}>
+          <Text style={[s.delta, { color: spec.delta > 0 ? tFg('#12b76a') : tFg('#e5484d') }]}>
             {spec.delta > 0 ? '▲' : '▼'} {Math.abs(Math.round(spec.delta))}
           </Text>
         )}

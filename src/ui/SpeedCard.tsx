@@ -10,6 +10,7 @@ import { Icon } from './Icon';
 import { speedTest, SpeedPhase, fmtMbps } from '../utils/speedLive';
 import { SpeedPair, SpeedPoint } from '../services/live';
 
+import { tBg, tFg } from './theme';
 const KEY = (id: string) => `bandly_speed_${id}`;
 const PHASE_TXT: Record<SpeedPhase, string> = { ping: 'نقيس البنق…', down: 'نقيس التحميل…', up: 'نقيس الرفع…' };
 
@@ -26,7 +27,7 @@ function Box({ title, p, other, tone }: { title: string; p?: SpeedPoint; other?:
           </View>
           <Text style={st.small}>{`⁦⬆ ${fmtMbps(p.up)} Mbps · ${p.ping} ms⁩`}</Text>
           {pct !== undefined && (
-            <Text style={[st.pct, { color: pct >= 0 ? '#0f9d5f' : P.red }]}>{`⁦${pct > 0 ? '+' : ''}${pct}%⁩`}</Text>
+            <Text style={[st.pct, { color: pct >= 0 ? tFg('#0f9d5f') : P.red }]}>{`⁦${pct > 0 ? '+' : ''}${pct}%⁩`}</Text>
           )}
         </>
       ) : <Text style={st.empty}>ما قسناه للحين</Text>}
@@ -89,7 +90,7 @@ export function SpeedCard({ routerId, onResult, onPair }: {
       ) : (
         <PrimaryBtn small icon="speed" style={{ marginTop: 12 }}
           text={!pair.before ? 'قِس السرعة الحين (قبل الضبط)' : 'قِس السرعة بعد الضبط'}
-          colors={['#12b76a', '#0ea5a0']}
+          colors={[tBg('#12b76a'), tBg('#0ea5a0')]}
           onPress={() => go(pair.before ? 'after' : 'before')} />
       )}
       <Text style={st.note}>القياس عبر الواي فاي من خوادم Cloudflare · يستهلك تقريباً ٢٠–١٥٠ ميقا حسب سرعتك</Text>
@@ -108,7 +109,7 @@ const st = StyleSheet.create({
   pct: { fontSize: 14, fontWeight: '800', marginTop: 4 },
   empty: { color: P.faint, fontSize: 12.5, fontWeight: '700', marginTop: 8 },
   running: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, backgroundColor: P.greenSoft, borderRadius: 16, paddingVertical: 13, paddingHorizontal: 14 },
-  runTxt: { color: '#0b7a47', fontSize: 14, fontWeight: '800' },
+  runTxt: { color: tFg('#0b7a47'), fontSize: 14, fontWeight: '800' },
   runStop: { color: P.red, fontSize: 13, fontWeight: '800' },
   note: { color: P.faint, fontSize: 10.5, textAlign: 'center', marginTop: 8 },
 });

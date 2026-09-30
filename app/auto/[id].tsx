@@ -8,7 +8,7 @@ import { Profile, listProfiles, ROLES } from '../../src/store/profiles';
 import { listGameLog, periodStats, PERIODS, PeriodStat } from '../../src/store/gameLog';
 import { AutoSettings, AutoState, NightlyMode, getAuto, saveAuto, getAutoState } from '../../src/store/automation';
 import { getMonitorSettings } from '../../src/store/monitor';
-import { C } from '../../src/ui/theme';
+import { C, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 
 const NIGHTLY: { id: NightlyMode; title: string; sub: string }[] = [
@@ -177,7 +177,7 @@ const s = StyleSheet.create({
   hint: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 19 },
   link: { color: C.blue, fontSize: 13, fontWeight: '800', textAlign: 'right', lineHeight: 20 },
   warn: { backgroundColor: C.amberSoft, borderRadius: 14, padding: 12 },
-  warnTxt: { color: '#8a4b00', fontWeight: '800', fontSize: 13, textAlign: 'right', lineHeight: 20 },
+  warnTxt: { color: tFg('#8a4b00'), fontWeight: '800', fontSize: 13, textAlign: 'right', lineHeight: 20 },
   switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   switchTxt: { color: C.text, fontWeight: '800', fontSize: 14, textAlign: 'right', flexShrink: 1 },
   dim: { opacity: 0.45 },

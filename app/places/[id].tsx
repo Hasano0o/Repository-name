@@ -15,6 +15,7 @@ import { snapshot } from '../../src/utils/safeLock';
 import { Icon, IconName } from '../../src/ui/Icon';
 import { LEVEL_COLOR, LEVEL_LABEL, rsrpLevel } from '../../src/utils/signal';
 
+import { tBd, tBg, tFg } from '../../src/ui/theme';
 const { width: SCREEN_W } = Dimensions.get('window');
 
 // ═══ Design tokens (هوية Bandly) ═══
@@ -473,7 +474,7 @@ export default function Places() {
         {/* ═══ اختبر مكان جديد ═══ */}
         <View style={g.card}>
           <View style={g.cardHead}>
-            <View style={[g.cardIcon, { backgroundColor: '#EEE8FF' }]}>
+            <View style={[g.cardIcon, { backgroundColor: tBg('#EEE8FF') }]}>
               <Icon name="pin" size={16} color={PURPLE} />
             </View>
             <View style={{ flex: 1, alignItems: 'flex-end' }}>
@@ -492,7 +493,7 @@ export default function Places() {
                   onPress={() => { setName(q); setShowInput(false); }}
                   style={[g.chip, on && g.chipOn]}
                 >
-                  <Text style={[g.chipTxt, on && { color: '#FFF' }]}>{q}</Text>
+                  <Text style={[g.chipTxt, on && { color: tFg('#FFF') }]}>{q}</Text>
                 </Pressable>
               );
             })}
@@ -523,10 +524,10 @@ export default function Places() {
             style={[g.measureBtn, busy && { opacity: 0.6 }]}
           >
             {busy ? (
-              <ActivityIndicator color="#FFF" />
+              <ActivityIndicator color={tFg('#FFF')} />
             ) : (
               <>
-                <Icon name="spark" size={18} color="#FFF" />
+                <Icon name="spark" size={18} color={tFg('#FFF')} />
                 <Text style={g.measureTxt}>
                   {name ? `قِس "${name}"` : 'قِس المكان الحالي'}
                 </Text>
@@ -541,7 +542,7 @@ export default function Places() {
         {/* ═══ نصائح ═══ */}
         <View style={g.tipsCard}>
           <View style={g.tipsHead}>
-            <View style={[g.cardIcon, { backgroundColor: '#FEF3C7' }]}>
+            <View style={[g.cardIcon, { backgroundColor: tBg('#FEF3C7') }]}>
               <Icon name="bulb" size={16} color={WARN} />
             </View>
             <Text style={g.tipsTitle}>نصائح لاختيار المكان</Text>
@@ -592,7 +593,7 @@ const g = StyleSheet.create({
   },
   cardHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   cardIcon: {
-    width: 32, height: 32, borderRadius: 10, backgroundColor: '#E1F5FF',
+    width: 32, height: 32, borderRadius: 10, backgroundColor: tBg('#E1F5FF'),
     alignItems: 'center', justifyContent: 'center',
   },
   cardTitle: { color: TEXT, fontSize: 15, fontWeight: '900', textAlign: 'right' },
@@ -602,20 +603,20 @@ const g = StyleSheet.create({
 
   // Best card
   bestCard: {
-    backgroundColor: '#F0FDF4', borderRadius: 22, padding: 14, gap: 12,
-    borderWidth: 1.5, borderColor: '#86EFAC',
+    backgroundColor: tBg('#F0FDF4'), borderRadius: 22, padding: 14, gap: 12,
+    borderWidth: 1.5, borderColor: tBd('#86EFAC'),
   },
   bestHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
   bestIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  bestTitle: { color: '#166534', fontSize: 15.5, fontWeight: '900', textAlign: 'right' },
-  bestSub: { color: '#15803D', fontSize: 11.5, textAlign: 'right', marginTop: 2 },
+  bestTitle: { color: tFg('#166534'), fontSize: 15.5, fontWeight: '900', textAlign: 'right' },
+  bestSub: { color: tFg('#15803D'), fontSize: 11.5, textAlign: 'right', marginTop: 2 },
   bestStats: { flexDirection: 'row-reverse', gap: 8 },
   bestStat: {
-    flex: 1, alignItems: 'center', backgroundColor: '#F3F6FA',
-    borderRadius: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#D1FAE5',
+    flex: 1, alignItems: 'center', backgroundColor: tBg('#F3F6FA'),
+    borderRadius: 12, paddingVertical: 8, borderWidth: 1, borderColor: tBd('#D1FAE5'),
   },
-  bestStatVal: { fontSize: 16, fontWeight: '900', color: '#166534' },
-  bestStatUnit: { color: '#15803D', fontSize: 9.5, fontWeight: '700', marginTop: 2 },
+  bestStatVal: { fontSize: 16, fontWeight: '900', color: tFg('#166534') },
+  bestStatUnit: { color: tFg('#15803D'), fontSize: 9.5, fontWeight: '700', marginTop: 2 },
 
   // Place cards
   placeCard: {
@@ -623,13 +624,13 @@ const g = StyleSheet.create({
     backgroundColor: CARD_BG, borderRadius: 14, padding: 12,
     borderWidth: 1, borderColor: BORDER, position: 'relative',
   },
-  placeCardBest: { backgroundColor: '#F0FDF4', borderColor: '#86EFAC' },
+  placeCardBest: { backgroundColor: tBg('#F0FDF4'), borderColor: tBd('#86EFAC') },
   bestBadge: {
     position: 'absolute', top: -8, right: 12,
     backgroundColor: SUCCESS, borderRadius: 8,
     paddingHorizontal: 8, paddingVertical: 2,
   },
-  bestBadgeTxt: { color: '#FFF', fontSize: 9.5, fontWeight: '900' },
+  bestBadgeTxt: { color: tFg('#FFF'), fontSize: 9.5, fontWeight: '900' },
   placeDot: { width: 10, height: 10, borderRadius: 5 },
   placeName: { color: TEXT, fontSize: 14, fontWeight: '900', textAlign: 'right' },
   placeMeta: { color: MUTED, fontSize: 11, textAlign: 'right', marginTop: 2 },
@@ -661,22 +662,22 @@ const g = StyleSheet.create({
     shadowColor: BLUE, shadowOpacity: 0.3, shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 }, elevation: 3,
   },
-  measureTxt: { color: '#FFF', fontWeight: '900', fontSize: 15 },
+  measureTxt: { color: tFg('#FFF'), fontWeight: '900', fontSize: 15 },
 
   busyTxt: { color: MUTED, fontSize: 12, textAlign: 'center', marginTop: 4 },
   errTxt: { color: DANGER, fontSize: 12, textAlign: 'center', marginTop: 4 },
 
   // Tips
   tipsCard: {
-    borderRadius: 22, backgroundColor: '#F7F3FF',
-    borderWidth: 1, borderColor: '#E4D9FF',
+    borderRadius: 22, backgroundColor: tBg('#F7F3FF'),
+    borderWidth: 1, borderColor: tBd('#E4D9FF'),
     padding: 14, gap: 8,
   },
   tipsHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, marginBottom: 4 },
   tipsTitle: { color: PURPLE, fontSize: 14.5, fontWeight: '900', flex: 1, textAlign: 'right' },
   tipRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, paddingVertical: 3 },
   tipCheck: { color: SUCCESS, fontSize: 14, fontWeight: '900' },
-  tipTxt: { flex: 1, textAlign: 'right', color: '#68718A', fontSize: 12.5, lineHeight: 19 },
+  tipTxt: { flex: 1, textAlign: 'right', color: tFg('#68718A'), fontSize: 12.5, lineHeight: 19 },
 
   // (legacy - unused but kept for safety)
   center: { alignItems: 'center', gap: 10, paddingVertical: 24 },

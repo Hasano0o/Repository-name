@@ -24,6 +24,7 @@ import {
   P, shadow, Hero, Section, MeterTile, InfoCell, Grid, Cell, PrimaryBtn, RANGE, ratioOf, lvlColor, lvlLabel,
 } from '../src/ui/Pro';
 
+import { tBd, tBg, tFg } from '../src/ui/theme';
 const K_KEY = 'bandly_tech_key';
 const K_NAME = 'bandly_tech_name';
 
@@ -249,7 +250,7 @@ export default function TechScreen() {
               <Text style={s.heroTitle} numberOfLines={1}>{label}</Text>
             </View>
             <View style={s.tag}>
-              <View style={[s.dot, { backgroundColor: report ? '#ff5a5f' : conn === 'on' && customer ? '#16c784' : '#ffb020' }]} />
+              <View style={[s.dot, { backgroundColor: report ? tBg('#ff5a5f') : conn === 'on' && customer ? tBg('#16c784') : tBg('#ffb020') }]} />
               <Text style={s.tagTxt}>{report ? 'انتهت' : conn !== 'on' ? 'نتصل…' : customer ? 'العميل متصل' : 'بانتظار العميل'}</Text>
             </View>
           </View>
@@ -325,7 +326,7 @@ export default function TechScreen() {
                 {SAY_ORDER.filter(k => say[k]).map(k => (
                   <Pressable key={k} onPress={() => sendSay(k)}
                     style={({ pressed }) => [s.sayBtn, k === 'stop' && s.sayStop, pressed && { opacity: 0.6 }]}>
-                    <Text style={[s.sayTxt, k === 'stop' && { color: '#0b7a47', fontSize: 16 }]}>{say[k]}</Text>
+                    <Text style={[s.sayTxt, k === 'stop' && { color: tFg('#0b7a47'), fontSize: 16 }]}>{say[k]}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -372,7 +373,7 @@ export default function TechScreen() {
               </View>
             ))}
             <PrimaryBtn text="أرسل التقرير كصورة" icon="share" style={{ marginTop: 14 }}
-              colors={['#12b76a', '#0ea5a0']} onPress={() => reportImage(report.r)} />
+              colors={[tBg('#12b76a'), tBg('#0ea5a0')]} onPress={() => reportImage(report.r)} />
             <Pressable style={s.leave} onPress={() => Share.share({ message: reportText(report.r, name.trim() || undefined) }).catch(() => {})}>
               <Text style={s.leaveTxt}>أو أرسله كنص</Text>
             </Pressable>
@@ -398,12 +399,12 @@ const deltaColor = (v?: number, base?: number) =>
 
 const s = StyleSheet.create({
   page: { padding: 16, gap: 14 },
-  kicker: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '700', textAlign: 'right' },
-  heroTitle: { color: '#fff', fontSize: 24, fontWeight: '800', textAlign: 'right' },
-  heroSub: { color: 'rgba(255,255,255,0.88)', fontSize: 13, textAlign: 'right', marginTop: 4 },
+  kicker: { color: tFg('rgba(255,255,255,0.8)'), fontSize: 12, fontWeight: '700', textAlign: 'right' },
+  heroTitle: { color: tFg('#fff'), fontSize: 24, fontWeight: '800', textAlign: 'right' },
+  heroSub: { color: tFg('rgba(255,255,255,0.88)'), fontSize: 13, textAlign: 'right', marginTop: 4 },
   heroRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
-  tag: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 999, paddingHorizontal: 10, height: 30 },
-  tagTxt: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  tag: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, backgroundColor: tBg('rgba(255,255,255,0.18)'), borderRadius: 999, paddingHorizontal: 10, height: 30 },
+  tagTxt: { color: tFg('#fff'), fontSize: 12, fontWeight: '800' },
   dot: { width: 8, height: 8, borderRadius: 4 },
 
   codeIn: {
@@ -416,22 +417,22 @@ const s = StyleSheet.create({
   },
   err: { color: P.red, fontSize: 12.5, fontWeight: '700', textAlign: 'center', marginTop: 10 },
 
-  howCard: { backgroundColor: '#faf8ff', borderRadius: 20, padding: 16, gap: 8, borderWidth: 1, borderColor: '#e6ddff' },
+  howCard: { backgroundColor: tBg('#faf8ff'), borderRadius: 20, padding: 16, gap: 8, borderWidth: 1, borderColor: tBd('#e6ddff') },
   howTitle: { color: P.violet, fontSize: 14.5, fontWeight: '800', textAlign: 'right', marginBottom: 4 },
   howRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   howNum: { width: 22, height: 22, borderRadius: 11, backgroundColor: P.violetSoft, alignItems: 'center', justifyContent: 'center' },
   howNumTxt: { color: P.violet, fontSize: 11, fontWeight: '800' },
-  howTxt: { flex: 1, color: '#4b5675', fontSize: 13, textAlign: 'right', lineHeight: 20 },
+  howTxt: { flex: 1, color: tFg('#4b5675'), fontSize: 13, textAlign: 'right', lineHeight: 20 },
 
   card: { backgroundColor: P.card, borderRadius: 22, padding: 14, borderWidth: 1, borderColor: P.border, ...shadow },
   waitCard: { backgroundColor: P.card, borderRadius: 22, padding: 24, alignItems: 'center', gap: 10, borderWidth: 1, borderColor: P.border },
   waitTxt: { color: P.sub, fontSize: 13 },
   delta: { fontSize: 11.5, fontWeight: '800', textAlign: 'center', marginTop: 4 },
   cardTitle: { color: P.text, fontSize: 15, fontWeight: '800', textAlign: 'right', marginBottom: 6 },
-  pingTag: { backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 999, paddingHorizontal: 10, height: 30, justifyContent: 'center' },
-  pingTxt: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  pingTag: { backgroundColor: tBg('rgba(255,255,255,0.18)'), borderRadius: 999, paddingHorizontal: 10, height: 30, justifyContent: 'center' },
+  pingTxt: { color: tFg('#fff'), fontSize: 12, fontWeight: '800' },
   best: { marginTop: 12, backgroundColor: P.greenSoft, borderRadius: 14, padding: 10, gap: 2 },
-  bestTxt: { color: '#0b7a47', fontSize: 13, fontWeight: '700', textAlign: 'right' },
+  bestTxt: { color: tFg('#0b7a47'), fontSize: 13, fontWeight: '700', textAlign: 'right' },
   bestGap: { fontSize: 12, fontWeight: '800', textAlign: 'right' },
   pinned: { color: P.violet, fontSize: 12, fontWeight: '700', textAlign: 'center', marginTop: 8 },
   chartLbls: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 },
@@ -442,10 +443,10 @@ const s = StyleSheet.create({
     width: '48.5%', backgroundColor: P.soft, borderRadius: 14, paddingVertical: 14, alignItems: 'center',
     borderWidth: 1.5, borderColor: P.border,
   },
-  sayStop: { width: '100%', backgroundColor: P.greenSoft, borderColor: '#c9f0dc' },
+  sayStop: { width: '100%', backgroundColor: P.greenSoft, borderColor: tBd('#c9f0dc') },
   sayTxt: { color: P.text, fontSize: 13.5, fontWeight: '800', textAlign: 'center' },
-  cmdBtn: { backgroundColor: P.violetSoft, borderColor: '#ded5ff' },
-  unlockBtn: { width: '100%', backgroundColor: P.redSoft, borderColor: '#ffdde2' },
+  cmdBtn: { backgroundColor: P.violetSoft, borderColor: tBd('#ded5ff') },
+  unlockBtn: { width: '100%', backgroundColor: P.redSoft, borderColor: tBd('#ffdde2') },
   log: { color: P.sub, fontSize: 12.5, textAlign: 'right', backgroundColor: P.soft, borderRadius: 10, padding: 8 },
 
   gain: { fontSize: 40, fontWeight: '800', textAlign: 'center', marginTop: 12 },

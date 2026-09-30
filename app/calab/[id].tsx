@@ -8,7 +8,7 @@ import { withSession } from '../../src/store/sessions';
 import { BandConfig, Carrier, CellTower } from '../../src/drivers/types';
 import { labBands, seenBands, buildAllCombos, runCaLab, LabRow, Combo } from '../../src/utils/bandLab';
 import { snapshot, safeApply, trialMessage, Snapshot } from '../../src/utils/safeLock';
-import { C, R, S } from '../../src/ui/theme';
+import { C, R, S, tBd, tBg, tFg } from '../../src/ui/theme';
 
 const ACCENT = '#0ea5a4';
 
@@ -18,18 +18,18 @@ const rowLabel = (r: { bands: number[]; nrBands?: number[] }) =>
 
 function gradeSpeed(mbps?: number): { label: string; color: string } {
   if (mbps === undefined) return { label: '—', color: C.muted };
-  if (mbps >= 40) return { label: 'ممتاز', color: '#16a34a' };
-  if (mbps >= 20) return { label: 'جيد', color: '#22c55e' };
-  if (mbps >= 8) return { label: 'مقبول', color: '#f59e0b' };
-  return { label: 'ضعيف', color: '#dc2626' };
+  if (mbps >= 40) return { label: 'ممتاز', color: tFg('#16a34a') };
+  if (mbps >= 20) return { label: 'جيد', color: tFg('#22c55e') };
+  if (mbps >= 8) return { label: 'مقبول', color: tFg('#f59e0b') };
+  return { label: 'ضعيف', color: tFg('#dc2626') };
 }
 
 function gradePing(ms?: number): { label: string; color: string } {
   if (ms === undefined) return { label: '—', color: C.muted };
-  if (ms <= 40) return { label: 'ممتاز', color: '#16a34a' };
-  if (ms <= 80) return { label: 'جيد', color: '#22c55e' };
-  if (ms <= 150) return { label: 'مقبول', color: '#f59e0b' };
-  return { label: 'ضعيف', color: '#dc2626' };
+  if (ms <= 40) return { label: 'ممتاز', color: tFg('#16a34a') };
+  if (ms <= 80) return { label: 'جيد', color: tFg('#22c55e') };
+  if (ms <= 150) return { label: 'مقبول', color: tFg('#f59e0b') };
+  return { label: 'ضعيف', color: tFg('#dc2626') };
 }
 
 export default function CaLab() {
@@ -234,11 +234,11 @@ export default function CaLab() {
           return (
             <View key={i} style={[
               s.row,
-              isBest && { borderColor: '#16a34a', borderWidth: 2, backgroundColor: '#f0fdf4' },
+              isBest && { borderColor: tBd('#16a34a'), borderWidth: 2, backgroundColor: tBg('#f0fdf4') },
               isBest5g && { borderColor: C.violet + '80' },
             ]}>
               <View style={s.rowHead}>
-                <Text style={[s.rowName, isBest && { color: '#16a34a' }]}>
+                <Text style={[s.rowName, isBest && { color: tFg('#16a34a') }]}>
                   {isBest ? '🥇 ' : isBest5g ? '🥈 ' : ''}{rowLabel(r)}
                 </Text>
                 {r.status === 'testing' ? <ActivityIndicator size="small" color={ACCENT} />
@@ -288,7 +288,7 @@ export default function CaLab() {
         })}
 
         {finished && (
-          <View style={[s.card, { borderColor: best ? '#16a34a' : C.line }]}>
+          <View style={[s.card, { borderColor: best ? tBd('#16a34a') : C.line }]}>
             {best ? (
               <>
                 <Text style={s.verdict}>
@@ -303,7 +303,7 @@ export default function CaLab() {
                     📡 الأفضل مع 5G نشط: {rowLabel(best5g)} — {best5g.speedMbps?.toFixed(1) ?? '—'} Mbps
                   </Text>
                 )}
-                <Pressable style={[s.btn, { backgroundColor: '#16a34a' }]} onPress={apply} disabled={running}>
+                <Pressable style={[s.btn, { backgroundColor: tBg('#16a34a') }]} onPress={apply} disabled={running}>
                   <Text style={s.btnText}>ثبّت {rowLabel(best)} بأمان</Text>
                 </Pressable>
               </>

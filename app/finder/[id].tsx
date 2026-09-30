@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, Href } from 'expo-router';
 import { Icon, IconName } from '../../src/ui/Icon';
 
+import { tBg, tFg } from '../../src/ui/theme';
 const BLUE = '#3567F5';
 const PURPLE = '#7655F5';
 const TEXT = '#14264A';
@@ -40,7 +41,7 @@ const SECTIONS: Section[] = [
       {
         key: 'speed',
         icon: 'spark',
-        color: '#7c5cff',
+        color: tFg('#7c5cff'),
         title: 'أسرع إنترنت',
         sub: 'اختبار تلقائي شامل — يقفل ويقيس ويثبّت',
         tag: 'موصى به',
@@ -57,7 +58,7 @@ const SECTIONS: Section[] = [
       {
         key: 'bands',
         icon: 'bands',
-        color: '#2f6bff',
+        color: tFg('#2f6bff'),
         title: 'قفل الترددات',
         sub: 'اختيار يدوي كامل + وضع الشبكة',
         path: 'bands',
@@ -65,7 +66,7 @@ const SECTIONS: Section[] = [
       {
         key: 'ca',
         icon: 'layers',
-        color: '#0ea5a4',
+        color: tFg('#0ea5a4'),
         title: 'دمج 4G + 4G',
         sub: 'جرب تركيبات مثل B1+B3 و B3+B20',
         path: 'calab',
@@ -73,7 +74,7 @@ const SECTIONS: Section[] = [
       {
         key: 'nsa',
         icon: 'layers',
-        color: '#f59e0b',
+        color: tFg('#f59e0b'),
         title: 'دمج 4G + 5G (NSA)',
         sub: 'تركيبات مثل B20+n78 و B1+n41',
         tag: 'جديد',
@@ -163,7 +164,7 @@ const s = StyleSheet.create({
   card: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 12,
     paddingVertical: 12, paddingHorizontal: 12,
-    backgroundColor: '#E9EEF5',
+    backgroundColor: tBg('#E9EEF5'),
     borderRadius: 14, borderWidth: 1.5,
   },
   iconWrap: {
@@ -175,7 +176,7 @@ const s = StyleSheet.create({
   tag: {
     paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6,
   },
-  tagTxt: { color: '#FFF', fontSize: 9, fontWeight: '900' },
+  tagTxt: { color: tFg('#FFF'), fontSize: 9, fontWeight: '900' },
   note: {
     color: MUTED, fontSize: 11.5, textAlign: 'right',
     lineHeight: 18, paddingHorizontal: 4, marginTop: 4,

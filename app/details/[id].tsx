@@ -15,6 +15,7 @@ import {
   RANGE, ratioOf, lvlLabel,
 } from '../../src/ui/Pro';
 
+import { tBg, tFg } from '../../src/ui/theme';
 type Info = { label: string; value?: string; accent?: string };
 
 /** يعرض الخانات المتوفرة فقط، ويذكر كم خانة ما يدعمها الراوتر */
@@ -219,7 +220,7 @@ function TrafficTile({ label, value, icon, color, bg }: {
   return (
     <View style={[d.traffic, { backgroundColor: bg }]}>
       <View style={[d.trafficIcon, { backgroundColor: color }]}>
-        <Icon name={icon} size={16} color="#fff" stroke={2.4} />
+        <Icon name={icon} size={16} color={tFg('#fff')} stroke={2.4} />
       </View>
       <Text style={d.trafficLbl}>{label}</Text>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', alignSelf: 'flex-end' }}>
@@ -236,18 +237,18 @@ const d = StyleSheet.create({
   muted: { color: P.sub, textAlign: 'center', lineHeight: 20, fontSize: 13 },
 
   heroTop: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: 10 },
-  heroKicker: { color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '700' },
-  heroTitle: { color: '#fff', fontSize: 22, fontWeight: '800', textAlign: 'right' },
-  heroSub: { color: 'rgba(255,255,255,0.8)', fontSize: 12.5, fontWeight: '600' },
+  heroKicker: { color: tFg('rgba(255,255,255,0.75)'), fontSize: 12, fontWeight: '700' },
+  heroTitle: { color: tFg('#fff'), fontSize: 22, fontWeight: '800', textAlign: 'right' },
+  heroSub: { color: tFg('rgba(255,255,255,0.8)'), fontSize: 12.5, fontWeight: '600' },
   heroBody: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 },
   heroChips: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6 },
-  glassChip: { backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  glassChipTxt: { color: '#fff', fontSize: 11.5, fontWeight: '800' },
-  hsLbl: { color: 'rgba(255,255,255,0.75)', fontSize: 11.5, fontWeight: '600' },
-  hsVal: { color: '#fff', fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
-  hsUnit: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '700' },
-  ringNum: { color: '#fff', fontSize: 36, fontWeight: '800', letterSpacing: -1, lineHeight: 42 },
-  ringLbl: { color: 'rgba(255,255,255,0.9)', fontSize: 12.5, fontWeight: '800' },
+  glassChip: { backgroundColor: tBg('rgba(255,255,255,0.18)'), borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  glassChipTxt: { color: tFg('#fff'), fontSize: 11.5, fontWeight: '800' },
+  hsLbl: { color: tFg('rgba(255,255,255,0.75)'), fontSize: 11.5, fontWeight: '600' },
+  hsVal: { color: tFg('#fff'), fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
+  hsUnit: { color: tFg('rgba(255,255,255,0.8)'), fontSize: 12, fontWeight: '700' },
+  ringNum: { color: tFg('#fff'), fontSize: 36, fontWeight: '800', letterSpacing: -1, lineHeight: 42 },
+  ringLbl: { color: tFg('rgba(255,255,255,0.9)'), fontSize: 12.5, fontWeight: '800' },
 
   hiddenNote: { color: P.faint, fontSize: 11, textAlign: 'center', marginTop: 2 },
 

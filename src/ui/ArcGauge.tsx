@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, Animated, Easing, StyleSheet } from 'react-native';
 import Svg, { Path, Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
-import { C } from './theme';
+import { C, tFg } from './theme';
 
 const SWEEP = 270;
 const START = 135; // يبدأ من تحت يسار ويلف لتحت يمين
@@ -68,5 +68,5 @@ const s = StyleSheet.create({
   num: { color: C.text, fontWeight: '800', letterSpacing: -1, marginTop: 6 },
   of: { color: C.muted, fontWeight: '600', marginTop: -4 },
   pill: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 3, marginTop: 6 },
-  pillText: { color: '#fff', fontWeight: '800' },
+  pillText: { color: tFg('#fff'), fontWeight: '800' },
 });

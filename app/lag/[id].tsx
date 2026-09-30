@@ -13,7 +13,7 @@ import {
   PingSample, RouterSample, Gap, LagReport, Cause, CAUSE_TEXT,
   baseline, isSpike, findIncidents, buildReport, listLagSessions, saveLagSession, fmtClock, fmtDur,
 } from '../../src/utils/lagDetector';
-import { C } from '../../src/ui/theme';
+import { C, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 
 const KEEP_TAG = 'bandly-lag';
@@ -322,7 +322,7 @@ const s = StyleSheet.create({
   page: { padding: 16, gap: 14 },
   center: { alignItems: 'center', paddingVertical: 40 },
   hint: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 19 },
-  warn: { color: '#b45309', fontSize: 12, textAlign: 'right', lineHeight: 19, backgroundColor: C.amberSoft, borderRadius: 12, padding: 10 },
+  warn: { color: tFg('#b45309'), fontSize: 12, textAlign: 'right', lineHeight: 19, backgroundColor: C.amberSoft, borderRadius: 12, padding: 10 },
   tipBox: { backgroundColor: C.rowBg, borderRadius: 14, borderWidth: 1, borderColor: C.cardBorder, padding: 10, gap: 4 },
   tipTitle: { color: C.text, fontWeight: '800', fontSize: 13, textAlign: 'right' },
   tip: { color: C.sub, fontSize: 12, textAlign: 'right', lineHeight: 19 },

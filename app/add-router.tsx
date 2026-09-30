@@ -14,7 +14,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Icon, IconName } from '../src/ui/Icon';
-import { C, R, S, T } from '../src/ui/theme';
+import { C, R, S, T, tBd, tBg, tFg } from '../src/ui/theme';
 import { isLanHost } from '../src/utils/host';
 import { detectDriver } from '../src/drivers/registry';
 import { getRouter, saveRouter, updateRouter, deleteRouter, SavedRouter } from '../src/store/routers';
@@ -153,7 +153,7 @@ export default function AddRouterScreen() {
   const isEdit = Boolean(editId);
 
   return (
-    <LinearGradient colors={['#eaf2ff', '#f3efff', '#eaf9f3']} style={styles.flex}>
+    <LinearGradient colors={[tBg('#eaf2ff'), tBg('#f3efff'), tBg('#eaf9f3')]} style={styles.flex}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -169,7 +169,7 @@ export default function AddRouterScreen() {
         >
           {/* الترويسة */}
           <LinearGradient
-            colors={['#2f6bff', '#6a4cff']}
+            colors={[tBg('#2f6bff'), tBg('#6a4cff')]}
             start={{ x: 1, y: 0 }}
             end={{ x: 0, y: 1 }}
             style={styles.hero}
@@ -184,34 +184,34 @@ export default function AddRouterScreen() {
                 : 'اتصل بشبكة الراوتر أول، وبعدها أدخل بيانات الدخول'}
             </Text>
             <View style={styles.safe}>
-              <Icon name="lock" size={13} color="#fff" />
+              <Icon name="lock" size={13} color={tFg('#fff')} />
               <Text style={styles.safeText}>كلمة المرور تنحفظ مشفّرة على جوالك فقط</Text>
             </View>
           </LinearGradient>
 
           {/* النموذج */}
           <View style={styles.card}>
-            <Field label="اسم الراوتر" hint="اختياري" icon="home" color="#8b5cf6" focused={focus === 'name'}>
+            <Field label="اسم الراوتر" hint="اختياري" icon="home" color={tFg('#8b5cf6')} focused={focus === 'name'}>
               <TextInput
                 value={name}
                 onChangeText={setName}
                 onFocus={() => setFocus('name')}
                 onBlur={() => setFocus(null)}
                 placeholder="مثال: راوتر الصالة"
-                placeholderTextColor="#9aa3bd"
+                placeholderTextColor={tFg('#9aa3bd')}
                 style={styles.input}
                 returnKeyType="next"
               />
             </Field>
 
-            <Field label="عنوان الراوتر (IP)" icon="tower" color="#2f6bff" focused={focus === 'host'}>
+            <Field label="عنوان الراوتر (IP)" icon="tower" color={tFg('#2f6bff')} focused={focus === 'host'}>
               <TextInput
                 value={host}
                 onChangeText={setHost}
                 onFocus={() => setFocus('host')}
                 onBlur={() => setFocus(null)}
                 placeholder="192.168.8.1"
-                placeholderTextColor="#9aa3bd"
+                placeholderTextColor={tFg('#9aa3bd')}
                 style={[styles.input, styles.ltr]}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -229,21 +229,21 @@ export default function AddRouterScreen() {
                     onPress={() => setHost(h.host)}
                     style={({ pressed }) => [styles.hostChip, on && styles.hostChipOn, pressed && { opacity: 0.7 }]}
                   >
-                    <Text style={[styles.hostIp, on && { color: '#fff' }]}>{h.host}</Text>
-                    <Text style={[styles.hostHint, on && { color: 'rgba(255,255,255,0.85)' }]}>{h.hint}</Text>
+                    <Text style={[styles.hostIp, on && { color: tFg('#fff') }]}>{h.host}</Text>
+                    <Text style={[styles.hostHint, on && { color: tFg('rgba(255,255,255,0.85)') }]}>{h.hint}</Text>
                   </Pressable>
                 );
               })}
             </View>
 
-            <Field label="اسم المستخدم" icon="user" color="#12b76a" focused={focus === 'user'}>
+            <Field label="اسم المستخدم" icon="user" color={tFg('#12b76a')} focused={focus === 'user'}>
               <TextInput
                 value={username}
                 onChangeText={setUsername}
                 onFocus={() => setFocus('user')}
                 onBlur={() => setFocus(null)}
                 placeholder="admin"
-                placeholderTextColor="#9aa3bd"
+                placeholderTextColor={tFg('#9aa3bd')}
                 style={[styles.input, styles.ltr]}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -252,7 +252,7 @@ export default function AddRouterScreen() {
               />
             </Field>
 
-            <Field label="كلمة المرور" icon="lock" color="#f97316" focused={focus === 'pass'}>
+            <Field label="كلمة المرور" icon="lock" color={tFg('#f97316')} focused={focus === 'pass'}>
               <View style={styles.passwordRow}>
                 <TextInput
                   value={password}
@@ -260,7 +260,7 @@ export default function AddRouterScreen() {
                   onFocus={() => setFocus('pass')}
                   onBlur={() => setFocus(null)}
                   placeholder="••••••••"
-                  placeholderTextColor="#9aa3bd"
+                  placeholderTextColor={tFg('#9aa3bd')}
                   style={[styles.input, styles.ltr, styles.passwordInput]}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -289,14 +289,14 @@ export default function AddRouterScreen() {
               style={({ pressed }) => [styles.primaryWrap, (busy || pressed) && { opacity: 0.85 }]}
             >
               <LinearGradient
-                colors={['#2f6bff', '#6a4cff']}
+                colors={[tBg('#2f6bff'), tBg('#6a4cff')]}
                 start={{ x: 1, y: 0 }}
                 end={{ x: 0, y: 0 }}
                 style={styles.primaryBtn}
               >
                 {busy ? (
                   <View style={styles.busyRow}>
-                    <ActivityIndicator color="#fff" />
+                    <ActivityIndicator color={tFg('#fff')} />
                     {!!step && <Text style={styles.primaryBtnText}>{step}</Text>}
                   </View>
                 ) : (
@@ -338,12 +338,12 @@ function Field({
     <View style={styles.field}>
       <View style={styles.labelRow}>
         <View style={[styles.labelIcon, { backgroundColor: color }]}>
-          <Icon name={icon} size={13} color="#fff" />
+          <Icon name={icon} size={13} color={tFg('#fff')} />
         </View>
         <Text style={styles.label}>{label}</Text>
         {!!hint && <Text style={styles.labelHint}>{hint}</Text>}
       </View>
-      <View style={[styles.inputWrap, focused && { borderColor: color, backgroundColor: '#f3f6fa' }]}>
+      <View style={[styles.inputWrap, focused && { borderColor: color, backgroundColor: tBg('#f3f6fa') }]}>
         {children}
       </View>
     </View>
@@ -361,19 +361,19 @@ const styles = StyleSheet.create({
   },
   heroIcon: {
     width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', marginBottom: 4,
+    backgroundColor: tBg('rgba(255,255,255,0.2)'), borderWidth: 1, borderColor: tBd('rgba(255,255,255,0.4)'), marginBottom: 4,
   },
-  heroTitle: { color: '#fff', fontSize: 22, fontWeight: '900' },
-  heroSub: { color: 'rgba(255,255,255,0.88)', fontSize: 13, textAlign: 'center', lineHeight: 20 },
+  heroTitle: { color: tFg('#fff'), fontSize: 22, fontWeight: '900' },
+  heroSub: { color: tFg('rgba(255,255,255,0.88)'), fontSize: 13, textAlign: 'center', lineHeight: 20 },
   safe: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 6, marginTop: 6,
-    backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6,
+    backgroundColor: tBg('rgba(255,255,255,0.18)'), borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6,
   },
-  safeText: { color: '#fff', fontSize: 11.5, fontWeight: '700' },
+  safeText: { color: tFg('#fff'), fontSize: 11.5, fontWeight: '700' },
 
   card: {
-    backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 24, padding: S.lg,
-    borderWidth: 1, borderColor: '#ffffff',
+    backgroundColor: tBg('rgba(255,255,255,0.92)'), borderRadius: 24, padding: S.lg,
+    borderWidth: 1, borderColor: tBd('#ffffff'),
     shadowColor: C.shadow, shadowOpacity: 0.07, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 2,
   },
   field: { marginBottom: S.md },
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
   labelIcon: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   label: { fontSize: 13.5, color: C.text, fontWeight: '800', textAlign: 'right' },
   labelHint: { fontSize: 11, color: C.muted, fontWeight: '600' },
-  inputWrap: { borderRadius: 16, borderWidth: 1.5, borderColor: '#d8e0eb', backgroundColor: '#e9eef5' },
+  inputWrap: { borderRadius: 16, borderWidth: 1.5, borderColor: tBd('#d8e0eb'), backgroundColor: tBg('#e9eef5') },
   input: {
     paddingHorizontal: S.md, paddingVertical: S.sm, color: C.text, fontSize: 15, minHeight: 50,
     textAlign: 'right',
@@ -389,7 +389,7 @@ const styles = StyleSheet.create({
   ltr: { textAlign: 'left', writingDirection: 'ltr', fontWeight: '700', letterSpacing: 0.3 },
   hosts: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6, marginTop: -4, marginBottom: S.md },
   hostChip: {
-    borderRadius: 12, borderWidth: 1, borderColor: '#d6e2ff', backgroundColor: '#eef3ff',
+    borderRadius: 12, borderWidth: 1, borderColor: tBd('#d6e2ff'), backgroundColor: tBg('#eef3ff'),
     paddingHorizontal: 10, paddingVertical: 5, alignItems: 'center',
   },
   hostChipOn: { backgroundColor: C.blue, borderColor: C.blue },
@@ -408,14 +408,14 @@ const styles = StyleSheet.create({
     shadowColor: '#2f6bff', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 5,
   },
   primaryBtn: { borderRadius: 16, paddingVertical: S.md, alignItems: 'center', justifyContent: 'center', minHeight: 54 },
-  primaryBtnText: { fontSize: 16, color: '#ffffff', fontWeight: '800' },
+  primaryBtnText: { fontSize: 16, color: tFg('#ffffff'), fontWeight: '800' },
   busyRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   ghostBtn: { marginTop: S.sm, paddingVertical: S.sm, alignItems: 'center' },
   ghostBtnText: { fontSize: T.body, color: C.sub, fontWeight: '700' },
 
   deleteBtn: {
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: '#fff1f2', borderColor: '#fecdd3', borderWidth: 1, borderRadius: 16, paddingVertical: 14,
+    backgroundColor: tBg('#fff1f2'), borderColor: tBd('#fecdd3'), borderWidth: 1, borderRadius: 16, paddingVertical: 14,
   },
   deleteText: { color: C.red, fontWeight: '800', fontSize: 14 },
 });

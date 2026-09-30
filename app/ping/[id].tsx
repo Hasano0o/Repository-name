@@ -18,7 +18,7 @@ import { Consent, TowerRef, TowerInfo, getConsent, setConsent, currentTower, cur
 import { AreaCompare } from '../../src/ui/AreaCompare';
 import { addGameLog, listGameLog, periodStats, PeriodStat } from '../../src/store/gameLog';
 import { bandLabel, freqLabel } from '../../src/utils/bands';
-import { C } from '../../src/ui/theme';
+import { C, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 
 type Tech = 'LTE' | 'NR';
@@ -829,7 +829,7 @@ function Stat({ v, u, l, c }: { v: string; u: string; l: string; c: string }) {
 const s = StyleSheet.create({
   inlineStatus: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, justifyContent: 'center', paddingVertical: 4 },
   inlineStatusTxt: { color: C.blue, fontWeight: '800', fontSize: 13 },
-  fallbackNote: { color: '#b45309', fontSize: 12, textAlign: 'right', lineHeight: 19, backgroundColor: C.amberSoft, borderRadius: 12, padding: 10 },
+  fallbackNote: { color: tFg('#b45309'), fontSize: 12, textAlign: 'right', lineHeight: 19, backgroundColor: C.amberSoft, borderRadius: 12, padding: 10 },
   weekLine: { color: C.text, fontSize: 13, textAlign: 'right', lineHeight: 21 },
   consentRow: { flexDirection: 'row', gap: 8 },
   outage: { backgroundColor: C.redSoft, borderRadius: 14, padding: 10, borderWidth: 1, borderColor: C.red },

@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet, ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { C, R, S, T } from './theme';
+import { C, R, S, T, tBd, tBg, tFg } from './theme';
 import { Icon, IconName } from './Icon';
 
 /** البطاقة البطل — الحالة الرئيسية، بخلفية متدرجة خفيفة وبدون حد */
@@ -103,7 +103,7 @@ export function ToolTile({
       {wide ? (
         <LinearGradient colors={[color, shade(color)]} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={s.tileWideIn}>
           <View style={s.tileIconWide}>
-            <Icon name={icon} size={21} color="#fff" />
+            <Icon name={icon} size={21} color={tFg('#fff')} />
           </View>
           <View style={{ flex: 1, alignItems: 'flex-end' }}>
             <Text style={s.tileTitleWide}>{title}</Text>
@@ -117,7 +117,7 @@ export function ToolTile({
           style={[s.tileIn, { borderColor: color + '33' }]}
         >
           <View style={[s.tileIcon, { backgroundColor: color }]}>
-            <Icon name={icon} size={17} color="#fff" />
+            <Icon name={icon} size={17} color={tFg('#fff')} />
           </View>
           <Text style={s.tileTitle}>{title}</Text>
           {!!sub && <Text style={[s.tileSub, { color: shade(color, 0.1) }]} numberOfLines={1}>{sub}</Text>}
@@ -177,10 +177,10 @@ const s = StyleSheet.create({
   tileWideIn: { borderRadius: R.lg, padding: 13, gap: 10, flexDirection: 'row-reverse', alignItems: 'center', flex: 1 },
   tileIconWide: {
     width: 40, height: 40, borderRadius: R.md, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.22)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: tBg('rgba(255,255,255,0.22)'), borderWidth: 1, borderColor: tBd('rgba(255,255,255,0.35)'),
   },
-  tileTitleWide: { color: '#fff', fontWeight: '800', fontSize: 14.5, textAlign: 'right' },
-  tileSubWide: { color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: '600', textAlign: 'right', marginTop: 2 },
+  tileTitleWide: { color: tFg('#fff'), fontWeight: '800', fontSize: 14.5, textAlign: 'right' },
+  tileSubWide: { color: tFg('rgba(255,255,255,0.85)'), fontSize: 11, fontWeight: '600', textAlign: 'right', marginTop: 2 },
   gHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, marginTop: 8, marginBottom: -2, paddingHorizontal: 4 },
   gBar: { width: 4, height: 16, borderRadius: 2 },
   gTitle: { color: C.text, fontSize: 14.5, fontWeight: '800', textAlign: 'right' },

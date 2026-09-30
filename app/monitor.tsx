@@ -10,16 +10,16 @@ import { startMonitor, stopMonitor, isMonitorRegistered, runMonitorCheck } from 
 import { requestNotifyPermission, notify } from '../src/utils/notify';
 import { listRouters } from '../src/store/routers';
 import { Icon, IconName } from '../src/ui/Icon';
-import { C, R, S, T } from '../src/ui/theme';
+import { C, R, S, T, tFg } from '../src/ui/theme';
 
 interface AlertRow { key: keyof MonitorAlerts; title: string; sub: string; icon: IconName; color: string; }
 
 const ALERT_ROWS: AlertRow[] = [
-  { key: 'signalDrop', title: 'ضعف الإشارة', sub: 'ينبّهك لما تطيح إشارتك', icon: 'down', color: '#e5484d' },
-  { key: 'signalRecover', title: 'تحسّن الإشارة', sub: 'لما ترجع الإشارة قوية', icon: 'up', color: '#12b76a' },
-  { key: 'nr5g', title: 'رجوع 5G', sub: 'لما يتصل بشبكة 5G', icon: 'spark', color: '#7a51e0' },
-  { key: 'disconnect', title: 'انقطاع الاتصال', sub: 'لما يفقد الراوتر الشبكة', icon: 'power', color: '#d73722' },
-  { key: 'dataPlan', title: 'استهلاك الباقة', sub: 'تنبيه عند 70٪ و90٪ و100٪', icon: 'chart', color: '#f59e0b' },
+  { key: 'signalDrop', title: 'ضعف الإشارة', sub: 'ينبّهك لما تطيح إشارتك', icon: 'down', color: tFg('#e5484d') },
+  { key: 'signalRecover', title: 'تحسّن الإشارة', sub: 'لما ترجع الإشارة قوية', icon: 'up', color: tFg('#12b76a') },
+  { key: 'nr5g', title: 'رجوع 5G', sub: 'لما يتصل بشبكة 5G', icon: 'spark', color: tFg('#7a51e0') },
+  { key: 'disconnect', title: 'انقطاع الاتصال', sub: 'لما يفقد الراوتر الشبكة', icon: 'power', color: tFg('#d73722') },
+  { key: 'dataPlan', title: 'استهلاك الباقة', sub: 'تنبيه عند 70٪ و90٪ و100٪', icon: 'chart', color: tFg('#f59e0b') },
 ];
 
 export default function MonitorScreen() {
@@ -186,7 +186,7 @@ const s = StyleSheet.create({
   msgOk: { color: C.green },
   explain: { color: C.sub, fontSize: 12.5, lineHeight: 21, textAlign: 'right' },
   warn: { backgroundColor: C.goldSoft, borderColor: C.amberSoft, borderWidth: 1, borderRadius: R.md, padding: S.md },
-  warnText: { color: '#9a6a12', fontSize: 12.5, textAlign: 'right', lineHeight: 20 },
+  warnText: { color: tFg('#9a6a12'), fontSize: 12.5, textAlign: 'right', lineHeight: 20 },
   grp: { color: C.text, fontSize: 13, fontWeight: '800', textAlign: 'right', marginTop: 4 },
   card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1, borderRadius: R.lg, paddingHorizontal: S.lg },
   cardOff: { opacity: 0.5 },

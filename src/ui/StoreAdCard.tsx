@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { StoreAd } from '../services/stores';
-import { C } from './theme';
+import { C, tBd, tBg, tFg } from './theme';
 
 /**
  * بطاقة الإعلان المدفوع أسفل الشاشة.
@@ -65,7 +65,7 @@ const s = StyleSheet.create({
   },
   featured: { color: C.violet, fontWeight: '800', fontSize: 13.5 },
   paid: {
-    backgroundColor: '#efe8ff',
+    backgroundColor: tBg('#efe8ff'),
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 4,
@@ -76,7 +76,7 @@ const s = StyleSheet.create({
     aspectRatio: 1200 / 500,
     borderRadius: 22,
     overflow: 'hidden',
-    backgroundColor: '#1b1f5e',
+    backgroundColor: tBg('#1b1f5e'),
     shadowColor: C.shadow,
     shadowOpacity: 0.18,
     shadowRadius: 14,
@@ -92,11 +92,11 @@ const s = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: tBg('rgba(255,255,255,0.22)'),
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
+    borderColor: tBd('rgba(255,255,255,0.35)'),
     alignItems: 'center',
     justifyContent: 'center',
   },
-  goText: { color: '#fff', fontSize: 20, fontWeight: '800', lineHeight: 22 },
+  goText: { color: tFg('#fff'), fontSize: 20, fontWeight: '800', lineHeight: 22 },
 });

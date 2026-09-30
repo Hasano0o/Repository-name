@@ -8,7 +8,7 @@ import { withSession } from '../../src/store/sessions';
 import { Carrier } from '../../src/drivers/types';
 import { LEVEL_COLOR, LEVEL_LABEL, overallLevel, signalScore } from '../../src/utils/signal';
 import { bandLabel, freqLabel } from '../../src/utils/bands';
-import { C, R, S, T } from '../../src/ui/theme';
+import { C, R, S, T, tFg } from '../../src/ui/theme';
 import { HeroCard, MetricCard, Section } from '../../src/ui/Cards';
 import { Icon } from '../../src/ui/Icon';
 import { Skeleton, ErrorCard } from '../../src/ui/States';
@@ -235,7 +235,7 @@ const s = StyleSheet.create({
 
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   pill: { borderRadius: R.pill, paddingHorizontal: S.md, paddingVertical: 5 },
-  pillTxt: { color: '#fff', fontWeight: '800', fontSize: T.label },
+  pillTxt: { color: tFg('#fff'), fontWeight: '800', fontSize: T.label },
   big: { color: C.text, fontWeight: '800', fontSize: 30, lineHeight: 34 },
   small: { color: C.sub, fontSize: T.label },
   bwRow: {

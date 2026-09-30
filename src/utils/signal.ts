@@ -1,3 +1,4 @@
+import { isDark } from '../ui/theme';
 import { Signal } from '../drivers/types';
 
 export type Level = 'excellent' | 'good' | 'fair' | 'poor' | 'unknown';
@@ -5,9 +6,9 @@ export type Level = 'excellent' | 'good' | 'fair' | 'poor' | 'unknown';
 export const LEVEL_COLOR: Record<Level, string> = {
   excellent: '#12b76a', good: '#5ba644', fair: '#f79009', poor: '#e5484d', unknown: '#9aa1bd',
 };
-export const LEVEL_SOFT: Record<Level, string> = {
-  excellent: '#e8f8f0', good: '#eef7e8', fair: '#fff6e8', poor: '#ffeef0', unknown: '#f1f2f7',
-};
+export const LEVEL_SOFT: Record<Level, string> = isDark
+  ? { excellent: '#14322a', good: '#1d3020', fair: '#352a15', poor: '#3a1c22', unknown: '#1c273d' }
+  : { excellent: '#e8f8f0', good: '#eef7e8', fair: '#fff6e8', poor: '#ffeef0', unknown: '#f1f2f7' };
 export const LEVEL_LABEL: Record<Level, string> = {
   excellent: 'ممتاز', good: 'جيد', fair: 'متوسط', poor: 'ضعيف', unknown: 'غير معروف',
 };

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import Svg, { Circle, Path, Line, Defs, LinearGradient, Stop } from 'react-native-svg';
+import { tBd } from './theme';
 
 /** رسم قوة الإشارة (RSRP) — يسار = قديم، يمين = الآن */
 export function SignalChart({ values, color, height = 120, min = -125, max = -60 }: {
@@ -30,7 +31,7 @@ export function SignalChart({ values, color, height = 120, min = -125, max = -60
           </LinearGradient>
         </Defs>
         {[-70, -90, -110].map(g => (
-          <Line key={g} x1={0} x2={w} y1={y(g)} y2={y(g)} stroke="#edf1f8" strokeWidth={1} strokeDasharray="4 5" />
+          <Line key={g} x1={0} x2={w} y1={y(g)} y2={y(g)} stroke={tBd('#edf1f8')} strokeWidth={1} strokeDasharray="4 5" />
         ))}
         <Path d={`${d} L ${last.x} ${pad.t + ih} L ${pts[0].x} ${pad.t + ih} Z`} fill="url(#sc)" />
         <Path d={d} stroke={color} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
