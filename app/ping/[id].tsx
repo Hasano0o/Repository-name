@@ -38,6 +38,20 @@ const lightColor = (l: Light) => (l === 'green' ? C.green : l === 'yellow' ? '#e
 const lightEmoji = (l: Light) => (l === 'green' ? '🟢' : l === 'yellow' ? '🟡' : '🔴');
 const scoreColor = (sc: number) => lightColor(scoreLight(sc));
 
+// أعلام المناطق — «أقرب سيرفر» ما له دولة فياخذ أيقونة
+const FLAG: Record<string, string> = {
+  ae: '🇦🇪', in: '🇮🇳', it: '🇮🇹', eu: '🇩🇪', fr: '🇫🇷', uk: '🇬🇧', se: '🇸🇪', sg: '🇸🇬', us: '🇺🇸', cf: '📍',
+};
+const flagOf = (id: string) => FLAG[id] ?? '🌐';
+
+// لون كل خيار في مُحسّن اللعبة: الحالي أزرق، 5G بنفسجي، 4G أخضر، «4G فقط» تركوازي
+const GREEN_DEEP = '#1f9e63';
+const TEAL = '#0f8fa8';
+const tileColor = (t: Target) => (t.kind === 'base' ? C.blue : t.kind === 'lteOnly' ? TEAL : t.tech === 'NR' ? C.violet : GREEN_DEEP);
+const tileIcon = (t: Target) => (t.kind === 'base' ? '⚙️' : t.kind === 'lteOnly' ? '📡' : '📶');
+
+type Panel = 'region' | 'time' | 'tips' | 'week';
+
 export default function GameScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
@@ -59,6 +73,7 @@ export default function GameScreen() {
   const [community, setCommunity] = useState<TowerInfo | null>(null);
   const [commLoading, setCommLoading] = useState(false);
   const [areaTick, setAreaTick] = useState(0);
+  const [panel, setPanel] = useState<Panel | null>(null);
   const [running, setRunning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
@@ -464,6 +479,7 @@ export default function GameScreen() {
                 return (
                   <Pressable key={r.id} onPress={() => pickRegion(r.id)} style={[s.chip, on && s.chipOn, (running || busy) && !on && s.dim]}>
                     <Text style={[s.chipText, on && { color: C.onAccent }]}>{r.name}</Text>
+                    <Text style={s.chipFlag}>{flagOf(r.id)}</Text>
                   </Pressable>
                 );
               })}
@@ -505,9 +521,12 @@ export default function GameScreen() {
             ) : (
               <Text style={s.hint}>فحص 20 ثانية قبل الجيم: يقيس البنق لسيرفر لعبتك والواي فاي والإشارة، ويقولك وين المشكلة لو فيه</Text>
             )}
-            <Pressable style={[s.btn, (busy || running) && s.dim]} onPress={readyCheck} disabled={busy || running}>
-              <Text style={s.btnText}>{busy ? 'نفحص...' : check ? 'افحص مرة ثانية' : 'افحص الحين'}</Text>
-            </Pressable>
+            <GradBtn
+              label={busy ? 'نفحص...' : check ? 'افحص مرة ثانية' : 'افحص الحين'}
+              icon="⚡"
+              onPress={readyCheck}
+              disabled={busy || running}
+            />
           </GlassCard>
         )}
 
@@ -534,20 +553,23 @@ export default function GameScreen() {
             <View style={s.grid}>
               {avail.map(a => {
                 const on = picked.includes(a.key);
-                const nr = a.tech === 'NR';
+                const col = tileColor(a);
                 return (
-                  <Pressable key={a.key} style={[s.band, on && s.bandOn, running && s.dim]} onPress={() => toggle(a.key)}>
-                    <Text style={[s.bandName, nr && !on && { color: C.violet }, on && { color: C.onAccent }]}>{a.label}</Text>
-                    <Text style={[s.bandFreq, on && { color: C.onAccent }]}>{a.sub || ' '}</Text>
+                  <Pressable
+                    key={a.key}
+                    style={[s.band, { borderColor: col }, on && { backgroundColor: col }, running && s.dim]}
+                    onPress={() => toggle(a.key)}
+                  >
+                    <Text style={s.bandIcon}>{tileIcon(a)}</Text>
+                    <Text style={[s.bandName, { color: on ? C.onAccent : col }]}>{a.label}</Text>
+                    <Text style={[s.bandFreq, on && { color: C.onAccentSoft }]}>{a.sub || ' '}</Text>
                   </Pressable>
                 );
               })}
             </View>
 
             {!running ? (
-              <Pressable style={[s.btn, (busy || !picked.length) && s.dim]} onPress={run} disabled={busy || !picked.length}>
-                <Text style={s.btnText}>ابدأ الفحص ({mins} دقيقة تقريباً)</Text>
-              </Pressable>
+              <GradBtn label={`ابدأ الفحص (${mins} دقيقة تقريباً)`} icon="▶" onPress={run} disabled={busy || !picked.length} />
             ) : (
               <Pressable style={[s.btnGhost, { borderColor: C.red }]} onPress={() => { cancel.current = true; }}>
                 <Text style={[s.btnGhostText, { color: C.red }]}>إيقاف</Text>
@@ -657,7 +679,37 @@ export default function GameScreen() {
         {!loading && info && <AreaCompare consent={consent} region={reg.id} regionName={reg.name} refresh={areaTick} />}
 
         {!loading && (
-          <GlassCard title="أي سيرفر أقرب لك؟" icon="🌍" tint={C.blueSoft} defaultOpen={false}>
+          <View style={s.tiles}>
+            {([
+              {
+                id: 'region', icon: '🌍', tint: C.blueSoft, title: 'أي سيرفر أقرب؟',
+                sub: sortedRegions[0] && regionRes[sortedRegions[0].id].samples
+                  ? `${flagOf(sortedRegions[0].id)} ${sortedRegions[0].name} · ${regionRes[sortedRegions[0].id].median}ms`
+                  : 'قِس كل المناطق',
+              },
+              { id: 'time', icon: '🕒', tint: C.violetSoft, title: 'أفضل وقت', sub: bestPeriod ? bestPeriod.name : 'يتعلّم من فحوصاتك' },
+              { id: 'tips', icon: '💡', tint: C.amberSoft, title: 'وش يهم', sub: 'البنق والتذبذب والفقد' },
+              ...(weekly.length ? [{ id: 'week', icon: '📅', tint: C.mintSoft, title: 'أسبوعك', sub: 'ملخص آخر ٧ أيام' }] : []),
+            ] as { id: Panel; icon: string; tint: string; title: string; sub: string }[]).map((t, _, all) => {
+              const on = panel === t.id;
+              return (
+                <Pressable
+                  key={t.id}
+                  style={[s.tile, { flexBasis: all.length > 3 ? '46%' : '30%' }, on && s.tileOn]}
+                  onPress={() => setPanel(p => (p === t.id ? null : t.id))}
+                >
+                  <View style={[s.tileIcon, { backgroundColor: t.tint }]}><Text style={{ fontSize: 18 }}>{t.icon}</Text></View>
+                  <Text style={s.tileTitle} numberOfLines={1}>{t.title}</Text>
+                  <Text style={s.tileSub} numberOfLines={2}>{t.sub}</Text>
+                  <Text style={[s.tileChev, on && { color: C.blue }]}>{on ? '▲' : '▼'}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
+        {!loading && panel === 'region' && (
+          <GlassCard title="أي سيرفر أقرب لك؟" icon="🌍" tint={C.blueSoft} collapsible={false}>
             <Text style={s.hint}>نقيس البنق لكل منطقة — اختار داخل اللعبة السيرفر الأقل بنق</Text>
             {!!regionWarn && <Text style={s.fallbackNote}>{regionWarn}</Text>}
             {sortedRegions.map((r, i) => {
@@ -669,7 +721,7 @@ export default function GameScreen() {
                     <Text style={[s.rowScore, { color: res.samples ? scoreColor(sc) : C.red, fontSize: 16 }]}>
                       {res.samples ? `${res.median}ms` : 'ما رد'}
                     </Text>
-                    <Text style={s.rowName}>{i === 0 && res.samples ? '⭐ ' : ''}{r.name}</Text>
+                    <Text style={s.rowName}>{i === 0 && res.samples ? '⭐ ' : ''}{r.name} {flagOf(r.id)}</Text>
                   </View>
                   {res.samples > 0
                     ? <Text style={s.rowVals}>تذبذب {res.jitter}ms · فقد {res.lossPct}% · {r.hint}{res.via ? ` · عبر خادم بديل` : ''}</Text>
@@ -692,14 +744,14 @@ export default function GameScreen() {
           </GlassCard>
         )}
 
-        {!loading && weekly.length > 0 && (
-          <GlassCard title="أسبوعك" icon="📅" tint={C.mintSoft} defaultOpen={false}>
+        {!loading && panel === 'week' && weekly.length > 0 && (
+          <GlassCard title="أسبوعك" icon="📅" tint={C.mintSoft} collapsible={false}>
             {weekly.map(l => <Text key={l} style={s.weekLine}>• {l}</Text>)}
           </GlassCard>
         )}
 
-        {!loading && (
-          <GlassCard title="أفضل وقت للعب" icon="🕒" tint={C.violetSoft} defaultOpen={hasHistory}>
+        {!loading && panel === 'time' && (
+          <GlassCard title="أفضل وقت للعب" icon="🕒" tint={C.violetSoft} collapsible={false}>
             {!hasHistory ? (
               <Text style={s.hint}>كل فحص تسويه ينحفظ مع وقته. بعد كم يوم نقولك أي وقت برجك فيه أهدى، وأي إعداد أفضل لكل وقت</Text>
             ) : (
@@ -729,8 +781,8 @@ export default function GameScreen() {
           </GlassCard>
         )}
 
-        {!loading && (
-          <GlassCard title="وش يهم في الألعاب" icon="💡" tint={C.violetSoft} defaultOpen={false}>
+        {!loading && panel === 'tips' && (
+          <GlassCard title="وش يهم في الألعاب" icon="💡" tint={C.violetSoft} collapsible={false}>
             <Text style={s.hint}>
               التذبذب (jitter) أخطر من البنق نفسه — بنق 80ms ثابت أفضل من 40ms متذبذب، لأن التذبذب يسبب الارتعاش والتقطيع
             </Text>
@@ -750,6 +802,17 @@ export default function GameScreen() {
         </Text>
       </ScrollView>
     </LinearGradient>
+  );
+}
+
+function GradBtn({ label, icon, onPress, disabled }: { label: string; icon?: string; onPress: () => void; disabled?: boolean }) {
+  return (
+    <Pressable onPress={onPress} disabled={disabled} style={({ pressed }) => [s.gradWrap, disabled && s.dim, pressed && { opacity: 0.85 }]}>
+      <LinearGradient colors={[C.violetBright, C.blue]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.gradBtn}>
+        <Text style={s.btnText}>{label}</Text>
+        {!!icon && <Text style={s.gradIcon}>{icon}</Text>}
+      </LinearGradient>
+    </Pressable>
   );
 }
 
@@ -786,7 +849,8 @@ const s = StyleSheet.create({
   regionBar: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 18, padding: 12, gap: 8 },
   regionTitle: { color: C.text, fontWeight: '800', fontSize: 14, textAlign: 'right' },
   chips: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: C.rowBg, borderWidth: 1, borderColor: C.cardBorder },
+  chip: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: C.rowBg, borderWidth: 1, borderColor: C.cardBorder },
+  chipFlag: { fontSize: 15 },
   chipOn: { backgroundColor: C.blue, borderColor: C.blue },
   chipText: { color: C.text, fontWeight: '700', fontSize: 13 },
   verdict: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, borderWidth: 2, borderRadius: 16, padding: 12, backgroundColor: C.card },
@@ -801,10 +865,20 @@ const s = StyleSheet.create({
   statU: { color: C.muted, fontSize: 10 },
   statL: { color: C.sub, fontSize: 11, fontWeight: '700', marginTop: 2 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  band: { flexBasis: '30%', flexGrow: 1, alignItems: 'center', paddingVertical: 11, borderRadius: 14, backgroundColor: C.rowBg, borderWidth: 1, borderColor: C.cardBorder },
-  bandOn: { backgroundColor: C.blue, borderColor: C.blue },
+  band: { flexBasis: '30%', flexGrow: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 14, backgroundColor: C.rowBg, borderWidth: 1.5, borderColor: C.cardBorder },
+  bandIcon: { fontSize: 14, marginBottom: 2 },
   bandName: { color: C.text, fontWeight: '800', fontSize: 15 },
   bandFreq: { color: C.sub, fontSize: 10, marginTop: 2 },
+  gradWrap: { borderRadius: 14, overflow: 'hidden', shadowColor: C.blue, shadowOpacity: 0.25, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
+  gradBtn: { flexDirection: 'row-reverse', justifyContent: 'center', alignItems: 'center', gap: 8, padding: 13 },
+  gradIcon: { color: C.onAccent, fontSize: 15, fontWeight: '900' },
+  tiles: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 },
+  tile: { flexGrow: 1, backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 16, padding: 10, gap: 4, alignItems: 'flex-end' },
+  tileOn: { borderColor: C.blue, borderWidth: 1.5 },
+  tileIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  tileTitle: { color: C.text, fontWeight: '800', fontSize: 13, textAlign: 'right', alignSelf: 'stretch' },
+  tileSub: { color: C.muted, fontSize: 11, textAlign: 'right', lineHeight: 16, alignSelf: 'stretch' },
+  tileChev: { color: C.sub, fontSize: 10, alignSelf: 'flex-start' },
   btn: { backgroundColor: C.blue, borderRadius: 14, padding: 13, alignItems: 'center' },
   btnText: { color: C.onAccent, fontWeight: '800', fontSize: 14 },
   btnGhost: { borderWidth: 1, borderRadius: 14, padding: 13, alignItems: 'center' },
