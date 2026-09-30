@@ -39,7 +39,7 @@ const s = StyleSheet.create({
   wrap: { position: 'absolute', left: 0, right: 0, bottom: 24, alignItems: 'center', paddingHorizontal: 16 },
   bar: {
     flexDirection: 'row', alignItems: 'center', gap: 10, width: '100%',
-    backgroundColor: isDark ? '#26324a' : C.text, borderWidth: isDark ? 1 : 0, borderColor: '#3a4a6b', borderRadius: 18, paddingVertical: 10, paddingHorizontal: 14,
+    backgroundColor: isDark ? '#38445c' : C.text, borderWidth: isDark ? 1 : 0, borderColor: '#4d5c7a', borderRadius: 18, paddingVertical: 10, paddingHorizontal: 14,
     shadowColor: C.shadow, shadowOpacity: 0.25, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8,
   },
   text: { flex: 1, color: tFg('#fff'), fontWeight: '700', fontSize: 13, textAlign: 'right' },

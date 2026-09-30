@@ -95,57 +95,57 @@ const LIGHT = {
   shadow: '#0d2350',
 };
 
-// داكن هادئ (كحلي مو أسود) — أريح للعين من الأبيض
+// داكن خافت (رمادي كحلي فاتح شوي، مو أسود) — مريح للعين وكل شي واضح فيه
 const DARK: typeof LIGHT = {
-  bg: '#0f1626',
-  bgTop: '#111a2c',
-  bgBottom: '#0b1220',
-  card: '#172136',
-  cardBorder: '#26324a',
-  rowBg: '#1c273d',
-  track: '#2a3d63',
+  bg: '#1f2738',
+  bgTop: '#232c3e',
+  bgBottom: '#1b2333',
+  card: '#2b3549',
+  cardBorder: '#3d4a63',
+  rowBg: '#333e54',
+  track: '#40568a',
 
-  heroFrom: '#16223a',
-  heroMid: '#182a48',
-  heroTo: '#1c3558',
-  dangerTop: '#2a1822',
-  dangerBottom: '#301a27',
+  heroFrom: '#2a364e',
+  heroMid: '#2d3c58',
+  heroTo: '#324666',
+  dangerTop: '#3c2632',
+  dangerBottom: '#432a37',
 
-  text: '#e6ecf7',
-  sub: '#9aa6c2',
-  muted: '#8d99b5',
+  text: '#f4f7fd',
+  sub: '#c4cde0',
+  muted: '#b2bdd3',
 
-  blue: '#4d82ff',
-  blueIcon: '#5b8cff',
-  blueLight: '#7aa0ff',
-  blueSoft: '#1f3358',
-  blueDeep: '#8fb0ff',
+  blue: '#5a8cff',
+  blueIcon: '#6a97ff',
+  blueLight: '#86aaff',
+  blueSoft: '#2f4775',
+  blueDeep: '#a3c0ff',
 
-  violet: '#a386f5',
-  violetBright: '#9a66ff',
-  violetSoft: '#2e2550',
-  cyan: '#5cc8e6',
-  cyanSoft: '#16323d',
-  mint: '#57d3b2',
-  mintSoft: '#173b36',
-  pink: '#f0609a',
-  pinkSoft: '#3d1c2b',
-  crimson: '#ec5c8a',
+  violet: '#b099f7',
+  violetBright: '#a67cff',
+  violetSoft: '#40376b',
+  cyan: '#6fd2ec',
+  cyanSoft: '#264652',
+  mint: '#6adcbd',
+  mintSoft: '#264e48',
+  pink: '#f478a8',
+  pinkSoft: '#522c3d',
+  crimson: '#f07099',
 
-  green: '#3fd68f',
-  greenBright: '#47eb6b',
-  greenSoft: '#16352a',
-  gold: '#ffc27a',
-  goldSoft: '#2c2618',
-  amber: '#ffc27a',
-  amberSoft: '#3a2d17',
-  red: '#ff6b57',
-  redSoft: '#3a1c22',
+  green: '#4fdc9a',
+  greenBright: '#5cef7e',
+  greenSoft: '#24493c',
+  gold: '#ffcb8c',
+  goldSoft: '#40382a',
+  amber: '#ffcb8c',
+  amberSoft: '#4d3e25',
+  red: '#ff7d6b',
+  redSoft: '#4d2c33',
 
-  line: '#26324a',
-  lineSoft: '#1f2a40',
+  line: '#3d4a63',
+  lineSoft: '#344058',
   onAccent: '#ffffff',
-  onAccentSoft: '#cfe0ff',
+  onAccentSoft: '#dce7ff',
   shadow: '#000000',
 };
 
@@ -206,10 +206,10 @@ function adapt(c: string, role: 'bg' | 'bd' | 'fg'): string {
     // الرمادي والأبيض ياخذون الكحلي حق الثيم بدل الرمادي الباهت
     if (s < 0.12) { h = 220; s = 0.35; }
     if (role === 'fg') {
-      if (l < 0.3 || (l <= 0.42 && s < 0.5)) out = fromHsl(h, Math.min(s, 0.5), Math.min(0.92, 1 - l * 0.6), p.a);
+      if (l < 0.3 || (l <= 0.42 && s < 0.5)) out = fromHsl(h, Math.min(s, 0.45), Math.min(0.95, 1 - l * 0.45), p.a);
     } else if (l >= 0.8 && p.a >= 0.5) {
       // الشفاف الخفيف (زجاج فوق تدرّج ملوّن) نخليه زي ما هو
-      const nl = 0.15 + (1 - l) * 0.45 + (role === 'bd' ? 0.08 : 0);
+      const nl = 0.23 + (1 - l) * 0.45 + (role === 'bd' ? 0.1 : 0);
       out = fromHsl(h, Math.min(s, 0.3), nl, p.a);
     }
   }
