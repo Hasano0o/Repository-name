@@ -602,12 +602,20 @@ export default function RouterDashboard() {
                 <Text style={s.moreLbl}>الملفات</Text>
               </Pressable>
               {feat.bands && (
+                <>
+                <Pressable style={[s.moreTile, { backgroundColor: tBg('#2f6bff12'), borderColor: tBd('#2f6bff30') }]} onPress={() => router.push(`/combo/${info.id}` as Href)}>
+                  <View style={[s.moreIcon, { backgroundColor: '#2f6bff' }]}>
+                    <Icon name="layers" size={18} color="#fff" />
+                  </View>
+                  <Text style={s.moreLbl}>الأساسي والثانوي</Text>
+                </Pressable>
                 <Pressable style={[s.moreTile, { backgroundColor: tBg('#7c5cff12'), borderColor: tBd('#7c5cff30') }]} onPress={() => router.push(`/auto/${info.id}` as Href)}>
                   <View style={[s.moreIcon, { backgroundColor: tBg('#7c5cff') }]}>
                     <Icon name="spark" size={18} color={tFg('#fff')} />
                   </View>
                   <Text style={s.moreLbl}>الوضع الذكي</Text>
                 </Pressable>
+                </>
               )}
               <Pressable style={[s.moreTile, { backgroundColor: tBg('#f43f5e12'), borderColor: tBd('#f43f5e30') }]} onPress={() => router.push('/monitor' as Href)}>
                 <View style={[s.moreIcon, { backgroundColor: tBg('#f43f5e') }]}>
