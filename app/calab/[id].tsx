@@ -345,7 +345,7 @@ const s = StyleSheet.create({
   metricsRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6 },
   chip: {
     alignItems: 'center', backgroundColor: C.rowBg,
-    borderRadius: 10, borderWidth: 1, borderColor: C.cardBorder,
+    borderRadius: 14, borderWidth: 1, borderColor: C.cardBorder,
     paddingHorizontal: 10, paddingVertical: 5, minWidth: 56,
   },
   chipVal: { color: C.text, fontWeight: '800', fontSize: 13 },

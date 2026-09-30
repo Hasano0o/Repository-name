@@ -351,10 +351,10 @@ const st = StyleSheet.create({
     backgroundColor: P.card, borderRadius: 18, paddingVertical: 12, paddingHorizontal: 12,
     borderWidth: 1.5, borderColor: P.border,
   },
-  toggleIcon: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  toggleIcon: { width: 30, height: 30, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   toggleTxt: { flex: 1, color: P.text, fontSize: 12.5, fontWeight: '800', textAlign: 'right' },
-  switch: { width: 34, height: 20, borderRadius: 10, backgroundColor: tBg('#d6ddec'), justifyContent: 'center' },
-  knob: { position: 'absolute', width: 16, height: 16, borderRadius: 8, backgroundColor: tBg('#fff') },
+  switch: { width: 34, height: 20, borderRadius: 14, backgroundColor: tBg('#d6ddec'), justifyContent: 'center' },
+  knob: { position: 'absolute', width: 16, height: 16, borderRadius: 14, backgroundColor: tBg('#fff') },
 
   primary: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 15, paddingHorizontal: 16 },
   primaryTxt: { color: tFg('#fff'), fontSize: 15.5, fontWeight: '800' },

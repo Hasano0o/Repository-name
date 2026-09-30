@@ -221,7 +221,7 @@ const s = StyleSheet.create({
   shot: { borderRadius: 22, overflow: 'hidden' },
   shotInner: { padding: 18, gap: 12, borderRadius: 22 },
   shotHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
-  brandDot: { width: 30, height: 30, borderRadius: 10, backgroundColor: C.blue, alignItems: 'center', justifyContent: 'center' },
+  brandDot: { width: 30, height: 30, borderRadius: 14, backgroundColor: C.blue, alignItems: 'center', justifyContent: 'center' },
   brand: { color: C.text, fontSize: 18, fontWeight: '900', flex: 1, textAlign: 'right' },
   shotDate: { color: C.sub, fontSize: 11.5 },
   gradeBadge: {

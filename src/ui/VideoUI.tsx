@@ -200,6 +200,6 @@ const v = StyleSheet.create({
   btn: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: P.blueSoft, borderRadius: 14, paddingVertical: 12 },
   btnTxt: { color: P.blue, fontSize: 13, fontWeight: '800' },
   shots: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6, marginTop: 10, alignItems: 'center' },
-  shot: { width: 54, height: 72, borderRadius: 10, overflow: 'hidden', backgroundColor: tBg('#000') },
+  shot: { width: 54, height: 72, borderRadius: 14, overflow: 'hidden', backgroundColor: tBg('#000') },
   shotHint: { color: P.sub, fontSize: 11, fontWeight: '700' },
 });

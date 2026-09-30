@@ -213,7 +213,7 @@ const s = StyleSheet.create({
   },
   rowTitle: { color: C.text, fontWeight: '800', fontSize: 15, textAlign: 'right' },
   rowSub: { color: C.muted, fontSize: 11.5, textAlign: 'right', marginTop: 2 },
-  apply: { backgroundColor: C.violetSoft, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
+  apply: { backgroundColor: C.violetSoft, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8 },
   applyTxt: { color: C.violet, fontWeight: '800', fontSize: 13 },
   del: { paddingHorizontal: 8, paddingVertical: 8 },
   delTxt: { color: C.red, fontSize: 12.5, fontWeight: '700' },

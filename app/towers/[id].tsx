@@ -888,7 +888,7 @@ export default function TowersScreen() {
 }
 
 const s = StyleSheet.create({
-  pingChip: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 3, backgroundColor: C.card },
+  pingChip: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 7, paddingVertical: 3, backgroundColor: C.card },
   pingVal: { fontWeight: '900', fontSize: 12 },
   pingAgo: { color: C.sub, fontSize: 9.5, fontWeight: '700' },
   scanRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, backgroundColor: C.rowBg, borderRadius: 14, padding: 10 },
@@ -900,7 +900,7 @@ const s = StyleSheet.create({
   scanLine: { color: C.sub, fontSize: 12, textAlign: 'right' },
   scanBest: { borderTopWidth: 1, borderTopColor: C.cardBorder, paddingTop: 10, gap: 8 },
   scanBestTxt: { color: C.green, fontWeight: '900', fontSize: 14, textAlign: 'right' },
-  copyBtn: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, backgroundColor: C.violetSoft },
+  copyBtn: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 14, backgroundColor: C.violetSoft },
   copyBtnText: { color: C.violet, fontWeight: '800', fontSize: 12 },
   page: { padding: 16, gap: 14 },
   center: { alignItems: 'center', gap: 10, paddingVertical: 30 },
@@ -910,7 +910,7 @@ const s = StyleSheet.create({
   link: { color: C.blue, fontSize: 12.5, textAlign: 'center', fontWeight: '700', marginTop: 2 },
   errorCard: { backgroundColor: C.redSoft, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 16, padding: 14, gap: 10 },
   errorText: { color: C.red, fontWeight: '700', textAlign: 'right' },
-  retryBtn: { alignSelf: 'flex-end', backgroundColor: C.red, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
+  retryBtn: { alignSelf: 'flex-end', backgroundColor: C.red, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8 },
   retryText: { color: tFg('#fff'), fontWeight: '700' },
 
   pinNote: { borderRadius: 12, paddingVertical: 7, paddingHorizontal: 10 },
@@ -1001,6 +1001,6 @@ const s = StyleSheet.create({
   carrLinkText: { color: C.blue, fontWeight: '700', fontSize: 13, textAlign: 'right' },
   lockBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.blueSoft, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 16, padding: 12 },
   lockBannerText: { flex: 1, color: C.text, fontWeight: '700', textAlign: 'right', fontSize: 13 },
-  unlockBtn: { borderWidth: 1, borderColor: C.blue, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 7 },
+  unlockBtn: { borderWidth: 1, borderColor: C.blue, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 7 },
   unlockText: { color: C.blue, fontWeight: '800', fontSize: 12 },
 });

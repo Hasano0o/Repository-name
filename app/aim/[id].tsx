@@ -1044,7 +1044,7 @@ const a = StyleSheet.create({
     flex: 1, alignItems: 'center', gap: 3, backgroundColor: P.soft, borderRadius: 16,
     paddingVertical: 10, paddingHorizontal: 6, borderWidth: 1, borderColor: P.border,
   },
-  pillIcon: { width: 28, height: 28, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+  pillIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
   pillLbl: { color: MUTED, fontSize: 10.5, fontWeight: '700' },
   pillVal: { fontSize: 14, fontWeight: '800' },
   stabBar: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, borderRadius: 16, borderWidth: 1, paddingVertical: 10, paddingHorizontal: 12 },
@@ -1077,7 +1077,7 @@ const a = StyleSheet.create({
   gUnit: { color: tFg('rgba(255,255,255,0.8)'), fontSize: 10.5, fontWeight: '700' },
   heroHint: { color: tFg('rgba(255,255,255,0.85)'), fontSize: 11.5, textAlign: 'center', marginTop: 10 },
 
-  trend: { width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  trend: { width: 16, height: 16, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   flat: { width: 8, height: 8, borderRadius: 4, backgroundColor: P.faint, marginHorizontal: 4 },
 
   segment: { flexDirection: 'row-reverse', backgroundColor: P.soft, borderRadius: 16, padding: 4, marginTop: 14, borderWidth: 1, borderColor: P.border },

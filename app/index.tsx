@@ -410,7 +410,7 @@ const s = StyleSheet.create({
   stateDot: { width: 7, height: 7, borderRadius: 4 },
   stateTxt: { fontSize: 11, fontWeight: '800' },
   metaRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6 },
-  meta: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: P.soft, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3 },
+  meta: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: P.soft, borderRadius: 14, paddingHorizontal: 7, paddingVertical: 3 },
   metaTxt: { color: P.sub, fontSize: 11.5, fontWeight: '700' },
 
   signal: { borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, gap: 8 },

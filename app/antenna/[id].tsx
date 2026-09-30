@@ -421,7 +421,7 @@ const g = StyleSheet.create({
     flexDirection: 'row-reverse', alignItems: 'center', gap: 6,
   },
   metricIcon: {
-    width: 26, height: 26, borderRadius: 8,
+    width: 26, height: 26, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center',
   },
   metricName: { color: MUTED, fontSize: 11.5, fontWeight: '800' },
@@ -442,7 +442,7 @@ const g = StyleSheet.create({
   },
   ringsHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   ringsIcon: {
-    width: 32, height: 32, borderRadius: 10, backgroundColor: tBg('#E1F5FF'),
+    width: 32, height: 32, borderRadius: 14, backgroundColor: tBg('#E1F5FF'),
     alignItems: 'center', justifyContent: 'center',
   },
   ringsTitle: { color: TEXT, fontSize: 15, fontWeight: '900', textAlign: 'right' },
@@ -455,7 +455,7 @@ const g = StyleSheet.create({
   },
   cardHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   cardIcon: {
-    width: 32, height: 32, borderRadius: 10,
+    width: 32, height: 32, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center',
   },
   cardTitle: { color: TEXT, fontSize: 15, fontWeight: '900', textAlign: 'right' },
@@ -476,7 +476,7 @@ const g = StyleSheet.create({
   // Check rows
   checkRow: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: 8 },
   checkDot: {
-    width: 20, height: 20, borderRadius: 10,
+    width: 20, height: 20, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center', marginTop: 1,
   },
   checkDotTxt: { color: tFg('#FFF'), fontSize: 11, fontWeight: '900' },

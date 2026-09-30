@@ -110,7 +110,7 @@ export function ManualLock({ seen, visible, busy, onLock, initial }: {
 }
 
 const s = StyleSheet.create({
-  copied: { color: C.violet, fontWeight: '800', fontSize: 12, textAlign: 'right', backgroundColor: C.card, borderRadius: 10, padding: 8 },
+  copied: { color: C.violet, fontWeight: '800', fontSize: 12, textAlign: 'right', backgroundColor: C.card, borderRadius: 14, padding: 8 },
   hint: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 19 },
   seg: { flexDirection: 'row', gap: 8 },
   segBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 12, backgroundColor: C.rowBg, borderWidth: 1, borderColor: C.cardBorder },

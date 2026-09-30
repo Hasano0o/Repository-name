@@ -447,7 +447,7 @@ const s = StyleSheet.create({
   sayTxt: { color: P.text, fontSize: 13.5, fontWeight: '800', textAlign: 'center' },
   cmdBtn: { backgroundColor: P.violetSoft, borderColor: tBd('#ded5ff') },
   unlockBtn: { width: '100%', backgroundColor: P.redSoft, borderColor: tBd('#ffdde2') },
-  log: { color: P.sub, fontSize: 12.5, textAlign: 'right', backgroundColor: P.soft, borderRadius: 10, padding: 8 },
+  log: { color: P.sub, fontSize: 12.5, textAlign: 'right', backgroundColor: P.soft, borderRadius: 14, padding: 8 },
 
   gain: { fontSize: 40, fontWeight: '800', textAlign: 'center', marginTop: 12 },
   gainLbl: { color: P.sub, fontSize: 12, textAlign: 'center', marginBottom: 8 },

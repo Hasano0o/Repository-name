@@ -254,7 +254,7 @@ const d = StyleSheet.create({
 
   trafficRow: { flexDirection: 'row-reverse', gap: 10, marginTop: 14 },
   traffic: { flex: 1, borderRadius: 18, padding: 14, gap: 4 },
-  trafficIcon: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-end', marginBottom: 4 },
+  trafficIcon: { width: 30, height: 30, borderRadius: 14, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-end', marginBottom: 4 },
   trafficLbl: { color: P.sub, fontSize: 12, fontWeight: '700', textAlign: 'right' },
   trafficVal: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
   trafficUnit: { color: P.sub, fontSize: 12, fontWeight: '700' },

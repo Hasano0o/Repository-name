@@ -211,7 +211,7 @@ const s = StyleSheet.create({
   bar: { height: 7, borderRadius: 999 },
   planRow: { flexDirection: 'row-reverse', gap: 6, marginTop: 10, flexWrap: 'wrap' },
   planChip: {
-    backgroundColor: C.rowBg, borderRadius: 10, borderWidth: 1, borderColor: C.cardBorder,
+    backgroundColor: C.rowBg, borderRadius: 14, borderWidth: 1, borderColor: C.cardBorder,
     paddingHorizontal: 11, paddingVertical: 6,
   },
   planChipOn: { backgroundColor: C.blue, borderColor: C.blue },
@@ -225,7 +225,7 @@ const s = StyleSheet.create({
   },
   blockedName: { color: C.text, fontSize: 12.5, fontWeight: '700', textAlign: 'right' },
   blockedMac: { color: C.muted, fontSize: 10, textAlign: 'right' },
-  unblock: { backgroundColor: C.redSoft, borderRadius: 10, paddingHorizontal: 11, paddingVertical: 6 },
+  unblock: { backgroundColor: C.redSoft, borderRadius: 14, paddingHorizontal: 11, paddingVertical: 6 },
   unblockTxt: { color: C.red, fontSize: 11.5, fontWeight: '800' },
   err: { color: C.red, fontSize: 13, textAlign: 'center' },
 });

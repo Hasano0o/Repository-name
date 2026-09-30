@@ -1055,7 +1055,7 @@ const s = StyleSheet.create({
   btnRow: { flexDirection: 'row', gap: S.sm },
   bothRow: {
     flexDirection: 'row-reverse', justifyContent: 'space-between',
-    alignItems: 'center', backgroundColor: C.rowBg, borderRadius: 10,
+    alignItems: 'center', backgroundColor: C.rowBg, borderRadius: 14,
     borderWidth: 1, borderColor: C.line, paddingHorizontal: 12, paddingVertical: 8,
   },
   bothLabel: { color: C.muted, fontWeight: '800', fontSize: 13 },

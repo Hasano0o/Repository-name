@@ -167,6 +167,6 @@ const a = StyleSheet.create({
   mHintTxt: { color: tFg('#fff'), fontSize: 12.5, fontWeight: '700' },
 
   mDot: { width: 8, height: 8, borderRadius: 4 },
-  trend: { width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  trend: { width: 16, height: 16, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   flat: { width: 8, height: 8, borderRadius: 4, backgroundColor: P.faint, marginHorizontal: 4 },
 });

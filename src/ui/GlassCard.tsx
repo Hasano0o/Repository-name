@@ -71,7 +71,7 @@ const s = StyleSheet.create({
   headLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headRight: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
   chevBtn: {
-    width: 32, height: 32, borderRadius: 10, borderWidth: 1, borderColor: C.cardBorder,
+    width: 32, height: 32, borderRadius: 14, borderWidth: 1, borderColor: C.cardBorder,
     alignItems: 'center', justifyContent: 'center', backgroundColor: C.rowBg,
   },
   chev: { color: C.sub, fontSize: 12 },

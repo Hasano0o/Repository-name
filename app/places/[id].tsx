@@ -593,7 +593,7 @@ const g = StyleSheet.create({
   },
   cardHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   cardIcon: {
-    width: 32, height: 32, borderRadius: 10, backgroundColor: tBg('#E1F5FF'),
+    width: 32, height: 32, borderRadius: 14, backgroundColor: tBg('#E1F5FF'),
     alignItems: 'center', justifyContent: 'center',
   },
   cardTitle: { color: TEXT, fontSize: 15, fontWeight: '900', textAlign: 'right' },
@@ -627,7 +627,7 @@ const g = StyleSheet.create({
   placeCardBest: { backgroundColor: tBg('#F0FDF4'), borderColor: tBd('#86EFAC') },
   bestBadge: {
     position: 'absolute', top: -8, right: 12,
-    backgroundColor: SUCCESS, borderRadius: 8,
+    backgroundColor: SUCCESS, borderRadius: 14,
     paddingHorizontal: 8, paddingVertical: 2,
   },
   bestBadgeTxt: { color: tFg('#FFF'), fontSize: 9.5, fontWeight: '900' },

@@ -130,7 +130,7 @@ export function ShareCardModal({ data, onClose }: { data: ShareData | null; onCl
 const c = StyleSheet.create({
   card: { backgroundColor: P.card, borderRadius: 26, overflow: 'hidden', borderWidth: 1, borderColor: P.border },
   head: { padding: 18, paddingBottom: 16 },
-  logo: { width: 30, height: 30, borderRadius: 10, backgroundColor: tBg('rgba(255,255,255,0.22)'), alignItems: 'center', justifyContent: 'center' },
+  logo: { width: 30, height: 30, borderRadius: 14, backgroundColor: tBg('rgba(255,255,255,0.22)'), alignItems: 'center', justifyContent: 'center' },
   brand: { color: tFg('#fff'), fontSize: 17, fontWeight: '800' },
   date: { color: tFg('rgba(255,255,255,0.8)'), fontSize: 11.5, fontWeight: '700' },
   title: { color: tFg('#fff'), fontSize: 22, fontWeight: '800', textAlign: 'right', marginTop: 14 },
