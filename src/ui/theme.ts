@@ -206,7 +206,7 @@ function adapt(c: string, role: 'bg' | 'bd' | 'fg'): string {
     // الرمادي والأبيض ياخذون الكحلي حق الثيم بدل الرمادي الباهت
     if (s < 0.12) { h = 220; s = 0.35; }
     if (role === 'fg') {
-      if (l <= 0.42) out = fromHsl(h, Math.min(s, 0.5), Math.min(0.92, 1 - l * 0.6), p.a);
+      if (l < 0.3 || (l <= 0.42 && s < 0.5)) out = fromHsl(h, Math.min(s, 0.5), Math.min(0.92, 1 - l * 0.6), p.a);
     } else if (l >= 0.8 && p.a >= 0.5) {
       // الشفاف الخفيف (زجاج فوق تدرّج ملوّن) نخليه زي ما هو
       const nl = 0.15 + (1 - l) * 0.45 + (role === 'bd' ? 0.08 : 0);

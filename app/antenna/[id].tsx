@@ -15,21 +15,21 @@ import { adviseAntenna, AntennaAdvice, Need } from '../../src/utils/antenna';
 import { Icon } from '../../src/ui/Icon';
 import { Level, LEVEL_COLOR, LEVEL_LABEL, rsrpLevel, rsrqLevel, sinrLevel, rssiLevel } from '../../src/utils/signal';
 
-import { tBg, tFg } from '../../src/ui/theme';
+import { C, tBg, tFg } from '../../src/ui/theme';
 const { width: SCREEN_W } = Dimensions.get('window');
 
 // ═══ Design tokens (هوية Bandly) ═══
 const BLUE = '#3567F5';
 const PURPLE = '#7655F5';
-const TEXT = '#14264A';
+const TEXT = C.text;
 const MUTED = '#71809A';
-const BG = '#E5EAF2';
+const BG = C.bg;
 const SUCCESS = '#13B783';
 const WARN = '#F59E0B';
 const DANGER = '#DC2626';
-const CARD = '#F3F6FA';
-const CARD_BG = '#E9EEF5';
-const BORDER = '#E6ECF5';
+const CARD = C.card;
+const CARD_BG = C.rowBg;
+const BORDER = C.cardBorder;
 
 // ═══ تقييم كل مؤشر (نص + لون) — من المصدر الموحّد src/utils/signal.ts ═══
 type Grade = { label: string; color: string };
@@ -75,9 +75,9 @@ function MetricCard({
 
 // ═══ Colour by need ═══
 const NEED_THEME: Record<Need, { main: string; soft: string; icon: string; headline: string }> = {
-  yes: { main: DANGER, soft: '#FEF2F2', icon: '📡', headline: 'ننصح بأنتنا خارجية' },
-  maybe: { main: WARN, soft: '#FFFBEB', icon: '🤔', headline: 'أنتنا خارجية قد تساعد' },
-  no: { main: SUCCESS, soft: '#ECFDF5', icon: '✅', headline: 'أنتنا الراوتر كافية' },
+  yes: { main: DANGER, soft: tBg('#FEF2F2'), icon: '📡', headline: 'ننصح بأنتنا خارجية' },
+  maybe: { main: WARN, soft: tBg('#FFFBEB'), icon: '🤔', headline: 'أنتنا خارجية قد تساعد' },
+  no: { main: SUCCESS, soft: tBg('#ECFDF5'), icon: '✅', headline: 'أنتنا الراوتر كافية' },
 };
 
 

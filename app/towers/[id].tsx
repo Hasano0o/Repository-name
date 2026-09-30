@@ -21,7 +21,7 @@ import { ManualLock, ManualTarget } from '../../src/ui/ManualLock';
 import { bandLabel } from '../../src/utils/bands';
 
 const BADGE_BG: Record<TowerGroup['badge'], string> = {
-  active: '#e8f8f0', confirmed: '#e8f8f0', likely: '#eaf0ff', single: '#f3f4fb',
+  active: tBg('#e8f8f0'), confirmed: tBg('#e8f8f0'), likely: tBg('#eaf0ff'), single: tBg('#f3f4fb'),
 };
 const BADGE_FG: Record<TowerGroup['badge'], string> = {
   active: '#12b76a', confirmed: '#12b76a', likely: '#2f6bff', single: '#6b7291',

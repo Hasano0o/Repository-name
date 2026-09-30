@@ -4,15 +4,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, Href } from 'expo-router';
 import { Icon, IconName } from '../../src/ui/Icon';
 
-import { tBg, tFg } from '../../src/ui/theme';
+import { C, tBg, tFg } from '../../src/ui/theme';
 const BLUE = '#3567F5';
 const PURPLE = '#7655F5';
-const TEXT = '#14264A';
+const TEXT = C.text;
 const MUTED = '#71809A';
-const BG = '#E5EAF2';
+const BG = C.bg;
 const SUCCESS = '#13B783';
-const CARD = '#F3F6FA';
-const BORDER = '#E6ECF5';
+const CARD = C.card;
+const BORDER = C.cardBorder;
 
 interface Item {
   key: string;

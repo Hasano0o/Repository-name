@@ -15,19 +15,19 @@ import { snapshot } from '../../src/utils/safeLock';
 import { Icon, IconName } from '../../src/ui/Icon';
 import { LEVEL_COLOR, LEVEL_LABEL, rsrpLevel } from '../../src/utils/signal';
 
-import { tBd, tBg, tFg } from '../../src/ui/theme';
+import { C, tBd, tBg, tFg } from '../../src/ui/theme';
 const { width: SCREEN_W } = Dimensions.get('window');
 
 // ═══ Design tokens (هوية Bandly) ═══
 const BLUE = '#3567F5';
 const PURPLE = '#7655F5';
-const TEXT = '#14264A';
+const TEXT = C.text;
 const MUTED = '#71809A';
-const BG = '#E5EAF2';
+const BG = C.bg;
 const SUCCESS = '#13B783';
-const CARD = '#F3F6FA';
-const CARD_BG = '#E9EEF5';
-const BORDER = '#E6ECF5';
+const CARD = C.card;
+const CARD_BG = C.rowBg;
+const BORDER = C.cardBorder;
 const WARN = '#F59E0B';
 const DANGER = '#DC2626';
 

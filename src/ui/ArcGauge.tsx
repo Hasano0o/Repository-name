@@ -50,7 +50,7 @@ export function ArcGauge({ score, label, color, size = 150 }: {
             <Stop offset="1" stopColor="#2f6bff" />
           </LinearGradient>
         </Defs>
-        <Circle cx={c} cy={c} r={r - stroke * 1.1} fill="#ffffff" opacity={0.85} />
+        <Circle cx={c} cy={c} r={r - stroke * 1.1} fill={C.card} opacity={0.85} />
         <Path d={arc(c, c, r, START, START + SWEEP)} stroke={C.track} strokeWidth={stroke} strokeLinecap="round" fill="none" />
         <Path d={arc(c, c, r, START, end)} stroke="url(#g)" strokeWidth={stroke} strokeLinecap="round" fill="none" />
         <Circle cx={tip.x} cy={tip.y} r={stroke * 0.32} fill="#ffffff" />

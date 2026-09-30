@@ -54,11 +54,11 @@ const featuresOf = (d: RouterDriver): Features => ({
 
 /** خلفية البطاقة الرئيسية حسب جودة الاتصال */
 const HERO_BG: Record<Level, [string, string, string]> = {
-  excellent: ['#ffffff', '#e3f8ee', '#c9f0de'],
-  good: ['#ffffff', '#e6f1ff', '#d3f3e6'],
-  fair: ['#ffffff', '#fff4e3', '#ffe6c2'],
-  poor: ['#ffffff', '#ffeef0', '#ffd9de'],
-  unknown: ['#ffffff', '#eef2fb', '#e2e8f6'],
+  excellent: [tBg('#ffffff'), tBg('#e3f8ee'), tBg('#c9f0de')],
+  good: [tBg('#ffffff'), tBg('#e6f1ff'), tBg('#d3f3e6')],
+  fair: [tBg('#ffffff'), tBg('#fff4e3'), tBg('#ffe6c2')],
+  poor: [tBg('#ffffff'), tBg('#ffeef0'), tBg('#ffd9de')],
+  unknown: [tBg('#ffffff'), tBg('#eef2fb'), tBg('#e2e8f6')],
 };
 
 function MetricRow({ label, value, unit, level }: { label: string; value?: number; unit: string; level: Level }) {
