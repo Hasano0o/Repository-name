@@ -40,3 +40,8 @@ expo-env.d.ts
 __pycache__/
 *.pyc
 live-server/data/
+node_modules/
+.venv/
+__pycache__/
+*.db
+.env
