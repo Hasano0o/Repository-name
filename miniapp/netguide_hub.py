@@ -22,7 +22,10 @@ STORE_PATH = ""   # يعبّيه سكربت التثبيت تلقائياً من
 
 WELCOME = (
     "📶 <b>Bandly — اطلع أقوى إشارة من راوترك</b>\n\n"
-    "وجّه الهوائي، ثبّت أفضل برج، وكلّم فني يشوفك بالكاميرا ويساعدك عن بُعد 📹👇"
+    "وجّه الهوائي، ثبّت أفضل برج، وكلّم فني يشوفك بالكاميرا ويساعدك عن بُعد 📹\n\n"
+    "📱 التطبيق متوفر الحين لأجهزة <b>أندرويد</b> كملف APK مباشر من الزر تحت 👇\n"
+    "🍎 وقريباً على <b>App Store</b> و ▶️ <b>Google Play</b>\n\n"
+    "⚠️ لو طلع لك تحذير وقت التثبيت، اضغط <b>«التثبيت على أي حال»</b>."
 )
 
 
@@ -149,6 +152,7 @@ def _scheduler(bot, owner_id: int) -> None:
 def keyboard() -> types.InlineKeyboardMarkup:
     kb = types.InlineKeyboardMarkup()
     wa = lambda text, page="": types.InlineKeyboardButton(text, web_app=types.WebAppInfo(APP + (f"#{page}" if page else "")))
+    kb.row(types.InlineKeyboardButton("📥 تحميل التطبيق (أندرويد)", url=APK))
     kb.row(wa("📱 افتح تطبيق Bandly"))
     kb.row(wa("🛠️ سجّل كفني", "tech"), wa("📢 اطلب إعلان", "ad"))
     kb.row(wa("🔌 أضف جهازك", "device"), wa("💬 ملاحظاتك", "feedback"))
