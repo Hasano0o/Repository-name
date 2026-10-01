@@ -403,7 +403,7 @@ const g = StyleSheet.create({
   reasonTxt: { flex: 1, color: TEXT, fontSize: 12.5, lineHeight: 20, textAlign: 'right' },
 
   otherBox: {
-    borderRadius: 12, padding: 10, borderWidth: 1,
+    borderRadius: 18, padding: 10, borderWidth: 1,
   },
   otherTxt: { fontSize: 12.5, lineHeight: 19, textAlign: 'right', fontWeight: '700' },
 
