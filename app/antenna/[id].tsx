@@ -27,7 +27,8 @@ const BG = C.bg;
 const SUCCESS = '#13B783';
 const WARN = '#F59E0B';
 const DANGER = '#DC2626';
-const CARD = C.card;
+const CARD = "#151932";
+const CARD_BORDER = "#252b48";
 const CARD_BG = C.rowBg;
 const BORDER = C.cardBorder;
 
