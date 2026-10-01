@@ -38,12 +38,12 @@ export async function setThemePref(p: ThemePref): Promise<void> {
 
 const LIGHT = {
   // الأسطح
-  bg: '#e5eaf2',
-  bgTop: '#e5eaf2',
-  bgBottom: '#d6e2f2',
-  card: '#f3f6fa',
-  cardBorder: '#d8e0eb',
-  rowBg: '#e9eef5',
+  bg: '#eef2f8',
+  bgTop: '#f2f5fa',
+  bgBottom: '#dde6f3',
+  card: '#ffffff',
+  cardBorder: '#e2e8f1',
+  rowBg: '#f1f4f9',
   track: '#bdd9fd',
 
   // تدرّج بطاقة الترويسة
@@ -97,12 +97,12 @@ const LIGHT = {
 
 // داكن خافت (رمادي كحلي فاتح شوي، مو أسود) — مريح للعين وكل شي واضح فيه
 const DARK: typeof LIGHT = {
-  bg: '#1f2738',
-  bgTop: '#232c3e',
-  bgBottom: '#1b2333',
-  card: '#2b3549',
-  cardBorder: '#3d4a63',
-  rowBg: '#333e54',
+  bg: '#151b2b',
+  bgTop: '#182033',
+  bgBottom: '#111726',
+  card: '#1f2840',
+  cardBorder: '#2f3b56',
+  rowBg: '#26314a',
   track: '#40568a',
 
   heroFrom: '#2a364e',
@@ -142,8 +142,8 @@ const DARK: typeof LIGHT = {
   red: '#ff7d6b',
   redSoft: '#4d2c33',
 
-  line: '#3d4a63',
-  lineSoft: '#344058',
+  line: '#2f3b56',
+  lineSoft: '#28324a',
   onAccent: '#ffffff',
   onAccentSoft: '#dce7ff',
   shadow: '#000000',
@@ -225,10 +225,10 @@ export const tBd = (c: string) => adapt(c, 'bd');
 export const tFg = (c: string) => adapt(c, 'fg');
 
 /** أنصاف الأقطار */
-export const R = { sm: 14, md: 18, lg: 26, pill: 999 };
+export const R = { sm: 16, md: 20, lg: 28, pill: 999 };
 
 /** المسافات على شبكة ٤ */
 export const S = { xs: 4, sm: 8, md: 12, lg: 16, xl: 22 };
 
 /** مقاسات الخط */
-export const T = { score: 44, h1: 22, h2: 16.5, body: 13, label: 12, tiny: 11 };
+export const T = { score: 44, h1: 23, h2: 17, body: 14, label: 12, tiny: 11 };
