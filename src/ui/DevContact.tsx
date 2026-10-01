@@ -1,7 +1,6 @@
 import { View, Text, Pressable, Linking, Alert, StyleSheet } from 'react-native';
 import { Icon, IconName } from './Icon';
 import { P } from './Pro';
-import { tFg } from './theme';
 
 /** معلومات تواصل صاحب التطبيق — تُعرض أسفل الرئيسية مع المظهر ونسخة التطبيق */
 const PHONE = '0562294460';
@@ -22,34 +21,29 @@ const open = (url: string) =>
 export function DevContact() {
   return (
     <View style={s.box}>
-      <View style={s.head}>
+      <View style={{ flex: 1, alignItems: 'flex-end' }}>
         <Text style={s.title}>تواصل مع المطوّر</Text>
-        <Text style={s.sub}>اقتراح، مشكلة، أو تبي مساعدة؟</Text>
+        <Text style={s.sub}>اقتراح أو مشكلة؟</Text>
       </View>
       <View style={s.row}>
         {WAYS.map(w => (
-          <Pressable key={w.id} onPress={() => open(w.url)}
-            style={({ pressed }) => [s.opt, pressed && { opacity: 0.7 }]}>
-            <View style={[s.icon, { backgroundColor: tFg(w.color) + '1f' }]}>
-              <Icon name={w.icon} size={18} color={tFg(w.color)} stroke={2.1} />
-            </View>
-            <Text style={s.lbl}>{w.label}</Text>
+          <Pressable key={w.id} onPress={() => open(w.url)} accessibilityLabel={w.label} hitSlop={4}
+            style={({ pressed }) => [s.btn, { backgroundColor: w.color }, pressed && { opacity: 0.75, transform: [{ scale: 0.94 }] }]}>
+            <Icon name={w.icon} size={19} color="#fff" stroke={2.2} />
           </Pressable>
         ))}
       </View>
-      <Text style={s.foot}>{PHONE}  ·  {EMAIL}</Text>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  box: { backgroundColor: P.card, borderColor: P.border, borderWidth: 1, borderRadius: 18, padding: 12, gap: 10 },
-  head: { alignItems: 'flex-end', gap: 2 },
+  box: {
+    backgroundColor: P.card, borderColor: P.border, borderWidth: 1, borderRadius: 18,
+    paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row-reverse', alignItems: 'center', gap: 12,
+  },
   title: { color: P.text, fontWeight: '800', fontSize: 14 },
-  sub: { color: P.sub, fontSize: 11.5 },
+  sub: { color: P.sub, fontSize: 11.5, marginTop: 2 },
   row: { flexDirection: 'row-reverse', gap: 8 },
-  opt: { flex: 1, alignItems: 'center', gap: 6, paddingVertical: 10, borderRadius: 14, backgroundColor: P.soft },
-  icon: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  lbl: { color: P.text, fontWeight: '800', fontSize: 12 },
-  foot: { color: P.faint, fontSize: 11, textAlign: 'center', writingDirection: 'ltr' },
+  btn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
 });
