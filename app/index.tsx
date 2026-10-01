@@ -19,6 +19,7 @@ import {
 import { tBd, tBg, tFg, THEME_PREF, ThemePref, setThemePref } from '../src/ui/theme';
 import { UpdateStatus } from '../src/ui/UpdateStatus';
 import { DevContact } from '../src/ui/DevContact';
+import { CityAsk } from '../src/ui/CityAsk';
 interface Status {
   loading: boolean;
   online?: boolean;
@@ -162,7 +163,8 @@ export default function RoutersList() {
         contentContainerStyle={[s.list, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 90 }]}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
-          <Hero style={{ marginBottom: 4 }}>
+          <View style={{ gap: 12, marginBottom: 4 }}>
+          <Hero>
             <View style={s.heroTop}>
               <View style={{ flex: 1, alignItems: 'flex-end' }}>
                 <Text style={s.hello}>Bandly</Text>
@@ -197,6 +199,8 @@ export default function RoutersList() {
               </View>
             </View>
           </Hero>
+          <CityAsk />
+          </View>
         }
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.blue} colors={[P.blue]} />

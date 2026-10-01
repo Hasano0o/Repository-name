@@ -247,6 +247,8 @@ app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
 from community import router as community_router  # noqa: E402
 app.include_router(community_router)
+from stats import router as stats_router, daily_loop as stats_daily  # noqa: E402
+app.include_router(stats_router)
 
 
 @app.on_event("startup")
@@ -263,6 +265,7 @@ async def _janitor():
                     SESSIONS.pop(code, None)
                     shutil.rmtree(VOICE / code, ignore_errors=True)
     asyncio.create_task(loop())
+    asyncio.create_task(stats_daily())
 
 
 @app.get("/live-api/config")

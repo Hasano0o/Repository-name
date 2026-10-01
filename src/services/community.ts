@@ -26,7 +26,7 @@ export async function setConsent(v: 'on' | 'off'): Promise<void> {
   try { await AsyncStorage.setItem(CONSENT_KEY, v); } catch {}
 }
 
-async function deviceId(): Promise<string> {
+export async function deviceId(): Promise<string> {
   try {
     let id = await AsyncStorage.getItem(DEVICE_KEY);
     if (!id) {

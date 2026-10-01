@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { pingDaily } from '../src/services/stats';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -65,6 +66,7 @@ export default function RootLayout() {
     if (loaded || error) {
       try { applyGlobalFont(); } catch {}
       SplashScreen.hideAsync().catch(() => {});
+      pingDaily();
     }
   }, [loaded, error]);
 

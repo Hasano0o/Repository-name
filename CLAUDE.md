@@ -50,6 +50,6 @@ grep -aE "BUILD (SUCCESSFUL|FAILED)" /root/bandly-build.log | tail -1; ls -l --t
 - مشروع البناء: `/root/router-manager/mobile`
 - خدمة وضع الفني والمجتمع: `/root/bandly-live` (systemd: `bandly-live`)، تحديثها:
   ```
-  cd /root/router-manager/mobile && git pull -q --ff-only origin main && cp live-server/app.py live-server/community.py /root/bandly-live/ && systemctl restart bandly-live
+  cd /root/router-manager/mobile && git pull -q --ff-only origin main && cp live-server/app.py live-server/community.py live-server/stats.py /root/bandly-live/ && systemctl restart bandly-live
   ```
 - بوت التطبيق: `@NetGuide1_bot` — ملفاته في `/root/netguide/`.
