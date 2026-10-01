@@ -12,10 +12,10 @@ import { C, isDark, tBd, tBg, tFg } from './theme';
 
 // ═══ الألوان ═══
 const P_LIGHT = {
-  bg: '#e5eaf2',
-  card: '#f3f6fa',
-  border: '#d8e0eb',
-  soft: '#e9eef5',
+  bg: C.bg,
+  card: C.card,
+  border: C.cardBorder,
+  soft: C.rowBg,
   text: '#0f1f45',
   sub: '#6b7796',
   faint: '#a3adc6',
