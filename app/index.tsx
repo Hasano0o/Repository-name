@@ -18,6 +18,7 @@ import {
 
 import { tBd, tBg, tFg, THEME_PREF, ThemePref, setThemePref } from '../src/ui/theme';
 import { UpdateStatus } from '../src/ui/UpdateStatus';
+import { DevContact } from '../src/ui/DevContact';
 interface Status {
   loading: boolean;
   online?: boolean;
@@ -222,6 +223,7 @@ export default function RoutersList() {
           </Pressable>
           <ThemePicker />
           <UpdateStatus />
+          <DevContact />
           </View>
         }
         renderItem={({ item }) => {

@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { ScrollView, View, Text, ActivityIndicator, StyleSheet, RefreshControl } from 'react-native';
+import { ScrollView, View, Text, Pressable, ActivityIndicator, StyleSheet, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
@@ -18,20 +18,31 @@ import {
 import { tBg, tFg } from '../../src/ui/theme';
 type Info = { label: string; value?: string; accent?: string };
 
-/** يعرض الخانات المتوفرة فقط، ويذكر كم خانة ما يدعمها الراوتر */
-function InfoGrid({ rows }: { rows: Info[] }) {
+/** يعرض الخانات المتوفرة فقط — أول [max] خانات، والباقي خلف «عرض الكل» عشان الصفحة ما تزدحم */
+function InfoGrid({ rows, max = 4 }: { rows: Info[]; max?: number }) {
+  const [all, setAll] = useState(false);
   const shown = rows.filter(r => r.value !== undefined && r.value !== '');
   const hidden = rows.length - shown.length;
+  const extra = shown.length - max;
+  const list = all || extra <= 0 ? shown : shown.slice(0, max);
   return (
     <>
-      {shown.length > 0 && (
+      {list.length > 0 && (
         <Grid>
-          {shown.map(r => (
+          {list.map(r => (
             <Cell key={r.label}><InfoCell label={r.label} value={r.value!} accent={r.accent} /></Cell>
           ))}
         </Grid>
       )}
-      {hidden > 0 && (
+      {extra > 0 && (
+        <Pressable onPress={() => setAll(v => !v)} style={({ pressed }) => [d.moreBtn, pressed && { opacity: 0.7 }]}>
+          <Text style={d.moreTxt}>{all ? 'إخفاء التفاصيل المتقدمة' : `عرض التفاصيل المتقدمة (${extra})`}</Text>
+          <View style={{ transform: [{ rotate: all ? '-90deg' : '90deg' }] }}>
+            <Icon name="chevron" size={14} color={P.blue} />
+          </View>
+        </Pressable>
+      )}
+      {all && hidden > 0 && (
         <Text style={d.hiddenNote}>
           {hidden === 1 ? 'خانة واحدة' : `${hidden} خانات`} ما يوفرها هذا الراوتر
         </Text>
@@ -251,6 +262,8 @@ const d = StyleSheet.create({
   ringLbl: { color: tFg('rgba(255,255,255,0.9)'), fontSize: 12.5, fontWeight: '800' },
 
   hiddenNote: { color: P.faint, fontSize: 11, textAlign: 'center', marginTop: 2 },
+  moreBtn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: 12, backgroundColor: P.soft },
+  moreTxt: { color: P.blue, fontSize: 12.5, fontWeight: '800' },
 
   trafficRow: { flexDirection: 'row-reverse', gap: 10, marginTop: 14 },
   traffic: { flex: 1, borderRadius: 18, padding: 14, gap: 4 },
