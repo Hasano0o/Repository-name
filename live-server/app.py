@@ -154,6 +154,8 @@ class Session:
 SESSIONS: dict[str, Session] = {}
 IP_HITS: dict[str, list[float]] = {}
 IP_BAD: dict[str, list[float]] = {}
+KEY_BAD: dict[str, list[float]] = {}
+MAX_BAD_KEYS_PER_IP = 20   # مفاتيح فني أو أكواد تقرير خاطئة بالساعة
 
 
 def client_ip(req_headers, fallback: str) -> str:
@@ -288,10 +290,18 @@ async def create_session(req: Request):
     }
 
 
+def _bad_try(req: Request):
+    """نحسب المحاولات الخاطئة (مفتاح فني أو كود) لكل IP — بعد الحد نوقفه ساعة."""
+    ip = client_ip(req.headers, req.client.host if req.client else "?")
+    if not hit(KEY_BAD, ip, MAX_BAD_KEYS_PER_IP):
+        raise HTTPException(429, "محاولات خاطئة كثيرة، جرّب بعد ساعة")
+
+
 @app.get("/live-api/report/{code}")
-async def get_report(code: str):
+async def get_report(code: str, req: Request):
     s = SESSIONS.get(code)
     if not s:
+        _bad_try(req)
         raise HTTPException(404, "الجلسة غير موجودة")
     return s.report()
 
@@ -313,8 +323,9 @@ async def list_techs(city: str | None = None):
 
 
 @app.get("/live-api/tech/sessions")
-async def tech_sessions(key: str):
+async def tech_sessions(key: str, req: Request):
     if not tech_ok(key):
+        _bad_try(req)
         raise HTTPException(403, "مفتاح الفني غير صالح")
     avg, n = rating_of(key)
     return {"sessions": load_json(_log_path(key), [])[:50], "rating": avg, "rating_n": n}
@@ -354,9 +365,10 @@ async def rate(code: str, req: Request):
 
 
 @app.get("/live-api/tech/check")
-async def tech_check(key: str):
+async def tech_check(key: str, req: Request):
     t = tech_ok(key)
     if not t:
+        _bad_try(req)
         return {"ok": False}
     return {"ok": True, "name": t.get("name"), "expires": t.get("expires")}
 
@@ -691,6 +703,26 @@ def _esc(t: str) -> str:
 HUB_HITS: dict[str, list[float]] = {}
 
 
+def _real_ext(data: bytes) -> str | None:
+    """يتعرف على الملف من أول بايتات: JPEG / PNG / WEBP، أو نص UTF-8 عادي. غير كذا يرجع None."""
+    if data[:3] == b"\xff\xd8\xff":
+        return ".jpg"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return ".png"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return ".webp"
+    if b"\x00" in data:
+        return None
+    try:
+        txt = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    head = txt.lstrip()[:200].lower()
+    if head.startswith("<") or "<script" in head or "<html" in head or "<svg" in head:
+        return None
+    return ".txt"
+
+
 @app.post("/live-api/hub/submit")
 async def hub_submit(req: Request):
     form = await req.form()
@@ -718,9 +750,10 @@ async def hub_submit(req: Request):
         data = await f.read(MAX_IMG + 1)
         if not data or len(data) > MAX_IMG:
             continue
-        ext = (Path(getattr(f, "filename", "") or "").suffix or ".jpg").lower()
-        if ext not in (".jpg", ".jpeg", ".png", ".webp", ".txt"):
-            ext = ".jpg"
+        # النوع من محتوى الملف نفسه مو من اسمه — أي شي غير صورة أو نص عادي ما ينحفظ
+        ext = _real_ext(data)
+        if not ext:
+            continue
         name = f"{rid}-{i}{ext}"
         (HUB_IMG / name).write_bytes(data)
         images.append({"file": name, "url": f"{HUB_IMG_URL}/{name}", "ext": ext})
