@@ -97,29 +97,29 @@ const LIGHT = {
 
 // داكن خافت (رمادي كحلي فاتح شوي، مو أسود) — مريح للعين وكل شي واضح فيه
 const DARK: typeof LIGHT = {
-  bg: '#1b2232',
-  bgTop: '#1e2637',
-  bgBottom: '#181f2e',
-  card: '#283247',
-  cardBorder: '#37435b',
-  rowBg: '#2f3a50',
-  track: '#40568a',
+  bg: '#1f1a15',
+  bgTop: '#231d17',
+  bgBottom: '#1b1612',
+  card: '#2c251e',
+  cardBorder: '#40362b',
+  rowBg: '#352d24',
+  track: '#5a4632',
 
-  heroFrom: '#2a364e',
-  heroMid: '#2d3c58',
-  heroTo: '#324666',
+  heroFrom: '#2f271f',
+  heroMid: '#352b21',
+  heroTo: '#3d3125',
   dangerTop: '#3c2632',
   dangerBottom: '#432a37',
 
-  text: '#e6ebf4',
-  sub: '#c4cde0',
-  muted: '#b2bdd3',
+  text: '#f2ebe1',
+  sub: '#d6cabb',
+  muted: '#c2b5a4',
 
-  blue: '#5a8cff',
-  blueIcon: '#6a97ff',
-  blueLight: '#86aaff',
-  blueSoft: '#2f4775',
-  blueDeep: '#a3c0ff',
+  blue: '#d08a4f',
+  blueIcon: '#d9955c',
+  blueLight: '#e3ac7a',
+  blueSoft: '#4a3826',
+  blueDeep: '#f0cfa6',
 
   violet: '#b099f7',
   violetBright: '#a67cff',
@@ -142,10 +142,10 @@ const DARK: typeof LIGHT = {
   red: '#ff7d6b',
   redSoft: '#4d2c33',
 
-  line: '#37435b',
-  lineSoft: '#303b51',
+  line: '#40362b',
+  lineSoft: '#382f26',
   onAccent: '#ffffff',
-  onAccentSoft: '#dce7ff',
+  onAccentSoft: '#fbe9d4',
   shadow: '#000000',
 };
 
@@ -204,7 +204,7 @@ function adapt(c: string, role: 'bg' | 'bd' | 'fg'): string {
   if (p) {
     let [h, s, l] = toHsl(p);
     // الرمادي والأبيض ياخذون الكحلي حق الثيم بدل الرمادي الباهت
-    if (s < 0.12) { h = 220; s = 0.35; }
+    if (s < 0.12) { h = 32; s = 0.22; }
     if (role === 'fg') {
       if (l < 0.3 || (l <= 0.42 && s < 0.5)) out = fromHsl(h, Math.min(s, 0.45), Math.min(0.95, 1 - l * 0.45), p.a);
     } else if (l >= 0.8 && p.a >= 0.5) {

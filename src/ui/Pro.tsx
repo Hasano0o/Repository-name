@@ -42,9 +42,9 @@ const P_DARK: typeof P_LIGHT = {
   soft: C.rowBg,
   text: C.text,
   sub: C.sub,
-  faint: '#8e9ab5',
-  blue: '#5a8cff',
-  blueSoft: '#2f4775',
+  faint: '#a8998a',
+  blue: '#d08a4f',
+  blueSoft: '#4a3826',
   violet: '#a98ff7',
   violetSoft: '#40376b',
   green: '#45d892',
@@ -55,8 +55,8 @@ const P_DARK: typeof P_LIGHT = {
   redSoft: '#4d2c33',
   cyan: '#56cde6',
   cyanSoft: '#264652',
-  heroA: '#3d6cea',
-  heroB: '#6a4cd6',
+  heroA: '#b8713a',
+  heroB: '#8a5530',
 };
 
 export const P = isDark ? P_DARK : P_LIGHT;
