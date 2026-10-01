@@ -191,6 +191,8 @@ def register(bot, is_owner, api_post=None, owner_id: int = 0):
             owner_id = 0
     threading.Thread(target=_scheduler, args=(bot, owner_id), daemon=True).start()
 
+    _n0 = len(bot.message_handlers)
+
     @bot.message_handler(commands=["users"])
     def _count(msg):
         if not is_owner(msg):
@@ -216,6 +218,11 @@ def register(bot, is_owner, api_post=None, owner_id: int = 0):
         bot.reply_to(msg, "⏳ نرسل...")
         ok, gone = broadcast(bot, msg.from_user.id)
         bot.send_message(msg.chat.id, f"✅ انرسلت لـ {ok}" + (f" · {gone} حاظرين البوت" if gone else ""))
+
+    # أوامرنا أول القائمة: لو bot.py فيه معالج عام للمالك (يلقط أي رسالة) ما يبلعها
+    mine = bot.message_handlers[_n0:]
+    del bot.message_handlers[_n0:]
+    bot.message_handlers[:0] = mine
 
     @bot.message_handler(commands=["user", "app"])
     def _preview(msg):
