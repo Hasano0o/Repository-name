@@ -38,12 +38,12 @@ export async function setThemePref(p: ThemePref): Promise<void> {
 
 const LIGHT = {
   // الأسطح
-  bg: '#eef2f8',
-  bgTop: '#f2f5fa',
-  bgBottom: '#dde6f3',
-  card: '#ffffff',
-  cardBorder: '#e2e8f1',
-  rowBg: '#f1f4f9',
+  bg: '#edf0f5',
+  bgTop: '#f0f3f7',
+  bgBottom: '#e2e8f0',
+  card: '#f8fafc',
+  cardBorder: '#e3e8ef',
+  rowBg: '#eff2f7',
   track: '#bdd9fd',
 
   // تدرّج بطاقة الترويسة
@@ -54,7 +54,7 @@ const LIGHT = {
   dangerBottom: '#ffecf2',
 
   // النص
-  text: '#0d2350',
+  text: '#1e2d4d',
   sub: '#70799b',
   muted: '#70799b',
 
@@ -97,12 +97,12 @@ const LIGHT = {
 
 // داكن خافت (رمادي كحلي فاتح شوي، مو أسود) — مريح للعين وكل شي واضح فيه
 const DARK: typeof LIGHT = {
-  bg: '#151b2b',
-  bgTop: '#182033',
-  bgBottom: '#111726',
-  card: '#1f2840',
-  cardBorder: '#2f3b56',
-  rowBg: '#26314a',
+  bg: '#1b2232',
+  bgTop: '#1e2637',
+  bgBottom: '#181f2e',
+  card: '#283247',
+  cardBorder: '#37435b',
+  rowBg: '#2f3a50',
   track: '#40568a',
 
   heroFrom: '#2a364e',
@@ -111,7 +111,7 @@ const DARK: typeof LIGHT = {
   dangerTop: '#3c2632',
   dangerBottom: '#432a37',
 
-  text: '#f4f7fd',
+  text: '#e6ebf4',
   sub: '#c4cde0',
   muted: '#b2bdd3',
 
@@ -142,8 +142,8 @@ const DARK: typeof LIGHT = {
   red: '#ff7d6b',
   redSoft: '#4d2c33',
 
-  line: '#2f3b56',
-  lineSoft: '#28324a',
+  line: '#37435b',
+  lineSoft: '#303b51',
   onAccent: '#ffffff',
   onAccentSoft: '#dce7ff',
   shadow: '#000000',
@@ -225,7 +225,7 @@ export const tBd = (c: string) => adapt(c, 'bd');
 export const tFg = (c: string) => adapt(c, 'fg');
 
 /** أنصاف الأقطار */
-export const R = { sm: 16, md: 20, lg: 28, pill: 999 };
+export const R = { sm: 18, md: 22, lg: 28, pill: 999 };
 
 /** المسافات على شبكة ٤ */
 export const S = { xs: 4, sm: 8, md: 12, lg: 16, xl: 22 };

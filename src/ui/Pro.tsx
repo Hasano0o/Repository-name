@@ -16,7 +16,7 @@ const P_LIGHT = {
   card: C.card,
   border: C.cardBorder,
   soft: C.rowBg,
-  text: '#0f1f45',
+  text: C.text,
   sub: '#6b7796',
   faint: '#a3adc6',
   blue: '#2f6bff',
@@ -281,7 +281,7 @@ export function PrimaryBtn({ text, icon, onPress, busy, disabled, colors = [P.he
 }) {
   return (
     <Pressable onPress={onPress} disabled={disabled || busy}
-      style={({ pressed }) => [{ borderRadius: 16, overflow: 'hidden' }, style, pressed && { opacity: 0.88 }, disabled && { opacity: 0.5 }]}>
+      style={({ pressed }) => [{ borderRadius: 20, overflow: 'hidden' }, style, pressed && { opacity: 0.88 }, disabled && { opacity: 0.5 }]}>
       <LinearGradient colors={colors} start={{ x: 1, y: 0 }} end={{ x: 0, y: 0 }}
         style={[st.primary, small && { paddingVertical: 11 }]}>
         {busy ? <ActivityIndicator size="small" color={tFg('#fff')} /> : !!icon && <Icon name={icon} size={small ? 16 : 19} color={tFg('#fff')} stroke={2.2} />}
@@ -330,13 +330,13 @@ const st = StyleSheet.create({
 
   val: { flexDirection: 'row', alignItems: 'baseline', alignSelf: 'flex-end' },
 
-  meter: { backgroundColor: P.soft, borderRadius: 16, padding: 12, gap: 8, borderWidth: 1, borderColor: P.border },
+  meter: { backgroundColor: P.soft, borderRadius: 20, padding: 12, gap: 8, borderWidth: 1, borderColor: P.border },
   meterHead: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
   meterLbl: { color: P.sub, fontSize: 12, fontWeight: '700', flexShrink: 1, textAlign: 'right' },
   lvlPill: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   lvlPillTxt: { fontSize: 10.5, fontWeight: '800' },
 
-  info: { backgroundColor: P.soft, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, gap: 2, borderWidth: 1, borderColor: P.border },
+  info: { backgroundColor: P.soft, borderRadius: 18, paddingVertical: 10, paddingHorizontal: 12, gap: 2, borderWidth: 1, borderColor: P.border },
   infoLbl: { color: P.sub, fontSize: 11, fontWeight: '600', textAlign: 'right' },
   infoVal: { color: P.text, fontSize: 15, fontWeight: '800', textAlign: 'right' },
 
