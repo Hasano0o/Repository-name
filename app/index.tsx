@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SavedRouter, listRouters, getPassword, deleteRouter } from '../src/store/routers';
 import { withSession } from '../src/store/sessions';
 import { Signal } from '../src/drivers/types';
-import { Icon } from '../src/ui/Icon';
+import { Icon, IconName } from '../src/ui/Icon';
 import { SkeletonRouterCard, EmptyState } from '../src/ui/States';
 import { overallLevel, parseBands, parseNrBands } from '../src/utils/signal';
 import {
@@ -222,8 +222,8 @@ export default function RoutersList() {
             </View>
           </Pressable>
           <ThemePicker />
-          <UpdateStatus />
           <DevContact />
+          <UpdateStatus />
           </View>
         }
         renderItem={({ item }) => {
@@ -342,12 +342,13 @@ export default function RoutersList() {
   );
 }
 
-const THEMES: { id: ThemePref; label: string; icon: string }[] = [
-  { id: 'light', label: 'فاتح', icon: '☀️' },
-  { id: 'dark', label: 'داكن', icon: '🌙' },
-  { id: 'system', label: 'حسب الجوال', icon: '📱' },
+const THEMES: { id: ThemePref; label: string; icon: IconName }[] = [
+  { id: 'light', label: 'فاتح', icon: 'sun' },
+  { id: 'dark', label: 'داكن', icon: 'moon' },
+  { id: 'system', label: 'حسب الجوال', icon: 'phone' },
 ];
 
+/** المظهر: سطر واحد — العنوان يمين وثلاث أيقونات يسار، والمختار يتلوّن */
 function ThemePicker() {
   const pick = (t: ThemePref) => {
     if (t === THEME_PREF) return;
@@ -356,16 +357,20 @@ function ThemePicker() {
       { text: 'طبّق', onPress: () => { setThemePref(t); } },
     ]);
   };
+  const cur = THEMES.find(t => t.id === THEME_PREF);
   return (
     <View style={s.theme}>
-      <Text style={s.themeTitle}>المظهر</Text>
+      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+        <Text style={s.themeTitle}>المظهر</Text>
+        <Text style={s.themeSub}>{cur?.label ?? ''}</Text>
+      </View>
       <View style={s.themeRow}>
         {THEMES.map(t => {
           const on = t.id === THEME_PREF;
           return (
-            <Pressable key={t.id} onPress={() => pick(t.id)} style={[s.themeOpt, on && s.themeOn]}>
-              <Text style={s.themeIcon}>{t.icon}</Text>
-              <Text style={[s.themeTxt, on && { color: P.blue }]}>{t.label}</Text>
+            <Pressable key={t.id} onPress={() => pick(t.id)} accessibilityLabel={t.label} hitSlop={4}
+              style={({ pressed }) => [s.themeOpt, on && s.themeOn, pressed && { opacity: 0.75, transform: [{ scale: 0.94 }] }]}>
+              <Icon name={t.icon} size={19} color={on ? P.blue : P.sub} stroke={2.1} />
             </Pressable>
           );
         })}
@@ -375,13 +380,15 @@ function ThemePicker() {
 }
 
 const s = StyleSheet.create({
-  theme: { backgroundColor: P.card, borderColor: P.border, borderWidth: 1, borderRadius: 18, padding: 12, gap: 10 },
-  themeTitle: { color: P.text, fontWeight: '800', fontSize: 14, textAlign: 'right' },
+  theme: {
+    backgroundColor: P.card, borderColor: P.border, borderWidth: 1, borderRadius: 18,
+    paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row-reverse', alignItems: 'center', gap: 12,
+  },
+  themeTitle: { color: P.text, fontWeight: '800', fontSize: 14 },
+  themeSub: { color: P.sub, fontSize: 11.5, marginTop: 2 },
   themeRow: { flexDirection: 'row-reverse', gap: 8 },
-  themeOpt: { flex: 1, alignItems: 'center', gap: 4, paddingVertical: 10, borderRadius: 14, backgroundColor: P.soft, borderWidth: 1.5, borderColor: P.soft },
+  themeOpt: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: P.soft, borderWidth: 1.5, borderColor: P.soft },
   themeOn: { borderColor: P.blue, backgroundColor: P.blueSoft },
-  themeIcon: { fontSize: 18 },
-  themeTxt: { color: P.sub, fontWeight: '800', fontSize: 12 },
   list: { padding: 16, gap: 14 },
   flip: { transform: [{ scaleX: -1 }] },
 
