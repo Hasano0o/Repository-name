@@ -32,6 +32,7 @@ import { UsageRing } from '../../src/ui/UsageRing';
 import { DeviceRow } from '../../src/ui/DeviceRow';
 import { SyncIcon } from '../../src/ui/SyncIcon';
 import { StoreAd } from '../../src/ui/StoreAd';
+import { ComboCard } from '../../src/ui/ComboCard';
 
 interface Features {
   bands: boolean; sms: boolean; block: boolean; reboot: boolean; devices: boolean; cells: boolean; details: boolean; plan: boolean; network: boolean; carriers: boolean;
@@ -546,6 +547,7 @@ export default function RouterDashboard() {
         {!loading && info && (
           <>
             {feat.bands && <ModeChips r={info} onApplied={() => loadAll(info)} />}
+            {feat.bands && <ComboCard r={info} />}
             <GroupTitle title="حسّن اتصالك" color={tFg('#2f6bff')} />
             <TileGrid>
               <ToolTile wide icon="aim" color={tFg('#2f6bff')} title="التوجيه" sub="لقّط أقوى إشارة"
@@ -603,12 +605,6 @@ export default function RouterDashboard() {
               </Pressable>
               {feat.bands && (
                 <>
-                <Pressable style={[s.moreTile, { backgroundColor: tBg('#2f6bff12'), borderColor: tBd('#2f6bff30') }]} onPress={() => router.push(`/combo/${info.id}` as Href)}>
-                  <View style={[s.moreIcon, { backgroundColor: '#2f6bff' }]}>
-                    <Icon name="layers" size={18} color="#fff" />
-                  </View>
-                  <Text style={s.moreLbl}>الأساسي والثانوي</Text>
-                </Pressable>
                 <Pressable style={[s.moreTile, { backgroundColor: tBg('#7c5cff12'), borderColor: tBd('#7c5cff30') }]} onPress={() => router.push(`/auto/${info.id}` as Href)}>
                   <View style={[s.moreIcon, { backgroundColor: tBg('#7c5cff') }]}>
                     <Icon name="spark" size={18} color={tFg('#fff')} />
