@@ -20,6 +20,21 @@ DEV = "https://t.me/hasa_n20"
 LIVE_DIR = "/root/bandly-live"
 STORE_PATH = ""   # يعبّيه سكربت التثبيت تلقائياً من bot.py (مسار إنشاء إعلان)
 
+
+class Btn(types.InlineKeyboardButton):
+    """زر ملوّن: style = "success" أخضر · "primary" أزرق · "danger" أحمر.
+    تليجرام القديم يتجاهل اللون ويطلع الزر عادي."""
+
+    def __init__(self, text, style=None, **kw):
+        super().__init__(text, **kw)
+        self._bstyle = style
+
+    def to_dict(self):
+        d = super().to_dict()
+        if self._bstyle:
+            d["style"] = self._bstyle
+        return d
+
 WELCOME = (
     "📶 <b>Bandly — اطلع أقوى إشارة من راوترك</b>\n\n"
     "وجّه الهوائي، ثبّت أفضل برج، وكلّم فني يشوفك بالكاميرا ويساعدك عن بُعد 📹\n\n"
@@ -76,7 +91,7 @@ def send_apk(bot, chat_id: int) -> bool:
     """يرسل التطبيق كملف. يرفعه مرة وحدة ويحفظ file_id — بعدها الإرسال فوري.
     يرجع False لو ما فيه ملف صغير جاهز (نرسل الرابط بداله)."""
     kb = types.InlineKeyboardMarkup()
-    kb.row(types.InlineKeyboardButton("🌐 النسخة الكاملة (رابط)", url=APK))
+    kb.row(Btn("🌐 النسخة الكاملة (رابط)", style="primary", url=APK))
     try:
         if not os.path.exists(APK_FILE) or os.path.getsize(APK_FILE) > BOT_FILE_LIMIT:
             return False
@@ -149,7 +164,7 @@ def remember(user) -> None:
 
 def promo_kb() -> types.InlineKeyboardMarkup:
     kb = types.InlineKeyboardMarkup()
-    kb.row(types.InlineKeyboardButton("📥 تحميل التطبيق (أندرويد)", callback_data="hubapk"))
+    kb.row(Btn("📥 تحميل التطبيق (أندرويد)", style="success", callback_data="hubapk"))
     return kb
 
 
@@ -199,8 +214,8 @@ def _scheduler(bot, owner_id: int) -> None:
 def keyboard() -> types.InlineKeyboardMarkup:
     kb = types.InlineKeyboardMarkup()
     wa = lambda text, page="": types.InlineKeyboardButton(text, web_app=types.WebAppInfo(APP + (f"#{page}" if page else "")))
-    kb.row(types.InlineKeyboardButton("📥 تحميل التطبيق (أندرويد)", callback_data="hubapk"))
-    kb.row(wa("📱 افتح تطبيق Bandly"))
+    kb.row(Btn("📥 تحميل التطبيق (أندرويد)", style="success", callback_data="hubapk"))
+    kb.row(Btn("📱 افتح تطبيق Bandly", style="primary", web_app=types.WebAppInfo(APP)))
     kb.row(wa("🛠️ سجّل كفني", "tech"), wa("📢 اطلب إعلان", "ad"))
     kb.row(wa("🔌 أضف جهازك", "device"), wa("💬 ملاحظاتك", "feedback"))
     kb.row(wa("👷 الفنيين", "techs"), types.InlineKeyboardButton("👨‍💻 المبرمج", url=DEV))
@@ -291,7 +306,7 @@ def register(bot, is_owner, api_post=None, owner_id: int = 0):
         remember(call.from_user)
         if not send_apk(bot, call.message.chat.id):
             kb = types.InlineKeyboardMarkup()
-            kb.row(types.InlineKeyboardButton("📥 حمّل التطبيق", url=APK))
+            kb.row(Btn("📥 حمّل التطبيق", style="success", url=APK))
             bot.send_message(call.message.chat.id, "حمّل التطبيق من الرابط 👇", reply_markup=kb)
 
     @bot.callback_query_handler(func=lambda c: (c.data or "").startswith("hub:"))
