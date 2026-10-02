@@ -71,7 +71,7 @@ def load_json(p: Path, default: Any) -> Any:
 
 def config() -> dict:
     c = load_json(CONFIG_FILE, {})
-    c.setdefault("require_tech_key", False)
+    c.setdefault("require_tech_key", True)
     return c
 
 
@@ -157,9 +157,60 @@ IP_BAD: dict[str, list[float]] = {}
 KEY_BAD: dict[str, list[float]] = {}
 MAX_BAD_KEYS_PER_IP = 20   # مفاتيح فني أو أكواد تقرير خاطئة بالساعة
 
+# حماية WebSocket / WebRTC
+WS_WINDOW = 60.0
+WS_MAX_CUSTOMER_MESSAGES = 600
+WS_MAX_TECH_MESSAGES = 300
+RTC_MAX_DATA_BYTES = 20_000
+
+RTC_ALLOWED_CUSTOMER = {
+    "call", "accept", "offer", "answer", "ice",
+    "camreq", "flip", "point",
+}
+
+RTC_ALLOWED_TECH = {
+    "call", "accept", "offer", "answer", "ice",
+    "camreq", "flip", "point",
+}
+
+def ws_rate_ok(hits: list[float], limit: int) -> bool:
+    now = time.time()
+    cutoff = now - WS_WINDOW
+    while hits and hits[0] < cutoff:
+        hits.pop(0)
+    if len(hits) >= limit:
+        return False
+    hits.append(now)
+    return True
+
+def rtc_payload_ok(m: dict, allowed: set[str]) -> bool:
+    kind = m.get("kind")
+    if not isinstance(kind, str) or kind not in allowed:
+        return False
+
+    data = m.get("data")
+
+    if data is None:
+        return kind in {"call", "accept", "camreq", "flip", "point"}
+
+    try:
+        size = len(json.dumps(
+            data,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8"))
+    except Exception:
+        return False
+
+    return size <= RTC_MAX_DATA_BYTES
+
+
 
 def client_ip(req_headers, fallback: str) -> str:
-    return (req_headers.get("x-real-ip") or req_headers.get("x-forwarded-for", "").split(",")[0].strip() or fallback)
+    # نثق فقط بعنوان X-Real-IP الذي يضعه Nginx من $remote_addr.
+    # لا نستخدم X-Forwarded-For لأن العميل يستطيع إرساله بنفسه.
+    real = (req_headers.get("x-real-ip") or "").strip()
+    return real or fallback
 
 
 def hit(bucket: dict, ip: str, limit: int) -> bool:
@@ -301,11 +352,17 @@ def _bad_try(req: Request):
 
 
 @app.get("/live-api/report/{code}")
-async def get_report(code: str, req: Request):
+async def get_report(code: str, req: Request, token: str = ""):
     s = SESSIONS.get(code)
     if not s:
         _bad_try(req)
         raise HTTPException(404, "الجلسة غير موجودة")
+
+    # التقرير خاص بصاحب الجلسة؛ معرفة رمز الجلسة وحده لا تكفي.
+    if not token or not secrets.compare_digest(s.token, token):
+        _bad_try(req)
+        raise HTTPException(403, "غير مصرح")
+
     return s.report()
 
 
@@ -392,17 +449,39 @@ async def ws_pub(ws: WebSocket, code: str, token: str = ""):
             pass
     s.pub = ws
     s.last = time.time()
+
+    # حد رسائل خاص باتصال العميل لمنع spam / abuse.
+    ws_hits: list[float] = []
+
     await send(ws, {"t": "viewers", "n": len(s.subs), "names": list(s.tech_names.values())})
     await to_subs(s, {"t": "status", "customer": True})
     try:
         while True:
             raw = await ws.receive_text()
+
+            # انتهاء الجلسة
+            if not s.alive():
+                await end_session(s, "expired")
+                break
+
+            # Rate limit: 600 رسالة / دقيقة لكل اتصال عميل
+            if not ws_rate_ok(ws_hits, WS_MAX_CUSTOMER_MESSAGES):
+                await send(ws, {"t": "error", "code": "rate_limited"})
+                await ws.close(code=4429)
+                break
+
             if len(raw) > 30000:
                 continue
+
             try:
                 m = json.loads(raw)
             except Exception:
                 continue
+
+            # يجب أن تكون الرسالة JSON object
+            if not isinstance(m, dict):
+                continue
+
             kind = m.get("t")
             if kind == "r":
                 r = {k: m.get(k) for k in ("rsrp", "sinr", "band", "pci", "tech", "level", "score", "best", "pinned", "ping")}
@@ -419,15 +498,37 @@ async def ws_pub(ws: WebSocket, code: str, token: str = ""):
                 s.events.append(ev)
                 await to_subs(s, {"t": "cmd_result", **ev})
             elif kind == "rtc":
-                # إشارات المكالمة من العميل ← فني محدد (to) أو كل الفنيين
-                fwd = {"t": "rtc", "kind": m.get("kind"), "data": m.get("data"), "from": "العميل"}
+                # إشارات WebRTC من العميل ← فني محدد أو كل الفنيين.
+                if not rtc_payload_ok(m, RTC_ALLOWED_CUSTOMER):
+                    continue
+
                 to = m.get("to")
-                if to and to in s.sid_ws:
+
+                if to is not None and (
+                    not isinstance(to, str) or
+                    len(to) > 32 or
+                    to not in s.sid_ws
+                ):
+                    continue
+
+                fwd = {
+                    "t": "rtc",
+                    "kind": m["kind"],
+                    "data": m.get("data"),
+                    "from": "العميل",
+                }
+
+                if to:
                     await send(s.sid_ws[to], fwd)
-                elif not to:
+                else:
                     await to_subs(s, fwd)
-                if m.get("kind") in ("call", "accept"):
-                    s.events.append({"at": int(time.time()), "e": "call", "by": "customer"})
+
+                if m["kind"] in ("call", "accept"):
+                    s.events.append({
+                        "at": int(time.time()),
+                        "e": "call",
+                        "by": "customer",
+                    })
             elif kind == "speed" and m.get("phase") in ("before", "after"):
                 try:
                     pt = {k: round(float(m.get(k) or 0), 1) for k in ("down", "up", "ping")}
@@ -465,13 +566,20 @@ async def ws_sub(ws: WebSocket, code: str, key: str = "", name: str = ""):
     if config()["require_tech_key"] and not t:
         await ws.close(code=4401)
         return
-    tech_name = (t or {}).get("name") or name[:30] or "الفني"
+    if not t:
+        await ws.close(code=4401)
+        return
+    tech_name = str(t.get("name") or "الفني")[:30]
     if t:
         s.tech_keys[key] = tech_name
     vt = secrets.token_hex(12)
     s.vtokens[vt] = tech_name
     s.subs.add(ws)
     s.tech_names[ws] = tech_name
+
+    # حد رسائل خاص باتصال الفني لمنع spam / abuse.
+    ws_hits: list[float] = []
+
     sid = vt[:10]
     s.sid_ws[sid] = ws
     s.ws_sid[ws] = sid
@@ -485,12 +593,30 @@ async def ws_sub(ws: WebSocket, code: str, key: str = "", name: str = ""):
     try:
         while True:
             raw = await ws.receive_text()
-            if len(raw) > 30000 or s.ended:
+
+            # انتهاء الجلسة
+            if not s.alive():
+                await end_session(s, "expired")
+                break
+
+            # Rate limit: 300 رسالة / دقيقة لكل اتصال فني
+            if not ws_rate_ok(ws_hits, WS_MAX_TECH_MESSAGES):
+                await send(ws, {"t": "error", "code": "rate_limited"})
+                await ws.close(code=4429)
+                break
+
+            if len(raw) > 30000:
                 continue
+
             try:
                 m = json.loads(raw)
             except Exception:
                 continue
+
+            # يجب أن تكون الرسالة JSON object
+            if not isinstance(m, dict):
+                continue
+
             kind = m.get("t")
             if kind == "say":
                 k = m.get("k")
@@ -507,14 +633,35 @@ async def ws_sub(ws: WebSocket, code: str, key: str = "", name: str = ""):
                 await to_subs(s, {"t": "cmd_sent", "id": cid, "action": m["action"],
                                   "delivered": s.pub is not None})
             elif kind == "rtc":
-                # إشارات المكالمة من الفني ← العميل (ومعها رقم الفني عشان العميل يرد عليه بالذات)
-                await send(s.pub, {"t": "rtc", "kind": m.get("kind"), "data": m.get("data"),
-                                   "sid": s.ws_sid.get(ws), "from": tech_name})
-                if m.get("kind") == "accept":
-                    # الفنيين الثانيين: المكالمة انأخذت
+                # إشارات WebRTC من الفني ← العميل.
+                if not rtc_payload_ok(m, RTC_ALLOWED_TECH):
+                    continue
+
+                if s.pub is None:
+                    continue
+
+                await send(
+                    s.pub,
+                    {
+                        "t": "rtc",
+                        "kind": m["kind"],
+                        "data": m.get("data"),
+                        "sid": s.ws_sid.get(ws),
+                        "from": tech_name,
+                    },
+                )
+
+                if m["kind"] == "accept":
                     for w in list(s.subs):
                         if w is not ws:
-                            await send(w, {"t": "rtc", "kind": "taken", "from": tech_name})
+                            await send(
+                                w,
+                                {
+                                    "t": "rtc",
+                                    "kind": "taken",
+                                    "from": tech_name,
+                                },
+                            )
             elif kind == "ping":
                 await send(ws, {"t": "pong"})
     except WebSocketDisconnect:
@@ -522,6 +669,8 @@ async def ws_sub(ws: WebSocket, code: str, key: str = "", name: str = ""):
     finally:
         s.subs.discard(ws)
         s.tech_names.pop(ws, None)
+        # إبطال رمز الفني فور إغلاق الاتصال
+        s.vtokens.pop(vt, None)
         _sid = s.ws_sid.pop(ws, None)
         if _sid:
             s.sid_ws.pop(_sid, None)
@@ -544,7 +693,7 @@ async def ice(code: str, token: str = ""):
     sec = _secret("turn_secret")
     host = os.environ.get("BANDLY_TURN_HOST", "has-host.com")
     if sec:
-        user = f"{int(time.time()) + 3 * 3600}:{code}"
+        user = f"{int(time.time()) + MAX_TTL}:{code}"
         cred = _b64.b64encode(hmac.new(sec.encode(), user.encode(), hashlib.sha1).digest()).decode()
         servers.insert(0, {"urls": [f"stun:{host}:3478"]})
         servers.append({"urls": [f"turn:{host}:3478?transport=udp", f"turn:{host}:3478?transport=tcp"],
@@ -595,12 +744,26 @@ async def upload_voice(code: str, file: UploadFile = File(...), role: str = Form
     raw.write_bytes(data)
     out = d / f"{vid}.m4a"
     ok = await asyncio.to_thread(_transcode, raw, out)
-    if ok:
+
+    # لا نسمح أبدًا بإرسال الملف الأصلي إذا فشل التحقق/التحويل.
+    # يجب أن يكون الناتج ملف صوت M4A صالحًا.
+    if not ok:
         raw.unlink(missing_ok=True)
-        fname = out.name
-    else:
-        fname = raw.name   # بدون ffmpeg نرسل الملف كما هو
-    url = f"{PUBLIC_URL}/live-api/voice/{code}/{fname}"
+        out.unlink(missing_ok=True)
+        s.voices = max(0, s.voices - 1)
+        raise HTTPException(415, "الملف ليس تسجيلًا صوتيًا صالحًا")
+
+    raw.unlink(missing_ok=True)
+    fname = out.name
+
+    # رابط صوت موقّع قصير العمر — لا نكشف session token أو vt داخل الرابط
+    voice_exp = int(time.time()) + 10 * 60
+    voice_sig = hmac.new(
+        _secret("voice_secret").encode(),
+        f"{code}|{fname}|{voice_exp}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    url = f"{PUBLIC_URL}/live-api/voice/{code}/{fname}?exp={voice_exp}&sig={voice_sig}"
     msg = {"t": "voice", "url": url, "from": who, "role": role, "dur": round(float(dur or 0), 1)}
     s.events.append({"at": int(time.time()), "e": "voice", "from": who})
     s.last = time.time()
@@ -613,14 +776,49 @@ async def upload_voice(code: str, file: UploadFile = File(...), role: str = Form
 
 
 @app.get("/live-api/voice/{code}/{fname}")
-async def get_voice(code: str, fname: str):
-    if "/" in fname or ".." in fname or not code.isdigit():
+async def get_voice(code: str, fname: str, exp: int = 0, sig: str = ""):
+    # روابط الصوت موقعة ومؤقتة؛ لا نقبل أي رابط مباشر للملف.
+    if "/" in fname or "\\" in fname or ".." in fname or not code.isdigit():
         raise HTTPException(404)
-    p = VOICE / code / fname
-    if not p.exists():
+
+    now = int(time.time())
+
+    # صلاحية الرابط 10 دقائق كحد أقصى، مع هامش زمني بسيط للساعة.
+    if exp < now - 30 or exp > now + 10 * 60 + 30:
+        raise HTTPException(403, "رابط الصوت منتهي أو غير صالح")
+
+    expected = hmac.new(
+        _secret("voice_secret").encode(),
+        f"{code}|{fname}|{exp}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+    if not sig or not secrets.compare_digest(expected, sig):
+        raise HTTPException(403, "غير مصرح")
+
+    base = (VOICE / code).resolve()
+    p = (base / fname).resolve()
+
+    # منع أي خروج من مجلد الجلسة.
+    try:
+        p.relative_to(base)
+    except ValueError:
         raise HTTPException(404)
+
+    if not p.is_file():
+        raise HTTPException(404)
+
     mt = "audio/mp4" if fname.endswith(".m4a") else "application/octet-stream"
-    return FileResponse(p, media_type=mt, headers={"Cache-Control": "private, max-age=3600"})
+
+    return FileResponse(
+        p,
+        media_type=mt,
+        headers={
+            "Cache-Control": "private, no-store, max-age=0",
+            "Pragma": "no-cache",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 # ═══ مركز Bandly (التطبيق المصغر للبوت): فنيين · إعلانات · ملاحظات · أجهزة ═══
@@ -688,8 +886,18 @@ def _check_init(init_data: str) -> dict | None:
         calc = hmac.new(key, check.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(calc, got):
             return None
-        if time.time() - int(pairs.get("auth_date", "0")) > 86400:
+        auth_date = int(pairs.get("auth_date", "0"))
+        now = int(time.time())
+
+        # initData قديمة أكثر من 24 ساعة مرفوضة.
+        if now - auth_date > 86400:
             return None
+
+        # نرفض تاريخًا مستقبليًا بشكل غير منطقي.
+        # سماحية 5 دقائق لتفاوت ساعة الجهاز/الخادم.
+        if auth_date > now + 300:
+            return None
+
         return json.loads(pairs.get("user", "{}"))
     except Exception:
         return None
@@ -782,10 +990,20 @@ async def hub_submit(req: Request):
         _tg("sendMessage", {"chat_id": owner, "text": text, "parse_mode": "HTML", "reply_markup": {"inline_keyboard": kb},
                             "disable_web_page_preview": True})
         for im in images:
+            content = (HUB_IMG / im["file"]).read_bytes()
+
             if im["ext"] == ".txt":
-                _tg("sendDocument", {"chat_id": owner, "caption": f"📎 {rid}"}, {"document": (im["file"], (HUB_IMG / im["file"]).read_bytes())})
+                _tg(
+                    "sendDocument",
+                    {"chat_id": owner, "caption": f"📎 {rid}"},
+                    {"document": (im["file"], content)},
+                )
             else:
-                _tg("sendPhoto", {"chat_id": owner, "photo": im["url"], "caption": f"📎 {rid}"})
+                _tg(
+                    "sendPhoto",
+                    {"chat_id": owner, "caption": f"📎 {rid}"},
+                    {"photo": (im["file"], content)},
+                )
     return {"ok": True, "id": rid}
 
 

@@ -56,12 +56,27 @@ def _clean(v, n: int = 40) -> str:
 
 
 def _ip(req: Request) -> str:
-    h = req.headers
-    return h.get("x-real-ip") or h.get("x-forwarded-for", "").split(",")[0].strip() or (req.client.host if req.client else "?")
+    # نثق فقط بعنوان X-Real-IP الذي يضعه Nginx من $remote_addr.
+    # لا نستخدم X-Forwarded-For لأن العميل يستطيع إرساله بنفسه.
+    real = (req.headers.get("x-real-ip") or "").strip()
+    if real:
+        return real
+    return req.client.host if req.client else "?"
 
 
 @router.post("/ping")
 async def ping(req: Request):
+    # إحصائية صغيرة جدًا؛ لا يوجد سبب لقبول body كبير.
+    # نرفض قبل req.json() لتجنب قراءة payload ضخم إلى الذاكرة.
+    MAX_BODY = 64 * 1024
+    raw_len = (req.headers.get("content-length") or "").strip()
+    if raw_len:
+        try:
+            if int(raw_len) > MAX_BODY:
+                raise HTTPException(413, "الطلب كبير جدًا")
+        except ValueError:
+            raise HTTPException(400, "حجم طلب غير صالح")
+
     ip = _ip(req)
     now = time.time()
     lst = [t for t in _hits.get(ip, []) if now - t < 3600]
