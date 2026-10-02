@@ -242,6 +242,9 @@ export default function TechScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: P.bg }}>
+      <CallBar info={callInfo} onHangup={() => callRef.current?.hangup()}
+        onMute={() => callRef.current?.toggleMute()} onSpeaker={() => callRef.current?.toggleSpeaker()}
+        onCam={askCam} camOn={!!callInfo.peerCam} />
       <ScrollView contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 30 }]}>
         <Hero>
           <View style={s.heroRow}>
@@ -386,9 +389,6 @@ export default function TechScreen() {
         </Pressable>
       </ScrollView>
       <IncomingCall info={callInfo} onAccept={() => callRef.current?.accept()} onReject={() => callRef.current?.reject()} />
-      <CallBar info={callInfo} top={8} onHangup={() => callRef.current?.hangup()}
-        onMute={() => callRef.current?.toggleMute()} onSpeaker={() => callRef.current?.toggleSpeaker()}
-        onCam={askCam} camOn={!!callInfo.peerCam} />
       <ShareCardModal data={shareData} onClose={() => setShareData(null)} />
     </View>
   );

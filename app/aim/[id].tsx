@@ -720,12 +720,15 @@ export default function AimScreen() {
 
   return (
     <View style={a.container}>
+      {/* شريط المكالمة مثبّت فوق — المحتوى يتمرر تحته بدون ما يندس */}
+      <CallBar info={callInfo} onHangup={() => callRef.current?.hangup()}
+        onMute={() => callRef.current?.toggleMute()} onSpeaker={() => callRef.current?.toggleSpeaker()}
+        onCam={toggleCam} camOn={!!callInfo.cam} />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[a.content, {
           paddingBottom: insets.bottom + 110,
-          // شريط المكالمة العائم ما يغطي العنوان وأزرار الصوت/الاهتزاز
-          paddingTop: ['outgoing', 'connecting', 'active'].includes(callInfo.state) ? 92 : 10,
+          paddingTop: 10,
         }]}
       >
         {/* ═══ Header ═══ */}
@@ -955,9 +958,6 @@ export default function AimScreen() {
 
       {/* ═══ المكالمة ═══ */}
       <IncomingCall info={callInfo} onAccept={() => callRef.current?.accept()} onReject={() => callRef.current?.reject()} />
-      <CallBar info={callInfo} top={insets.top + 8} onHangup={() => callRef.current?.hangup()}
-        onMute={() => callRef.current?.toggleMute()} onSpeaker={() => callRef.current?.toggleSpeaker()}
-        onCam={toggleCam} camOn={!!callInfo.cam} />
       <CamPreview info={callInfo} top={insets.top + 84} onFlip={() => callRef.current?.flipCam()} onStop={toggleCam} />
       <CamRequest info={callInfo} onAccept={toggleCam} onReject={() => callRef.current?.clearCamReq()} />
       <ShareCardModal data={shareData} onClose={() => setShareData(null)} />

@@ -66,9 +66,11 @@ export function IncomingCall({ info, onAccept, onReject }: { info: CallInfo; onA
   );
 }
 
-/** شريط المكالمة العائم (يطلع أثناء الاتصال والمكالمة) */
+/** شريط المكالمة (يطلع أثناء الاتصال والمكالمة).
+ * بدون top: مثبّت فوق الصفحة والمحتوى يبدأ تحته (ما يدخل الكلام تحته).
+ * مع top: عائم فوق المحتوى. */
 export function CallBar({ info, top, onHangup, onMute, onSpeaker, onCam, camOn }: {
-  info: CallInfo; top: number; onHangup: () => void; onMute: () => void; onSpeaker: () => void;
+  info: CallInfo; top?: number; onHangup: () => void; onMute: () => void; onSpeaker: () => void;
   onCam?: () => void; camOn?: boolean;   // زر الكاميرا: العميل يشغّلها، والفني يطلبها
 }) {
   const [, tick] = useState(0);
@@ -80,7 +82,7 @@ export function CallBar({ info, top, onHangup, onMute, onSpeaker, onCam, camOn }
   if (info.state !== 'outgoing' && info.state !== 'connecting' && info.state !== 'active') return null;
   const status = info.state === 'outgoing' ? 'يرن…' : info.state === 'connecting' ? 'نوصل الصوت…' : mmss(Date.now() - (info.startedAt ?? Date.now()));
   return (
-    <View style={[c.barWrap, { top }]} pointerEvents="box-none">
+    <View style={top === undefined ? c.barDock : [c.barWrap, { top }]} pointerEvents="box-none">
       <View style={c.bar}>
         <View style={{ flex: 1, alignItems: 'flex-end' }}>
           <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6 }}>
@@ -132,6 +134,7 @@ const c = StyleSheet.create({
   inBtns: { flexDirection: 'row', justifyContent: 'space-around', alignSelf: 'stretch', marginTop: 30 },
 
   barWrap: { position: 'absolute', left: 12, right: 12, zIndex: 60 },
+  barDock: { marginHorizontal: 12, marginTop: 8, marginBottom: 2, zIndex: 60 },
   bar: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 8, backgroundColor: tBg('#0f1f45'), borderRadius: 24,
     paddingVertical: 10, paddingHorizontal: 12,
