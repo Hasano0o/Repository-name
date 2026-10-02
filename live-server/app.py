@@ -165,12 +165,12 @@ RTC_MAX_DATA_BYTES = 20_000
 
 RTC_ALLOWED_CUSTOMER = {
     "call", "accept", "offer", "answer", "ice",
-    "camreq", "flip", "point",
+    "camreq", "flip", "point", "cam", "hangup", "reject", "busy",
 }
 
 RTC_ALLOWED_TECH = {
     "call", "accept", "offer", "answer", "ice",
-    "camreq", "flip", "point",
+    "camreq", "flip", "point", "cam", "hangup", "reject", "busy",
 }
 
 def ws_rate_ok(hits: list[float], limit: int) -> bool:
@@ -191,7 +191,7 @@ def rtc_payload_ok(m: dict, allowed: set[str]) -> bool:
     data = m.get("data")
 
     if data is None:
-        return kind in {"call", "accept", "camreq", "flip", "point"}
+        return kind in {"call", "accept", "camreq", "flip", "point", "hangup", "reject", "busy"}
 
     try:
         size = len(json.dumps(
@@ -566,10 +566,7 @@ async def ws_sub(ws: WebSocket, code: str, key: str = "", name: str = ""):
     if config()["require_tech_key"] and not t:
         await ws.close(code=4401)
         return
-    if not t:
-        await ws.close(code=4401)
-        return
-    tech_name = str(t.get("name") or "الفني")[:30]
+    tech_name = str((t or {}).get("name") or name[:30] or "الفني")[:30]
     if t:
         s.tech_keys[key] = tech_name
     vt = secrets.token_hex(12)
@@ -757,7 +754,7 @@ async def upload_voice(code: str, file: UploadFile = File(...), role: str = Form
     fname = out.name
 
     # رابط صوت موقّع قصير العمر — لا نكشف session token أو vt داخل الرابط
-    voice_exp = int(time.time()) + 10 * 60
+    voice_exp = int(time.time()) + MAX_TTL
     voice_sig = hmac.new(
         _secret("voice_secret").encode(),
         f"{code}|{fname}|{voice_exp}".encode(),
@@ -784,7 +781,7 @@ async def get_voice(code: str, fname: str, exp: int = 0, sig: str = ""):
     now = int(time.time())
 
     # صلاحية الرابط 10 دقائق كحد أقصى، مع هامش زمني بسيط للساعة.
-    if exp < now - 30 or exp > now + 10 * 60 + 30:
+    if exp < now - 30 or exp > now + MAX_TTL + 30:
         raise HTTPException(403, "رابط الصوت منتهي أو غير صالح")
 
     expected = hmac.new(
@@ -1059,6 +1056,14 @@ async def hub_decide(rid: str, req: Request):
         out["msg"] = f"انضاف الفني وأُرسل له المفتاح {key}"
     elif action == "ok" and rec["type"] == "ad":
         rec["status"] = "ok"
+        # صورة الإعلان تنسخ لمجلد عام (مجلد hub صار مقفول)
+        ads_dir = HUB_IMG.parent / "ads"
+        ads_dir.mkdir(parents=True, exist_ok=True)
+        for im in rec.get("images") or []:
+            src = HUB_IMG / Path(str(im.get("file", ""))).name
+            if im.get("ext") != ".txt" and src.is_file():
+                shutil.copy2(src, ads_dir / src.name)
+                im["url"] = f"{HUB_IMG_URL.rsplit('/', 1)[0]}/ads/{src.name}"
         _tg("sendMessage", {"chat_id": uid, "text": "✅ تم قبول طلب إعلانك في Bandly! بنتواصل معك لتأكيد التفاصيل والدفع قبل النشر."})
         out["msg"] = "تم القبول — الإعلان انضاف للقائمة (غير مفعّل) وتقدر تفعّله من لوحة الإعلانات"
     else:
