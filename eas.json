@@ -22,6 +22,12 @@
         "buildType": "app-bundle"
       },
       "channel": "production"
+    },
+    "preview-arm64": {
+      "extends": "preview",
+      "env": {
+        "BANDLY_ARM64": "1"
+      }
     }
   },
   "submit": {
