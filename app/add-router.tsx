@@ -20,9 +20,9 @@ import { detectDriver } from '../src/drivers/registry';
 import { getRouter, saveRouter, updateRouter, deleteRouter, SavedRouter } from '../src/store/routers';
 import { dropSession } from '../src/store/sessions';
 import {
-  DEVICE_DRIVER_ID, DEVICE_HOST, deviceReadingSupported, ensureCellPermission,
+  DEVICE_DRIVER_ID, DEVICE_HOST, ensureCellPermission,
 } from '../src/drivers/device';
-import { cellModuleAvailable } from '../modules/bandly-cell/src';
+import { cellModuleAvailable, cellNative } from '../modules/bandly-cell/src';
 
 /** عناوين الراوترات الشائعة — اختصار بضغطة */
 const COMMON_HOSTS: { host: string; hint: string }[] = [
@@ -82,10 +82,6 @@ export default function AddRouterScreen() {
       Alert.alert('تحتاج تحديث', 'هذي الميزة تحتاج آخر نسخة من Bandly — حمّلها من البوت وثبّتها فوق النسخة الحالية');
       return;
     }
-    if (!deviceReadingSupported()) {
-      Alert.alert('ما فيه شريحة', 'هذا الجهاز ما يدعم شبكة الجوال، فما نقدر نقرأ منه إشارة');
-      return;
-    }
     setBusy(true);
     try {
       setStep('نطلب الصلاحية...');
@@ -93,6 +89,22 @@ export default function AddRouterScreen() {
       if (!ok) {
         Alert.alert('الصلاحية مطلوبة', 'أندرويد ما يعطي قراءات الأبراج إلا بصلاحية الموقع. اسمح بها وجرّب مرة ثانية.');
         return;
+      }
+      setStep('نقرأ الإشارة...');
+      let found = 0;
+      try {
+        found = (await cellNative().getCells()).length;
+      } catch { /* نحفظ ونخلّي شاشة الراوتر توضح الخطأ */ }
+      if (found === 0) {
+        const go = await new Promise<boolean>(res => Alert.alert(
+          'ما طلعت أبراج',
+          'ما قدرنا نقرأ أي برج الحين. تأكد إن فيه شريحة، وشغّل الموقع (GPS) من القائمة اللي فوق، وبعدها جرّب.',
+          [
+            { text: 'رجوع', style: 'cancel', onPress: () => res(false) },
+            { text: 'أضفه على كل حال', onPress: () => res(true) },
+          ],
+        ));
+        if (!go) return;
       }
       setStep('نحفظ...');
       const saved = await saveRouter({

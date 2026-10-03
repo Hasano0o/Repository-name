@@ -19,10 +19,12 @@ export const isDeviceHost = (host?: string) => host === DEVICE_HOST;
 /** للعرض: بدل كلمة device نكتب «هذا الجهاز» */
 export const hostLabel = (host?: string) => (isDeviceHost(host) ? 'هذا الجهاز' : host ?? '');
 
-export const deviceReadingSupported = (): boolean => {
-  if (Platform.OS !== 'android' || !cellModuleAvailable()) return false;
-  try { return cellNative().isSupported(); } catch { return false; }
-};
+/**
+ * ما نعتمد على إعلان «الجهاز يدعم شبكة الجوال» — بعض أجهزة الإنترنت المنزلية
+ * تعلن إنها بدون شبكة جوال رغم إن فيها شريحة شغالة. نجرّب القراءة فعلياً بدلها.
+ */
+export const deviceReadingSupported = (): boolean =>
+  Platform.OS === 'android' && cellModuleAvailable();
 
 /** يطلب صلاحية الموقع (وحالة الهاتف) — أندرويد ما يعطي الأبراج بدونها */
 export async function ensureCellPermission(): Promise<boolean> {
