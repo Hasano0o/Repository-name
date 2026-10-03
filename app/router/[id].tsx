@@ -404,6 +404,10 @@ export default function RouterDashboard() {
   const hasNr = !!signal && (signal.nrRsrp !== undefined || !!signal.nrBand);
   const nrList = parseNrBands(signal?.nrBand);
   const allBands = [...new Set([...bands, ...nrList])];
+  // بعض الأجهزة تدمج نواقل بدون ما تكشف أرقام باندات النواقل الثانوية —
+  // نعتمد عدد النواقل (caCount) كبديل عشان مؤشر الدمج يطلع صح
+  const caCount = Math.max(allBands.length, signal?.caCount ?? 0);
+  const caBw = signal?.caBandwidthMhz;
   const primary = hasNr && signal
     ? { rsrp: signal.nrRsrp, sinr: signal.nrSinr }
     : { rsrp: signal?.rsrp, sinr: signal?.sinr };
@@ -506,10 +510,10 @@ export default function RouterDashboard() {
                   <View style={s.heroDiv} />
                   <View style={s.heroCell}>
                     <Text style={s.heroCellLbl}>الدمج</Text>
-                    <Text style={[s.heroCellVal, { color: allBands.length > 1 ? C.green : C.sub }]} numberOfLines={1}>
-                      {allBands.length > 1 ? '🔗 مدموج' : '◻️ تردد واحد'}
+                    <Text style={[s.heroCellVal, { color: caCount > 1 ? C.green : C.sub }]} numberOfLines={1}>
+                      {caCount > 1 ? '🔗 مدموج' : '◻️ تردد واحد'}
                     </Text>
-                    {allBands.length > 1 && <Text style={s.heroCellSub}>{allBands.length} ترددات</Text>}
+                    {caCount > 1 && <Text style={s.heroCellSub}>{caCount} نواقل{caBw ? ` · ${caBw}MHz` : ''}</Text>}
                   </View>
                   <View style={s.heroDiv} />
                   <View style={s.heroCell}>

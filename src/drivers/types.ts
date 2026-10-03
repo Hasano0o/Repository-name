@@ -17,6 +17,10 @@ export interface Signal {
   nrCqi?: number; nrDlMcs?: number; nrTxPower?: number; nrRank?: number;
   /** رقم موقع البرج الفعلي */
   enodebId?: string;
+  /** عدد النواقل المدموجة (CA) حين يكشفها الجهاز بعرض النطاقات بدل خلايا منفصلة */
+  caCount?: number;
+  /** مجموع عرض النطاق المدموج بالـ MHz */
+  caBandwidthMhz?: number;
 }
 
 export interface NetworkInfo {

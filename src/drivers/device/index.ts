@@ -128,7 +128,14 @@ export class DeviceDriver implements RouterDriver {
     const { pcc, nr } = this.split(r);
     const nrConnected = /nrState\s*=\s*CONNECTED|mIs5GConnected\s*=\s*true/i.test(r.raw);
     const nrAvail = /nrState\s*=\s*NOT_RESTRICTED/i.test(r.raw);
-    const ca = r.bandwidths.length > 1;
+    // الدمج: المودم يكشفه بعرض النطاقات + علم mIsUsingCarrierAggregation،
+    // مو بعدد الخلايا (كثير أجهزة ترجّع خلية وحدة بس)
+    const caFlag = /mIsUsingCarrierAggregation\s*=\s*true/i.test(r.raw);
+    const widths = r.bandwidths.filter(b => b > 0);
+    const caActive = caFlag && widths.length > 1;
+    const caCount = caActive ? widths.length : 1;
+    const totalBwMhz = widths.length ? Math.round(widths.reduce((a, b) => a + b, 0) / 1000) : undefined;
+    const ca = caActive;
     const network = nr || nrConnected ? (pcc ? '5G NSA' : '5G') : pcc ? (ca ? 'LTE-A' : 'LTE') : undefined;
     const ci = n(pcc?.ci);
     const pccBand = pcc ? bandOf(pcc) : undefined;
@@ -140,7 +147,9 @@ export class DeviceDriver implements RouterDriver {
       enodebId: ci !== undefined ? String(Math.floor(ci / 256)) : undefined,
       pci: str(pcc?.pci),
       earfcn: str(pcc?.earfcn),
-      dlBandwidth: bw !== undefined ? `${Math.round(bw / 1000)}MHz` : undefined,
+      dlBandwidth: totalBwMhz !== undefined ? `${totalBwMhz}MHz` : (bw !== undefined ? `${Math.round(bw / 1000)}MHz` : undefined),
+      caCount,
+      caBandwidthMhz: caActive ? totalBwMhz : undefined,
       rsrp: n(pcc?.rsrp),
       rsrq: n(pcc?.rsrq),
       sinr: sinrDb(pcc?.rssnr),
