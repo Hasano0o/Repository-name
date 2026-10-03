@@ -2,6 +2,7 @@ import { RouterDriver } from './types';
 import { HuaweiDriver } from './huawei';
 import { ZteDriver } from './zte';
 import { UnknownDriver } from './unknown';
+import { DeviceDriver } from './device';
 
 // ═══ لماذا لا Mikrotik/OpenWrt؟ ═══
 // ملفات `mikrotik/index.ts` و `openwrt/index.ts` موجودة كـ stubs فقط
@@ -9,6 +10,8 @@ import { UnknownDriver } from './unknown';
 // في كل `detectDriver()` — بطيء بلا فائدة.
 // نحتفظ بالملفات للمستقبل، لكن نستثنيها من الـ factories النشطة.
 const factories: (() => RouterDriver)[] = [
+  // «هذا الجهاز» أول — detect يرجع false فوراً لأي عنوان غير device (بدون شبكة)
+  () => new DeviceDriver(),
   () => new HuaweiDriver(),
   () => new ZteDriver(),
   () => new UnknownDriver(),

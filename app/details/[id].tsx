@@ -16,6 +16,7 @@ import {
 } from '../../src/ui/Pro';
 
 import { tBg, tFg } from '../../src/ui/theme';
+import { hostLabel } from '../../src/drivers/device';
 type Info = { label: string; value?: string; accent?: string };
 
 /** يعرض الخانات المتوفرة فقط — أول [max] خانات، والباقي خلف «عرض الكل» عشان الصفحة ما تزدحم */
@@ -121,7 +122,7 @@ export default function DetailsScreen() {
                 <View style={{ flex: 1, alignItems: 'flex-end' }}>
                   <Text style={d.heroKicker}>كل الأرقام الفنية</Text>
                   <Text style={d.heroTitle} numberOfLines={1}>{info.name}</Text>
-                  <Text style={d.heroSub}>{info.host}</Text>
+                  <Text style={d.heroSub}>{hostLabel(info.host)}</Text>
                 </View>
                 <GlassBtn icon="refresh" onPress={onRefresh} busy={refreshing} />
               </View>

@@ -33,6 +33,7 @@ import { DeviceRow } from '../../src/ui/DeviceRow';
 import { SyncIcon } from '../../src/ui/SyncIcon';
 import { StoreAd } from '../../src/ui/StoreAd';
 import { ComboCard } from '../../src/ui/ComboCard';
+import { hostLabel } from '../../src/drivers/device';
 
 interface Features {
   bands: boolean; sms: boolean; block: boolean; reboot: boolean; devices: boolean; cells: boolean; details: boolean; plan: boolean; network: boolean; carriers: boolean;
@@ -482,7 +483,7 @@ export default function RouterDashboard() {
             <View style={{ flex: 1 }} />
             <View style={{ flexShrink: 1 }}>
               <Text style={s.topName}>{info.name}</Text>
-              <Text style={s.topSub}>{details?.operator ? `${details.operator}  ·  ` : ''}{info.host}</Text>
+              <Text style={s.topSub}>{details?.operator ? `${details.operator}  ·  ` : ''}{hostLabel(info.host)}</Text>
             </View>
             <View style={s.topIcon}><Text style={{ fontSize: 18 }}>📡</Text></View>
           </LinearGradient>

@@ -20,6 +20,7 @@ import { tBd, tBg, tFg, THEME_PREF, ThemePref, setThemePref } from '../src/ui/th
 import { UpdateStatus } from '../src/ui/UpdateStatus';
 import { DevContact } from '../src/ui/DevContact';
 import { CityAsk } from '../src/ui/CityAsk';
+import { hostLabel } from '../src/drivers/device';
 interface Status {
   loading: boolean;
   online?: boolean;
@@ -266,7 +267,7 @@ export default function RoutersList() {
                   </View>
                   <View style={s.metaRow}>
                     <View style={s.meta}>
-                      <Text style={s.metaTxt}>{item.host}</Text>
+                      <Text style={s.metaTxt}>{hostLabel(item.host)}</Text>
                       <Icon name="wifi" size={12} color={P.sub} stroke={2.2} />
                     </View>
                     <View style={s.meta}>
