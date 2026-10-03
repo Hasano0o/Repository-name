@@ -95,7 +95,21 @@ class BandlyCellModule : Module() {
       fun finish(list: List<CellInfo>?) {
         if (!done.compareAndSet(false, true)) return
         try {
-          promise.resolve((list ?: emptyList()).mapNotNull { toMap(it) })
+          val maps = (list ?: emptyList()).mapNotNull { toMap(it) }.toMutableList()
+          // كثير أجهزة ما تحط SINR/CQI في قائمة الخلايا، تحطها في كائن SignalStrength
+          // المنفصل. نسحبها منه ونكمّل فيها الخلية الحالية (المسجّلة).
+          val fb = lteStrengthFallback()
+          if (fb.isNotEmpty()) {
+            val idx = maps.indexOfFirst { it["tech"] == "LTE" && it["registered"] == true }
+            if (idx >= 0) {
+              val m = maps[idx].toMutableMap()
+              for (k in listOf("rssnr", "cqi", "rsrp", "rsrq")) {
+                if (m[k] == null && fb[k] != null) m[k] = fb[k]
+              }
+              maps[idx] = m
+            }
+          }
+          promise.resolve(maps)
         } catch (e: Throwable) {
           promise.reject(CodedException("READ_FAILED", e.message ?: "تعذر قراءة الأبراج", e))
         }
@@ -124,6 +138,29 @@ class BandlyCellModule : Module() {
           promise.reject(CodedException("READ_FAILED", e.message ?: "تعذر قراءة الأبراج", e))
         }
       }
+    }
+  }
+
+  /**
+   * يقرأ SINR/CQI/RSRP/RSRQ من كائن SignalStrength (مصدر منفصل عن قائمة الخلايا).
+   * نستخدم reflection لأن getLteRssnr/getLteCqi مخفية في أندرويد 9، ونتحمّل غيابها.
+   */
+  private fun lteStrengthFallback(): Map<String, Int?> {
+    if (Build.VERSION.SDK_INT < 28) return emptyMap()
+    return try {
+      val ss = tm().signalStrength ?: return emptyMap()
+      fun refl(name: String): Int? = try {
+        val r = ss.javaClass.getMethod(name).invoke(ss) as? Int
+        if (r == null || r == Int.MAX_VALUE || r == Int.MIN_VALUE) null else r
+      } catch (ignored: Throwable) { null }
+      mapOf(
+        "rsrp" to refl("getLteRsrp"),
+        "rsrq" to refl("getLteRsrq"),
+        "rssnr" to refl("getLteRssnr"),
+        "cqi" to refl("getLteCqi"),
+      )
+    } catch (ignored: Throwable) {
+      emptyMap()
     }
   }
 
