@@ -2,12 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter, Href } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { BandConfig, Signal, CellTower, Carrier } from '../../src/drivers/types';
 import { BandPicker, BandSeen } from '../../src/ui/BandPicker';
+import { BestCombo, GuardCard, comboLabel } from '../../src/ui/BestCombo';
+import { bestComboCandidates, runCaLab, LabRow } from '../../src/utils/bandLab';
+import { getGuard, saveGuard, GuardState } from '../../src/store/guard';
+import { getMonitorSettings } from '../../src/store/monitor';
 import { LEVEL_COLOR, LEVEL_LABEL, overallLevel, parseBands, signalScore } from '../../src/utils/signal';
 import { bandFreq, SCAN_PREFERRED, bandLabel, freqLabel, nrFreq } from '../../src/utils/bands';
 import { fmtTime } from '../../src/utils/format';
@@ -61,6 +65,12 @@ export default function BandsScreen() {
   const [seen, setSeen] = useState<number[]>([]);
   const [seenMap, setSeenMap] = useState<Record<string, BandSeen>>({});
   const [carriers, setCarriers] = useState<Carrier[]>([]);
+  const [labRows, setLabRows] = useState<LabRow[]>([]);
+  const [labRunning, setLabRunning] = useState(false);
+  const [labDone, setLabDone] = useState(false);
+  const [guard, setGuard] = useState<GuardState>({ on: false });
+  const [monitorOn, setMonitorOn] = useState(true);
+  const nav = useRouter();
   const [nrSelected, setNrSelected] = useState<number[]>([]);
   const [quick, setQuick] = useState<QuickRow[]>([]);
   const [quickAt, setQuickAt] = useState<number | null>(null);
@@ -133,6 +143,8 @@ export default function BandsScreen() {
           setScanAt(j.at ?? null);
         }
       } catch {}
+      getGuard(r.id).then(g => mounted.current && setGuard(g));
+      getMonitorSettings().then(m => mounted.current && setMonitorOn(m.enabled)).catch(() => {});
       await load(r);
       if (mounted.current) setLoading(false);
     })();
@@ -284,6 +296,69 @@ export default function BandsScreen() {
         (t ? `\n\n🧠 ${trialNote(t)}` : ''),
       [{ text: 'إلغاء', style: 'cancel' }, { text: 'جرّب', onPress: () => applyMix(lte, nr, label) }],
     );
+  };
+
+  /** ═══ لقّ لي أفضل تركيبة ═══ */
+  const startLab = () => {
+    if (!info || !cfg) return;
+    const score: Record<string, number> = {};
+    for (const [k, v] of Object.entries(seenMap)) score[k] = v.score;
+    const live = bandNums(signal?.band);
+    const liveNr = signal?.nrBand ? [parseInt((signal.nrBand.match(/(\d+)/) || ['0', '0'])[1], 10)].filter(n => n > 0) : [];
+    const combos = bestComboCandidates(cfg, score, live, liveNr);
+    if (!combos.length) {
+      Alert.alert('ما لقينا ترددات', 'ما ظهر لنا أبراج حولك — اضغط «فحص» تحت أول وبعدين جرّب.');
+      return;
+    }
+    const mins = Math.ceil(combos.length * 1.3);
+    Alert.alert(
+      'لقّ لي أفضل تركيبة',
+      `بنجرب ${combos.length} تركيبات ورا بعض:\n${combos.map(c => '• ' + comboLabel(c.lte, c.nr)).join('\n')}\n\n` +
+        `ياخذ حوالي ${mins} دقائق ويستهلك تقريباً ${combos.length * 35} ميقا من الباقة (قياس السرعة).\n` +
+        'النت بينقطع لحظات بين كل تجربة، وبالآخر نرجّع إعدادك الحالي.',
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'ابدأ', onPress: async () => {
+            const rows: LabRow[] = combos.map(c => ({ bands: c.lte, nrBands: c.nr, status: 'pending' }));
+            cancelRef.current = false;
+            scanningRef.current = true;
+            setLabRows(rows);
+            setLabDone(false);
+            setLabRunning(true);
+            setError('');
+            try {
+              await runCaLab({
+                r: info, cfg, rows, measureSpeed: true,
+                isCancelled: () => cancelRef.current,
+                update: (i, p) => { rows[i] = { ...rows[i], ...p }; if (mounted.current) setLabRows([...rows]); },
+              });
+            } catch (e: any) {
+              if (mounted.current) setError(e?.message ?? String(e));
+            } finally {
+              scanningRef.current = false;
+              if (mounted.current) { setLabRunning(false); setLabDone(true); await load(info); }
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const applyLabBest = (row: LabRow) => {
+    const nr = row.nrBands?.length ? row.nrBands : undefined;
+    confirmMix(row.bands, nr, comboLabel(row.bands, row.nrBands));
+  };
+
+  const toggleGuard = async () => {
+    if (!info) return;
+    const next = { ...guard, on: !guard.on };
+    setGuard(next);
+    await saveGuard(info.id, next);
+    if (next.on) {
+      const m = await getMonitorSettings().catch(() => null);
+      setMonitorOn(!!m?.enabled);
+    }
   };
 
   const confirmAuto = () => {
@@ -534,7 +609,7 @@ export default function BandsScreen() {
     signal?.nrBand ? [parseInt((signal.nrBand.match(/(\d+)/) || ['0', '0'])[1], 10)].filter(n => n > 0) : [],
   );
   const level = overallLevel(signal);
-  const locked = busy || scanning;
+  const locked = busy || scanning || labRunning;
 
   const deepDone: Result[] = scan
     .filter(r => r.status === 'done' && r.score !== undefined)
@@ -604,6 +679,23 @@ export default function BandsScreen() {
               busy={locked}
               onTry={confirmMix}
               onAuto={confirmAuto}
+            />
+            <BestCombo
+              rows={labRows}
+              running={labRunning}
+              done={labDone}
+              busy={locked}
+              onStart={startLab}
+              onStop={() => { cancelRef.current = true; }}
+              onApply={applyLabBest}
+            />
+            <GuardCard
+              on={guard.on}
+              reason={guard.reason}
+              fellBackAt={guard.fellBackAt}
+              monitorOn={monitorOn}
+              onToggle={toggleGuard}
+              onOpenMonitor={() => nav.push('/monitor' as Href)}
             />
           </Stage>
         )}

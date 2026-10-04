@@ -262,3 +262,56 @@ export async function runAnchorScan(o: {
     await waitOnline(r, 45000, () => false);
   }
 }
+
+// ─── «لقّ لي أفضل تركيبة» — 4G + 5G مع بعض ───
+
+/**
+ * يبني تركيبات للتجربة من الترددات اللي فيها برج حولك:
+ * الكل مع الكل، الكل مع أقوى 5G، كل 4G لحاله مع أقوى 5G (يكشف أفضل مرساة)، وثاني أقوى 5G.
+ * بدون 5G: تركيبات دمج 4G + كل تردد لحاله. حد أقصى ٦ عشان ما تطول.
+ */
+export function bestComboCandidates(
+  cfg: BandConfig,
+  score: Record<string, number>,
+  activeLte: number[],
+  activeNr: number[],
+): Combo[] {
+  const pool = (tech: 'LTE' | 'NR', supported: number[], active: number[], max: number) => {
+    const s = (b: number) => score[tech + ':' + b] ?? (active.includes(b) ? 0.4 : -1);
+    return [...new Set([...active, ...supported.filter(b => score[tech + ':' + b] !== undefined)])]
+      .filter(b => supported.includes(b))
+      .sort((a, b) => s(b) - s(a))
+      .slice(0, max);
+  };
+  const lte = pool('LTE', cfg.supported, activeLte, 3);
+  const nr = pool('NR', cfg.nrSupported, activeNr, 2);
+  const out: Combo[] = [];
+  const keys = new Set<string>();
+  const push = (l: number[], n: number[]) => {
+    if (!l.length) return;
+    const ls = [...l].sort((a, b) => a - b);
+    const ns = [...n].sort((a, b) => a - b);
+    const k = ls.join('+') + '|' + ns.join('+');
+    if (keys.has(k)) return;
+    keys.add(k);
+    out.push({ lte: ls, nr: ns });
+  };
+  if (nr.length) {
+    push(lte, nr);
+    push(lte, [nr[0]]);
+    for (const b of lte) push([b], [nr[0]]);
+    if (nr[1]) push(lte, [nr[1]]);
+  } else {
+    for (const c of labCombos(lte)) push(c, []);
+    for (const b of lte) push([b], []);
+  }
+  return out.slice(0, 6);
+}
+
+/** نقاط التركيبة بعد القياس: السرعة الفعلية أولاً، ونخصم شوي على البنق العالي */
+export function comboScore(row: LabRow): number {
+  if (row.status !== 'done') return -1;
+  const base = row.speedMbps ?? (row.snap ? row.snap.cap / 4 : 0);
+  const pingPenalty = row.pingMs !== undefined && row.pingMs > 60 ? (row.pingMs - 60) * 0.5 : 0;
+  return base - pingPenalty;
+}
