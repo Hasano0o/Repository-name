@@ -16,6 +16,7 @@ import { C, tBd, tBg, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { trafficBurst, collectNr, mb } from '../../src/utils/nrprobe';
 import { safeApply, lastTrial, trialNote, trialMessage, loadTrials, canRescue, rescueRouter } from '../../src/utils/safeLock';
+import { driverById } from '../../src/drivers/registry';
 import { SeenCell, rememberSeen, seenKey } from '../../src/store/seenCells';
 import { ManualLock, ManualTarget } from '../../src/ui/ManualLock';
 import { bandLabel } from '../../src/utils/bands';
@@ -200,6 +201,7 @@ export default function TowersScreen() {
   const reloadTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   useEffect(() => () => { alive.current = false; reloadTimers.current.forEach(clearTimeout); }, []);
   const [canLock, setCanLock] = useState(false);
+  const [lockRisk, setLockRisk] = useState('');
   const [bandCfg, setBandCfg] = useState<BandConfig | null>(null);
   const [trialCount, setTrialCount] = useState(0);
   const [seen, setSeen] = useState<SeenCell[]>([]);
@@ -225,7 +227,7 @@ export default function TowersScreen() {
         d.getCellLocks
           ? await d.getCellLocks().catch(() => [] as CellLockState[])
           : d.getCellLock ? await d.getCellLock().then(x => (x ? [x] : [])).catch(() => [] as CellLockState[]) : [],
-        typeof d.lockCell === 'function' && typeof d.unlockCell === 'function',
+        typeof d.lockCell === 'function' && typeof d.unlockCell === 'function' && !d.cellLockRisk,
         d.getSignal ? await d.getSignal().catch(() => null) : null,
         d.getBandConfig && d.setBand ? await d.getBandConfig().catch(() => null) : null,
       ] as const);
@@ -238,6 +240,7 @@ export default function TowersScreen() {
       setNrAvail(sig?.nrAvailable);
       setLocks(lock);
       setCanLock(supports);
+      setLockRisk(driverById(r.driverId)?.cellLockRisk ?? '');
       setBandCfg(cfg);
       setTrialCount((await loadTrials(r.id)).length);
     } catch (e: any) {
@@ -707,6 +710,12 @@ export default function TowersScreen() {
               </Pressable>
             )}
           </GlassCard>
+        )}
+
+        {!loading && !!lockRisk && (
+          <View style={{ backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 16, padding: 12, marginBottom: 12 }}>
+            <Text style={{ color: C.text, fontSize: 13, fontWeight: '700', lineHeight: 20, textAlign: 'right' }}>🛡️ {lockRisk}</Text>
+          </View>
         )}
 
         {!loading && (canLock || !!bandCfg) && primary && (

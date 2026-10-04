@@ -125,6 +125,9 @@ export class ZteDriver implements RouterDriver {
   id = 'zte';
   name = 'ZTE';
   capabilities: Capability[] = ['signal', 'devices', 'traffic', 'usage', 'reboot', 'cells', 'bandLock'];
+  // تجربة حقيقية (MU5001، أكتوبر ٢٠٢٦): التثبيت على برج — خصوصاً فحص بنق الأبراج اللي يثبّت على
+  // كل برج بالدور — يطيّح الإشارة والواي فاي ولا يرجع إلا بضبط المصنع. موقف لين نفهم السبب.
+  cellLockRisk = 'التثبيت على برج متوقف على راوترات ZTE — جربناه وكان يقطع الإشارة والواي فاي لين إعادة ضبط المصنع. تقدر تثبّت التردد بداله.';
   private host = '';
   private password = '';
   /** إعدادات الراوتر الأصلية (من أول اتصال وهو نظيف) */

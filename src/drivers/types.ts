@@ -191,6 +191,11 @@ export interface RouterDriver {
   getBandConfig?(): Promise<BandConfig>;
   setBand?(bands: number[], nrBands?: number[]): Promise<void>;
   lockCell?(target: CellLockTarget): Promise<void>;
+  /**
+   * لو موجود: التثبيت على برج خطر على هذا النوع (مثلاً ZTE يطيح بدون خدمة/واي فاي لين ضبط المصنع)
+   * — الشاشات تخفي «ثبّت على برج» و«فحص بنق الأبراج» وتعرض هذا السبب. فك التثبيت يبقى متاح.
+   */
+  cellLockRisk?: string;
   /** بدون tech = يفك كل التثبيتات. مع tech = يفك تثبيت 4G أو 5G بس */
   unlockCell?(tech?: 'LTE' | 'NR'): Promise<void>;
   getCellLock?(): Promise<CellLockState | null>;

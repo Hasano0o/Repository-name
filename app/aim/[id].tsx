@@ -304,7 +304,7 @@ export default function AimScreen() {
     busy.current = true;
     try {
       const sig = await withSession(r, async d => {
-        setCanPin(typeof d.lockCell === 'function' && typeof d.unlockCell === 'function');
+        setCanPin(typeof d.lockCell === 'function' && typeof d.unlockCell === 'function' && !d.cellLockRisk);
         return d.getSignal ? d.getSignal() : null;
       });
       if (!sig) return;
