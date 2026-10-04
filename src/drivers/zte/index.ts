@@ -692,8 +692,8 @@ export class ZteDriver implements RouterDriver {
       try { if (/success/i.test(await fn())) ok.push(name); } catch (e) { this.log('restore', name, 'failed', (e as any)?.message); }
     };
     // ١. فك التثبيت على الأبراج
-    await step('lte-cell', () => this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: '0', lte_earfcn_lock: '0' }));
-    await step('nr-cell', () => this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: '0,0,0,0' }));
+    await step('lte-cell', () => this.clearLteCell());
+    await step('nr-cell', () => this.clearNrCell());
     // ٢. ترددات 4G: الأصلية لو نعرفها، وإلا قائمة واسعة، وإلا الافتراضية
     const lteTries = [
       this.baseLte(),
@@ -918,12 +918,28 @@ export class ZteDriver implements RouterDriver {
     await this.rebootAndWait();
   }
 
+  /**
+   * فك تثبيت برج 4G. الراوتر النظيف قيمه **فاضية** ("") — كنا نرسل 0 و0، والصفر رقم برج صالح (PCI 0)،
+   * فالراوتر يعتبرها تثبيت على برج غير موجود ويطيح بدون خدمة لين ضبط المصنع.
+   * نرسل فاضي أول، وصفر بس لو الراوتر رفض الفاضي.
+   */
+  private async clearLteCell(): Promise<string> {
+    const o = await this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: '', lte_earfcn_lock: '' });
+    if (/success/i.test(o)) return o;
+    return this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: '0', lte_earfcn_lock: '0' });
+  }
+  private async clearNrCell(): Promise<string> {
+    const o = await this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: '' });
+    if (/success/i.test(o)) return o;
+    return this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: '0,0,0,0' });
+  }
+
   async unlockCell(tech?: 'LTE' | 'NR'): Promise<void> {
     await this.ensure();
     const had = (await this.getCellLocks().catch(() => [] as CellLockState[])).filter(h => !tech || h.tech === tech);
     let o1 = '', o2 = '';
-    if (!tech || tech === 'LTE') o1 = await this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: '0', lte_earfcn_lock: '0' });
-    if (!tech || tech === 'NR') o2 = await this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: '0,0,0,0' }).catch(() => '');
+    if (!tech || tech === 'LTE') o1 = await this.clearLteCell();
+    if (!tech || tech === 'NR') o2 = await this.clearNrCell().catch(() => '');
     if (!/success/i.test(o1) && !/success/i.test(o2)) throw this.rejected('فك التثبيت', o1 || o2);
     if (had.length && rebootToApply.has(this.host)) await this.rebootAndWait();
   }
