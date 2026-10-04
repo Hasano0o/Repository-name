@@ -6,7 +6,8 @@ import { useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
-import { BandConfig, Signal, CellTower } from '../../src/drivers/types';
+import { BandConfig, Signal, CellTower, Carrier } from '../../src/drivers/types';
+import { BandPicker, BandSeen } from '../../src/ui/BandPicker';
 import { LEVEL_COLOR, LEVEL_LABEL, overallLevel, parseBands, signalScore } from '../../src/utils/signal';
 import { bandFreq, SCAN_PREFERRED, bandLabel, freqLabel, nrFreq } from '../../src/utils/bands';
 import { fmtTime } from '../../src/utils/format';
@@ -58,6 +59,8 @@ export default function BandsScreen() {
   const [signal, setSignal] = useState<Signal | null>(null);
   const [selected, setSelected] = useState<number[]>([]);
   const [seen, setSeen] = useState<number[]>([]);
+  const [seenMap, setSeenMap] = useState<Record<string, BandSeen>>({});
+  const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [nrSelected, setNrSelected] = useState<number[]>([]);
   const [quick, setQuick] = useState<QuickRow[]>([]);
   const [quickAt, setQuickAt] = useState<number | null>(null);
@@ -85,12 +88,13 @@ export default function BandsScreen() {
   const load = useCallback(async (r: SavedRouter) => {
     setError('');
     try {
-      const [c, sig, cells] = await withSession(r, async d => {
+      const [c, sig, cells, cars] = await withSession(r, async d => {
         if (!d.getBandConfig) throw new Error('هذا الراوتر ما يدعم التحكم بالترددات');
         return Promise.all([
           d.getBandConfig(),
           d.getSignal ? d.getSignal().catch(() => null) : Promise.resolve(null),
           d.getCells ? d.getCells().catch(() => [] as CellTower[]) : Promise.resolve([] as CellTower[]),
+          d.getCarriers ? d.getCarriers().catch(() => [] as Carrier[]) : Promise.resolve([] as Carrier[]),
         ]);
       });
       if (!mounted.current) return;
@@ -98,7 +102,19 @@ export default function BandsScreen() {
       setSignal(sig);
       setSelected(c.locked);
       setNrSelected(c.nrLocked);
-      setSeen([...new Set(cells.map(x => x.band).filter((n): n is number => !!n))]);
+      setSeen([...new Set(cells.filter(x => x.tech !== 'NR').map(x => x.band).filter((n): n is number => !!n))]);
+      setCarriers(cars);
+      // أقوى قراءة لكل تردد: من الأبراج المجاورة + النواقل المتصل عليها
+      const m: Record<string, BandSeen> = {};
+      const put = (tech: string, band: number | undefined, rsrp?: number, sinr?: number) => {
+        if (!band) return;
+        const score = signalScore({ rsrp, sinr });
+        const k = tech + ':' + band;
+        if (!m[k] || score > m[k].score) m[k] = { rsrp, sinr, score };
+      };
+      cells.forEach(x => put(x.tech, x.band, x.rsrp, x.sinr));
+      cars.forEach(x => put(x.tech, x.band, x.rsrp, x.sinr));
+      setSeenMap(m);
     } catch (e: any) {
       if (mounted.current) setError(e?.message ?? String(e));
     }
@@ -226,25 +242,23 @@ export default function BandsScreen() {
     }
   };
 
-  /** ═══ تثبيت 4G + 5G معاً (الأفضل لـ NSA) ═══ */
-  const applyBoth = async (lte: number[], nr: number[]) => {
+  /** ═══ تركيبة من شاشة الاختيار: 4G (فاضي = تلقائي) و 5G (undefined = ما تغيّر) ═══ */
+  const applyMix = async (lte: number[], nr: number[] | undefined, label: string) => {
     if (!info || !cfg) return;
     cancelRef.current = false;
     setBusy(true);
     setError('');
     const prevLte = cfg.locked;
     const prevNr = cfg.nrLocked;
-    const nrTxt = nr.length ? nr.map(b => 'n' + b).join(' + ') : 'تلقائي';
-    const lteTxt = lte.length ? names(lte) : 'تلقائي';
-    const label = `تثبيت معاً (${lteTxt} + ${nrTxt})`;
+    const k = (xs: number[]) => [...xs].sort((a, b) => a - b).join('+') || 'auto';
     try {
       const res = await safeApply({
         r: info,
-        key: `band:both:${[...lte].sort((a, b) => a - b).join('+')}:${[...nr].sort((a, b) => a - b).join('+')}`,
+        key: `band:mix:${k(lte)}:${nr ? k(nr) : '-'}`,
         label,
-        withNr: nr.length > 0,
+        withNr: !!nr,
         apply: d => d.setBand!(lte, nr),
-        revert: d => d.setBand!(prevLte, prevNr),
+        revert: d => d.setBand!(prevLte, nr ? prevNr : undefined),
         onStatus: setStatus,
         isCancelled: () => cancelRef.current,
       });
@@ -256,6 +270,44 @@ export default function BandsScreen() {
     } finally {
       if (mounted.current) { setBusy(false); setStatus(''); }
     }
+  };
+
+  const confirmMix = async (lte: number[], nr: number[] | undefined, label: string) => {
+    if (!info) return;
+    const k = (xs: number[]) => [...xs].sort((a, b) => a - b).join('+') || 'auto';
+    const t = await lastTrial(info.id, `band:mix:${k(lte)}:${nr ? k(nr) : '-'}`);
+    Alert.alert(
+      'نجرّب التركيبة',
+      `${label}\n\nنقيس قبل وبعد حوالي دقيقة، ولو صار أسوأ أو ما اتصل نرجع إعدادك تلقائياً. الإنترنت بينقطع لحظات.` +
+        (lte.length === 1 ? '\n\n⚠️ تردد 4G واحد يوقف الدمج — لو تبي سرعة أكثر خلّ أكثر من تردد.' : '') +
+        (nr ? '\nمع 5G نسوي تحميل قصير (حوالي ٢٥ ميقا) عشان يصحى.' : '') +
+        (t ? `\n\n🧠 ${trialNote(t)}` : ''),
+      [{ text: 'إلغاء', style: 'cancel' }, { text: 'جرّب', onPress: () => applyMix(lte, nr, label) }],
+    );
+  };
+
+  const confirmAuto = () => {
+    if (!info || !cfg) return;
+    Alert.alert('الوضع التلقائي', 'بنرجع الراوتر يختار الترددات بنفسه (4G و 5G). الإنترنت بينقطع لحظات.', [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'رجّعه', onPress: async () => {
+          setBusy(true);
+          setError('');
+          try {
+            setStatus('نرجّع الوضع التلقائي...');
+            await withSession(info, d => d.setBand!([], cfg.nrSupported.length ? [] : undefined), false);
+            setStatus('ننتظر الراوتر يتصل بالشبكة...');
+            await waitConnected(info, [], 45000);
+            await load(info);
+          } catch (e: any) {
+            setError(e?.message ?? String(e));
+          } finally {
+            if (mounted.current) { setBusy(false); setStatus(''); }
+          }
+        },
+      },
+    ]);
   };
 
   const confirmApply = async (bands: number[]) => {
@@ -476,30 +528,13 @@ export default function BandsScreen() {
     ]);
   };
 
-  const toggle = (b: number) => {
-    if (busy || scanning) return;
-    setSelected(sel => (sel.includes(b) ? sel.filter(x => x !== b) : [...sel, b].sort((x, y) => x - y)));
-  };
-
   // ---------- المشتقّات ----------
-  const [showAll, setShowAll] = useState(false);
-  const [showAllNr, setShowAllNr] = useState(false);
   const active = bandNums(signal?.band);
-  const knownBands = new Set<number>([...active, ...seen]);
-  const knownNrBands = new Set<number>([
-    ...(signal?.nrBand ? [parseInt((signal.nrBand.match(/(\d+)/) || ['0','0'])[1], 10)].filter(n => n > 0) : []),
-    ...(cfg?.nrLocked ?? []),
-  ]);
-  const displayedNr = showAllNr
-    ? (cfg?.nrSupported ?? [])
-    : (cfg?.nrSupported ?? []).filter(b => knownNrBands.has(b));
-  const displayedBands = showAll
-    ? (cfg?.supported ?? [])
-    : (cfg?.supported ?? []).filter(b => knownBands.has(b));
+  const knownNrLive = new Set<number>(
+    signal?.nrBand ? [parseInt((signal.nrBand.match(/(\d+)/) || ['0', '0'])[1], 10)].filter(n => n > 0) : [],
+  );
   const level = overallLevel(signal);
   const locked = busy || scanning;
-  const dirty = cfg ? selected.join(',') !== cfg.locked.join(',') : false;
-  const nrDirty = cfg ? nrSelected.join(',') !== cfg.nrLocked.join(',') : false;
 
   const deepDone: Result[] = scan
     .filter(r => r.status === 'done' && r.score !== undefined)
@@ -557,48 +592,19 @@ export default function BandsScreen() {
           </View>
         )}
 
-        {/* ═════ المرحلة ١ — الاتصال الحالي ═════ */}
+        {/* ═════ المرحلة ١ — اختيار الترددات ═════ */}
         {!loading && cfg && (
-          <Stage n={1} title="الاتصال الحالي" sub="وين أنت الحين">
-            <HeroCard>
-              <View style={s.heroTop}>
-                <View style={[s.pill, { backgroundColor: LEVEL_COLOR[level] }]}>
-                  <Text style={s.pillText}>{LEVEL_LABEL[level]}</Text>
-                </View>
-                <View style={{ alignItems: 'flex-end', flexShrink: 1 }}>
-                  <Text style={s.heroBand}>{active.length ? names(active) : '—'}</Text>
-                  <Text style={s.heroFreq}>
-                    {active.length === 1 ? bandFreq(active[0]) : `${active.length || 0} تردد نشط`}
-                    {signal?.nrBand ? ` · ${signal.nrBand}` : ''}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={s.statRow}>
-                <View style={s.stat}>
-                  <Text style={s.statVal}>{signal?.sinr ?? '—'}</Text>
-                  <Text style={s.statKey}>SINR</Text>
-                </View>
-                <View style={s.statDiv} />
-                <View style={s.stat}>
-                  <Text style={s.statVal}>{signal?.rsrp ?? '—'}</Text>
-                  <Text style={s.statKey}>RSRP</Text>
-                </View>
-                <View style={s.statDiv} />
-                <View style={s.stat}>
-                  <Text style={[s.statVal, { fontSize: 15 }]}>{cfg.locked.length ? 'مثبّت' : 'تلقائي'}</Text>
-                  <Text style={s.statKey}>الوضع</Text>
-                </View>
-              </View>
-
-              <Text style={s.verdict}>{verdict}</Text>
-
-              {cfg.locked.length > 0 && (
-                <Pressable style={[s.ghost, locked && s.off]} onPress={() => confirmApply([])} disabled={locked}>
-                  <Text style={s.ghostText}>إلغاء التثبيت</Text>
-                </Pressable>
-              )}
-            </HeroCard>
+          <Stage n={1} title="ترددات راوترك" sub={verdict}>
+            <BandPicker
+              cfg={cfg}
+              seen={seenMap}
+              carriers={carriers}
+              activeLte={active}
+              activeNr={[...knownNrLive]}
+              busy={locked}
+              onTry={confirmMix}
+              onAuto={confirmAuto}
+            />
           </Stage>
         )}
 
@@ -722,7 +728,7 @@ export default function BandsScreen() {
             {!advanced ? (
               <Pressable style={s.collapsed} onPress={() => setAdvanced(true)}>
                 <Text style={s.collapsedText}>
-                  وضع الشبكة{modeLabel ? ` (${modeLabel})` : ''} · الاختيار اليدوي · ترددات 5G · الفحص الدقيق
+                  وضع الشبكة{modeLabel ? ` (${modeLabel})` : ''} · الفحص الدقيق
                 </Text>
               </Pressable>
             ) : (
@@ -746,140 +752,6 @@ export default function BandsScreen() {
                   </MetricCard>
                 )}
 
-                {/* الاختيار اليدوي 4G */}
-                <MetricCard>
-                  <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={s.blockTitle}>ترددات 4G</Text>
-                    <Pressable onPress={() => setShowAll(v => !v)} hitSlop={8}>
-                      <Text style={{ color: C.blue, fontSize: 12, fontWeight: '800' }}>
-                        {showAll ? 'عرض الفعّالة فقط' : 'عرض الكل'}
-                      </Text>
-                    </Pressable>
-                  </View>
-                  <Text style={s.hint}>اختيار أكثر من تردد يسمح للراوتر يجمع بينهم (4G+). النقطة الخضراء = متصل الآن.</Text>
-                  <View style={s.grid}>
-                    {displayedBands.map(b => {
-                      const on = selected.includes(b);
-                      const live = active.includes(b);
-                      const known = live || seen.includes(b);
-                      return (
-                        <Pressable key={b} style={[s.bandCard, on && s.bandCardOn, locked && { opacity: 0.6 }]} onPress={() => toggle(b)}>
-                          <View style={[s.miniCheck, on && s.miniCheckOn]}>
-                            {on && <Text style={s.checkMark}>✓</Text>}
-                          </View>
-                          <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                            <Text style={[s.bandNameSm, on && { color: C.onAccent }]}>B{b}</Text>
-                            <Text style={[s.bandFreqSm, on && { color: C.onAccentSoft }]}>{bandFreq(b)?.replace(' MHz', '') || '—'}</Text>
-                          </View>
-                          {live && <View style={s.bandLiveDotSm} />}
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                  <View style={s.btnRow}>
-                    <Pressable
-                      style={[s.ghost, (locked || !cfg.locked.length) && s.off]}
-                      onPress={() => confirmApply([])}
-                      disabled={locked || !cfg.locked.length}
-                    >
-                      <Text style={s.ghostText}>إلغاء التثبيت</Text>
-                    </Pressable>
-                    <Pressable
-                      style={[s.primary, (locked || !selected.length || !dirty) && s.off]}
-                      onPress={() => confirmApply(selected)}
-                      disabled={locked || !selected.length || !dirty}
-                    >
-                      <Text style={s.primaryText}>تثبيت</Text>
-                    </Pressable>
-                  </View>
-                </MetricCard>
-
-                {/* ترددات 5G */}
-                {cfg.nrSupported.length > 0 && (
-                  <MetricCard>
-                    <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={s.blockTitle}>ترددات 5G</Text>
-                      <Pressable onPress={() => setShowAllNr(v => !v)} hitSlop={8}>
-                        <Text style={{ color: C.violet, fontSize: 12, fontWeight: '800' }}>
-                          {showAllNr ? 'عرض الفعّالة فقط' : 'عرض الكل'}
-                        </Text>
-                      </Pressable>
-                    </View>
-                    <Text style={s.hint}>
-                      تثبيت مستقل عن 4G. التثبيت على تردد ما فيه تغطية يوقف 5G تماماً — تأكد من الفحص أولاً.
-                    </Text>
-                    <View style={s.grid}>
-                      {displayedNr.map(b => {
-                        const on = nrSelected.includes(b);
-                        return (
-                          <Pressable
-                            key={'n' + b}
-                            style={[s.bandCard, on && s.bandCardNrOn, locked && { opacity: 0.6 }]}
-                            onPress={() => {
-                              if (locked) return;
-                              setNrSelected(sel => (sel.includes(b) ? sel.filter(x => x !== b) : [...sel, b].sort((x, y) => x - y)));
-                            }}
-                          >
-                            <View style={[s.miniCheck, on && s.miniCheckNrOn]}>
-                              {on && <Text style={s.checkMarkNr}>✓</Text>}
-                            </View>
-                            <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                              <Text style={[s.bandNameSm, on && { color: C.onAccent }]}>n{b}</Text>
-                              <Text style={[s.bandFreqSm, on && { color: C.onAccentSoft }]}>{nrFreq(b)?.replace(' MHz', '') || '—'}</Text>
-                            </View>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                    <View style={s.btnRow}>
-                      <Pressable
-                        style={[s.ghost, (locked || !cfg.nrLocked.length) && s.off]}
-                        onPress={() => confirmApplyNr([])}
-                        disabled={locked || !cfg.nrLocked.length}
-                      >
-                        <Text style={s.ghostText}>إلغاء التثبيت</Text>
-                      </Pressable>
-                      <Pressable
-                        style={[s.primary, (locked || !nrSelected.length || !nrDirty) && s.off]}
-                        onPress={() => confirmApplyNr(nrSelected)}
-                        disabled={locked || !nrSelected.length || !nrDirty}
-                      >
-                        <Text style={s.primaryText}>تثبيت</Text>
-                      </Pressable>
-                    </View>
-                  </MetricCard>
-                )}
-
-                {/* تثبيت 4G + 5G معاً */}
-                {(selected.length > 0 || nrSelected.length > 0) && (
-                  <MetricCard>
-                    <Text style={s.blockTitle}>🔗 تثبيت 4G + 5G معاً</Text>
-                    <Text style={s.hint}>
-                      بعض الراوترات (خصوصاً في وضع NSA) ترفض قفل 5G لوحده — تحتاج 4G anchor معه. هذا الزر يرسل الاثنين في نفس الطلب.
-                    </Text>
-                    <View style={{ gap: 6, marginTop: 8 }}>
-                      <View style={s.bothRow}>
-                        <Text style={s.bothLabel}>4G</Text>
-                        <Text style={s.bothVal}>
-                          {selected.length ? selected.map(b => 'B' + b).join(' + ') : 'تلقائي'}
-                        </Text>
-                      </View>
-                      <View style={s.bothRow}>
-                        <Text style={s.bothLabel}>5G</Text>
-                        <Text style={s.bothVal}>
-                          {nrSelected.length ? nrSelected.map(b => 'n' + b).join(' + ') : 'تلقائي'}
-                        </Text>
-                      </View>
-                    </View>
-                    <Pressable
-                      style={[s.primary, { marginTop: 12 }, locked && s.off]}
-                      onPress={() => applyBoth(selected, nrSelected)}
-                      disabled={locked}
-                    >
-                      <Text style={s.primaryText}>تثبيت 4G + 5G معاً</Text>
-                    </Pressable>
-                  </MetricCard>
-                )}
                 {/* الفحص الدقيق */}
                 <MetricCard>
                   <Text style={s.blockTitle}>الفحص الدقيق</Text>
