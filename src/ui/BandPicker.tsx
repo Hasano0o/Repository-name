@@ -11,6 +11,23 @@ import { BandConfig, Carrier } from '../drivers/types';
 import { BAND_FREQ, NR_FREQ } from '../utils/bands';
 import { C, isDark } from './theme';
 import { Icon } from './Icon';
+import Svg, { Path, Circle, Rect, Text as SvgText } from 'react-native-svg';
+
+/** رسمة برج خفيفة لزاوية البطاقة */
+function TowerArt() {
+  const w = 'rgba(255,255,255,';
+  return (
+    <Svg width={78} height={78} viewBox="0 0 78 78">
+      <Path d="M17 30a26 26 0 0 1 44 0" stroke={w + '0.22)'} strokeWidth={2.4} fill="none" strokeLinecap="round" />
+      <Path d="M24 33a17 17 0 0 1 30 0" stroke={w + '0.35)'} strokeWidth={2.4} fill="none" strokeLinecap="round" />
+      <Path d="M31 36a8 8 0 0 1 16 0" stroke={w + '0.55)'} strokeWidth={2.4} fill="none" strokeLinecap="round" />
+      <Circle cx={39} cy={38} r={3.2} fill={w + '0.9)'} />
+      <Path d="M39 41L29 74M39 41l10 33M32 60h14M30 68h18" stroke={w + '0.7)'} strokeWidth={2.2} fill="none" strokeLinecap="round" />
+      <Rect x={50} y={44} width={24} height={16} rx={5} fill={w + '0.18)'} stroke={w + '0.5)'} strokeWidth={1.2} />
+      <SvgText x={62} y={55.5} fontSize={10} fontWeight="bold" fontFamily="IBMPlexSansArabic_700Bold" fill="#fff" textAnchor="middle">5G</SvgText>
+    </Svg>
+  );
+}
 
 export type Tech = 'LTE' | 'NR';
 /** أقوى قراءة شفناها لكل تردد من الأبراج المجاورة */
@@ -145,19 +162,22 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
               <Text style={s.heroNum}>{combo.length ? speed : '—'}</Text>
             </View>
           </View>
-          <View style={{ alignItems: 'flex-start', paddingBottom: 6, gap: 2 }}>
+          <View style={{ alignItems: 'center', paddingBottom: 6, gap: 2, flex: 1 }}>
             <Text style={s.heroKey}>{isAuto && !dirty ? 'الوضع' : 'مسموح'}</Text>
             {isAuto && !dirty ? (
               <Text style={s.heroSide}>تلقائي</Text>
             ) : (
               (hasNr ? (['LTE', 'NR'] as Tech[]) : (['LTE'] as Tech[])).map(t => (
-                <View key={t} style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 5 }}>
-                  <Text style={s.heroSide}>{t === 'LTE' ? '4G' : '5G'}</Text>
-                  <Text style={[s.heroSide, { opacity: 0.85 }]}>{countOn(t)}</Text>
+                <View key={t} style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6 }}>
+                  <View style={[s.chipTech, { backgroundColor: t === 'NR' ? '#d6c6ff' : '#ffffff' }]}>
+                    <Text style={[s.chipTechText, { color: t === 'NR' ? '#4b2aa8' : '#2f6bff' }]}>{t === 'LTE' ? '4G' : '5G'}</Text>
+                  </View>
+                  <Text style={s.heroSide}>{countOn(t)}</Text>
                 </View>
               ))
             )}
           </View>
+          <TowerArt />
         </View>
         <View style={s.compBar}>
           {combo.length
@@ -175,7 +195,10 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
               <View style={[s.chipTech, { backgroundColor: x.t === 'NR' ? '#d6c6ff' : '#ffffff' }]}>
                 <Text style={[s.chipTechText, { color: x.t === 'NR' ? '#4b2aa8' : '#2f6bff' }]}>{x.t === 'NR' ? '5G' : '4G'}</Text>
               </View>
-              <Text style={s.chipText} numberOfLines={1}>{mhzOf(x.t, x.b) || x.b}</Text>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={s.chipText} numberOfLines={1}>{mhzOf(x.t, x.b) || x.b}</Text>
+                <Text style={s.chipUnit}>ميقا</Text>
+              </View>
               {pcc && pcc.tech === x.t && pcc.band === x.b && <Text style={s.chipStar}>★</Text>}
             </View>
           ))}
@@ -195,6 +218,7 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
                 onPress={() => setTab(t)}
                 style={[s.segBtn, { borderColor: on ? tone.fg : tone.line, backgroundColor: on ? tone.soft : C.card }, on && s.segOn]}
               >
+                <Icon name={t === 'LTE' ? 'tower' : 'wifi'} size={16} color={on ? tone.fg : C.muted} />
                 <View style={[s.segBadge, { backgroundColor: on ? tone.fg : tone.soft }]}>
                   <Text style={[s.segBadgeText, { color: on ? '#fff' : tone.fg }]}>{t === 'LTE' ? '4G' : '5G'}</Text>
                 </View>
@@ -231,6 +255,7 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
                 s.row,
                 on && s.rowOn,
                 live && { borderColor: isDark ? '#2f5a46' : '#bfead3' },
+                on && { borderRightWidth: 4, borderRightColor: live ? C.green : TECH_TONE[tab].fg },
                 !sv && !live && { opacity: 0.55 },
               ]}
             >
@@ -252,6 +277,7 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
                       <View key={n} style={[s.bar, { height: 3 + n * 2.25, backgroundColor: n <= lvl ? barColor : C.lineSoft }]} />
                     ))}
                   </View>
+                  {(live || lvl > 0) && <View style={[s.dot, { backgroundColor: live ? C.green : barColor }]} />}
                   <Text style={[s.sub, live && { color: C.green }]} numberOfLines={1}>
                     {live ? 'متصل عليه الحين' : SIG_TEXT[lvl]}
                   </Text>
@@ -280,7 +306,10 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
         style={[{ borderRadius: 16, overflow: 'hidden' }, (busy || !dirty) && { opacity: 0.45 }]}
       >
         <LinearGradient colors={heroColors} start={{ x: 1, y: 0 }} end={{ x: 0, y: 0 }} style={s.cta}>
-          <Text style={s.ctaText}>جرّب التركيبة دقيقة</Text>
+          <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
+            <Icon name="speed" size={18} color="#fff" />
+            <Text style={s.ctaText}>جرّب التركيبة دقيقة</Text>
+          </View>
         </LinearGradient>
       </Pressable>
       <Text style={s.note}>
@@ -290,7 +319,10 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
       </Text>
       {!isAuto && (
         <Pressable onPress={onAuto} disabled={busy} style={[s.ghost, busy && { opacity: 0.45 }]}>
-          <Text style={s.ghostText}>رجّع الراوتر يختار بنفسه</Text>
+          <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 7 }}>
+            <Icon name="refresh" size={16} color={C.blue} />
+            <Text style={s.ghostText}>رجّع الراوتر يختار بنفسه</Text>
+          </View>
         </Pressable>
       )}
       {dirty && (
@@ -317,15 +349,17 @@ const s = StyleSheet.create({
   compBar: { flexDirection: 'row-reverse', gap: 4, height: 8, borderRadius: 999, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.15)' },
   chips: { flexDirection: 'row-reverse', gap: 6 },
   chip: {
-    flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6,
-    borderRadius: 12, borderWidth: 1, paddingVertical: 6, paddingHorizontal: 6,
+    flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center',
+    borderRadius: 14, borderWidth: 1, paddingVertical: 7, paddingHorizontal: 8, gap: 8,
   },
   chipLte: { backgroundColor: 'rgba(255,255,255,0.16)', borderColor: 'rgba(255,255,255,0.45)' },
   chipNr: { backgroundColor: 'rgba(214,198,255,0.22)', borderColor: 'rgba(214,198,255,0.75)' },
   chipPrim: { borderColor: '#ffd36a', borderWidth: 1.5 },
   chipTech: { borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 },
   chipTechText: { fontSize: 10, fontWeight: '800' },
-  chipText: { color: '#fff', fontSize: 12.5, fontWeight: '700', flexShrink: 1 },
+  chipText: { color: '#fff', fontSize: 16, fontWeight: '700', lineHeight: 19 },
+  chipUnit: { color: 'rgba(255,255,255,0.8)', fontSize: 9.5, fontWeight: '600', lineHeight: 12 },
+  dot: { width: 6, height: 6, borderRadius: 3 },
   chipStar: { color: '#ffd36a', fontSize: 12, fontWeight: '800' },
 
   seg: { flexDirection: 'row', gap: 8 },
