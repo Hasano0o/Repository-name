@@ -259,7 +259,7 @@ export default function AddRouterScreen() {
             </Text>
             <View style={styles.safe}>
               <Icon name="lock" size={13} color={tFg('#fff')} />
-              <Text style={styles.safeText}>كلمة المرور تنحفظ مشفّرة على جوالك فقط</Text>
+              <Text style={styles.safeText}>{Platform.OS === 'web' ? 'كلمة المرور تنحفظ مشفّرة على جهازك فقط' : 'كلمة المرور تنحفظ مشفّرة على جوالك فقط'}</Text>
             </View>
           </LinearGradient>
 

@@ -53,3 +53,14 @@ grep -aE "BUILD (SUCCESSFUL|FAILED)" /root/bandly-build.log | tail -1; ls -l --t
   cd /root/router-manager/mobile && git pull -q --ff-only origin main && cp live-server/app.py live-server/community.py live-server/stats.py /root/bandly-live/ && systemctl restart bandly-live
   ```
 - بوت التطبيق: `@NetGuide1_bot` — ملفاته في `/root/netguide/`.
+
+## نسخة الويندوز (desktop/)
+- برنامج Electron يلف نسخة الويب من نفس الكود (`BANDLY_DESKTOP=1` في app.config.js ← web output = single).
+- `src/desktop/install.ts`: في الويندوز يوجّه fetch عبر البرنامج (بدون CORS، مع كوكيز وReferer)، ويحوّل Alert لنافذة ويندوز وShare للحافظة. في الجوال ما يسوي شي.
+- كلمات المرور: `src/desktop/secret.ts` (SecureStore بالجوال، safeStorage بالويندوز).
+- البناء على السيرفر (يحتاج wine — السكربت يثبته أول مرة):
+  ```
+  cd /root/router-manager/mobile && git pull --ff-only origin main && nohup bash desktop/build-windows.sh > /root/bandly-win.log 2>&1 &
+  ```
+  الناتج: https://has-host.com/dl/Bandly-Setup.exe
+- ما فيه تحديث عن بُعد للويندوز حالياً — أي تعديل يحتاج إعادة بناء وتحميل.

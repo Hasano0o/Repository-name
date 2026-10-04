@@ -1,0 +1,45 @@
+{
+  "name": "bandly-desktop",
+  "productName": "Bandly",
+  "version": "1.0.0",
+  "description": "Bandly — أقوى إشارة لراوترك",
+  "author": "Hasan Alshehri",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "dist": "electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.hasan.bandly.desktop",
+    "productName": "Bandly",
+    "copyright": "Hasan Alshehri",
+    "directories": {
+      "output": "out",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "web/**/*",
+      "build/icon.png"
+    ],
+    "asar": true,
+    "win": {
+      "icon": "build/icon.png",
+      "artifactName": "Bandly-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Bandly",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": null
+  }
+}

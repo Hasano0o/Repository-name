@@ -1,3 +1,4 @@
+import '../src/desktop/install'; // نسخة الويندوز: توجيه الطلبات عبر البرنامج (ما يأثر على الجوال)
 import { useEffect } from 'react';
 import { pingDaily } from '../src/services/stats';
 import { Stack } from 'expo-router';

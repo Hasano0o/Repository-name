@@ -1,6 +1,11 @@
 // يقرأ app.json كما هو. ولو البناء من بروفايل preview-arm64 (BANDLY_ARM64=1):
 // نسخة صغيرة arm64 فقط + ضغط المكتبات الأصلية — عشان تنرسل كملف من بوت تيليجرام (حد البوت 50 ميقا)
+// ولو BANDLY_DESKTOP=1: نسخة ويب صفحة واحدة (SPA) تنلف داخل برنامج الويندوز (desktop/)
 module.exports = ({ config }) => {
+  if (process.env.BANDLY_DESKTOP === '1') {
+    config.web = { ...(config.web || {}), output: 'single' };
+    return config;
+  }
   if (process.env.BANDLY_ARM64 !== '1') return config;
   config.plugins = (config.plugins || []).map(p => {
     if (!Array.isArray(p) || p[0] !== 'expo-build-properties') return p;
