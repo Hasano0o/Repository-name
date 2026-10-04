@@ -324,7 +324,26 @@ export default function TowersScreen() {
           }
           setScan({ i: i + 1, n: cands.length, name, step: 'ننتظر الاتصال...' });
           if (!(await waitOnline(r, 120000))) {
-            setScanDone(x => [...x, `${name}: ما اتصل`]);
+            // البرج ما مسك — نفك التثبيت فوراً بدل ما نكمل والراوتر طايح
+            setScanDone(x => [...x, `${name}: ما اتصل — فكّينا التثبيت`]);
+            setScan({ i: i + 1, n: cands.length, name, step: 'ما اتصل — نفك التثبيت ونرجّع الخدمة...' });
+            const was = prev.find(l => (l.tech ?? 'LTE') === cell.tech && l.pci);
+            try {
+              await withSession(r, d => (was
+                ? d.lockCell!({ tech: cell.tech, band: was.band, arfcn: was.arfcn, pci: was.pci! })
+                : d.unlockCell!(cell.tech)), false);
+            } catch {}
+            if (!(await waitOnline(r, 120000))) {
+              // ولا رجع — نرجّع الإعدادات الأصلية كاملة ونوقف الفحص
+              if (canRescue(r)) {
+                try {
+                  await rescueRouter(r, st => setScan(s0 => (s0 ? { ...s0, step: st } : { i: 0, n: 0, name: '', step: st })));
+                } catch {}
+              }
+              setScanDone(x => [...x, 'وقّفنا الفحص ورجّعنا إعدادات الراوتر الأصلية']);
+              touched.clear();
+              break;
+            }
             continue;
           }
           await new Promise(x => setTimeout(x, 3000));
