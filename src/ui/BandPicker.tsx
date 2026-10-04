@@ -29,6 +29,10 @@ const KIND_COLOR: Record<Kind, { bg: string; fg: string; bar: string }> = isDark
       mid: { bg: '#e6eeff', fg: '#2f6bff', bar: '#ffffff' },
       fast: { bg: '#f0eaff', fg: '#7a51e0', bar: '#d6c6ff' },
     };
+/** لون مميز لكل تقنية: 4G أزرق و 5G بنفسجي */
+const TECH_TONE: Record<Tech, { fg: string; soft: string; line: string }> = isDark
+  ? { LTE: { fg: '#9cbcff', soft: '#26324a', line: '#3b4d72' }, NR: { fg: '#c9b8ff', soft: '#33294f', line: '#53447f' } }
+  : { LTE: { fg: '#2f6bff', soft: '#eef3ff', line: '#c9d8ff' }, NR: { fg: '#7a51e0', soft: '#f4efff', line: '#dccdff' } };
 const SIG_TEXT = ['ما ظهر برج', 'ضعيفة', 'متوسطة', 'قوية', 'قوية جداً'];
 
 const mhzOf = (tech: Tech, b: number) => parseInt((tech === 'NR' ? NR_FREQ : BAND_FREQ)[b] ?? '0', 10);
@@ -134,18 +138,25 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
       {/* البطاقة الرئيسية */}
       <LinearGradient colors={heroColors} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={s.hero}>
         <View style={s.heroTop}>
-          <View style={{ alignItems: 'flex-end' }}>
+          <View style={s.speedBox}>
             <Text style={s.heroKey}>سرعة متوقعة تقريباً</Text>
             <View style={s.heroNumRow}>
               <Text style={s.heroUnit}>ميقا</Text>
               <Text style={s.heroNum}>{combo.length ? speed : '—'}</Text>
             </View>
           </View>
-          <View style={{ alignItems: 'flex-start' }}>
+          <View style={{ alignItems: 'flex-start', paddingBottom: 6, gap: 2 }}>
             <Text style={s.heroKey}>{isAuto && !dirty ? 'الوضع' : 'مسموح'}</Text>
-            <Text style={s.heroSide}>
-              {isAuto && !dirty ? 'تلقائي' : `${countOn('LTE')} 4G${hasNr ? ` · ${countOn('NR')} 5G` : ''}`}
-            </Text>
+            {isAuto && !dirty ? (
+              <Text style={s.heroSide}>تلقائي</Text>
+            ) : (
+              (hasNr ? (['LTE', 'NR'] as Tech[]) : (['LTE'] as Tech[])).map(t => (
+                <View key={t} style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 5 }}>
+                  <Text style={s.heroSide}>{t === 'LTE' ? '4G' : '5G'}</Text>
+                  <Text style={[s.heroSide, { opacity: 0.85 }]}>{countOn(t)}</Text>
+                </View>
+              ))
+            )}
           </View>
         </View>
         <View style={s.compBar}>
@@ -157,11 +168,15 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
         </View>
         <View style={s.chips}>
           {combo.map(x => (
-            <View key={x.t + x.b} style={s.chip}>
-              <View style={[s.chipDot, { backgroundColor: x.t === 'NR' ? KIND_COLOR.fast.bar : KIND_COLOR[kindOf(x.mhz)].bar }]} />
-              <Text style={s.chipText} numberOfLines={1}>
-                {name(x.t, x.b)}{pcc && pcc.tech === x.t && pcc.band === x.b ? ' ★' : ''}
-              </Text>
+            <View
+              key={x.t + x.b}
+              style={[s.chip, x.t === 'NR' ? s.chipNr : s.chipLte, pcc && pcc.tech === x.t && pcc.band === x.b && s.chipPrim]}
+            >
+              <View style={[s.chipTech, { backgroundColor: x.t === 'NR' ? '#d6c6ff' : '#ffffff' }]}>
+                <Text style={[s.chipTechText, { color: x.t === 'NR' ? '#4b2aa8' : '#2f6bff' }]}>{x.t === 'NR' ? '5G' : '4G'}</Text>
+              </View>
+              <Text style={s.chipText} numberOfLines={1}>{mhzOf(x.t, x.b) || x.b}</Text>
+              {pcc && pcc.tech === x.t && pcc.band === x.b && <Text style={s.chipStar}>★</Text>}
             </View>
           ))}
           {!combo.length && <Text style={s.heroKey}>اختر ترددات فيها برج قريب</Text>}
@@ -171,14 +186,22 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
       {/* 4G / 5G */}
       {hasNr && (
         <View style={s.seg}>
-          {(['NR', 'LTE'] as Tech[]).map(t => (
-            <Pressable key={t} onPress={() => setTab(t)} style={[s.segBtn, tab === t && s.segOn]}>
-              <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6 }}>
-                <Text style={[s.segText, tab === t && { color: C.text }]}>{t === 'LTE' ? '4G' : '5G'}</Text>
-                <Text style={[s.segCount, tab === t && { color: C.blue }]}>{`${countOn(t)} من ${supported(t).length}`}</Text>
-              </View>
-            </Pressable>
-          ))}
+          {(['NR', 'LTE'] as Tech[]).map(t => {
+            const tone = TECH_TONE[t];
+            const on = tab === t;
+            return (
+              <Pressable
+                key={t}
+                onPress={() => setTab(t)}
+                style={[s.segBtn, { borderColor: on ? tone.fg : tone.line, backgroundColor: on ? tone.soft : C.card }, on && s.segOn]}
+              >
+                <View style={[s.segBadge, { backgroundColor: on ? tone.fg : tone.soft }]}>
+                  <Text style={[s.segBadgeText, { color: on ? '#fff' : tone.fg }]}>{t === 'LTE' ? '4G' : '5G'}</Text>
+                </View>
+                <Text style={[s.segCount, { color: on ? tone.fg : C.muted }]}>{`${countOn(t)} من ${supported(t).length}`}</Text>
+              </Pressable>
+            );
+          })}
         </View>
       )}
 
@@ -191,7 +214,7 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
             <Text style={[s.headText, { width: 40, textAlign: 'center' }]} numberOfLines={1}>أساسي</Text>
           </View>
         </View>
-        {rows.map((b, i) => {
+        {rows.map(b => {
           const mhz = mhzOf(tab, b);
           const k = KIND_COLOR[kindOf(mhz)];
           const sv = seen[tab + ':' + b];
@@ -204,7 +227,12 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
             <Pressable
               key={tab + b}
               onPress={() => toggle(tab, b)}
-              style={[s.row, i > 0 && s.rowLine, on && s.rowOn, !sv && !live && { opacity: 0.55 }]}
+              style={[
+                s.row,
+                on && s.rowOn,
+                live && { borderColor: isDark ? '#2f5a46' : '#bfead3' },
+                !sv && !live && { opacity: 0.55 },
+              ]}
             >
               <View style={[s.badge, { backgroundColor: k.bg }]}>
                 <Text style={[s.badgeText, { color: k.fg }]}>{shortOf(mhz)}</Text>
@@ -239,7 +267,8 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
             </Pressable>
           );
         })}
-        <Pressable onPress={() => setShowAll(v => !v)} style={[s.more, s.rowLine]} hitSlop={6}>
+        <Pressable onPress={() => setShowAll(v => !v)} style={s.more} hitSlop={6}>
+          <Icon name={showAll ? 'up' : 'down'} size={14} color={C.blue} />
           <Text style={s.moreText}>{showAll ? 'اعرض اللي فيها برج بس' : `اعرض كل ترددات ${tab === 'LTE' ? '4G' : '5G'} اللي يدعمها الراوتر`}</Text>
         </Pressable>
       </View>
@@ -276,6 +305,10 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
 const s = StyleSheet.create({
   hero: { borderRadius: 22, padding: 16, gap: 12 },
   heroTop: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 },
+  speedBox: {
+    alignItems: 'flex-end', backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.28)',
+    borderRadius: 16, paddingHorizontal: 14, paddingVertical: 8,
+  },
   heroKey: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '600' },
   heroNumRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   heroNum: { color: '#fff', fontSize: 34, fontWeight: '700', lineHeight: 40 },
@@ -285,26 +318,39 @@ const s = StyleSheet.create({
   chips: { flexDirection: 'row-reverse', gap: 6 },
   chip: {
     flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: 10, paddingVertical: 6, paddingHorizontal: 4,
+    borderRadius: 12, borderWidth: 1, paddingVertical: 6, paddingHorizontal: 6,
   },
-  chipDot: { width: 8, height: 8, borderRadius: 4 },
-  chipText: { color: '#fff', fontSize: 11.5, fontWeight: '700', flexShrink: 1 },
+  chipLte: { backgroundColor: 'rgba(255,255,255,0.16)', borderColor: 'rgba(255,255,255,0.45)' },
+  chipNr: { backgroundColor: 'rgba(214,198,255,0.22)', borderColor: 'rgba(214,198,255,0.75)' },
+  chipPrim: { borderColor: '#ffd36a', borderWidth: 1.5 },
+  chipTech: { borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 },
+  chipTechText: { fontSize: 10, fontWeight: '800' },
+  chipText: { color: '#fff', fontSize: 12.5, fontWeight: '700', flexShrink: 1 },
+  chipStar: { color: '#ffd36a', fontSize: 12, fontWeight: '800' },
 
-  seg: { flexDirection: 'row', gap: 4, backgroundColor: C.rowBg, borderRadius: 14, padding: 4 },
-  segBtn: { flex: 1, minHeight: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  segOn: { backgroundColor: C.card, shadowColor: C.shadow, shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
-  segCount: { color: C.muted, fontSize: 11.5, fontWeight: '600', writingDirection: 'rtl' },
+  seg: { flexDirection: 'row', gap: 8 },
+  segBtn: {
+    flex: 1, minHeight: 44, borderRadius: 14, borderWidth: 1.5, flexDirection: 'row-reverse',
+    alignItems: 'center', justifyContent: 'center', gap: 8,
+  },
+  segOn: { shadowColor: C.shadow, shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
+  segBadge: { borderRadius: 7, paddingHorizontal: 7, paddingVertical: 2 },
+  segBadgeText: { fontSize: 12, fontWeight: '800' },
+  segCount: { color: C.muted, fontSize: 12, fontWeight: '700', writingDirection: 'rtl' },
   segText: { color: C.muted, fontSize: 13, fontWeight: '700', writingDirection: 'rtl' },
 
-  card: { backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, borderRadius: 22, overflow: 'hidden' },
+  card: { backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, borderRadius: 22, overflow: 'hidden', paddingBottom: 10, gap: 8 },
   cardHead: {
     flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 14, paddingTop: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: C.lineSoft,
+    paddingHorizontal: 22, paddingTop: 12, paddingBottom: 2,
   },
   headText: { color: C.muted, fontSize: 11.5, fontWeight: '700' },
-  row: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, paddingVertical: 11, paddingHorizontal: 14, minHeight: 64 },
-  rowLine: { borderTopWidth: 1, borderTopColor: C.lineSoft },
-  rowOn: { backgroundColor: isDark ? '#30281f' : '#fbfcff' },
+  row: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12, minHeight: 62,
+    marginHorizontal: 10, borderRadius: 16, borderWidth: 1, borderColor: isDark ? '#3a3128' : '#edf0f6',
+    backgroundColor: isDark ? '#2a231c' : '#ffffff',
+  },
+  rowOn: { borderColor: isDark ? '#4a3d30' : '#dfe7fb', backgroundColor: isDark ? '#30281f' : '#fbfcff' },
   badge: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   badgeText: { fontSize: 11.5, fontWeight: '700' },
   mid: { flex: 1, minWidth: 0, gap: 3, alignItems: 'flex-end' },
@@ -320,7 +366,11 @@ const s = StyleSheet.create({
   star: { width: 40, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   sw: { width: 44, height: 26, borderRadius: 999, padding: 3, flexDirection: 'row', backgroundColor: C.line },
   knob: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', shadowColor: '#0d2350', shadowOpacity: 0.2, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
-  more: { paddingVertical: 12, alignItems: 'center' },
+  more: {
+    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, alignSelf: 'center',
+    marginTop: 2, paddingVertical: 9, paddingHorizontal: 16, borderRadius: 999,
+    borderWidth: 1, borderColor: TECH_TONE.LTE.line, backgroundColor: TECH_TONE.LTE.soft,
+  },
   moreText: { color: C.blue, fontSize: 12, fontWeight: '700' },
 
   cta: { minHeight: 54, alignItems: 'center', justifyContent: 'center' },
