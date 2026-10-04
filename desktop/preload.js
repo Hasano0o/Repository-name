@@ -3,7 +3,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('bandlyDesktop', {
-  version: '1.0.0',
+  version: '1.1.0',
   fetch: (id, req) => ipcRenderer.invoke('net:fetch', id, req),
   abort: (id) => ipcRenderer.send('net:abort', id),
   secretGet: (k) => ipcRenderer.invoke('secret:get', k),
@@ -11,4 +11,7 @@ contextBridge.exposeInMainWorld('bandlyDesktop', {
   secretDel: (k) => ipcRenderer.invoke('secret:del', k),
   dialog: (title, message, buttons, cancelId) => ipcRenderer.invoke('ui:dialog', title, message, buttons, cancelId),
   openExternal: (url) => ipcRenderer.send('ui:open', url),
+  netDiag: () => ipcRenderer.invoke('net:diag'),
+  netRepair: () => ipcRenderer.invoke('net:repair'),
+  openWifiSettings: () => ipcRenderer.send('net:wifiSettings'),
 });

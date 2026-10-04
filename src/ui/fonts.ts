@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, TextInput, StyleSheet } from 'react-native';
+import { Platform, Text, TextInput, StyleSheet } from 'react-native';
 
 export const FONT = {
   regular: 'IBMPlexSansArabic_400Regular',
@@ -27,6 +27,15 @@ export function applyGlobalFont() {
     if (typeof orig !== 'function') continue;
     Comp.render = function (...args: any[]) {
       const el = orig.apply(this, args);
+      // الويب (نسخة الويندوز): النص المتداخل يرجع عنصر DOM مباشر وستايله كائن CSS —
+      // مصفوفة ستايل عليه تكسر الصفحة، فنضيف الخط للكائن نفسه
+      if (Platform.OS === 'web' && typeof el?.type === 'string') {
+        const st = el.props?.style;
+        if (st && typeof st === 'object' && !Array.isArray(st) && !st.fontFamily) {
+          return React.cloneElement(el, { style: { ...st, fontFamily: familyFor(st.fontWeight) } });
+        }
+        return el;
+      }
       const flat = StyleSheet.flatten(el.props.style) || {};
       const family = familyFor((flat as any).fontWeight);
       return React.cloneElement(el, {

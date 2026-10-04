@@ -136,6 +136,107 @@ ipcMain.handle('secret:del', (_e, key) => {
   writeSecrets(all);
 });
 
+// ───────── فحص الشبكة وإصلاحها (ويندوز) ─────────
+const { execFile } = require('node:child_process');
+const IS_WIN = process.platform === 'win32';
+
+function run(file, args, timeout = 20000) {
+  return new Promise((resolve) => {
+    execFile(file, args, { timeout, windowsHide: true, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
+      resolve(err && !stdout ? '' : String(stdout || ''));
+    });
+  });
+}
+function ps(script, timeout) {
+  const wrapped = '[Console]::OutputEncoding=[Text.Encoding]::UTF8;$ErrorActionPreference="SilentlyContinue";' + script;
+  const enc = Buffer.from(wrapped, 'utf16le').toString('base64');
+  return run('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', enc], timeout);
+}
+
+// عنوان الراوتر وعنوان الجهاز من الويندوز
+const DIAG_PS = `
+$up = Get-NetIPConfiguration | ? { $_.NetAdapter.Status -eq 'Up' }
+$g = $up | ? { $_.IPv4DefaultGateway } | select -First 1
+$w = $up | ? { $_.NetAdapter.PhysicalMediaType -match '802\\.11' } | select -First 1
+$pick = if ($g) { $g } else { $w }
+[pscustomobject]@{
+  gateway = if ($g) { [string]($g.IPv4DefaultGateway.NextHop | select -First 1) } else { $null }
+  ip = [string](@($pick.IPv4Address.IPAddress) | select -First 1)
+  wifiUp = [bool]$w
+  wired = [bool]($up | ? { $_.NetAdapter.PhysicalMediaType -match '802\\.3' -and $_.IPv4DefaultGateway })
+} | ConvertTo-Json -Compress`;
+
+function parseMac(s) { return (s || '').trim().toLowerCase(); }
+// أول 3 بايتات = الشركة المصنعة (نتجاهل بت "العنوان المحلي")
+function oui(mac) {
+  const p = mac.split(':');
+  if (p.length < 3) return mac;
+  return [(parseInt(p[0], 16) & 0xfc).toString(16), p[1], p[2]].join(':');
+}
+
+async function wifiInfo() {
+  const out = await run('netsh', ['wlan', 'show', 'interfaces']);
+  let ssid = null, bssid = null;
+  for (const line of out.split(/\r?\n/)) {
+    const m = line.match(/^\s*(SSID|BSSID|AP BSSID)\s*:\s*(.+)$/i);
+    if (!m) continue;
+    if (/^SSID$/i.test(m[1])) ssid = m[2].trim();
+    else bssid = parseMac(m[2]);
+  }
+  if (!ssid) return { ssid: null, bssid: null, sameName: 0 };
+  // كم جهاز مختلف يبث نفس اسم الشبكة؟
+  const nets = await run('netsh', ['wlan', 'show', 'networks', 'mode=bssid']);
+  let cur = null;
+  const macs = [];
+  for (const line of nets.split(/\r?\n/)) {
+    const s = line.match(/^SSID\s+\d+\s*:\s*(.*)$/i);
+    if (s) { cur = s[1].trim(); continue; }
+    const b = line.match(/^\s*BSSID\s+\d+\s*:\s*(.+)$/i);
+    if (b && cur === ssid) macs.push(parseMac(b[1]));
+  }
+  const vendors = new Set(macs.map(oui));
+  return { ssid, bssid, sameName: vendors.size };
+}
+
+ipcMain.handle('net:diag', async () => {
+  // للاختبار فقط: BANDLY_FAKE_NET='{"gateway":...}' يحاكي حالة شبكة
+  if (process.env.BANDLY_FAKE_NET) { try { return JSON.parse(process.env.BANDLY_FAKE_NET); } catch { return null; } }
+  if (!IS_WIN) return null;
+  let base = {};
+  try { base = JSON.parse((await ps(DIAG_PS)).replace(/^\uFEFF/, '').trim() || '{}'); } catch {}
+  const wifi = base.wifiUp ? await wifiInfo() : { ssid: null, bssid: null, sameName: 0 };
+  const ip = base.ip || null;
+  return {
+    gateway: base.gateway || null,
+    ip,
+    noAddress: !base.gateway || !ip || ip.startsWith('169.254.'),
+    wired: !!base.wired,
+    ssid: wifi.ssid,
+    duplicateSsid: wifi.sameName > 1,
+  };
+});
+
+// إصلاح: يشغّل خدمات الشبكة ويطلب عنوان جديد — بصلاحية المسؤول (الويندوز يسأل المستخدم)
+const REPAIR_PS = `
+foreach($s in 'Dhcp','NlaSvc','netprofm','WlanSvc','Dnscache'){ Set-Service $s -StartupType Automatic; Start-Service $s }
+Get-NetAdapter | ? { $_.Status -eq 'Up' } | % { Set-NetIPInterface -InterfaceIndex $_.ifIndex -AddressFamily IPv4 -Dhcp Enabled }
+ipconfig /release | Out-Null
+ipconfig /flushdns | Out-Null
+ipconfig /renew | Out-Null`;
+
+ipcMain.handle('net:repair', async () => {
+  if (process.env.BANDLY_FAKE_NET) return true;
+  if (!IS_WIN) return false;
+  const inner = Buffer.from('$ErrorActionPreference="SilentlyContinue";' + REPAIR_PS, 'utf16le').toString('base64');
+  const outer = `try { Start-Process powershell.exe -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand','${inner}' -ErrorAction Stop; 'ok' } catch { 'denied' }`;
+  const r = (await ps(outer, 120000)).trim();
+  if (r !== 'ok') return false;
+  await new Promise((res) => setTimeout(res, 4000)); // نعطي الراوتر وقت يوزع العنوان
+  return true;
+});
+
+ipcMain.on('net:wifiSettings', () => { if (IS_WIN) shell.openExternal('ms-settings:network-wifi'); });
+
 // ───────── رسائل وروابط ─────────
 ipcMain.handle('ui:dialog', async (e, title, message, buttons, cancelId) => {
   const win = BrowserWindow.fromWebContents(e.sender);

@@ -25,6 +25,23 @@ export interface DesktopBridge {
   /** نافذة رسالة ويندوز أصلية — ترجع رقم الزر المضغوط (أو آخر زر لو انقفلت) */
   dialog(title: string, message: string, buttons: string[], cancelId: number): Promise<number>;
   openExternal(url: string): void;
+  /** حالة الشبكة من الويندوز (null خارج الويندوز). موجودة من نسخة 1.1 */
+  netDiag?(): Promise<NetDiag | null>;
+  /** يصلح الاتصال بصلاحية المسؤول — false لو المستخدم رفض */
+  netRepair?(): Promise<boolean>;
+  openWifiSettings?(): void;
+}
+
+export interface NetDiag {
+  /** عنوان الراوتر (البوابة) — null لو ما فيه */
+  gateway: string | null;
+  ip: string | null;
+  /** الجهاز ما أخذ عنوان من الراوتر (169.254 أو بدون بوابة) */
+  noAddress: boolean;
+  wired: boolean;
+  ssid: string | null;
+  /** أكثر من جهاز يبث نفس اسم الواي فاي */
+  duplicateSsid: boolean;
 }
 
 export const desktop: DesktopBridge | undefined =

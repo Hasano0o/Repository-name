@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,7 @@ import { Icon, IconName } from '../src/ui/Icon';
 import { C, R, S, T, tBd, tBg, tFg } from '../src/ui/theme';
 import { isLanHost } from '../src/utils/host';
 import { detectDriver } from '../src/drivers/registry';
+import { DesktopNetCard, explainDetectFailure, useDesktopNet } from '../src/ui/DesktopNet';
 import { getRouter, saveRouter, updateRouter, deleteRouter, SavedRouter } from '../src/store/routers';
 import { dropSession } from '../src/store/sessions';
 import {
@@ -49,6 +50,14 @@ export default function AddRouterScreen() {
   const [focus, setFocus] = useState<string | null>(null);
   /** تعديل «هذا الجهاز» — ما له عنوان ولا كلمة مرور */
   const [isDevice, setIsDevice] = useState(false);
+  // نسخة الويندوز: حالة الشبكة + تعبئة عنوان الراوتر تلقائياً (ما لم يغيّره المستخدم)
+  const net = useDesktopNet();
+  const hostTouched = useRef(false);
+  const pickHost = (h: string) => { hostTouched.current = true; setHost(h); };
+  useEffect(() => {
+    const gw = net.diag?.gateway;
+    if (gw && !editId && !hostTouched.current && !net.diag?.noAddress) setHost(gw);
+  }, [net.diag, editId]);
 
   useEffect(() => {
     let alive = true;
@@ -155,6 +164,7 @@ export default function AddRouterScreen() {
       setStep('نتعرّف على نوع الراوتر...');
       const driver = await detectDriver(h);
       if (!driver) {
+        if (await explainDetectFailure(h, net, pickHost)) return;
         Alert.alert('تعذّر التعرف', 'ما تعرفنا على نوع الراوتر على هذا العنوان. تأكد إنك متصل بشبكة الراوتر.');
         return;
       }
@@ -297,10 +307,11 @@ export default function AddRouterScreen() {
             </Field>
 
             {!isDevice && (<>
+            <DesktopNetCard net={net} />
             <Field label="عنوان الراوتر (IP)" icon="tower" color={tFg('#2f6bff')} focused={focus === 'host'}>
               <TextInput
                 value={host}
-                onChangeText={setHost}
+                onChangeText={pickHost}
                 onFocus={() => setFocus('host')}
                 onBlur={() => setFocus(null)}
                 placeholder="192.168.8.1"
@@ -319,7 +330,7 @@ export default function AddRouterScreen() {
                 return (
                   <Pressable
                     key={h.host}
-                    onPress={() => setHost(h.host)}
+                    onPress={() => pickHost(h.host)}
                     style={({ pressed }) => [styles.hostChip, on && styles.hostChipOn, pressed && { opacity: 0.7 }]}
                   >
                     <Text style={[styles.hostIp, on && { color: tFg('#fff') }]}>{h.host}</Text>
