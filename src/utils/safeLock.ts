@@ -2,7 +2,9 @@ import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Carrier, RouterDriver, Signal } from '../drivers/types';
 import { SavedRouter } from '../store/routers';
-import { withSession, withRouterLock } from '../store/sessions';
+import { withSession, withRouterLock, dropSession } from '../store/sessions';
+import { getBaseline } from '../store/baseline';
+import { driverById } from '../drivers/registry';
 import { trafficBurst } from './nrprobe';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -113,6 +115,45 @@ export async function waitOnline(r: SavedRouter, timeoutMs: number, isCancelled:
   return false;
 }
 
+// ─── الإنقاذ: يرجّع الراوتر لإعداداته الأصلية بدون إعادة ضبط مصنع ───
+
+/** هل نوع هذا الراوتر يدعم «رجّع الإعدادات الأصلية»؟ */
+export function canRescue(r: SavedRouter | null | undefined): boolean {
+  if (!r) return false;
+  const d = driverById(r.driverId);
+  return !!d?.restoreAll;
+}
+
+/**
+ * يفك كل الأقفال ويرجع الإعدادات الأصلية ويعيد التشغيل، وينتظر الراوتر يرجع.
+ * يعيد المحاولة لو الراوتر كان في نص إعادة تشغيل. يرجع true لو رجع الاتصال.
+ */
+export async function rescueRouter(r: SavedRouter, say: (s: string) => void = () => {}): Promise<boolean> {
+  const baseline = await getBaseline(r.id);
+  let lastErr: unknown;
+  let sent = false;
+  for (let i = 0; i < 5 && !sent; i++) {
+    if (i) { say('الراوتر ما رد — نعيد المحاولة...'); await sleep(10000); }
+    try {
+      dropSession(r.id);
+      say('نفك كل الأقفال ونرجّع الإعدادات الأصلية...');
+      await withSession(r, d => {
+        if (!d.restoreAll) throw new Error('هذا النوع من الراوترات ما يدعم الإرجاع التلقائي');
+        return d.restoreAll(baseline);
+      }, false);
+      sent = true;
+    } catch (e) {
+      lastErr = e;
+      if (/ما يدعم/.test(String((e as any)?.message))) break;
+    }
+  }
+  if (!sent) throw lastErr ?? new Error('ما قدرنا نوصل للراوتر');
+  dropSession(r.id);
+  say('الراوتر يعيد التشغيل — ننتظره يرجع (دقيقتين تقريباً)...');
+  await sleep(25000);
+  return waitOnline(r, 180000, () => false);
+}
+
 export type TrialVerdict = 'better' | 'same' | 'worse' | 'noconn';
 
 export interface TrialResult {
@@ -186,7 +227,11 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
   if (!online) {
     say('ما اتصل — نرجع الإعداد السابق...');
     try { await withSession(o.r, o.revert, false); } catch {}
-    const back = await waitOnline(o.r, 45000, () => false);
+    let back = await waitOnline(o.r, 45000, () => false);
+    // الإرجاع العادي ما نفع (الراوتر بدون خدمة) — نرجّع إعداداته الأصلية كاملة بدل ما يعلق
+    if (!back && canRescue(o.r)) {
+      try { back = await rescueRouter(o.r, say); } catch {}
+    }
     const res: TrialResult = { verdict: 'noconn', kept: false, before, after: null, restoreFailed: !back };
     await record(o.r.id, o.key, o.label, res);
     return res;
@@ -223,7 +268,10 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
   if (!kept) {
     say('نرجع الإعداد السابق...');
     try { await withSession(o.r, o.revert, false); } catch {}
-    const back = await waitOnline(o.r, 45000, () => false);
+    let back = await waitOnline(o.r, 45000, () => false);
+    if (!back && canRescue(o.r)) {
+      try { back = await rescueRouter(o.r, say); } catch {}
+    }
     restoreFailed = !back;
   }
 
@@ -330,7 +378,7 @@ const fmtSnap = (s: Snapshot | null) =>
 /** عنوان ونص رسالة النتيجة */
 export function trialMessage(res: TrialResult, label: string): { title: string; body: string } {
   const b = `قبل: ${fmtSnap(res.before)}\nبعد: ${fmtSnap(res.after)}`;
-  const warn = res.restoreFailed ? '⚠️ ما قدرنا نتأكد إن إعدادك رجع للوضع السابق — افحص راوترك، ولو النت مقطوع سوّ إعادة تشغيل.\n\n' : '';
+  const warn = res.restoreFailed ? '⚠️ ما قدرنا نتأكد إن الراوتر رجع — لو النت مقطوع، افتح الراوتر في التطبيق واضغط «رجّع الإعدادات الأصلية» (بدون إعادة ضبط مصنع).\n\n' : '';
   const tower = res.towerChanged ? '\n\n(لاحظنا تغيّر البرج أثناء القياس — المقارنة تقديرية)' : '';
   switch (res.verdict) {
     case 'better':

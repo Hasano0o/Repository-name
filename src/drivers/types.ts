@@ -197,6 +197,18 @@ export interface RouterDriver {
   /** كل التثبيتات الحالية (بعض الراوترات تثبّت 4G و 5G مع بعض) */
   getCellLocks?(): Promise<CellLockState[]>;
   getActiveLock?(): Promise<ActiveLock | null>;
+  /**
+   * إعدادات الراوتر الأصلية (ترددات، وضع الشبكة) — ترجع null لو الراوتر حالياً مقفول على شي
+   * (ما نبي نحفظ وضع مقفول كأنه الأصلي). تنحفظ مرة وحدة لكل راوتر.
+   */
+  readBaseline?(): Promise<Record<string, string> | null>;
+  /** يعطي الدرايفر الإعدادات الأصلية المحفوظة — «فك التثبيت» يرجع لها بدل قائمة تخمينية */
+  useBaseline?(b: Record<string, string> | null): void;
+  /**
+   * إنقاذ: يفك كل الأقفال (أبراج، ترددات، وضع الشبكة) ويرجع الإعدادات الأصلية ويعيد التشغيل.
+   * كل خطوة مستقلة — لو وحدة فشلت يكمل الباقي. ما يلمس الواي فاي ولا كلمة المرور.
+   */
+  restoreAll?(baseline: Record<string, string> | null): Promise<void>;
   getDataPlan?(): Promise<DataPlan>;
   setDataPlan?(plan: DataPlan): Promise<void>;
   setNetworkMode?(mode: string): Promise<void>;

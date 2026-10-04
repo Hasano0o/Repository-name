@@ -55,6 +55,8 @@ const DEFAULT_LTE = [1, 3, 7, 8, 20, 28, 40, 41];
 const DEFAULT_NR = [1, 3, 5, 7, 8, 20, 28, 38, 40, 41, 77, 78, 79];
 // لو الراوتر رفض القائمة الكاملة وقت فك التثبيت نرجع لهذي
 const SAFE_NR = [40, 41, 78];
+// قائمة واسعة لفك التثبيت لو ما نعرف ترددات الراوتر الأصلية — تشمل ترددات الخليج (B38 وغيره)
+const WIDE_LTE = [1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 32, 34, 38, 39, 40, 41, 42, 43, 66, 71];
 
 const bandsFromMask = (hex?: string): number[] => (hex ? decodeBandMask(hex) : []);
 const maskFromBands = (bands: number[]) => encodeBandMask(bands);
@@ -125,6 +127,8 @@ export class ZteDriver implements RouterDriver {
   capabilities: Capability[] = ['signal', 'devices', 'traffic', 'usage', 'reboot', 'cells', 'bandLock'];
   private host = '';
   private password = '';
+  /** إعدادات الراوتر الأصلية (من أول اتصال وهو نظيف) */
+  private orig: Record<string, string> | null = null;
 
   private log(...a: unknown[]) {
     if (__DEV__) console.log('[zte]', ...a);
@@ -645,6 +649,77 @@ export class ZteDriver implements RouterDriver {
     return out;
   }
 
+  // ─── الإعدادات الأصلية والإنقاذ ───
+  useBaseline(b: Record<string, string> | null) { this.orig = b; }
+  private baseLte(): number[] | null {
+    const l = bandsFromMask(this.orig?.lte_band_lock);
+    return l.length ? l : null;
+  }
+  private baseNr(): number[] | null {
+    const l = nrList((this.orig && pick(this.orig, 'nr5g_nsa_band_lock', 'nr5g_band_lock', 'nr5g_sa_band_lock')) || undefined);
+    return l.length ? l : null;
+  }
+
+  async readBaseline(): Promise<Record<string, string> | null> {
+    await this.ensure();
+    const r = await this.get([
+      'lte_band_lock', 'nr5g_nsa_band_lock', 'nr5g_sa_band_lock', 'nr5g_band_lock', 'net_select',
+      'lte_pci_lock', 'lte_earfcn_lock', 'nr5g_cell_lock',
+    ]);
+    // مثبّت على برج؟ هذا مو الوضع الأصلي
+    const ear = (r.lte_earfcn_lock || '').trim();
+    const nrCell = (r.nr5g_cell_lock || '').split(',').map(x => x.trim());
+    if ((ear && ear !== '0') || (nrCell.length >= 2 && nrCell[1] && nrCell[1] !== '0')) return null;
+    // التثبيت عادة تردد أو ترددين — الأصلي فيه قائمة كاملة
+    if (bandsFromMask(r.lte_band_lock).length < 4) return null;
+    const mode = (r.net_select || '').trim();
+    if (mode === 'Only_LTE' || mode === 'Only_5G') return null;
+    const out: Record<string, string> = {};
+    for (const k of ['lte_band_lock', 'nr5g_nsa_band_lock', 'nr5g_sa_band_lock', 'nr5g_band_lock', 'net_select']) {
+      if (r[k] !== undefined && r[k] !== '') out[k] = r[k];
+    }
+    return out;
+  }
+
+  async restoreAll(baseline: Record<string, string> | null): Promise<void> {
+    if (baseline) this.orig = baseline;
+    await this.ensure();
+    const ok: string[] = [];
+    const step = async (name: string, fn: () => Promise<string>) => {
+      try { if (/success/i.test(await fn())) ok.push(name); } catch (e) { this.log('restore', name, 'failed', (e as any)?.message); }
+    };
+    // ١. فك التثبيت على الأبراج
+    await step('lte-cell', () => this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: '0', lte_earfcn_lock: '0' }));
+    await step('nr-cell', () => this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: '0,0,0,0' }));
+    // ٢. ترددات 4G: الأصلية لو نعرفها، وإلا قائمة واسعة، وإلا الافتراضية
+    const lteTries = [
+      this.baseLte(),
+      [...new Set([...DEFAULT_LTE, ...WIDE_LTE])].sort((a, b) => a - b),
+      DEFAULT_LTE,
+    ].filter((x): x is number[] => !!x && x.length > 0);
+    for (const bands of lteTries) {
+      const before = ok.length;
+      await step('lte-bands', () => this.act({
+        goformId: 'BAND_SELECT', is_gw_band: '0', gw_band_mask: '0',
+        is_lte_band: '1', lte_band_mask: maskFromBands(bands),
+      }));
+      if (ok.length > before) break;
+    }
+    // ٣. ترددات 5G
+    for (const nr of [this.baseNr(), DEFAULT_NR, SAFE_NR].filter((x): x is number[] => !!x && x.length > 0)) {
+      const before = ok.length;
+      await step('nr-bands', () => this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: nr.join(',') }));
+      if (ok.length > before) break;
+    }
+    // ٤. وضع الشبكة: الأصلي أو تلقائي
+    const mode = (this.orig?.net_select || '').trim() || CODE_TO_ZTE['00'];
+    await step('mode', () => this.act({ goformId: 'SET_BEARER_PREFERENCE', BearerPreference: mode }));
+    this.log('restoreAll ok:', ok.join(','));
+    if (!ok.length) throw new Error('الراوتر ما قبل أي أمر — تأكد إنك متصل بالواي فاي حقه وجرّب مرة ثانية');
+    // ٥. إعادة تشغيل عشان كل شي يتطبّق
+    try { await this.post({ goformId: 'REBOOT_DEVICE' }); } catch {}
+  }
+
   // ─── الترددات ───
   private async readLocks() {
     const r = await this.get(['lte_band_lock', 'nr5g_nsa_band_lock', 'nr5g_sa_band_lock', 'nr5g_band_lock']);
@@ -656,11 +731,14 @@ export class ZteDriver implements RouterDriver {
   async getBandConfig(): Promise<BandConfig> {
     await this.ensure();
     const { lte, nr } = await this.readLocks();
-    const supported = [...new Set([...DEFAULT_LTE, ...lte])].sort((a, b) => a - b);
-    const nrSupported = [...new Set([...DEFAULT_NR, ...nr])].sort((a, b) => a - b);
-    const locked = lte.length === 0 || supported.every(b => lte.includes(b)) ? [] : lte;
+    const bl = this.baseLte();
+    const bn = this.baseNr();
+    const supported = [...new Set([...DEFAULT_LTE, ...lte, ...(bl ?? [])])].sort((a, b) => a - b);
+    const nrSupported = [...new Set([...DEFAULT_NR, ...nr, ...(bn ?? [])])].sort((a, b) => a - b);
+    // لو نعرف الأصلي: مو مقفول طالما كل الترددات الأصلية مفتوحة
+    const locked = lte.length === 0 || (bl ? bl.every(b => lte.includes(b)) : supported.every(b => lte.includes(b))) ? [] : lte;
     // نفس القاعدة القديمة: لو فيها n40+n41+n78 كلها نعتبرها غير مثبّتة (قائمة الراوتر الأصلية تختلف من جهاز لجهاز)
-    const nrLocked = nr.length === 0 || SAFE_NR.every(b => nr.includes(b)) ? [] : nr;
+    const nrLocked = nr.length === 0 || (bn ? bn.every(b => nr.includes(b)) : SAFE_NR.every(b => nr.includes(b))) ? [] : nr;
     // وضع الشبكة (net_select) — نحوّله لنفس أكواد هواوي عشان الشاشات تشتغل على الاثنين
     let mode = 'auto';
     let modes: { value: string; label: string }[] = [];
@@ -690,7 +768,8 @@ export class ZteDriver implements RouterDriver {
 
   async setBand(bands: number[], nrBands?: number[]): Promise<void> {
     await this.ensure();
-    const all = [...new Set([...DEFAULT_LTE, ...(await this.readLocks()).lte])];
+    // «فك التثبيت» = الترددات الأصلية للراوتر لو نعرفها (مو قائمة تخمينية — كانت تشيل ترددات زي B38 ويطيح الراوتر بدون خدمة)
+    const all = this.baseLte() ?? [...new Set([...DEFAULT_LTE, ...(await this.readLocks()).lte])];
     const lte = bands.length ? bands : all;
     const out = await this.act({
       goformId: 'BAND_SELECT',
@@ -699,7 +778,7 @@ export class ZteDriver implements RouterDriver {
     });
     if (!/success/i.test(out)) throw this.rejected('تثبيت الترددات', out);
     if (nrBands) {
-      const nr = nrBands.length ? nrBands : DEFAULT_NR;
+      const nr = nrBands.length ? nrBands : (this.baseNr() ?? DEFAULT_NR);
       const cur = (await this.readLocks()).nr;
       const same = cur.length === nr.length && nr.every(b => cur.includes(b));
       if (!same) {

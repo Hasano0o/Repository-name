@@ -33,6 +33,7 @@ import { DeviceRow } from '../../src/ui/DeviceRow';
 import { SyncIcon } from '../../src/ui/SyncIcon';
 import { StoreAd } from '../../src/ui/StoreAd';
 import { ComboCard } from '../../src/ui/ComboCard';
+import { canRescue, rescueRouter } from '../../src/utils/safeLock';
 import { hostLabel } from '../../src/drivers/device';
 
 interface Features {
@@ -333,6 +334,41 @@ export default function RouterDashboard() {
     ]);
   };
 
+  // إنقاذ: الراوتر علق بدون خدمة بعد تثبيت برج/تردد — نرجّع إعداداته الأصلية بدون إعادة ضبط مصنع
+  const [rescueStep, setRescueStep] = useState('');
+  const onRescue = () => {
+    if (!info) return;
+    Alert.alert(
+      'رجّع الإعدادات الأصلية',
+      'بنفك كل التثبيتات (الأبراج، الترددات، وضع الشبكة) ونرجّع الراوتر لإعداداته الأصلية ونعيد تشغيله — بدون إعادة ضبط مصنع.\n\nاسم الواي فاي وكلمة المرور ما يتغيرون. النت بينقطع دقيقتين تقريباً.',
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'رجّعها', onPress: async () => {
+            setBusy(true);
+            setRescueStep('نبدأ...');
+            try {
+              const back = await rescueRouter(info, st => setRescueStep(st));
+              setError('');
+              await loadAll(info).catch(() => {});
+              Alert.alert(
+                back ? '✅ رجع الراوتر' : 'خلصنا — بس ما رجعت الخدمة للحين',
+                back
+                  ? 'فكّينا كل التثبيتات ورجّعنا الإعدادات الأصلية، والراوتر متصل الحين.'
+                  : 'رجّعنا الإعدادات الأصلية والراوتر أعاد التشغيل، بس الشبكة ما رجعت للحين. انتظر دقيقة وتأكد من الشريحة والتغطية. لو بقي «No Service» جرّب تطفيه وتشغّله من الزر.',
+              );
+            } catch (e: any) {
+              Alert.alert('ما قدرنا نوصل للراوتر', `${e?.message ?? String(e)}\n\nتأكد إن جوالك متصل بواي فاي الراوتر نفسه وجرّب مرة ثانية.`);
+            } finally {
+              setRescueStep('');
+              setBusy(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const onEnableAuto = () => {
     if (!info) return;
     Alert.alert('تفعيل الوضع التلقائي', 'بنخلي الراوتر يختار بين 4G و5G بنفسه. الإنترنت بينقطع لحظات.', [
@@ -444,6 +480,25 @@ export default function RouterDashboard() {
             <Pressable style={s.retryBtn} onPress={onRefresh} disabled={busy}>
               <Text style={s.retryText}>إعادة المحاولة</Text>
             </Pressable>
+          </View>
+        )}
+
+        {!loading && (!!error || disconnected || !!rescueStep) && canRescue(info) && (
+          <View style={s.rescueCard}>
+            <Text style={s.rescueTitle}>الراوتر بدون خدمة؟</Text>
+            <Text style={s.rescueText}>
+              لو ثبّت برج أو تردد وانقطع النت، نرجّع الراوتر لإعداداته الأصلية — بدون إعادة ضبط مصنع.
+            </Text>
+            {rescueStep ? (
+              <View style={s.rescueBusy}>
+                <ActivityIndicator color={C.red} />
+                <Text style={s.rescueText}>{rescueStep}</Text>
+              </View>
+            ) : (
+              <Pressable style={[s.rescueBtn, busy && { opacity: 0.5 }]} onPress={onRescue} disabled={busy}>
+                <Text style={s.rescueBtnText}>رجّع الإعدادات الأصلية</Text>
+              </Pressable>
+            )}
           </View>
         )}
 
@@ -667,6 +722,12 @@ const s = StyleSheet.create({
   center: { alignItems: 'center', gap: 10, paddingVertical: 24 },
   muted: { color: C.sub, textAlign: 'center' },
   hint: { color: C.muted, fontSize: 12, textAlign: 'center', lineHeight: 18 },
+  rescueCard: { backgroundColor: C.card, borderColor: C.red, borderWidth: 1.5, borderRadius: 16, padding: 14, gap: 8 },
+  rescueTitle: { color: C.red, fontWeight: '900', fontSize: 15, textAlign: 'right' },
+  rescueText: { color: C.text, fontWeight: '600', fontSize: 13, lineHeight: 20, textAlign: 'right' },
+  rescueBusy: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
+  rescueBtn: { backgroundColor: C.red, borderRadius: 12, paddingVertical: 11, alignItems: 'center' },
+  rescueBtnText: { color: '#fff', fontWeight: '900', fontSize: 14 },
   errorCard: { backgroundColor: C.redSoft, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 16, padding: 14, gap: 10 },
   errorText: { color: C.red, fontWeight: '700', textAlign: 'right' },
   retryBtn: { alignSelf: 'flex-end', backgroundColor: C.red, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8 },

@@ -2,6 +2,7 @@ import { RouterDriver } from '../drivers/types';
 import { driverById } from '../drivers/registry';
 import { SavedRouter, getPassword } from './routers';
 import { assertLanHost } from '../utils/host';
+import { getBaseline, saveBaseline } from './baseline';
 
 interface Sess { d: RouterDriver; authAt: number; }
 const sessions = new Map<string, Sess>();
@@ -37,7 +38,24 @@ async function doConnect(r: SavedRouter, force = false): Promise<RouterDriver> {
     // لا نقدر "نمسح" متغير نصي في JS، لكن تضييق النطاق يخفف.
   }
   sessions.set(r.id, { d, authAt: Date.now() });
+  if (!cur) await attachBaseline(r, d);
   return d;
+}
+
+/** يعطي الدرايفر إعدادات الراوتر الأصلية — ولو ما عندنا، نحفظها الحين (لو الراوتر نظيف) */
+async function attachBaseline(r: SavedRouter, d: RouterDriver) {
+  if (!d.useBaseline && !d.readBaseline) return;
+  const b = await getBaseline(r.id);
+  d.useBaseline?.(b);
+  if (b || !d.readBaseline) return;
+  // ما ننتظرها — ما تأخّر فتح الشاشة
+  d.readBaseline()
+    .then(async nb => {
+      if (!nb) return;
+      await saveBaseline(r.id, nb);
+      d.useBaseline?.(nb);
+    })
+    .catch(() => {});
 }
 
 /** يمنع تشغيل عمليتين تعديل على نفس الراوتر بنفس الوقت (قفل تردد + دمج مثلاً) */
