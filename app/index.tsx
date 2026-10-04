@@ -18,6 +18,7 @@ import {
 
 import { tBd, tBg, tFg, THEME_PREF, ThemePref, setThemePref } from '../src/ui/theme';
 import { UpdateStatus } from '../src/ui/UpdateStatus';
+import { desktop } from '../src/desktop/bridge';
 import { DevContact } from '../src/ui/DevContact';
 import { CityAsk } from '../src/ui/CityAsk';
 import { hostLabel } from '../src/drivers/device';
@@ -145,6 +146,13 @@ export default function RoutersList() {
           <Icon name="compass" size={16} color={P.violet} />
           <Text style={s.linkTxt}>استكشاف جهاز غير مدعوم</Text>
         </Pressable>
+        {desktop?.openTech && (
+          // الويندوز: الفني غالباً ما عنده راوتر مضاف — نعطيه وضع الفني من البداية
+          <Pressable style={s.link} onPress={() => desktop?.openTech?.()}>
+            <Icon name="aim" size={16} color={P.blue} />
+            <Text style={[s.linkTxt, { color: P.blue }]}>أنا فني — وضع الفني</Text>
+          </Pressable>
+        )}
       </EmptyState>
     );
   }
@@ -208,7 +216,7 @@ export default function RoutersList() {
         }
         ListFooterComponent={
           <View style={{ gap: 12 }}>
-          <Pressable style={({ pressed }) => [s.tech, pressed && { opacity: 0.85 }]} onPress={() => router.push('/tech' as Href)}>
+          <Pressable style={({ pressed }) => [s.tech, pressed && { opacity: 0.85 }]} onPress={() => (desktop?.openTech ? desktop.openTech() : router.push('/tech' as Href))}>
             <View style={s.flip}><Icon name="chevron" size={16} color={tFg('#fff')} /></View>
             <View style={{ flex: 1, alignItems: 'flex-end' }}>
               <Text style={s.techTitle}>وضع الفني</Text>

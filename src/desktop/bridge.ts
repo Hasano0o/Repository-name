@@ -30,6 +30,10 @@ export interface DesktopBridge {
   /** يصلح الاتصال بصلاحية المسؤول — false لو المستخدم رفض */
   netRepair?(): Promise<boolean>;
   openWifiSettings?(): void;
+  /** يفتح صفحة الفني في نافذة مستقلة (من نسخة 1.2) */
+  openTech?(code?: string): void;
+  /** يشيك على تحديث جديد ويعرض النتيجة */
+  checkUpdate?(): void;
 }
 
 export interface NetDiag {

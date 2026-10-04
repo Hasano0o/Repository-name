@@ -25,12 +25,31 @@ import {
 } from '../src/ui/Pro';
 
 import { tBd, tBg, tFg } from '../src/ui/theme';
+import { desktop } from '../src/desktop/bridge';
 const K_KEY = 'bandly_tech_key';
 const K_NAME = 'bandly_tech_name';
 
 type Log = { at: number; text: string; tone: 'ok' | 'err' | 'info' };
 
-export default function TechScreen() {
+/** في الويندوز: صفحة الفني تنفتح في نافذة مستقلة (فيها المكالمة والكاميرا كاملة) */
+export default function TechRoute() {
+  const p = useLocalSearchParams<{ code?: string }>();
+  const opener = desktop?.openTech;
+  useEffect(() => { opener?.(typeof p.code === 'string' ? p.code : ''); }, [opener, p.code]);
+  if (opener) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 }}>
+        <Text style={{ fontSize: 16, fontWeight: '800', color: tFg('#1d2433'), textAlign: 'center' }}>وضع الفني انفتح في نافذة مستقلة</Text>
+        <Pressable onPress={() => opener(typeof p.code === 'string' ? p.code : '')} style={({ pressed }) => [{ backgroundColor: '#2f6bff', borderRadius: 12, paddingHorizontal: 18, paddingVertical: 10 }, pressed && { opacity: 0.8 }]}>
+          <Text style={{ color: '#fff', fontWeight: '800' }}>افتح النافذة</Text>
+        </Pressable>
+      </View>
+    );
+  }
+  return <TechScreen />;
+}
+
+function TechScreen() {
   const params = useLocalSearchParams<{ code?: string }>();
   const insets = useSafeAreaInsets();
   const [code, setCode] = useState(typeof params.code === 'string' ? params.code : '');

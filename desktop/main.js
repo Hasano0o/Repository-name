@@ -258,6 +258,132 @@ ipcMain.on('ui:open', (_e, url) => {
   if (typeof url === 'string' && SAFE_EXTERNAL.test(url)) shell.openExternal(url);
 });
 
+
+// ───────── وضع الفني (نافذة صفحة الفني من السيرفر) ─────────
+// صفحة الفني على السيرفر فيها كل شي (مكالمة، رسائل صوتية، كاميرا العميل، السجل، التقييم)
+// وتشتغل في متصفح البرنامج كما هي — فنفتحها في نافذة Bandly مستقلة.
+const LIVE_ORIGIN = 'https://has-host.com';
+const LIVE_PATH = /^\/live(\/|$)/;
+let techWin = null;
+function isLiveUrl(u) {
+  try { const x = new URL(u); return x.origin === LIVE_ORIGIN && LIVE_PATH.test(x.pathname); } catch { return false; }
+}
+function openTech(code) {
+  const c = /^\d{6}$/.test(String(code || '')) ? String(code) : '';
+  const url = `${LIVE_ORIGIN}/live/${c}`;
+  if (techWin && !techWin.isDestroyed()) {
+    if (c) techWin.loadURL(url);
+    if (techWin.isMinimized()) techWin.restore();
+    techWin.focus();
+    return;
+  }
+  techWin = new BrowserWindow({
+    width: 1280, height: 860, minWidth: 400, minHeight: 560,
+    title: 'Bandly — وضع الفني',
+    backgroundColor: '#eceff4',
+    icon: path.join(__dirname, 'build', 'icon.png'),
+    autoHideMenuBar: true,
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false },
+  });
+  techWin.setMenuBarVisibility(false);
+  techWin.webContents.setWindowOpenHandler(({ url }) => {
+    if (SAFE_EXTERNAL.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  techWin.webContents.on('will-navigate', (ev, url) => {
+    if (!isLiveUrl(url)) { ev.preventDefault(); if (SAFE_EXTERNAL.test(url)) shell.openExternal(url); }
+  });
+  techWin.webContents.on('before-input-event', (_e, input) => {
+    if (input.type === 'keyDown' && input.key === 'F5') techWin.webContents.reload();
+  });
+  techWin.webContents.on('did-fail-load', (_e, code, desc, failedUrl, isMain) => {
+    if (!isMain || code === -3) return; // -3 = انلغى (تنقّل عادي)
+    techWin.webContents.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(
+      '<html dir="rtl"><body style="font-family:Segoe UI,Tahoma;background:#eceff4;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">' +
+      '<div style="text-align:center;color:#1d2433"><h2>ما قدرنا نفتح صفحة الفني</h2><p style="color:#5b6478">تأكد إن اللابتوب متصل بالإنترنت، وبعدها اضغط F5</p></div></body></html>'));
+  });
+  techWin.on('closed', () => { techWin = null; });
+  techWin.loadURL(url);
+}
+ipcMain.on('tech:open', (_e, code) => openTech(code));
+
+// ───────── التحديث التلقائي ─────────
+// السيرفر ينشر dl/bandly-desktop.json مع كل بناء (desktop/build-windows.sh)
+const UPDATE_URL = 'https://has-host.com/dl/bandly-desktop.json';
+const crypto = require('node:crypto');
+const os = require('node:os');
+
+function newer(a, b) { // هل a أحدث من b؟
+  const pa = String(a).split('.').map(n => parseInt(n, 10) || 0);
+  const pb = String(b).split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+  }
+  return false;
+}
+
+let updateBusy = false;
+async function checkForUpdate(manual = false) {
+  if (updateBusy) return;
+  if (!app.isPackaged || process.platform !== 'win32') {
+    if (manual && win) dialog.showMessageBox(win, { type: 'none', title: 'Bandly', message: 'التحديث يشتغل في النسخة المثبتة على الويندوز فقط', buttons: ['حسناً'] });
+    return;
+  }
+  updateBusy = true;
+  try {
+    const r = await fetch(UPDATE_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error('http ' + r.status);
+    const info = await r.json();
+    const url = new URL(info.url);
+    if (url.origin !== 'https://has-host.com') throw new Error('bad url');
+    if (!newer(info.version, app.getVersion())) {
+      if (manual && win) await dialog.showMessageBox(win, { type: 'none', title: 'Bandly', message: 'عندك آخر نسخة ✓', detail: `النسخة ${app.getVersion()}`, buttons: ['حسناً'] });
+      return;
+    }
+    if (!win) return;
+    const sizeMb = info.size ? ` (${Math.round(info.size / 1048576)} ميقا)` : '';
+    const ask = await dialog.showMessageBox(win, {
+      type: 'none', title: 'تحديث جديد',
+      message: 'فيه نسخة جديدة من Bandly',
+      detail: (info.notes ? info.notes + '\n\n' : '') + `التحميل${sizeMb} — بعدها البرنامج يتحدث ويفتح من جديد.`,
+      buttons: ['حدّث الحين', 'لاحقاً'], defaultId: 0, cancelId: 1, noLink: true,
+    });
+    if (ask.response !== 0) return;
+
+    // التحميل مع شريط تقدم على أيقونة البرنامج
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok || !res.body) throw new Error('download ' + res.status);
+    const total = Number(res.headers.get('content-length')) || info.size || 0;
+    const file = path.join(os.tmpdir(), `Bandly-Setup-${String(info.version).replace(/[^\d.]/g, '')}.exe`);
+    const out = fs.createWriteStream(file);
+    const hash = crypto.createHash('sha256');
+    let got = 0;
+    for await (const chunk of res.body) {
+      hash.update(chunk);
+      got += chunk.length;
+      if (!out.write(chunk)) await new Promise(r2 => out.once('drain', r2));
+      if (total && win) win.setProgressBar(Math.min(got / total, 1));
+    }
+    await new Promise((r2, j) => out.end(err => (err ? j(err) : r2())));
+    if (win) win.setProgressBar(-1);
+    if (info.sha256 && hash.digest('hex') !== String(info.sha256).toLowerCase()) {
+      try { fs.unlinkSync(file); } catch {}
+      throw new Error('الملف وصل ناقص أو تالف');
+    }
+    const { spawn } = require('node:child_process');
+    spawn(file, [], { detached: true, stdio: 'ignore' }).unref();
+    flush();
+    setTimeout(() => app.quit(), 500);
+  } catch (e) {
+    if (win) win.setProgressBar(-1);
+    if (manual && win) dialog.showMessageBox(win, { type: 'none', title: 'Bandly', message: 'ما قدرنا نتحقق من التحديث', detail: 'تأكد من الإنترنت وجرّب بعدين.\n' + (e && e.message ? e.message : ''), buttons: ['حسناً'] });
+  } finally {
+    updateBusy = false;
+  }
+}
+ipcMain.on('update:check', () => checkForUpdate(true));
+ipcMain.on('app:version', (e) => { e.returnValue = app.getVersion(); });
+
 // ───────── النافذة ─────────
 let win;
 function createWindow() {
@@ -309,11 +435,16 @@ app.on('second-instance', () => {
 
 app.whenReady().then(() => {
   serveApp();
-  // الميكروفون والكاميرا لوضع الفني والإشعارات فقط
-  session.defaultSession.setPermissionRequestHandler((_wc, perm, cb) => {
-    cb(['media', 'notifications', 'clipboard-sanitized-write'].includes(perm));
+  // الميكروفون والكاميرا لصفحة الفني ولواجهة التطبيق فقط
+  session.defaultSession.setPermissionRequestHandler((wc, perm, cb, details) => {
+    const u = String(details?.requestingUrl || wc.getURL() || '');
+    const trusted = u.startsWith(ORIGIN + '/') || u.startsWith(LIVE_ORIGIN + '/');
+    cb(trusted && ['media', 'notifications', 'clipboard-sanitized-write'].includes(perm));
   });
   createWindow();
+  // يشيك على التحديثات بعد ما يفتح، وكل 6 ساعات
+  setTimeout(() => checkForUpdate(false), 8000);
+  setInterval(() => checkForUpdate(false), 6 * 3600 * 1000);
   // الراوترات والإعدادات محفوظة في تخزين المتصفح، وكرومium يأجّل كتابتها للقرص —
   // نكتبها كل كم ثانية وعند الإغلاق عشان ما تضيع لو انطفى الجهاز أو انقفل البرنامج غصب
   setInterval(() => { try { session.defaultSession.flushStorageData(); } catch {} }, 3000);

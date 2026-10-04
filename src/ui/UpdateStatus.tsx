@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import * as Updates from 'expo-updates';
 import { C } from './theme';
+import { desktop } from '../desktop/bridge';
 
 const when = (d: Date | null) => {
   if (!d) return '—';
@@ -16,6 +17,25 @@ export function UpdateStatus() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [ready, setReady] = useState(false);
+
+  // نسخة الويندوز: التحديث من البرنامج نفسه (يحمّل المثبّت الجديد ويثبّته)
+  if (desktop) {
+    return (
+      <View style={s.box}>
+        <View style={s.row}>
+          {desktop.checkUpdate && (
+            <Pressable style={s.btn} onPress={() => desktop?.checkUpdate?.()}>
+              <Text style={s.btnTxt}>تحقق من التحديث</Text>
+            </Pressable>
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={s.title}>Bandly للويندوز</Text>
+            <Text style={s.sub}>النسخة {desktop.version}</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   if (!Updates.isEnabled) return null;
 
