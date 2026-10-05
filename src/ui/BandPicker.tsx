@@ -50,6 +50,7 @@ const KIND_COLOR: Record<Kind, { bg: string; fg: string; bar: string }> = isDark
 const TECH_TONE: Record<Tech, { fg: string; soft: string; line: string }> = isDark
   ? { LTE: { fg: '#9cbcff', soft: '#26324a', line: '#3b4d72' }, NR: { fg: '#c9b8ff', soft: '#33294f', line: '#53447f' } }
   : { LTE: { fg: '#2f6bff', soft: '#eef3ff', line: '#c9d8ff' }, NR: { fg: '#7a51e0', soft: '#f4efff', line: '#dccdff' } };
+const KIND_HINT: Record<Kind, string> = { far: 'يمسك من بعيد وداخل البيت', mid: 'سرعة وتغطية', fast: 'أعلى سرعة لو البرج قريب' };
 const SIG_TEXT = ['ما ظهر برج', 'ضعيفة', 'متوسطة', 'قوية', 'قوية جداً'];
 
 const mhzOf = (tech: Tech, b: number) => parseInt((tech === 'NR' ? NR_FREQ : BAND_FREQ)[b] ?? '0', 10);
@@ -147,6 +148,15 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
   ].join(' · ');
 
   const rows = list(tab);
+  // نجمع الترددات حسب نوعها، والمجموعة اللي فيها أقوى إشارة تطلع فوق
+  const groups = (['fast', 'mid', 'far'] as Kind[])
+    .map(kind => ({ kind, bands: rows.filter(b => kindOf(mhzOf(tab, b)) === kind) }))
+    .filter(g => g.bands.length)
+    .sort((x, y) => {
+      const best = (g: { bands: number[] }) => Math.max(-1, ...g.bands.map(b =>
+        (tab === 'LTE' ? activeLte : activeNr).includes(b) ? 2 : seen[tab + ':' + b]?.score ?? -1));
+      return best(y) - best(x);
+    });
   const heroColors: [string, string] = isDark ? [C.blueDeep, C.blue] : ['#6a4cff', '#2f6bff'];
   const tot = combo.reduce((a, x) => a + x.v, 0) || 1;
 
@@ -229,70 +239,78 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
         </View>
       )}
 
-      {/* القائمة */}
+      {/* القائمة — مجموعات (يوصل بعيد / متوازن / سريع)، وكل مجموعة مربعين جنب بعض */}
       <View style={s.card}>
-        <View style={s.cardHead}>
-          <Text style={s.headText}>التردد</Text>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Text style={[s.headText, { width: 44, textAlign: 'center' }]}>مسموح</Text>
-            <Text style={[s.headText, { width: 40, textAlign: 'center' }]} numberOfLines={1}>أساسي</Text>
+        <View style={s.legend}>
+          <Text style={s.headText}>اضغط المربع تشغّله أو تطفيه</Text>
+          <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 4 }}>
+            <Text style={{ color: '#f0b020', fontSize: 12 }}>★</Text>
+            <Text style={s.headText}>الأساسي</Text>
           </View>
         </View>
-        {rows.map(b => {
-          const mhz = mhzOf(tab, b);
-          const k = KIND_COLOR[kindOf(mhz)];
-          const sv = seen[tab + ':' + b];
-          const lvl = levelOf(sv);
-          const live = (tab === 'LTE' ? activeLte : activeNr).includes(b);
-          const prim = !!pcc && pcc.tech === tab && pcc.band === b;
-          const on = isOn(tab, b);
-          const barColor = lvl >= 3 ? C.green : lvl === 2 ? '#e0a100' : '#e94079';
-          return (
-            <Pressable
-              key={tab + b}
-              onPress={() => toggle(tab, b)}
-              style={[
-                s.row,
-                on && s.rowOn,
-                live && { borderColor: isDark ? '#2f5a46' : '#bfead3' },
-                on && { borderRightWidth: 4, borderRightColor: live ? C.green : TECH_TONE[tab].fg },
-                !sv && !live && { opacity: 0.55 },
-              ]}
-            >
-              <View style={[s.badge, { backgroundColor: k.bg }]}>
-                <Text style={[s.badgeText, { color: k.fg }]}>{shortOf(mhz)}</Text>
-              </View>
-              <View style={s.mid}>
-                <View style={s.titleRow}>
-                  <Text style={s.title}>{mhz ? `${mhz} ميقا` : (tab === 'NR' ? 'n' : 'B') + b}</Text>
-                  {!!mhz && (
-                    <View style={[s.tag, { backgroundColor: k.bg }]}>
-                      <Text style={[s.tagText, { color: k.fg }]}>{KIND_LABEL[kindOf(mhz)]}</Text>
+        {groups.map(g => (
+          <View key={g.kind} style={{ gap: 8 }}>
+            <View style={s.groupHead}>
+              <View style={[s.groupDot, { backgroundColor: KIND_COLOR[g.kind].fg }]} />
+              <Text style={s.groupTitle}>{KIND_LABEL[g.kind]}</Text>
+              <Text style={s.groupHint}>{KIND_HINT[g.kind]}</Text>
+            </View>
+            <View style={s.grid}>
+              {g.bands.map(b => {
+                const mhz = mhzOf(tab, b);
+                const k = KIND_COLOR[g.kind];
+                const sv = seen[tab + ':' + b];
+                const lvl = levelOf(sv);
+                const live = (tab === 'LTE' ? activeLte : activeNr).includes(b);
+                const prim = !!pcc && pcc.tech === tab && pcc.band === b;
+                const on = isOn(tab, b);
+                const barColor = lvl >= 3 ? C.green : lvl === 2 ? '#e0a100' : '#e94079';
+                return (
+                  <Pressable
+                    key={tab + b}
+                    onPress={() => toggle(tab, b)}
+                    style={[
+                      s.tile,
+                      on && s.tileOn,
+                      live && { borderColor: isDark ? '#2f5a46' : '#bfead3' },
+                      on && { borderRightWidth: 4, borderRightColor: live ? C.green : TECH_TONE[tab].fg },
+                      !sv && !live && { opacity: 0.55 },
+                    ]}
+                  >
+                    <View style={s.tileTop}>
+                      <View style={[s.badge, { backgroundColor: k.bg }]}>
+                        <Text style={[s.badgeText, { color: k.fg }]}>{shortOf(mhz)}</Text>
+                      </View>
+                      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                        <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 4 }}>
+                          <Text style={s.title}>{mhz || b}</Text>
+                          {prim && <Text style={{ color: '#f0b020', fontSize: 13 }}>★</Text>}
+                        </View>
+                        <Text style={s.code}>ميقا</Text>
+                      </View>
+                      <View style={[s.sw, on ? { backgroundColor: TECH_TONE[tab].fg, justifyContent: 'flex-start' } : { justifyContent: 'flex-end' }]}>
+                        <View style={s.knob} />
+                      </View>
                     </View>
-                  )}
-                </View>
-                <View style={s.subRow}>
-                  <View style={s.bars}>
-                    {[1, 2, 3, 4].map(n => (
-                      <View key={n} style={[s.bar, { height: 3 + n * 2.25, backgroundColor: n <= lvl ? barColor : C.lineSoft }]} />
-                    ))}
-                  </View>
-                  {(live || lvl > 0) && <View style={[s.dot, { backgroundColor: live ? C.green : barColor }]} />}
-                  <Text style={[s.sub, live && { color: C.green }]} numberOfLines={1}>
-                    {live ? 'متصل عليه الحين' : SIG_TEXT[lvl]}
-                  </Text>
-                  <Text style={s.code}>{(tab === 'NR' ? 'n' : 'B') + b}</Text>
-                </View>
-              </View>
-              <View style={[s.star, prim && { backgroundColor: isDark ? '#40382a' : '#fff6dc' }]}>
-                <Icon name="star" size={16} color={prim ? '#f0b020' : C.lineSoft} />
-              </View>
-              <View style={[s.sw, on ? { backgroundColor: C.blue, justifyContent: 'flex-start' } : { justifyContent: 'flex-end' }]}>
-                <View style={s.knob} />
-              </View>
-            </Pressable>
-          );
-        })}
+                    <View style={s.subRow}>
+                      <View style={s.bars}>
+                        {[1, 2, 3, 4].map(n => (
+                          <View key={n} style={[s.bar, { height: 3 + n * 2.25, backgroundColor: n <= lvl ? barColor : C.lineSoft }]} />
+                        ))}
+                      </View>
+                      <Text style={[s.sub, live && { color: C.green }]} numberOfLines={1}>
+                        {live ? 'متصل عليه' : SIG_TEXT[lvl]}
+                      </Text>
+                      <View style={{ flex: 1 }} />
+                      <Text style={s.code}>{(tab === 'NR' ? 'n' : 'B') + b}</Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+              {g.bands.length % 2 === 1 && <View style={[s.tile, { opacity: 0, borderWidth: 0 }]} />}
+            </View>
+          </View>
+        ))}
         <Pressable onPress={() => setShowAll(v => !v)} style={s.more} hitSlop={6}>
           <Icon name={showAll ? 'up' : 'down'} size={14} color={C.blue} />
           <Text style={s.moreText}>{showAll ? 'اعرض اللي فيها برج بس' : `اعرض كل ترددات ${tab === 'LTE' ? '4G' : '5G'} اللي يدعمها الراوتر`}</Text>
@@ -373,33 +391,31 @@ const s = StyleSheet.create({
   segCount: { color: C.muted, fontSize: 12, fontWeight: '700', writingDirection: 'rtl' },
   segText: { color: C.muted, fontSize: 13, fontWeight: '700', writingDirection: 'rtl' },
 
-  card: { backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, borderRadius: 22, overflow: 'hidden', paddingBottom: 10, gap: 8 },
-  cardHead: {
-    flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 22, paddingTop: 12, paddingBottom: 2,
+  card: { backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, borderRadius: 22, overflow: 'hidden', padding: 12, gap: 10 },
+  legend: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4, paddingBottom: 2 },
+  groupHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, paddingHorizontal: 4, marginTop: 4 },
+  groupDot: { width: 8, height: 8, borderRadius: 4 },
+  groupTitle: { color: C.text, fontSize: 13, fontWeight: '700' },
+  groupHint: { color: C.muted, fontSize: 11, fontWeight: '600', flexShrink: 1 },
+  grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
+  tile: {
+    flexBasis: '47%', flexGrow: 1, borderRadius: 16, borderWidth: 1, gap: 8,
+    borderColor: isDark ? '#3a3128' : '#edf0f6', backgroundColor: isDark ? '#2a231c' : '#ffffff',
+    paddingVertical: 10, paddingHorizontal: 10,
   },
+  tileOn: { borderColor: isDark ? '#4a3d30' : '#dfe7fb', backgroundColor: isDark ? '#30281f' : '#fbfcff' },
+  tileTop: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   headText: { color: C.muted, fontSize: 11.5, fontWeight: '700' },
-  row: {
-    flexDirection: 'row-reverse', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12, minHeight: 62,
-    marginHorizontal: 10, borderRadius: 16, borderWidth: 1, borderColor: isDark ? '#3a3128' : '#edf0f6',
-    backgroundColor: isDark ? '#2a231c' : '#ffffff',
-  },
-  rowOn: { borderColor: isDark ? '#4a3d30' : '#dfe7fb', backgroundColor: isDark ? '#30281f' : '#fbfcff' },
-  badge: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  badge: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   badgeText: { fontSize: 11.5, fontWeight: '700' },
-  mid: { flex: 1, minWidth: 0, gap: 3, alignItems: 'flex-end' },
-  titleRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
-  title: { color: C.text, fontSize: 14.5, fontWeight: '700' },
-  tag: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 1 },
-  tagText: { fontSize: 10.5, fontWeight: '700', lineHeight: 16 },
-  subRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, maxWidth: '100%' },
+  title: { color: C.text, fontSize: 16, fontWeight: '700' },
+  subRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
   bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 12 },
   bar: { width: 3, borderRadius: 2 },
   sub: { color: C.muted, fontSize: 11, fontWeight: '600', flexShrink: 1 },
   code: { color: C.muted, opacity: 0.75, fontSize: 11, fontWeight: '600' },
-  star: { width: 40, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  sw: { width: 44, height: 26, borderRadius: 999, padding: 3, flexDirection: 'row', backgroundColor: C.line },
-  knob: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', shadowColor: '#0d2350', shadowOpacity: 0.2, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+  sw: { width: 38, height: 22, borderRadius: 999, padding: 3, flexDirection: 'row', backgroundColor: C.line },
+  knob: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#fff', shadowColor: '#0d2350', shadowOpacity: 0.2, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
   more: {
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, alignSelf: 'center',
     marginTop: 2, paddingVertical: 9, paddingHorizontal: 16, borderRadius: 999,
