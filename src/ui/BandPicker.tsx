@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BandConfig, Carrier } from '../drivers/types';
 import { BAND_FREQ, NR_FREQ } from '../utils/bands';
 import { C, isDark } from './theme';
@@ -51,6 +52,7 @@ const TECH_TONE: Record<Tech, { fg: string; soft: string; line: string }> = isDa
   ? { LTE: { fg: '#9cbcff', soft: '#26324a', line: '#3b4d72' }, NR: { fg: '#c9b8ff', soft: '#33294f', line: '#53447f' } }
   : { LTE: { fg: '#2f6bff', soft: '#eef3ff', line: '#c9d8ff' }, NR: { fg: '#7a51e0', soft: '#f4efff', line: '#dccdff' } };
 const KIND_HINT: Record<Kind, string> = { far: 'يمسك من بعيد وداخل البيت', mid: 'سرعة وتغطية', fast: 'أعلى سرعة لو البرج قريب' };
+const LAYOUT_KEY = 'bandly.bandsLayout';
 const SIG_TEXT = ['ما ظهر برج', 'ضعيفة', 'متوسطة', 'قوية', 'قوية جداً'];
 
 const mhzOf = (tech: Tech, b: number) => parseInt((tech === 'NR' ? NR_FREQ : BAND_FREQ)[b] ?? '0', 10);
@@ -87,6 +89,15 @@ export interface BandPickerProps {
 export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onTry, onAuto }: BandPickerProps) {
   const [tab, setTab] = useState<Tech>('LTE');
   const [showAll, setShowAll] = useState(false);
+  // شكل القائمة: مربعات (الجديد) أو صفوف (القديم) — يتذكر اختيارك
+  const [layout, setLayout] = useState<'grid' | 'list'>('grid');
+  useEffect(() => {
+    AsyncStorage.getItem(LAYOUT_KEY).then(v => { if (v === 'list') setLayout('list'); }).catch(() => {});
+  }, []);
+  const changeLayout = (l: 'grid' | 'list') => {
+    setLayout(l);
+    AsyncStorage.setItem(LAYOUT_KEY, l).catch(() => {});
+  };
   // فاضي = تلقائي (كل الترددات مسموحة)
   const [lte, setLte] = useState<number[]>(cfg.locked);
   const [nr, setNr] = useState<number[]>(cfg.nrLocked);
@@ -239,6 +250,8 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
         </View>
       )}
 
+      {layout === 'grid' ? (
+        <>
       {/* القائمة — مجموعات (يوصل بعيد / متوازن / سريع)، وكل مجموعة مربعين جنب بعض */}
       <View style={s.card}>
         <View style={s.legend}>
@@ -246,6 +259,10 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
           <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 4 }}>
             <Text style={{ color: '#f0b020', fontSize: 12 }}>★</Text>
             <Text style={s.headText}>الأساسي</Text>
+            <Text style={s.headText}>·</Text>
+            <Pressable onPress={() => changeLayout('list')} hitSlop={8}>
+              <Text style={[s.headText, { color: C.blue }]}>اعرض كقائمة</Text>
+            </Pressable>
           </View>
         </View>
         {groups.map(g => (
@@ -316,6 +333,85 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
           <Text style={s.moreText}>{showAll ? 'اعرض اللي فيها برج بس' : `اعرض كل ترددات ${tab === 'LTE' ? '4G' : '5G'} اللي يدعمها الراوتر`}</Text>
         </Pressable>
       </View>
+
+        </>
+      ) : (
+        <>
+      {/* القائمة — الشكل القديم (صفوف) */}
+      <View style={o.card}>
+        <View style={o.cardHead}>
+          <Text style={o.headText}>التردد</Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Text style={[o.headText, { width: 44, textAlign: 'center' }]}>مسموح</Text>
+            <Text style={[o.headText, { width: 40, textAlign: 'center' }]} numberOfLines={1}>أساسي</Text>
+          </View>
+        </View>
+        {rows.map(b => {
+          const mhz = mhzOf(tab, b);
+          const k = KIND_COLOR[kindOf(mhz)];
+          const sv = seen[tab + ':' + b];
+          const lvl = levelOf(sv);
+          const live = (tab === 'LTE' ? activeLte : activeNr).includes(b);
+          const prim = !!pcc && pcc.tech === tab && pcc.band === b;
+          const on = isOn(tab, b);
+          const barColor = lvl >= 3 ? C.green : lvl === 2 ? '#e0a100' : '#e94079';
+          return (
+            <Pressable
+              key={tab + b}
+              onPress={() => toggle(tab, b)}
+              style={[
+                o.row,
+                on && o.rowOn,
+                live && { borderColor: isDark ? '#2f5a46' : '#bfead3' },
+                on && { borderRightWidth: 4, borderRightColor: live ? C.green : TECH_TONE[tab].fg },
+                !sv && !live && { opacity: 0.55 },
+              ]}
+            >
+              <View style={[o.badge, { backgroundColor: k.bg }]}>
+                <Text style={[o.badgeText, { color: k.fg }]}>{shortOf(mhz)}</Text>
+              </View>
+              <View style={o.mid}>
+                <View style={o.titleRow}>
+                  <Text style={o.title}>{mhz ? `${mhz} ميقا` : (tab === 'NR' ? 'n' : 'B') + b}</Text>
+                  {!!mhz && (
+                    <View style={[o.tag, { backgroundColor: k.bg }]}>
+                      <Text style={[o.tagText, { color: k.fg }]}>{KIND_LABEL[kindOf(mhz)]}</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={o.subRow}>
+                  <View style={o.bars}>
+                    {[1, 2, 3, 4].map(n => (
+                      <View key={n} style={[o.bar, { height: 3 + n * 2.25, backgroundColor: n <= lvl ? barColor : C.lineSoft }]} />
+                    ))}
+                  </View>
+                  {(live || lvl > 0) && <View style={[o.dot, { backgroundColor: live ? C.green : barColor }]} />}
+                  <Text style={[o.sub, live && { color: C.green }]} numberOfLines={1}>
+                    {live ? 'متصل عليه الحين' : SIG_TEXT[lvl]}
+                  </Text>
+                  <Text style={o.code}>{(tab === 'NR' ? 'n' : 'B') + b}</Text>
+                </View>
+              </View>
+              <View style={[o.star, prim && { backgroundColor: isDark ? '#40382a' : '#fff6dc' }]}>
+                <Icon name="star" size={16} color={prim ? '#f0b020' : C.lineSoft} />
+              </View>
+              <View style={[o.sw, on ? { backgroundColor: C.blue, justifyContent: 'flex-start' } : { justifyContent: 'flex-end' }]}>
+                <View style={o.knob} />
+              </View>
+            </Pressable>
+          );
+        })}
+        <Pressable onPress={() => changeLayout('grid')} hitSlop={6} style={{ alignSelf: 'center' }}>
+          <Text style={[o.headText, { color: C.blue }]}>اعرض كمربعات</Text>
+        </Pressable>
+        <Pressable onPress={() => setShowAll(v => !v)} style={o.more} hitSlop={6}>
+          <Icon name={showAll ? 'up' : 'down'} size={14} color={C.blue} />
+          <Text style={o.moreText}>{showAll ? 'اعرض اللي فيها برج بس' : `اعرض كل ترددات ${tab === 'LTE' ? '4G' : '5G'} اللي يدعمها الراوتر`}</Text>
+        </Pressable>
+      </View>
+
+        </>
+      )}
 
       {/* الأزرار */}
       <Pressable
@@ -416,6 +512,87 @@ const s = StyleSheet.create({
   code: { color: C.muted, opacity: 0.75, fontSize: 11, fontWeight: '600' },
   sw: { width: 38, height: 22, borderRadius: 999, padding: 3, flexDirection: 'row', backgroundColor: C.line },
   knob: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#fff', shadowColor: '#0d2350', shadowOpacity: 0.2, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+  more: {
+    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, alignSelf: 'center',
+    marginTop: 2, paddingVertical: 9, paddingHorizontal: 16, borderRadius: 999,
+    borderWidth: 1, borderColor: TECH_TONE.LTE.line, backgroundColor: TECH_TONE.LTE.soft,
+  },
+  moreText: { color: C.blue, fontSize: 12, fontWeight: '700' },
+
+  cta: { minHeight: 54, alignItems: 'center', justifyContent: 'center' },
+  ctaText: { color: '#fff', fontSize: 15.5, fontWeight: '700' },
+  note: { color: C.muted, fontSize: 11.5, fontWeight: '600', textAlign: 'center' },
+  ghost: { borderWidth: 1, borderColor: C.blue, borderRadius: 16, paddingVertical: 12, alignItems: 'center' },
+  ghostText: { color: C.blue, fontSize: 14, fontWeight: '700' },
+});
+
+/** ستايل الشكل القديم (صفوف) — للي يفضّله */
+const o = StyleSheet.create({
+  hero: { borderRadius: 22, padding: 16, gap: 12 },
+  heroTop: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 },
+  speedBox: {
+    alignItems: 'flex-end', backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.28)',
+    borderRadius: 16, paddingHorizontal: 14, paddingVertical: 8,
+  },
+  heroKey: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '600' },
+  heroNumRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  heroNum: { color: '#fff', fontSize: 34, fontWeight: '700', lineHeight: 40 },
+  heroUnit: { color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: '600' },
+  heroSide: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  compBar: { flexDirection: 'row-reverse', gap: 4, height: 8, borderRadius: 999, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.15)' },
+  chips: { flexDirection: 'row-reverse', gap: 6 },
+  chip: {
+    flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center',
+    borderRadius: 14, borderWidth: 1, paddingVertical: 7, paddingHorizontal: 8, gap: 8,
+  },
+  chipLte: { backgroundColor: 'rgba(255,255,255,0.16)', borderColor: 'rgba(255,255,255,0.45)' },
+  chipNr: { backgroundColor: 'rgba(214,198,255,0.22)', borderColor: 'rgba(214,198,255,0.75)' },
+  chipPrim: { borderColor: '#ffd36a', borderWidth: 1.5 },
+  chipTech: { borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 },
+  chipTechText: { fontSize: 10, fontWeight: '800' },
+  chipText: { color: '#fff', fontSize: 16, fontWeight: '700', lineHeight: 19 },
+  chipUnit: { color: 'rgba(255,255,255,0.8)', fontSize: 9.5, fontWeight: '600', lineHeight: 12 },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  chipStar: { color: '#ffd36a', fontSize: 12, fontWeight: '800' },
+
+  seg: { flexDirection: 'row', gap: 8 },
+  segBtn: {
+    flex: 1, minHeight: 44, borderRadius: 14, borderWidth: 1.5, flexDirection: 'row-reverse',
+    alignItems: 'center', justifyContent: 'center', gap: 8,
+  },
+  segOn: { shadowColor: C.shadow, shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
+  segBadge: { borderRadius: 7, paddingHorizontal: 7, paddingVertical: 2 },
+  segBadgeText: { fontSize: 12, fontWeight: '800' },
+  segCount: { color: C.muted, fontSize: 12, fontWeight: '700', writingDirection: 'rtl' },
+  segText: { color: C.muted, fontSize: 13, fontWeight: '700', writingDirection: 'rtl' },
+
+  card: { backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, borderRadius: 22, overflow: 'hidden', paddingBottom: 10, gap: 8 },
+  cardHead: {
+    flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 22, paddingTop: 12, paddingBottom: 2,
+  },
+  headText: { color: C.muted, fontSize: 11.5, fontWeight: '700' },
+  row: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12, minHeight: 62,
+    marginHorizontal: 10, borderRadius: 16, borderWidth: 1, borderColor: isDark ? '#3a3128' : '#edf0f6',
+    backgroundColor: isDark ? '#2a231c' : '#ffffff',
+  },
+  rowOn: { borderColor: isDark ? '#4a3d30' : '#dfe7fb', backgroundColor: isDark ? '#30281f' : '#fbfcff' },
+  badge: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  badgeText: { fontSize: 11.5, fontWeight: '700' },
+  mid: { flex: 1, minWidth: 0, gap: 3, alignItems: 'flex-end' },
+  titleRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
+  title: { color: C.text, fontSize: 14.5, fontWeight: '700' },
+  tag: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 1 },
+  tagText: { fontSize: 10.5, fontWeight: '700', lineHeight: 16 },
+  subRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, maxWidth: '100%' },
+  bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 12 },
+  bar: { width: 3, borderRadius: 2 },
+  sub: { color: C.muted, fontSize: 11, fontWeight: '600', flexShrink: 1 },
+  code: { color: C.muted, opacity: 0.75, fontSize: 11, fontWeight: '600' },
+  star: { width: 40, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  sw: { width: 44, height: 26, borderRadius: 999, padding: 3, flexDirection: 'row', backgroundColor: C.line },
+  knob: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', shadowColor: '#0d2350', shadowOpacity: 0.2, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
   more: {
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, alignSelf: 'center',
     marginTop: 2, paddingVertical: 9, paddingHorizontal: 16, borderRadius: 999,
