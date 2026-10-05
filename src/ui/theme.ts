@@ -3,9 +3,7 @@ import { File, Paths } from 'expo-file-system';
 import * as Updates from 'expo-updates';
 
 /* ═══════════════════════════════════════════════════════════════
- * الثيم (فاتح / داكن)
- * الأنماط في كل الشاشات تنبني مرة وحدة وقت تحميل التطبيق (StyleSheet.create)،
- * فالثيم يتحدد هنا بشكل متزامن قبل أي شاشة، وتغييره يعيد تشغيل التطبيق.
+ * الثيم (فاتح / داكن) - ثيم مريح للعين بدائل فخمة داكنة
  * ═══════════════════════════════════════════════════════════════ */
 
 export type ThemePref = 'light' | 'dark' | 'system';
@@ -14,17 +12,17 @@ const PREF_FILE = 'bandly-theme.txt';
 function readPref(): ThemePref {
   try {
     const f = new File(Paths.document, PREF_FILE);
-    if (!f.exists) return 'light';
+    if (!f.exists) return 'dark';
     const v = f.textSync().trim();
-    return v === 'dark' || v === 'system' ? v : 'light';
+    return v === 'light' || v === 'system' ? v : 'dark';
   } catch {
-    return 'light';
+    return 'dark';
   }
 }
 
 export const THEME_PREF: ThemePref = readPref();
 export const isDark: boolean =
-  THEME_PREF === 'dark' || (THEME_PREF === 'system' && Appearance.getColorScheme() === 'dark');
+  THEME_PREF === 'dark' || (THEME_PREF === 'system' && Appearance.getColorScheme() === 'dark') || THEME_PREF !== 'light';
 
 /** يحفظ الاختيار ويعيد تشغيل التطبيق عشان كل الشاشات تاخذ الألوان الجديدة */
 export async function setThemePref(p: ThemePref): Promise<void> {
@@ -38,124 +36,120 @@ export async function setThemePref(p: ThemePref): Promise<void> {
 
 const LIGHT = {
   // الأسطح
-  bg: '#edf0f5',
-  bgTop: '#f0f3f7',
+  bg: '#f8fafc',
+  bgTop: '#f1f5f9',
   bgBottom: '#e2e8f0',
-  card: '#f8fafc',
-  cardBorder: '#e3e8ef',
-  rowBg: '#eff2f7',
-  track: '#bdd9fd',
+  card: '#ffffff',
+  cardBorder: '#e2e8f0',
+  rowBg: '#f1f5f9',
+  track: '#cbd5e1',
 
   // تدرّج بطاقة الترويسة
-  heroFrom: '#f4fbfe',
-  heroMid: '#e6f4ff',
-  heroTo: '#c4e5f9',
-  dangerTop: '#fff3f6',
-  dangerBottom: '#ffecf2',
+  heroFrom: '#eff6ff',
+  heroMid: '#e0f2fe',
+  heroTo: '#dbeafe',
+  dangerTop: '#fef2f2',
+  dangerBottom: '#ffe4e6',
 
   // النص
-  text: '#1e2d4d',
-  sub: '#70799b',
-  muted: '#70799b',
+  text: '#0f172a',
+  sub: '#475569',
+  muted: '#64748b',
 
-  // الهوية: الأزرق للإجراء فقط
-  blue: '#2f6bff',
-  blueIcon: '#2a73ff',
-  blueLight: '#628dfe',
-  blueSoft: '#bdd9fd',
-  blueDeep: '#1b47c7',
+  // الهوية: الأزرق للتمييز والإجراء
+  blue: '#2563eb',
+  blueIcon: '#3b82f6',
+  blueLight: '#60a5fa',
+  blueSoft: '#dbeafe',
+  blueDeep: '#1d4ed8',
 
   // ألوان المواضيع
-  violet: '#7a51e0',
-  violetBright: '#8448f5',
-  violetSoft: '#d6c6ff',
-  cyan: '#86d9ef',
-  cyanSoft: '#c5f3ff',
-  mint: '#57d3b2',
-  mintSoft: '#a9e6dd',
-  pink: '#e94079',
-  pinkSoft: '#ffc5d9',
-  crimson: '#cc275c',
+  violet: '#7c3aed',
+  violetBright: '#8b5cf6',
+  violetSoft: '#ede9fe',
+  cyan: '#0891b2',
+  cyanSoft: '#cff4fc',
+  mint: '#059669',
+  mintSoft: '#d1fae5',
+  pink: '#db2777',
+  pinkSoft: '#fce7f3',
+  crimson: '#e11d48',
 
   // الحالة
-  green: '#34ce83',
-  greenBright: '#47eb6b',
-  greenSoft: '#dafcee',
-  gold: '#ffc27a',
-  goldSoft: '#fff9f2',
-  amber: '#ffc27a',
-  amberSoft: '#fde4b8',
-  red: '#d73722',
-  redSoft: '#ffecf2',
+  green: '#059669',
+  greenBright: '#10b981',
+  greenSoft: '#d1fae5',
+  gold: '#d97706',
+  goldSoft: '#fef3c7',
+  amber: '#d97706',
+  amberSoft: '#fef3c7',
+  red: '#dc2626',
+  redSoft: '#fee2e2',
 
-  line: '#d8e0eb',
-  lineSoft: '#e1e7f0',
+  line: '#e2e8f0',
+  lineSoft: '#f1f5f9',
   onAccent: '#ffffff',
-  onAccentSoft: '#cfe0ff',
-  shadow: '#0d2350',
+  onAccentSoft: '#bfdbfe',
+  shadow: '#0f172a',
 };
 
-// داكن خافت (رمادي كحلي فاتح شوي، مو أسود) — مريح للعين وكل شي واضح فيه
+// داكن فخم مريح للعين (Midnight Obsidian) - بدون أسود حاد ولا بياض فاقع
 const DARK: typeof LIGHT = {
-  bg: '#1f1a15',
-  bgTop: '#231d17',
-  bgBottom: '#1b1612',
-  card: '#2c251e',
-  cardBorder: '#40362b',
-  rowBg: '#352d24',
-  track: '#5a4632',
+  bg: '#12151e',
+  bgTop: '#1a1f2c',
+  bgBottom: '#10131b',
+  card: '#1e2433',
+  cardBorder: '#2a3246',
+  rowBg: '#171c28',
+  track: '#263046',
 
-  heroFrom: '#2f271f',
-  heroMid: '#352b21',
-  heroTo: '#3d3125',
-  dangerTop: '#3c2632',
-  dangerBottom: '#432a37',
+  heroFrom: '#1c2333',
+  heroMid: '#1a202e',
+  heroTo: '#141824',
+  dangerTop: '#331c24',
+  dangerBottom: '#24141a',
 
-  text: '#f2ebe1',
-  sub: '#d6cabb',
-  muted: '#c2b5a4',
+  text: '#f3f4f6',
+  sub: '#9ca3af',
+  muted: '#6b7280',
 
-  blue: '#d08a4f',
-  blueIcon: '#d9955c',
-  blueLight: '#e3ac7a',
-  blueSoft: '#4a3826',
-  blueDeep: '#f0cfa6',
+  blue: '#3b82f6',
+  blueIcon: '#60a5fa',
+  blueLight: '#93c5fd',
+  blueSoft: '#1e293b',
+  blueDeep: '#2563eb',
 
-  violet: '#b099f7',
-  violetBright: '#a67cff',
-  violetSoft: '#40376b',
-  cyan: '#6fd2ec',
-  cyanSoft: '#264652',
-  mint: '#6adcbd',
-  mintSoft: '#264e48',
-  pink: '#f478a8',
-  pinkSoft: '#522c3d',
-  crimson: '#f07099',
+  violet: '#8b5cf6',
+  violetBright: '#a78bfa',
+  violetSoft: '#2e1065',
+  cyan: '#06b6d4',
+  cyanSoft: '#164e63',
+  mint: '#10b981',
+  mintSoft: '#064e3b',
+  pink: '#ec4899',
+  pinkSoft: '#831843',
+  crimson: '#f43f5e',
 
-  green: '#4fdc9a',
-  greenBright: '#5cef7e',
-  greenSoft: '#24493c',
-  gold: '#ffcb8c',
-  goldSoft: '#40382a',
-  amber: '#ffcb8c',
-  amberSoft: '#4d3e25',
-  red: '#ff7d6b',
-  redSoft: '#4d2c33',
+  green: '#10b981',
+  greenBright: '#34d399',
+  greenSoft: '#064e3b',
+  gold: '#f59e0b',
+  goldSoft: '#451a03',
+  amber: '#f59e0b',
+  amberSoft: '#78350f',
+  red: '#ef4444',
+  redSoft: '#7f1d1d',
 
-  line: '#40362b',
-  lineSoft: '#382f26',
+  line: '#273043',
+  lineSoft: '#1f2738',
   onAccent: '#ffffff',
-  onAccentSoft: '#fbe9d4',
+  onAccentSoft: '#dbeafe',
   shadow: '#000000',
 };
 
 export const C = isDark ? DARK : LIGHT;
 
-/* ═══ تكييف الألوان المكتوبة مباشرة في الشاشات ═══
- * في الفاتح ترجع اللون نفسه. في الداكن:
- *  bg/bd: الخلفيات الفاتحة (أبيض وباستيل) تصير داكنة بنفس الدرجة اللونية
- *  fg:    النصوص الغامقة تصير فاتحة — والألوان الزاهية (أزرق، أخضر...) تبقى
- */
+/* ═══ تكييف الألوان المكتوبة مباشرة في الشاشات ═══ */
 type Rgba = { r: number; g: number; b: number; a: number };
 
 function parse(c: string): Rgba | null {
@@ -203,13 +197,11 @@ function adapt(c: string, role: 'bg' | 'bd' | 'fg'): string {
   const p = parse(c);
   if (p) {
     let [h, s, l] = toHsl(p);
-    // الرمادي والأبيض ياخذون الكحلي حق الثيم بدل الرمادي الباهت
-    if (s < 0.12) { h = 32; s = 0.22; }
+    if (s < 0.12) { h = 222; s = 0.22; }
     if (role === 'fg') {
       if (l < 0.3 || (l <= 0.42 && s < 0.5)) out = fromHsl(h, Math.min(s, 0.45), Math.min(0.95, 1 - l * 0.45), p.a);
     } else if (l >= 0.8 && p.a >= 0.5) {
-      // الشفاف الخفيف (زجاج فوق تدرّج ملوّن) نخليه زي ما هو
-      const nl = 0.23 + (1 - l) * 0.45 + (role === 'bd' ? 0.1 : 0);
+      const nl = 0.20 + (1 - l) * 0.45 + (role === 'bd' ? 0.1 : 0);
       out = fromHsl(h, Math.min(s, 0.3), nl, p.a);
     }
   }
@@ -224,11 +216,11 @@ export const tBd = (c: string) => adapt(c, 'bd');
 /** لون نص أو أيقونة */
 export const tFg = (c: string) => adapt(c, 'fg');
 
-/** أنصاف الأقطار */
-export const R = { sm: 18, md: 22, lg: 28, pill: 999 };
+/** أنصاف الأقطار - زوايا متناسقة وعصرية */
+export const R = { xs: 8, sm: 12, md: 16, lg: 20, xl: 24, pill: 999 };
 
-/** المسافات على شبكة ٤ */
-export const S = { xs: 4, sm: 8, md: 12, lg: 16, xl: 22 };
+/** المسافات على شبكة 4 */
+export const S = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24 };
 
-/** مقاسات الخط */
-export const T = { score: 44, h1: 23, h2: 17, body: 14, label: 12, tiny: 11 };
+/** مقاسات الخطوط */
+export const T = { score: 40, h1: 22, h2: 17, body: 14, label: 12, tiny: 11 };
