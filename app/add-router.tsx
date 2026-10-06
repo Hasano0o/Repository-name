@@ -18,7 +18,9 @@ import { C, R, S, T, tBd, tBg, tFg } from '../src/ui/theme';
 import { isLanHost } from '../src/utils/host';
 import { detectDriver } from '../src/drivers/registry';
 import { DesktopNetCard, explainDetectFailure, useDesktopNet } from '../src/ui/DesktopNet';
-import { getRouter, saveRouter, updateRouter, deleteRouter, SavedRouter } from '../src/store/routers';
+import { getRouter, saveRouter, updateRouter, deleteRouter, SavedRouter, setWifi, SavedWifi } from '../src/store/routers';
+import { LabelScannerHost, ensureScanner } from '../src/ui/scanner';
+import type { LabelData } from '../src/utils/routerLabel';
 import { dropSession } from '../src/store/sessions';
 import {
   DEVICE_DRIVER_ID, DEVICE_HOST, ensureCellPermission,
@@ -50,6 +52,12 @@ export default function AddRouterScreen() {
   const [focus, setFocus] = useState<string | null>(null);
   /** تعديل «هذا الجهاز» — ما له عنوان ولا كلمة مرور */
   const [isDevice, setIsDevice] = useState(false);
+  /** ماسح ملصق الراوتر + بيانات الواي فاي اللي انقرأت منه (تنحفظ مع الراوتر) */
+  const [scanning, setScanning] = useState(false);
+  const [wifi, setWifiState] = useState<SavedWifi | null>(null);
+  const [scanMsg, setScanMsg] = useState('');
+  // يظهر حتى بالنسخ القديمة (يطلب التحديث) — بس مو بالويندوز
+  const canScan = Platform.OS !== 'web';
   // نسخة الويندوز: حالة الشبكة + تعبئة عنوان الراوتر تلقائياً (ما لم يغيّره المستخدم)
   const net = useDesktopNet();
   const hostTouched = useRef(false);
@@ -132,6 +140,22 @@ export default function AddRouterScreen() {
     }
   }
 
+  function onScanned(d: LabelData) {
+    const got: string[] = [];
+    if (d.host) { pickHost(d.host); got.push('العنوان'); }
+    if (d.username) { setUsername(d.username); got.push('اسم المستخدم'); }
+    if (d.adminPassword) { setPassword(d.adminPassword); got.push('كلمة المرور'); }
+    if (d.wifi?.ssid) {
+      setWifiState({ ssid: d.wifi.ssid, password: d.wifi.password ?? '' });
+      got.push('الواي فاي');
+      if (!name.trim()) setName(d.wifi.ssid);
+    }
+    setScanMsg(got.length ? `✓ عبّينا: ${got.join('، ')}` : '');
+    if (!d.adminPassword && d.wifi?.password) {
+      Alert.alert('كلمة مرور الإدارة', 'ما لقينا كلمة مرور الإدارة على الملصق. بعض الرواترات تستخدم نفس كلمة سر الواي فاي أو «admin» — جرّبها.');
+    }
+  }
+
   async function onSave() {
     if (isDevice && editId) {
       setBusy(true);
@@ -202,6 +226,7 @@ export default function AddRouterScreen() {
       } else {
         saved = await saveRouter(payload, password);
       }
+      if (wifi?.ssid) { try { await setWifi(saved.id, wifi); } catch {} }
       nav.replace({ pathname: '/router/[id]', params: { id: saved.id } });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -290,6 +315,25 @@ export default function AddRouterScreen() {
               <Icon name="chevron" size={18} color={C.blue} />
             </Pressable>
           )}
+
+          {/* امسح ملصق الراوتر — يعبّي البيانات لحاله */}
+          {!isDevice && canScan && (
+            <Pressable
+              onPress={() => ensureScanner() && setScanning(true)}
+              disabled={busy}
+              style={({ pressed }) => [styles.deviceCard, styles.scanCard, pressed && { opacity: 0.8 }]}
+            >
+              <View style={[styles.deviceIcon, { backgroundColor: tBg('#e9fbf2') }]}><Text style={{ fontSize: 24 }}>📷</Text></View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.deviceTitle}>امسح ملصق الراوتر</Text>
+                <Text style={styles.deviceSub}>
+                  {scanMsg || 'صوّر الملصق اللي تحت الراوتر ونعبّي العنوان وكلمة المرور والواي فاي لحالها'}
+                </Text>
+              </View>
+              <Icon name="chevron" size={18} color={tFg('#12b76a')} />
+            </Pressable>
+          )}
+          <LabelScannerHost visible={scanning} onClose={() => setScanning(false)} onResult={onScanned} />
 
           {/* النموذج */}
           <View style={styles.card}>
@@ -523,6 +567,7 @@ const styles = StyleSheet.create({
     backgroundColor: tBg('rgba(255,255,255,0.92)'), borderRadius: 20, padding: S.md,
     borderWidth: 1.5, borderColor: tBd('#cfdcff'),
   },
+  scanCard: { borderColor: tBd('#bfeed6') },
   deviceIcon: {
     width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center',
     backgroundColor: tBg('#eef3ff'),

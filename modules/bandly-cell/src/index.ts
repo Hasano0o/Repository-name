@@ -50,6 +50,8 @@ interface BandlyCellNative {
   deviceInfo(): RawDeviceInfo;
   serviceInfo(): RawService;
   getCells(): Promise<RawCell[]>;
+  /** موجود من نسخة أكتوبر ٢٠٢٦ — النسخ الأقدم ما فيها */
+  recognizeText?(uri: string): Promise<{ text: string; lines: string[] }>;
 }
 
 /**
@@ -64,4 +66,14 @@ export const cellModuleAvailable = (): boolean => Native !== null;
 export function cellNative(): BandlyCellNative {
   if (!Native) throw new Error('هذي الميزة تحتاج آخر نسخة من Bandly — حمّلها من البوت وثبّتها');
   return Native;
+}
+
+/** قراءة النص من صورة — null لو التطبيق المثبّت ما يدعمها */
+export function ocrAvailable(): boolean {
+  return typeof Native?.recognizeText === 'function';
+}
+
+export async function recognizeText(uri: string): Promise<{ text: string; lines: string[] }> {
+  if (!Native?.recognizeText) throw new Error('قراءة النص تحتاج آخر نسخة من Bandly — حمّلها من البوت');
+  return Native.recognizeText(uri);
 }

@@ -680,6 +680,14 @@ export default function RouterDashboard() {
           <View style={s.moreCard}>
             <GroupTitle title="إعدادات وأدوات" color={tFg('#f97316')} />
             <View style={s.moreGrid}>
+              {info.driverId !== 'device' && (
+                <Pressable style={[s.moreTile, { backgroundColor: tBg('#2f6bff12'), borderColor: tBd('#2f6bff30') }]} onPress={() => router.push(`/wifi/${info.id}` as Href)}>
+                  <View style={[s.moreIcon, { backgroundColor: tBg('#2f6bff') }]}>
+                    <Icon name="wifi" size={18} color={tFg('#fff')} />
+                  </View>
+                  <Text style={s.moreLbl}>شارك الواي فاي</Text>
+                </Pressable>
+              )}
               {feat.sms && (
                 <Pressable style={[s.moreTile, { backgroundColor: tBg('#16a34a12'), borderColor: tBd('#16a34a30') }]} onPress={() => router.push(`/sms/${info.id}` as Href)}>
                   <View style={[s.moreIcon, { backgroundColor: tBg('#16a34a') }]}>

@@ -13,6 +13,24 @@ export interface SavedRouter {
 
 const KEY = 'routers:v1';
 const pwKey = (id: string) => `router_pw_${id}`;
+const wifiKey = (id: string) => `router_wifi_${id}`;
+
+/** بيانات الواي فاي (للمشاركة مع الضيوف) — محفوظة مشفّرة مثل كلمة مرور الإدارة */
+export interface SavedWifi { ssid: string; password: string; security?: string }
+
+export async function getWifi(id: string): Promise<SavedWifi | null> {
+  try {
+    const raw = await secret.get(wifiKey(id));
+    return raw ? (JSON.parse(raw) as SavedWifi) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function setWifi(id: string, w: SavedWifi | null): Promise<void> {
+  if (!w || !w.ssid) { try { await secret.del(wifiKey(id)); } catch {} return; }
+  await secret.set(wifiKey(id), JSON.stringify(w));
+}
 
 export async function listRouters(): Promise<SavedRouter[]> {
   try {
@@ -74,6 +92,7 @@ export async function deleteRouter(id: string) {
   const all = await listRouters();
   await AsyncStorage.setItem(KEY, JSON.stringify(all.filter(r => r.id !== id)));
   try { await secret.del(pwKey(id)); } catch {}
+  try { await secret.del(wifiKey(id)); } catch {}
 }
 
 export function getPassword(id: string) {

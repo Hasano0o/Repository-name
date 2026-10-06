@@ -103,7 +103,15 @@
           "cameraPermission": "Bandly يستخدم الكاميرا بس لما تشغّلها بنفسك أثناء المكالمة، عشان الفني يشوف الهوائي والراوتر ويوجّهك.",
           "microphonePermission": "Bandly يستخدم الميكروفون للمكالمات والرسائل الصوتية مع الفني."
         }
-      ]
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Bandly يستخدم الكاميرا لقراءة ملصق الراوتر، وأثناء المكالمة لما تشغّلها بنفسك عشان الفني يشوف الهوائي والراوتر.",
+          "recordAudioAndroid": false
+        }
+      ],
+      "./plugins/withMlkitDeps"
     ],
     "experiments": {
       "typedRoutes": true

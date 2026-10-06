@@ -20,4 +20,6 @@ android {
 dependencies {
   implementation 'com.facebook.react:react-android'
   implementation 'com.squareup.okhttp3:okhttp:4.9.2'
+  // قراءة النص من ملصق الراوتر — نسخة خدمات Google (ما تكبّر التطبيق، النموذج ينزل مرة وحدة)
+  implementation 'com.google.android.gms:play-services-mlkit-text-recognition:19.0.0'
 }

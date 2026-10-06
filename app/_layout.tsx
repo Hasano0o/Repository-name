@@ -38,6 +38,7 @@ const SCREENS: [string, string][] = [
   ['profiles/[id]', 'ملفات التعريف'],
   ['optimize/[id]', 'المُحسِّن التلقائي'],
   ['report/[id]', 'تقرير الاتصال'],
+  ['wifi/[id]', 'مشاركة الواي فاي'],
   ['device/[id]', 'الجهاز'],
   ['speed/[id]', 'اختبار السرعة'],
   ['network/[id]', 'إعدادات الشبكة'],

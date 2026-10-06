@@ -1,6 +1,7 @@
 package expo.modules.bandlycell
 
 import android.Manifest
+import android.net.Uri
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -18,6 +19,9 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicBoolean
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 
 /**
  * يقرأ إشارة الشبكة من شريحة الجهاز نفسه (4G/5G) عن طريق TelephonyManager.
@@ -48,6 +52,28 @@ class BandlyCellModule : Module() {
     }
 
     Function("hasPermission") { hasLocation() }
+
+    /**
+     * يقرأ النص من صورة (ملصق الراوتر) على الجهاز نفسه — بدون إنترنت ولا رفع.
+     * يرجع النص كامل + السطور بترتيب القراءة.
+     */
+    AsyncFunction("recognizeText") { uri: String, promise: Promise ->
+      try {
+        val image = InputImage.fromFilePath(ctx, Uri.parse(uri))
+        TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+          .process(image)
+          .addOnSuccessListener { res ->
+            val lines = mutableListOf<String>()
+            for (b in res.textBlocks) for (l in b.lines) lines.add(l.text)
+            promise.resolve(mapOf("text" to res.text, "lines" to lines))
+          }
+          .addOnFailureListener { e ->
+            promise.reject(CodedException("OCR_FAILED", e.message ?: "تعذّر قراءة النص", e))
+          }
+      } catch (e: Throwable) {
+        promise.reject(CodedException("OCR_FAILED", e.message ?: "تعذّر فتح الصورة", e))
+      }
+    }
 
     Function("deviceInfo") {
       val t = tm()
