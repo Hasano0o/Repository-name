@@ -52,6 +52,10 @@ const TECH_TONE: Record<Tech, { fg: string; soft: string; line: string }> = isDa
   ? { LTE: { fg: '#9cbcff', soft: '#26324a', line: '#3b4d72' }, NR: { fg: '#c9b8ff', soft: '#33294f', line: '#53447f' } }
   : { LTE: { fg: '#2f6bff', soft: '#eef3ff', line: '#c9d8ff' }, NR: { fg: '#7a51e0', soft: '#f4efff', line: '#dccdff' } };
 const KIND_HINT: Record<Kind, string> = { far: 'يمسك من بعيد وداخل البيت', mid: 'سرعة وتغطية', fast: 'أعلى سرعة لو البرج قريب' };
+/** المفتاح المطفي: وردي هادي (مقفل باختيارك — مو خطأ) */
+const SW_OFF = isDark
+  ? { backgroundColor: '#4d2c33', borderColor: '#7a3a44' }
+  : { backgroundColor: '#F7D4D4', borderColor: '#E9A3A3' };
 const LAYOUT_KEY = 'bandly.bandsLayout';
 const SIG_TEXT = ['ما ظهر برج', 'ضعيفة', 'متوسطة', 'قوية', 'قوية جداً'];
 
@@ -291,7 +295,7 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
                       on && s.tileOn,
                       live && { borderColor: isDark ? '#2f5a46' : '#bfead3' },
                       on && { borderRightWidth: 4, borderRightColor: live ? C.green : TECH_TONE[tab].fg },
-                      !sv && !live && { opacity: 0.55 },
+
                     ]}
                   >
                     <View style={s.tileTop}>
@@ -305,8 +309,8 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
                         </View>
                         <Text style={s.code}>ميقا</Text>
                       </View>
-                      <View style={[s.sw, on ? { backgroundColor: TECH_TONE[tab].fg, justifyContent: 'flex-start' } : { justifyContent: 'flex-end' }]}>
-                        <View style={s.knob} />
+                      <View style={[s.sw, on ? { backgroundColor: TECH_TONE[tab].fg, borderColor: TECH_TONE[tab].fg, justifyContent: 'flex-start' } : { ...SW_OFF, justifyContent: 'flex-end' }]}>
+                        <View style={[s.knob, !on && { borderWidth: 1, borderColor: SW_OFF.borderColor }]} />
                       </View>
                     </View>
                     <View style={s.subRow}>
@@ -395,8 +399,8 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
               <View style={[o.star, prim && { backgroundColor: isDark ? '#40382a' : '#fff6dc' }]}>
                 <Icon name="star" size={16} color={prim ? '#f0b020' : C.lineSoft} />
               </View>
-              <View style={[o.sw, on ? { backgroundColor: C.blue, justifyContent: 'flex-start' } : { justifyContent: 'flex-end' }]}>
-                <View style={o.knob} />
+              <View style={[o.sw, on ? { backgroundColor: C.blue, borderColor: C.blue, justifyContent: 'flex-start' } : { ...SW_OFF, justifyContent: 'flex-end' }]}>
+                <View style={[o.knob, !on && { borderWidth: 1, borderColor: SW_OFF.borderColor }]} />
               </View>
             </Pressable>
           );
@@ -510,7 +514,7 @@ const s = StyleSheet.create({
   bar: { width: 3, borderRadius: 2 },
   sub: { color: C.muted, fontSize: 11, fontWeight: '600', flexShrink: 1 },
   code: { color: C.muted, opacity: 0.75, fontSize: 11, fontWeight: '600' },
-  sw: { width: 38, height: 22, borderRadius: 999, padding: 3, flexDirection: 'row', backgroundColor: C.line },
+  sw: { width: 38, height: 22, borderRadius: 999, padding: 2, flexDirection: 'row', backgroundColor: C.line, borderWidth: 1, borderColor: C.line },
   knob: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#fff', shadowColor: '#0d2350', shadowOpacity: 0.2, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
   more: {
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, alignSelf: 'center',
@@ -591,7 +595,7 @@ const o = StyleSheet.create({
   sub: { color: C.muted, fontSize: 11, fontWeight: '600', flexShrink: 1 },
   code: { color: C.muted, opacity: 0.75, fontSize: 11, fontWeight: '600' },
   star: { width: 40, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  sw: { width: 44, height: 26, borderRadius: 999, padding: 3, flexDirection: 'row', backgroundColor: C.line },
+  sw: { width: 44, height: 26, borderRadius: 999, padding: 2, flexDirection: 'row', backgroundColor: C.line, borderWidth: 1, borderColor: C.line },
   knob: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', shadowColor: '#0d2350', shadowOpacity: 0.2, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
   more: {
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, alignSelf: 'center',
