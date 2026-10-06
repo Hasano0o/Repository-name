@@ -7,6 +7,7 @@ import { getBaseline } from '../store/baseline';
 import { driverById } from '../drivers/registry';
 import { trafficBurst } from './nrprobe';
 import { isNoService } from './signal';
+import { progress, Tracker } from '../ui/Progress';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : undefined);
@@ -141,7 +142,7 @@ export function canRescue(r: SavedRouter | null | undefined): boolean {
  * يفك كل الأقفال ويرجع الإعدادات الأصلية ويعيد التشغيل، وينتظر الراوتر يرجع.
  * يعيد المحاولة لو الراوتر كان في نص إعادة تشغيل. يرجع true لو رجع الاتصال.
  */
-export async function rescueRouter(r: SavedRouter, say: (s: string) => void = () => {}): Promise<boolean> {
+async function rescueRouterImpl(r: SavedRouter, say: (s: string) => void): Promise<boolean> {
   const baseline = await getBaseline(r.id);
   let lastErr: unknown;
   let sent = false;
@@ -175,7 +176,7 @@ export async function rescueRouter(r: SavedRouter, say: (s: string) => void = ()
  * ١. فك تثبيت الأبراج + الترددات على التلقائي (بدون إعادة تشغيل — أسرع)
  * ٢. ما رجع؟ الإنقاذ الكامل (الإعدادات الأصلية + إعادة تشغيل) أو إعادة تشغيل عادية
  */
-export async function freeRelease(r: SavedRouter, say: (s: string) => void = () => {}): Promise<boolean> {
+async function freeReleaseImpl(r: SavedRouter, say: (s: string) => void): Promise<boolean> {
   say('نفك كل التثبيتات عشان الراوتر يلقط أقوى برج...');
   let released = false;
   for (let i = 0; i < 3 && !released; i++) {
@@ -221,6 +222,37 @@ export async function freeRelease(r: SavedRouter, say: (s: string) => void = () 
   dropSession(r.id);
   await sleep(25000);
   return waitOnline(r, 180000, () => false);
+}
+
+/** يربط رسائل العملية بنافذة التقدّم: رسائل معروفة تنقل الخطوة، والباقي يطلع كملاحظة */
+function tracked(t: Tracker, say: (s: string) => void, map: [RegExp, number | string][]) {
+  return (msg: string) => {
+    say(msg);
+    const hit = map.find(([re]) => re.test(msg));
+    if (hit) t.step(hit[1]); else t.note(msg);
+  };
+}
+
+/** الإنقاذ: الإعدادات الأصلية + إعادة تشغيل — مع نافذة التقدّم */
+export async function rescueRouter(r: SavedRouter, say: (s: string) => void = () => {}): Promise<boolean> {
+  const t = progress.start('نرجّع إعدادات الراوتر الأصلية', ['نفك الأقفال ونرجّع الإعدادات', 'الراوتر يعيد التشغيل ويرجع'], 200);
+  try {
+    return await rescueRouterImpl(r, tracked(t, say, [[/نفك كل الأقفال/, 0], [/يعيد التشغيل/, 1]]));
+  } finally {
+    t.end();
+  }
+}
+
+/** «رجّع الإشارة» — مع نافذة التقدّم */
+export async function freeRelease(r: SavedRouter, say: (s: string) => void = () => {}): Promise<boolean> {
+  const t = progress.start('نرجّع الإشارة', ['نفك تثبيت الأبراج والترددات', 'ننتظر الراوتر يلقط أقوى برج'], 100);
+  try {
+    return await freeReleaseImpl(r, tracked(t, say, [
+      [/نفك كل التثبيتات/, 0], [/يلقط أقوى برج\.\.\./, 1], [/نعيد تشغيل الراوتر/, 'نعيد تشغيل الراوتر'],
+    ]));
+  } finally {
+    t.end();
+  }
 }
 
 export type TrialVerdict = 'better' | 'same' | 'worse' | 'noconn';
@@ -272,7 +304,26 @@ export interface SafeApplyOpts {
 
 /** يطبّق بأمان، ومقفول لكل راوتر عشان ما تشتغل عمليتان معاً */
 export function safeApply(o: SafeApplyOpts): Promise<TrialResult> {
-  return withRouterLock(o.r.id, () => safeApplyInner(o));
+  return withRouterLock(o.r.id, async () => {
+    const t = progress.start(o.label, ['نقيس الوضع الحالي', 'نطبّق التغيير', 'ننتظر الراوتر يتصل', 'نقيس النتيجة'], o.withNr ? 75 : 60);
+    const base = o.onStatus ?? (() => {});
+    const say = (msg: string) => {
+      base(msg);
+      if (/ننتظر قرارك/.test(msg)) { t.hide(true); return; }
+      t.hide(false);
+      if (/نقيس الوضع الحالي/.test(msg)) t.step(0);
+      else if (/نطبّق التغيير/.test(msg)) t.step(1);
+      else if (/ننتظر الراوتر يتصل/.test(msg)) t.step(2);
+      else if (/ننتظر الإشارة تستقر|نقيس بعد التغيير/.test(msg)) t.step(3);
+      else if (/نرجع الإعداد السابق|نرجّع إعدادك السابق/.test(msg)) t.step('نرجّع إعدادك السابق');
+      else t.note(msg);
+    };
+    try {
+      return await safeApplyInner({ ...o, onStatus: say });
+    } finally {
+      t.end();
+    }
+  });
 }
 
 async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {

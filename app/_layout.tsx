@@ -18,6 +18,7 @@ import { C, isDark } from '../src/ui/theme';
 import { UpdateBanner } from '../src/ui/UpdateBanner';
 import { initNotificationHandler } from '../src/utils/notify';
 import '../src/tasks/monitor'; // يسجّل تعريف مهمة المراقبة الخلفية عند الإقلاع
+import { ProgressHost } from '../src/ui/Progress';
 
 initNotificationHandler();
 
@@ -105,6 +106,7 @@ export default function RootLayout() {
         ))}
       </Stack>
       <UpdateBanner />
+      <ProgressHost />
     </>
   );
 }
