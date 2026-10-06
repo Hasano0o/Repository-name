@@ -767,13 +767,15 @@ export default function AimScreen() {
             {/* ═══ Hero ═══ */}
             {/* ═══ شريط التوجيه: الصوت والاهتزاز + وين أنت من أفضل نقطة ═══ */}
             <View style={a.aimBar}>
-              <Pressable onPress={() => setSound(v => !v)} style={[a.aimTgl, sound && { backgroundColor: PURPLE, borderColor: PURPLE }]}>
-                <Icon name="sound" size={16} color={sound ? tFg('#fff') : MUTED} stroke={2.2} />
-                <Text style={[a.aimTglTxt, sound && { color: tFg('#fff') }]}>الصوت</Text>
+              <Pressable onPress={() => setSound(v => !v)}
+                style={[a.aimTgl, { backgroundColor: P.violetSoft, borderColor: tBd('#b9a6ff') }, sound && { backgroundColor: PURPLE, borderColor: PURPLE }]}>
+                <Icon name="sound" size={16} color={sound ? tFg('#fff') : PURPLE} stroke={2.2} />
+                <Text style={[a.aimTglTxt, { color: sound ? tFg('#fff') : PURPLE }]}>الصوت</Text>
               </Pressable>
-              <Pressable onPress={() => setHaptics(v => !v)} style={[a.aimTgl, haptics && { backgroundColor: SUCCESS, borderColor: SUCCESS }]}>
-                <Icon name="vibrate" size={16} color={haptics ? tFg('#fff') : MUTED} stroke={2.2} />
-                <Text style={[a.aimTglTxt, haptics && { color: tFg('#fff') }]}>الاهتزاز</Text>
+              <Pressable onPress={() => setHaptics(v => !v)}
+                style={[a.aimTgl, { backgroundColor: P.greenSoft, borderColor: tBd('#9fe0bf') }, haptics && { backgroundColor: SUCCESS, borderColor: SUCCESS }]}>
+                <Icon name="vibrate" size={16} color={haptics ? tFg('#fff') : SUCCESS} stroke={2.2} />
+                <Text style={[a.aimTglTxt, { color: haptics ? tFg('#fff') : SUCCESS }]}>الاهتزاز</Text>
               </Pressable>
               <View style={[a.aimState, {
                 backgroundColor: gapToBest === undefined ? P.soft : gapToBest <= 1 ? P.greenSoft : gapToBest >= 5 ? P.redSoft : P.amberSoft,

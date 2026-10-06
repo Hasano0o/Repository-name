@@ -142,7 +142,7 @@ function PingBar({ ping, to }: { ping?: number; to?: string }) {
   const lv = pingLevel(ping);
   const col = ping === undefined ? P.faint : LEVEL_COLOR[lv];
   return (
-    <View style={pb.bar}>
+    <View style={[pb.bar, { borderColor: tBd(col + '66'), backgroundColor: tBg(col + '12') }]}>
       <View style={pb.valBox}>
         <Text style={[pb.val, { color: col }]}>{ping ?? '…'}</Text>
         <Text style={pb.unit}>ms</Text>
@@ -159,7 +159,7 @@ function PingBar({ ping, to }: { ping?: number; to?: string }) {
 }
 
 const pb = StyleSheet.create({
-  bar: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: tBg('#ffffff'), borderRadius: 20, paddingVertical: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: P.soft },
+  bar: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: tBg('#ffffff'), borderRadius: 20, paddingVertical: 12, paddingHorizontal: 14, borderWidth: 1.5, borderColor: P.border },
   valBox: { flexDirection: 'row', alignItems: 'baseline', gap: 3, minWidth: 74 },
   val: { fontSize: 30, fontWeight: '900', letterSpacing: -0.5 },
   unit: { fontSize: 12, color: P.sub, fontWeight: '700' },
