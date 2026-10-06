@@ -42,7 +42,7 @@ export function DevContact() {
 
 const s = StyleSheet.create({
   box: {
-    backgroundColor: P.card, borderColor: P.border, borderWidth: 1, borderRadius: 18,
+    backgroundColor: P.card, borderColor: P.border, borderWidth: 1.5, borderRadius: 18,
     padding: 14, gap: 12,
   },
   head: { alignItems: 'flex-end' },

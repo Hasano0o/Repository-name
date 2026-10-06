@@ -442,7 +442,7 @@ function ThemePicker() {
 
 const s = StyleSheet.create({
   theme: {
-    backgroundColor: P.card, borderColor: P.border, borderWidth: 1, borderRadius: 18,
+    backgroundColor: P.card, borderColor: P.border, borderWidth: 1.5, borderRadius: 18,
     paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row-reverse', alignItems: 'center', gap: 12,
   },
   themeTitle: { color: P.text, fontWeight: '800', fontSize: 14 },
@@ -472,7 +472,7 @@ const s = StyleSheet.create({
   statUnit: { color: tFg('rgba(255,255,255,0.8)'), fontSize: 10.5, fontWeight: '700' },
   statLbl: { color: tFg('rgba(255,255,255,0.8)'), fontSize: 11, fontWeight: '600' },
 
-  card: { backgroundColor: P.card, borderRadius: 24, padding: 14, gap: 12, borderWidth: 1, borderColor: P.border, ...shadow },
+  card: { backgroundColor: P.card, borderRadius: 24, padding: 14, gap: 12, borderWidth: 1.5, borderColor: P.border, ...shadow },
   row: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
   avatar: { width: 52, height: 52, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   name: { color: P.text, fontSize: 17, fontWeight: '800', textAlign: 'right', flexShrink: 1 },
@@ -508,6 +508,7 @@ const s = StyleSheet.create({
   tech: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 12, marginTop: 4,
     borderRadius: 20, padding: 14, backgroundColor: tBg('#0ea5c6'),
+    borderWidth: 1.5, borderColor: tBd('#0b86a1'),
   },
   techIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: tBg('rgba(255,255,255,0.2)'), alignItems: 'center', justifyContent: 'center' },
   techTitle: { color: tFg('#fff'), fontSize: 14.5, fontWeight: '800' },
