@@ -524,10 +524,14 @@ export class ZteDriver implements RouterDriver {
     await this.ensure();
     const r = await this.get(['network_provider', 'network_type', 'ppp_status', 'modem_main_state']);
     const state = (r.modem_main_state || '') + ' ' + (r.ppp_status || '');
+    const type = pick(r, 'network_type') ?? '';
+    // انتبه: «ppp_disconnected» فيها كلمة connected — نستثني اللي قبلها s (dis-connected)
+    // و«LIMITED_SERVICE / NO_SERVICE» = الأبراج طايحة حتى لو الحالة القديمة تقول متصل
+    const linked = /(^|[^s])connected|working/i.test(state) && !/connecting/i.test(state);
     return {
       operator: pick(r, 'network_provider'),
-      mode: pick(r, 'network_type'),
-      connected: /connect|working/i.test(state),
+      mode: type || undefined,
+      connected: linked && !/LIMITED|NO[_ ]?SERVICE/i.test(type),
     };
   }
 

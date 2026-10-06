@@ -10,8 +10,7 @@ import { withSession, dropSession } from '../../src/store/sessions';
 import { Signal, Usage, ConnectedDevice, Traffic, RouterDriver, DeviceDetails, DataPlan, ActiveLock } from '../../src/drivers/types';
 import {
   Level, LEVEL_COLOR, LEVEL_LABEL, overallLevel, parseBands, parseNrBands, signalScore,
-  rsrpLevel, rsrqLevel, sinrLevel, rssiLevel,
-} from '../../src/utils/signal';
+  rsrpLevel, rsrqLevel, sinrLevel, rssiLevel, isNoService } from '../../src/utils/signal';
 import { fmtRate, fmtDuration, fmtBytes } from '../../src/utils/format';
 import {addSample, stability } from '../../src/store/history';
 import { C, tBd, tBg, tFg } from '../../src/ui/theme';
@@ -33,7 +32,7 @@ import { DeviceRow } from '../../src/ui/DeviceRow';
 import { SyncIcon } from '../../src/ui/SyncIcon';
 import { StoreAd } from '../../src/ui/StoreAd';
 import { ComboCard } from '../../src/ui/ComboCard';
-import { canRescue, rescueRouter } from '../../src/utils/safeLock';
+import { canRescue, rescueRouter, freeRelease } from '../../src/utils/safeLock';
 import { hostLabel } from '../../src/drivers/device';
 
 interface Features {
@@ -336,6 +335,30 @@ export default function RouterDashboard() {
 
   // إنقاذ: الراوتر علق بدون خدمة بعد تثبيت برج/تردد — نرجّع إعداداته الأصلية بدون إعادة ضبط مصنع
   const [rescueStep, setRescueStep] = useState('');
+  /** بلا شبكة: نفك كل التثبيتات ويلقط أقوى برج (ولو ما رجع: الإعدادات الأصلية/إعادة تشغيل) */
+  const onFree = () => {
+    if (!info) return;
+    Alert.alert('رجّع الإشارة', 'بنفك تثبيت الأبراج والترددات ونخلي الراوتر يلقط أقوى برج بنفسه. لو ما رجعت، نعيد تشغيله.\n\nاسم الواي فاي وكلمة المرور ما يتغيرون.', [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'رجّعها', onPress: async () => {
+          setBusy(true);
+          setRescueStep('نبدأ...');
+          let back = false;
+          try { back = await freeRelease(info, st => setRescueStep(st)); } catch {}
+          setRescueStep('');
+          setBusy(false);
+          await loadAll(info).catch(() => {});
+          Alert.alert(
+            back ? '✅ رجعت الإشارة' : 'ما رجعت الشبكة للحين',
+            back
+              ? 'فكّينا التثبيتات والراوتر لقط أقوى برج. تقدر الحين تجرّب الأبراج والترددات براحتك.'
+              : 'فكّينا التثبيتات بس الشبكة ما رجعت. انتظر دقيقة، وتأكد من الشريحة والتغطية.',
+          );
+        },
+      },
+    ]);
+  };
   const onRescue = () => {
     if (!info) return;
     Alert.alert(
@@ -453,6 +476,8 @@ export default function RouterDashboard() {
     ? (bands.length ? '5G NSA' : '5G')
     : (bands.length > 1 ? '4G+' : signal?.network ?? '4G LTE') + (nrIdle ? ' · 5G متاح' : '');
   const disconnected = online === false;
+  // الأبراج طايحة (خدمة محدودة/لا خدمة) — نعرض زر «رجّع الإشارة» الأحمر بدل النصيحة
+  const noService = !error && isNoService(signal, online, mode);
   // التنبيه يطلع بس لراوتر يدعم 5G ومقفول على 4G — راوتر 4G فقط ما نزعجه
   const fourGOnly = mode === '03' && has5g !== false;
 
@@ -483,7 +508,7 @@ export default function RouterDashboard() {
           </View>
         )}
 
-        {!loading && (!!error || disconnected || !!rescueStep) && canRescue(info) && (
+        {!loading && !!error && !rescueStep && canRescue(info) && (
           <View style={s.rescueCard}>
             <Text style={s.rescueTitle}>الراوتر بدون خدمة؟</Text>
             <Text style={s.rescueText}>
@@ -534,10 +559,10 @@ export default function RouterDashboard() {
         {!loading && info && (
           <LinearGradient colors={[tBg('#2f6bff'), tBg('#6a4cff')]} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={s.topBar}>
             <View style={[s.statusPill, { backgroundColor: tBg('#ffffff') }]}>
-              <Text style={[s.statusText, { color: disconnected ? C.red : C.green }]}>
-                {disconnected ? 'منقطع' : 'متصل'}
+              <Text style={[s.statusText, { color: noService ? C.red : C.green }]}>
+                {disconnected ? 'منقطع' : noService ? 'بلا شبكة' : 'متصل'}
               </Text>
-              <View style={[s.statusDot, { backgroundColor: disconnected ? C.red : C.green }]} />
+              <View style={[s.statusDot, { backgroundColor: noService ? C.red : C.green }]} />
             </View>
             <View style={{ flex: 1 }} />
             <View style={{ flexShrink: 1 }}>
@@ -549,11 +574,11 @@ export default function RouterDashboard() {
         )}
 
         {!loading && info && (
-          <LinearGradient colors={HERO_BG[disconnected ? 'poor' : level]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.heroX}>
+          <LinearGradient colors={HERO_BG[noService ? 'poor' : level]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.heroX}>
             <ArcGauge score={signalScore(primary)} label={LEVEL_LABEL[level]} color={LEVEL_COLOR[level]} size={172} />
-            <Text style={s.heroLine}>{disconnected ? 'الراوتر غير متصل' : `اتصالك ${LEVEL_LABEL[level]}`}</Text>
-            {disconnected ? (
-              <Text style={s.heroSub}>ما فيه إشارة الآن</Text>
+            <Text style={s.heroLine}>{disconnected ? 'الراوتر غير متصل' : noService ? 'الراوتر بلا شبكة' : `اتصالك ${LEVEL_LABEL[level]}`}</Text>
+            {noService ? (
+              <Text style={s.heroSub}>الأبراج طايحة — اضغط «رجّع الإشارة» تحت</Text>
             ) : (
               <>
                 <Pressable style={s.heroBox} onPress={() => router.push(`/towers/${info.id}` as Href)}>
@@ -589,7 +614,21 @@ export default function RouterDashboard() {
           </LinearGradient>
         )}
 
-        {!loading && signal && info && (() => {
+        {!loading && info && (noService || !!rescueStep) && (
+          rescueStep ? (
+            <View style={[s.cta, s.freeBusy]}>
+              <ActivityIndicator color={tFg('#fff')} />
+              <Text style={[s.ctaText, { color: tFg('#fff') }]} numberOfLines={2}>{rescueStep}</Text>
+            </View>
+          ) : (
+            <Pressable style={[s.cta, s.freeBtn, busy && { opacity: 0.6 }]} onPress={onFree} disabled={busy}>
+              <Icon name="refresh" size={17} color={tFg('#fff')} />
+              <Text style={[s.ctaText, { color: tFg('#fff') }]}>الأبراج طايحة — رجّع الإشارة</Text>
+            </Pressable>
+          )
+        )}
+
+        {!loading && signal && info && !noService && !rescueStep && (() => {
           const adv = buildAdvice(signal, [], { no5g: has5g === false });
           if (!adv.action) return null;
           const soft = level === 'excellent';
@@ -809,6 +848,8 @@ const s = StyleSheet.create({
   rate: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 7, borderRadius: 12, paddingVertical: 9 },
   rateArrow: { fontSize: 18, fontWeight: '800' },
   rateVal: { color: C.text, fontWeight: '800', fontSize: 14 },
+  freeBtn: { backgroundColor: tBg('#e5484d') },
+  freeBusy: { backgroundColor: tBg('#e5484d'), opacity: 0.85 },
   adviceCard: {
     backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: C.cardBorder,
     padding: 14, gap: 11,

@@ -51,6 +51,16 @@ export function scoreLevel(score: number): Level {
   return 'poor';
 }
 
+/**
+ * الراوتر بلا شبكة (الأبراج طايحة): المودم يقول خدمة محدودة/لا خدمة، أو الاتصال مقطوع.
+ * مثال حقيقي من ZTE: network_type = LIMITED_SERVICE_WCDMA والقراءات فاضية.
+ */
+export function isNoService(sig?: Signal | null, online?: boolean, mode?: string): boolean {
+  if (online === false) return true;
+  const txt = `${sig?.network ?? ''} ${mode ?? ''}`;
+  return /LIMITED|NO[_ ]?SERVICE|NOSERVICE|EMERGENCY/i.test(txt);
+}
+
 /** التقييم العام للاتصال أو لأي برج */
 export function overallLevel(s?: Reading): Level {
   if (!s || (s.rsrp === undefined && s.sinr === undefined)) return 'unknown';

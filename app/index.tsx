@@ -10,7 +10,7 @@ import { withSession } from '../src/store/sessions';
 import { Signal } from '../src/drivers/types';
 import { Icon, IconName } from '../src/ui/Icon';
 import { SkeletonRouterCard, EmptyState } from '../src/ui/States';
-import { overallLevel, parseBands, parseNrBands, rsrpLevel, rsrqLevel, sinrLevel, Level } from '../src/utils/signal';
+import { overallLevel, parseBands, parseNrBands, rsrpLevel, rsrqLevel, sinrLevel, Level, isNoService } from '../src/utils/signal';
 import {
   P, shadow, Hero, GlassBtn, Chip, PrimaryBtn,
   lvlColor, lvlSoft,
@@ -28,6 +28,7 @@ interface Status {
   online?: boolean;
   signal?: Signal | null;
   operator?: string;
+  mode?: string;
   at?: number;
   error?: string;
   hasPw?: boolean;
@@ -60,6 +61,7 @@ export default function RoutersList() {
           signal: sig,
           online: net?.connected ?? true,
           operator: net?.operator,
+          mode: net?.mode,
           at: Date.now(),
           hasPw,
         },
@@ -313,7 +315,7 @@ export default function RoutersList() {
 
               {/* ─── بطاقة الحالة: تعرف وضعك من أول نظرة (اضغطها للتحديث) ─── */}
               {(() => {
-                const noService = !st?.error && st?.online === false;
+                const noService = !st?.error && !loading && isNoService(sig, st?.online, st?.mode);
                 const tone = loading && !sig ? P.sub : st?.error || noService ? P.red : sig ? color : P.sub;
                 const bg = loading && !sig ? P.soft : st?.error || noService ? P.redSoft : sig ? lvlSoft(level) : P.soft;
                 const title = st?.error ? 'تعذّر الوصول للراوتر'
@@ -324,7 +326,7 @@ export default function RoutersList() {
                   : noService ? 'الأبراج منقطعة — ادخل غيّر البرج أو التردد'
                   : sig ? STATUS_SUB[level]
                   : loading ? 'لحظات…' : '';
-                const tech = hasNr ? '5G' : sig ? (sig.network?.match(/\b[2-5]G\b/)?.[0] ?? '4G') : undefined;
+                const tech = noService ? undefined : hasNr ? '5G' : sig ? (sig.network?.match(/\b[2-5]G\b/)?.[0] ?? '4G') : undefined;
                 return (
                   <Pressable onPress={() => probe(item)} disabled={loading}
                     style={({ pressed }) => [s.status, { backgroundColor: bg }, pressed && { opacity: 0.85 }]}>
@@ -339,7 +341,7 @@ export default function RoutersList() {
                         <Text style={[s.statusTitle, { color: tone }]}>{title}</Text>
                       </View>
                       {!!sub && <Text style={s.statusSub} numberOfLines={1}>{sub}</Text>}
-                      {sig && band.length > 0 && (
+                      {sig && !noService && band.length > 0 && (
                         <View style={{ flexDirection: 'row-reverse', gap: 5, marginTop: 3 }}>
                           {band.slice(0, 3).map(b => (
                             <Chip key={b} text={b}
@@ -359,7 +361,7 @@ export default function RoutersList() {
               })()}
 
               {/* ─── بلا شبكة: زر رجّع الإشارة ─── */}
-              {(!!freeing[item.id] || (!st?.error && st?.online === false && !loading)) && (
+              {(!!freeing[item.id] || (!st?.error && !loading && isNoService(sig, st?.online, st?.mode))) && (
                 freeing[item.id] ? (
                   <View style={s.freeBusy}>
                     <ActivityIndicator size="small" color={P.red} />
@@ -374,7 +376,7 @@ export default function RoutersList() {
               )}
 
               {/* ─── مربعات القراءات ─── */}
-              {sig && (
+              {sig && !isNoService(sig, st?.online, st?.mode) && (
                 <View style={s.tiles}>
                   <ReadTile label="SINR" v={sig.sinr} unit="dB" level={sinrLevel(sig.sinr)} />
                   <ReadTile label="RSRQ" v={sig.rsrq} unit="dB" level={rsrqLevel(sig.rsrq)} />
