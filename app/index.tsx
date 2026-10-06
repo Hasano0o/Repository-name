@@ -10,9 +10,9 @@ import { withSession } from '../src/store/sessions';
 import { Signal } from '../src/drivers/types';
 import { Icon, IconName } from '../src/ui/Icon';
 import { SkeletonRouterCard, EmptyState } from '../src/ui/States';
-import { overallLevel, parseBands, parseNrBands, rsrpLevel, rsrqLevel, sinrLevel, Level, isNoService } from '../src/utils/signal';
+import { overallLevel, parseBands, parseNrBands, rsrpLevel, rsrqLevel, sinrLevel, Level, isNoService, signalScore, scoreLevel, LEVEL_LABEL } from '../src/utils/signal';
 import {
-  P, shadow, Hero, GlassBtn, Chip, PrimaryBtn,
+  P, shadow, Chip, PrimaryBtn,
   lvlColor, lvlSoft,
 } from '../src/ui/Pro';
 
@@ -21,6 +21,7 @@ import { UpdateStatus } from '../src/ui/UpdateStatus';
 import { desktop } from '../src/desktop/bridge';
 import { DevContact } from '../src/ui/DevContact';
 import { CityAsk } from '../src/ui/CityAsk';
+import { HomeHeader, HeaderChip, HeaderTone } from '../src/ui/HomeHeader';
 import { hostLabel } from '../src/drivers/device';
 interface Status {
   loading: boolean;
@@ -159,12 +160,31 @@ export default function RoutersList() {
     );
   }
 
-  // ملخص الترويسة
+  // ملخص الترويسة: دائرة جودة أفضل راوتر + الحالة
   const statuses = items.map(i => status[i.id]);
-  const onlineCount = statuses.filter(x => x && !x.loading && !x.error && x.online !== false).length;
   const anyLoading = statuses.some(x => !x || x.loading);
-  const rsrps = statuses.map(x => x?.signal?.rsrp).filter((v): v is number => v !== undefined);
-  const bestRsrp = rsrps.length ? Math.max(...rsrps) : undefined;
+  const down = statuses.filter(x => x && !x.loading && !x.error && isNoService(x.signal, x.online, x.mode)).length;
+  const live = statuses.filter(x => x?.signal && !x.error && !isNoService(x.signal, x.online, x.mode));
+  const best = live.reduce<Status | undefined>((b, x) => (!b || signalScore(x.signal) > signalScore(b.signal) ? x : b), undefined);
+  const header = (() => {
+    const chips: HeaderChip[] = [];
+    if (best?.signal) {
+      const sig = best.signal;
+      const score = signalScore(sig);
+      const nr = sig.nrRsrp !== undefined || !!sig.nrBand;
+      const bands = [...parseBands(sig.band), ...parseNrBands(sig.nrBand)].slice(0, 3);
+      if (best.operator) chips.push({ text: best.operator });
+      chips.push({ text: nr ? '5G' : '4G', tone: 'violet' });
+      if (bands.length) chips.push({ text: bands.join(' + ') });
+      if (items.length > 1) chips.push({ text: `${live.length} من ${items.length} متصل`, tone: 'green' });
+      if (down) chips.push({ text: `${down} بلا شبكة`, tone: 'red' });
+      const lvl = scoreLevel(score);
+      return { score, tone: lvl as HeaderTone, loading: false, lead: 'اتصالك', word: LEVEL_LABEL[lvl], chips };
+    }
+    if (down) return { score: 0, tone: 'down' as HeaderTone, loading: false, lead: 'الراوتر', word: 'بلا شبكة', chips: [{ text: 'الأبراج منقطعة', tone: 'red' as const }] };
+    if (anyLoading) return { score: 0, tone: 'unknown' as HeaderTone, loading: true, lead: '', word: 'نقرأ الإشارة…', chips };
+    return { score: 0, tone: 'unknown' as HeaderTone, loading: false, lead: '', word: 'تعذّر الوصول للراوتر', chips: [{ text: 'تأكد إنك على شبكته' }] };
+  })();
 
   return (
     <View style={{ flex: 1, backgroundColor: P.bg }}>
@@ -175,41 +195,7 @@ export default function RoutersList() {
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={{ gap: 12, marginBottom: 4 }}>
-          <Hero>
-            <View style={s.heroTop}>
-              <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                <Text style={s.hello}>Bandly</Text>
-                <Text style={s.heroTitle}>راوتراتي</Text>
-              </View>
-              <GlassBtn icon="compass" onPress={explore} />
-              <Pressable onPress={add} style={({ pressed }) => [s.addBtn, pressed && { opacity: 0.85 }]}>
-                <Text style={s.addTxt}>إضافة</Text>
-                <Icon name="plus" size={16} color={P.blue} stroke={2.6} />
-              </Pressable>
-            </View>
-
-            <View style={s.stats}>
-              <View style={s.stat}>
-                <Text style={s.statVal}>{items.length}</Text>
-                <Text style={s.statLbl}>{items.length === 1 ? 'راوتر' : 'راوترات'}</Text>
-              </View>
-              <View style={s.statSep} />
-              <View style={s.stat}>
-                {anyLoading && onlineCount === 0
-                  ? <ActivityIndicator size="small" color={tFg('#fff')} style={{ height: 26 }} />
-                  : <Text style={s.statVal}>{onlineCount}</Text>}
-                <Text style={s.statLbl}>متصل الآن</Text>
-              </View>
-              <View style={s.statSep} />
-              <View style={s.stat}>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-                  <Text style={s.statVal}>{bestRsrp ?? '—'}</Text>
-                  {bestRsrp !== undefined && <Text style={s.statUnit}> dBm</Text>}
-                </View>
-                <Text style={s.statLbl}>أقوى إشارة</Text>
-              </View>
-            </View>
-          </Hero>
+          <HomeHeader {...header} onAdd={add} onExplore={explore} />
           <CityAsk />
           </View>
         }
