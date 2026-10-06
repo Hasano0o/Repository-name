@@ -56,9 +56,11 @@ export function scoreLevel(score: number): Level {
  * مثال حقيقي من ZTE: network_type = LIMITED_SERVICE_WCDMA والقراءات فاضية.
  */
 export function isNoService(sig?: Signal | null, online?: boolean, mode?: string): boolean {
-  if (online === false) return true;
   const txt = `${sig?.network ?? ''} ${mode ?? ''}`;
-  return /LIMITED|NO[_ ]?SERVICE|NOSERVICE|EMERGENCY/i.test(txt);
+  if (/LIMITED|NO[_ ]?SERVICE|NOSERVICE|EMERGENCY/i.test(txt)) return true;
+  // فيه قراءة برج = الأبراج موجودة، حتى لو اتصال البيانات مقفل (مثلاً بيانات الراوتر طافية)
+  if (sig && (sig.rsrp !== undefined || sig.nrRsrp !== undefined)) return false;
+  return online === false;
 }
 
 /** التقييم العام للاتصال أو لأي برج */

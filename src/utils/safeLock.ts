@@ -6,6 +6,7 @@ import { withSession, withRouterLock, dropSession } from '../store/sessions';
 import { getBaseline } from '../store/baseline';
 import { driverById } from '../drivers/registry';
 import { trafficBurst } from './nrprobe';
+import { isNoService } from './signal';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : undefined);
@@ -104,10 +105,11 @@ export async function waitOnline(r: SavedRouter, timeoutMs: number, isCancelled:
     await sleep(3000);
     try {
       const ok = await withSession(r, async d => {
-        const conn = d.isConnected ? await d.isConnected() : true;
-        if (!conn) return false;
-        const s = d.getSignal ? await d.getSignal() : null;
-        return !s || s.rsrp !== undefined;
+        // الإشارة نفسها هي الحكم: لو فيه قراءة برج والمودم ما يقول «خدمة محدودة» = رجعت
+        const s = d.getSignal ? await d.getSignal().catch(() => null) : null;
+        if (s && (s.rsrp !== undefined || s.nrRsrp !== undefined)) return !isNoService(s);
+        if (s && isNoService(s)) return false;
+        return d.isConnected ? await d.isConnected() : !d.getSignal;
       }, false);
       if (ok) return true;
     } catch {}
@@ -176,7 +178,8 @@ export async function freeRelease(r: SavedRouter, say: (s: string) => void = () 
   }
   if (released) {
     say('ننتظر الراوتر يلقط أقوى برج...');
-    if (await waitOnline(r, 60000, () => false)) return true;
+    // المودم ياخذ وقت يمسح الأبراج — نعطيه دقيقة ونص قبل ما نعيد التشغيل
+    if (await waitOnline(r, 90000, () => false)) return true;
   }
   if (canRescue(r)) {
     try { return await rescueRouter(r, say); } catch {}

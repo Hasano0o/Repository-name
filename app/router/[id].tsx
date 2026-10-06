@@ -475,7 +475,8 @@ export default function RouterDashboard() {
   const netLabel = hasNr
     ? (bands.length ? '5G NSA' : '5G')
     : (bands.length > 1 ? '4G+' : signal?.network ?? '4G LTE') + (nrIdle ? ' · 5G متاح' : '');
-  const disconnected = online === false;
+  // «منقطع» بس لو ما فيه قراءة برج — بعض الرواترات تقول disconnected والأبراج شغالة
+  const disconnected = online === false && signal?.rsrp === undefined && signal?.nrRsrp === undefined;
   // الأبراج طايحة (خدمة محدودة/لا خدمة) — نعرض زر «رجّع الإشارة» الأحمر بدل النصيحة
   const noService = !error && isNoService(signal, online, mode);
   // التنبيه يطلع بس لراوتر يدعم 5G ومقفول على 4G — راوتر 4G فقط ما نزعجه

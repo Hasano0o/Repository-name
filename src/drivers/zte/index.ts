@@ -524,14 +524,17 @@ export class ZteDriver implements RouterDriver {
     await this.ensure();
     const r = await this.get(['network_provider', 'network_type', 'ppp_status', 'modem_main_state']);
     const state = (r.modem_main_state || '') + ' ' + (r.ppp_status || '');
-    const type = pick(r, 'network_type') ?? '';
-    // انتبه: «ppp_disconnected» فيها كلمة connected — نستثني اللي قبلها s (dis-connected)
-    // و«LIMITED_SERVICE / NO_SERVICE» = الأبراج طايحة حتى لو الحالة القديمة تقول متصل
-    const linked = /(^|[^s])connected|working/i.test(state) && !/connecting/i.test(state);
+    const type = (pick(r, 'network_type') ?? '').trim();
+    // تجربة حقيقية (٦ أكتوبر ٢٠٢٦): ppp_status في ZTE ما يعكس حالة الأبراج — الراوتر ماسك
+    // B3 + n40 بإشارة ممتازة وهو يقول disconnected. فنعتمد على نوع الشبكة:
+    // LIMITED_SERVICE / NO_SERVICE = الأبراج طايحة، وأي نوع ثاني (LTE / ENDC / SA...) = متصل.
+    const connected = type
+      ? !/LIMITED|NO[_ ]?SERVICE|NOSERVICE/i.test(type)
+      : /connect|working/i.test(state);
     return {
       operator: pick(r, 'network_provider'),
       mode: type || undefined,
-      connected: linked && !/LIMITED|NO[_ ]?SERVICE/i.test(type),
+      connected,
     };
   }
 
