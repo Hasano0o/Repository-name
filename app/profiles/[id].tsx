@@ -201,7 +201,7 @@ const s = StyleSheet.create({
   sub: { color: C.sub, fontSize: 12.5, textAlign: 'right', marginTop: 4 },
   lbl: { color: C.sub, fontSize: 12, marginTop: 12, marginBottom: 4, textAlign: 'right' },
   input: {
-    backgroundColor: C.rowBg, borderRadius: 12, borderWidth: 1, borderColor: C.cardBorder,
+    backgroundColor: C.rowBg, borderRadius: 12, borderWidth: 1.5, borderColor: C.cardBorder,
     paddingHorizontal: 12, paddingVertical: 10, color: C.text, fontSize: 14, textAlign: 'right',
   },
   btn: { backgroundColor: C.blue, borderRadius: 14, paddingVertical: 12, alignItems: 'center', marginTop: 12 },

@@ -132,7 +132,7 @@ const s = StyleSheet.create({
   content: { padding: 16, gap: 14, paddingBottom: 60 },
   qrCard: {
     backgroundColor: C.card, borderRadius: 24, padding: 18, alignItems: 'center', gap: 6,
-    borderWidth: 1, borderColor: C.cardBorder,
+    borderWidth: 1.5, borderColor: C.cardBorder,
   },
   qrTitle: { color: C.text, fontSize: 17, fontWeight: '800' },
   qrSub: { color: C.sub, fontSize: 12.5, textAlign: 'center' },
@@ -148,11 +148,11 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row-reverse', gap: 10 },
   ghost: {
     flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 14,
-    backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
+    backgroundColor: C.card, borderWidth: 1.5, borderColor: C.cardBorder,
   },
   ghostCenter: { alignItems: 'center', paddingVertical: 10 },
   ghostTxt: { color: C.sub, fontSize: 14, fontWeight: '700' },
-  card: { backgroundColor: C.card, borderRadius: 22, padding: 16, gap: 8, borderWidth: 1, borderColor: C.cardBorder },
+  card: { backgroundColor: C.card, borderRadius: 22, padding: 16, gap: 8, borderWidth: 1.5, borderColor: C.cardBorder },
   cardTitle: { color: C.text, fontSize: 16, fontWeight: '800', textAlign: 'right' },
   cardSub: { color: C.sub, fontSize: 12.5, textAlign: 'right', lineHeight: 19 },
   scanBtn: { alignSelf: 'stretch', alignItems: 'center', paddingVertical: 12, borderRadius: 14, backgroundColor: tBg('#e9fbf2'), borderWidth: 1, borderColor: tBd('#bfeed6'), marginVertical: 4 },

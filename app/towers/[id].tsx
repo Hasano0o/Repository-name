@@ -731,7 +731,7 @@ export default function TowersScreen() {
         )}
 
         {!loading && !!lockRisk && (
-          <View style={{ backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 16, padding: 12, marginBottom: 12 }}>
+          <View style={{ backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: 16, padding: 12, marginBottom: 12 }}>
             <Text style={{ color: C.text, fontSize: 13, fontWeight: '700', lineHeight: 20, textAlign: 'right' }}>🛡️ {lockRisk}</Text>
           </View>
         )}
@@ -940,7 +940,7 @@ const s = StyleSheet.create({
   hint: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 19 },
   lowNote: { color: tFg('#b76e00'), fontSize: 12, textAlign: 'right', lineHeight: 19, fontWeight: '700' },
   link: { color: C.blue, fontSize: 12.5, textAlign: 'center', fontWeight: '700', marginTop: 2 },
-  errorCard: { backgroundColor: C.redSoft, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 16, padding: 14, gap: 10 },
+  errorCard: { backgroundColor: C.redSoft, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: 16, padding: 14, gap: 10 },
   errorText: { color: C.red, fontWeight: '700', textAlign: 'right' },
   retryBtn: { alignSelf: 'flex-end', backgroundColor: C.red, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8 },
   retryText: { color: tFg('#fff'), fontWeight: '700' },
@@ -1016,7 +1016,7 @@ const s = StyleSheet.create({
 
   nrRow: {
     flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.cardBorder, padding: 10,
+    backgroundColor: C.card, borderRadius: 12, borderWidth: 1.5, borderColor: C.cardBorder, padding: 10,
   },
   nrBusy: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 10,
@@ -1031,7 +1031,7 @@ const s = StyleSheet.create({
   recBtnText: { color: C.onAccent, fontWeight: '800', fontSize: 14 },
   carrLink: { backgroundColor: C.blueSoft, borderRadius: 14, paddingVertical: 11, paddingHorizontal: 14 },
   carrLinkText: { color: C.blue, fontWeight: '700', fontSize: 13, textAlign: 'right' },
-  lockBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.blueSoft, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 16, padding: 12 },
+  lockBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.blueSoft, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: 16, padding: 12 },
   lockBannerText: { flex: 1, color: C.text, fontWeight: '700', textAlign: 'right', fontSize: 13 },
   unlockBtn: { borderWidth: 1, borderColor: C.blue, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 7 },
   unlockText: { color: C.blue, fontWeight: '800', fontSize: 12 },

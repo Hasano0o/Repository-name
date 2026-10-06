@@ -443,8 +443,8 @@ const s = StyleSheet.create({
   howNumTxt: { color: P.violet, fontSize: 11, fontWeight: '800' },
   howTxt: { flex: 1, color: tFg('#4b5675'), fontSize: 13, textAlign: 'right', lineHeight: 20 },
 
-  card: { backgroundColor: P.card, borderRadius: 22, padding: 14, borderWidth: 1, borderColor: P.border, ...shadow },
-  waitCard: { backgroundColor: P.card, borderRadius: 22, padding: 24, alignItems: 'center', gap: 10, borderWidth: 1, borderColor: P.border },
+  card: { backgroundColor: P.card, borderRadius: 22, padding: 14, borderWidth: 1.5, borderColor: P.border, ...shadow },
+  waitCard: { backgroundColor: P.card, borderRadius: 22, padding: 24, alignItems: 'center', gap: 10, borderWidth: 1.5, borderColor: P.border },
   waitTxt: { color: P.sub, fontSize: 13 },
   delta: { fontSize: 11.5, fontWeight: '800', textAlign: 'center', marginTop: 4 },
   cardTitle: { color: P.text, fontSize: 15, fontWeight: '800', textAlign: 'right', marginBottom: 6 },
@@ -476,7 +476,7 @@ const s = StyleSheet.create({
 
   camAsk: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: P.blueSoft, borderRadius: 16, paddingVertical: 12, marginBottom: 4 },
   camAskTxt: { color: P.blue, fontSize: 13.5, fontWeight: '800' },
-  spBox: { flex: 1, backgroundColor: P.soft, borderRadius: 16, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: P.border },
+  spBox: { flex: 1, backgroundColor: P.soft, borderRadius: 16, padding: 10, alignItems: 'center', borderWidth: 1.5, borderColor: P.border },
   spLbl: { color: P.sub, fontSize: 12, fontWeight: '800' },
   spVal: { color: P.text, fontSize: 22, fontWeight: '800' },
   spUnit: { color: P.sub, fontSize: 11, fontWeight: '700' },

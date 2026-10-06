@@ -69,7 +69,7 @@ const s = StyleSheet.create({
   actions: { position: 'absolute', left: 0, top: 0, bottom: 0, width: ACTION_W, flexDirection: 'row', gap: 6, padding: 6 },
   action: { flex: 1, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   actionText: { fontWeight: '700', fontSize: 13 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.rowBg, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: C.cardBorder },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.rowBg, padding: 12, borderRadius: 16, borderWidth: 1.5, borderColor: C.cardBorder },
   info: { flex: 1 },
   name: { color: C.text, fontWeight: '700', fontSize: 15, textAlign: 'right' },
   ip: { color: C.sub, fontSize: 12, textAlign: 'right', marginTop: 2 },

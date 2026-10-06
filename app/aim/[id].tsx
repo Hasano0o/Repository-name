@@ -1007,7 +1007,7 @@ const a = StyleSheet.create({
   header: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   headerBtn: {
     width: 44, height: 44, borderRadius: 15, backgroundColor: P.card,
-    alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: P.border, ...shadow,
+    alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: P.border, ...shadow,
   },
   headerTitle: { fontSize: 21, fontWeight: '800', color: TEXT, textAlign: 'center' },
   headerSub: { fontSize: 11.5, color: MUTED, textAlign: 'center', marginTop: 1 },
@@ -1053,12 +1053,12 @@ const a = StyleSheet.create({
   mHintTxt: { color: tFg('#fff'), fontSize: 12.5, fontWeight: '700' },
   heroCard: {
     backgroundColor: P.card, borderRadius: 24, padding: 14, gap: 12,
-    borderWidth: 1, borderColor: P.border, ...shadow,
+    borderWidth: 1.5, borderColor: P.border, ...shadow,
   },
   infoStrip: { flexDirection: 'row-reverse', gap: 8 },
   pill: {
     flex: 1, alignItems: 'center', gap: 3, backgroundColor: P.soft, borderRadius: 16,
-    paddingVertical: 10, paddingHorizontal: 6, borderWidth: 1, borderColor: P.border,
+    paddingVertical: 10, paddingHorizontal: 6, borderWidth: 1.5, borderColor: P.border,
   },
   pillIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
   pillLbl: { color: MUTED, fontSize: 10.5, fontWeight: '700' },
@@ -1096,7 +1096,7 @@ const a = StyleSheet.create({
   trend: { width: 16, height: 16, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   flat: { width: 8, height: 8, borderRadius: 4, backgroundColor: P.faint, marginHorizontal: 4 },
 
-  segment: { flexDirection: 'row-reverse', backgroundColor: P.soft, borderRadius: 16, padding: 4, marginTop: 14, borderWidth: 1, borderColor: P.border },
+  segment: { flexDirection: 'row-reverse', backgroundColor: P.soft, borderRadius: 16, padding: 4, marginTop: 14, borderWidth: 1.5, borderColor: P.border },
   segBtn: { flex: 1, paddingVertical: 11, borderRadius: 12, alignItems: 'center' },
   segOn: { ...shadow, shadowOpacity: 0.15 },
   segTxt: { color: TEXT, fontWeight: '800', fontSize: 13.5 },
@@ -1113,7 +1113,7 @@ const a = StyleSheet.create({
   dirBody: { flexDirection: 'row-reverse', gap: 8, marginTop: 14 },
   dirStat: {
     flex: 1, alignItems: 'center', gap: 4, backgroundColor: P.soft, borderRadius: 16,
-    paddingVertical: 12, paddingHorizontal: 6, borderWidth: 1, borderColor: P.border,
+    paddingVertical: 12, paddingHorizontal: 6, borderWidth: 1.5, borderColor: P.border,
   },
   dirIcon: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
   dirLbl: { color: MUTED, fontSize: 11, fontWeight: '700', textAlign: 'center' },

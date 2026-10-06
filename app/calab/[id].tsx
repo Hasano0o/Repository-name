@@ -319,7 +319,7 @@ export default function CaLab() {
 
 const s = StyleSheet.create({
   page: { padding: S.lg, gap: S.md },
-  card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1, borderRadius: R.lg, padding: S.lg, gap: S.sm },
+  card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: R.lg, padding: S.lg, gap: S.sm },
   title: { color: C.text, fontWeight: '800', fontSize: 17, textAlign: 'right' },
   body: { color: C.sub, fontSize: 13, lineHeight: 21, textAlign: 'right' },
   meta: { color: C.text, fontSize: 12.5, fontWeight: '700', textAlign: 'right' },
@@ -345,7 +345,7 @@ const s = StyleSheet.create({
   metricsRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6 },
   chip: {
     alignItems: 'center', backgroundColor: C.rowBg,
-    borderRadius: 14, borderWidth: 1, borderColor: C.cardBorder,
+    borderRadius: 14, borderWidth: 1.5, borderColor: C.cardBorder,
     paddingHorizontal: 10, paddingVertical: 5, minWidth: 56,
   },
   chipVal: { color: C.text, fontWeight: '800', fontSize: 13 },

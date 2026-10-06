@@ -42,7 +42,7 @@ export function LinkHealthChips({ items }: { items: HealthItem[] }) {
 }
 
 const s = StyleSheet.create({
-  card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1, borderRadius: R.lg, padding: S.lg, gap: S.md },
+  card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: R.lg, padding: S.lg, gap: S.md },
   title: { color: C.text, fontWeight: '800', fontSize: 15, textAlign: 'right' },
   sub: { color: C.muted, fontSize: 11.5, textAlign: 'right', marginTop: -S.sm },
   row: { gap: 6 },

@@ -27,8 +27,8 @@ const BG = C.bg;
 const SUCCESS = '#13B783';
 const WARN = '#F59E0B';
 const DANGER = '#DC2626';
-const CARD = "#151932";
-const CARD_BORDER = "#252b48";
+const CARD = C.card;
+const CARD_BORDER = C.cardBorder;
 const CARD_BG = C.rowBg;
 const BORDER = C.cardBorder;
 
@@ -169,7 +169,7 @@ export default function AntennaAdvisor() {
           <View style={g.headerIcon}>
             <Icon name="antenna" size={20} color={PURPLE} />
           </View>
-          <View style={{ backgroundColor: "#0b0e1a",  flex: 1, alignItems: 'flex-end' }}>
+          <View style={{ flex: 1, alignItems: 'flex-end' }}>
             <Text style={g.title}>مستشار الأنتنا</Text>
             <Text style={g.subtitle}>هل تحتاج أنتنا خارجية؟ — تحليل تلقائي</Text>
           </View>
@@ -415,7 +415,7 @@ const g = StyleSheet.create({
   metricCard: {
     flexBasis: '47%', flexGrow: 1,
     backgroundColor: tBg('#E9EEF5'), borderRadius: 14,
-    borderWidth: 1, borderColor: BORDER,
+    borderWidth: 1.5, borderColor: BORDER,
     paddingVertical: 12, paddingHorizontal: 10, gap: 6,
   },
   metricHead: {
@@ -439,7 +439,7 @@ const g = StyleSheet.create({
   // Rings card
   ringsCard: {
     backgroundColor: CARD, borderRadius: 22, padding: 14, gap: 12,
-    borderWidth: 1, borderColor: BORDER,
+    borderWidth: 1.5, borderColor: BORDER,
   },
   ringsHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   ringsIcon: {
@@ -452,7 +452,7 @@ const g = StyleSheet.create({
   // Generic card
   card: {
     backgroundColor: CARD, borderRadius: 22, padding: 14, gap: 10,
-    borderWidth: 1, borderColor: BORDER,
+    borderWidth: 1.5, borderColor: BORDER,
   },
   cardHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   cardIcon: {

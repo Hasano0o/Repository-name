@@ -578,7 +578,7 @@ const g = StyleSheet.create({
   headerIcon: {
     width: 46, height: 46, borderRadius: 16, backgroundColor: CARD,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: BORDER,
+    borderWidth: 1.5, borderColor: BORDER,
   },
   title: { fontSize: 20, fontWeight: '900', color: TEXT, textAlign: 'right' },
   subtitle: { fontSize: 12, color: MUTED, textAlign: 'right', marginTop: 3 },
@@ -586,7 +586,7 @@ const g = StyleSheet.create({
   // Card
   card: {
     backgroundColor: CARD, borderRadius: 22, padding: 14, gap: 10,
-    borderWidth: 1, borderColor: BORDER,
+    borderWidth: 1.5, borderColor: BORDER,
     shadowColor: '#0D2350', shadowOpacity: 0.04,
     shadowRadius: 10, shadowOffset: { width: 0, height: 3 },
     elevation: 1,
@@ -622,7 +622,7 @@ const g = StyleSheet.create({
   placeCard: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 10,
     backgroundColor: CARD_BG, borderRadius: 14, padding: 12,
-    borderWidth: 1, borderColor: BORDER, position: 'relative',
+    borderWidth: 1.5, borderColor: BORDER, position: 'relative',
   },
   placeCardBest: { backgroundColor: tBg('#F0FDF4'), borderColor: tBd('#86EFAC') },
   bestBadge: {
@@ -644,7 +644,7 @@ const g = StyleSheet.create({
   chipsRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
-    backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER,
+    backgroundColor: CARD_BG, borderWidth: 1.5, borderColor: BORDER,
   },
   chipOn: { backgroundColor: BLUE, borderColor: BLUE },
   chipTxt: { color: TEXT, fontSize: 12.5, fontWeight: '800' },
@@ -652,7 +652,7 @@ const g = StyleSheet.create({
   customLink: { color: PURPLE, fontSize: 12.5, fontWeight: '800', textAlign: 'right', paddingVertical: 4 },
 
   input: {
-    backgroundColor: CARD_BG, borderRadius: 12, borderWidth: 1, borderColor: BORDER,
+    backgroundColor: CARD_BG, borderRadius: 12, borderWidth: 1.5, borderColor: BORDER,
     paddingHorizontal: 14, paddingVertical: 11, color: TEXT, fontSize: 13.5,
   },
 

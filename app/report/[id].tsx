@@ -204,7 +204,7 @@ const s = StyleSheet.create({
   advice: { color: C.text, fontSize: 13, lineHeight: 21, textAlign: 'right' },
   btnRow: { flexDirection: 'row-reverse', gap: 8, marginTop: 12 },
   btn: { flex: 1, backgroundColor: C.green, borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
-  btnAlt: { backgroundColor: C.rowBg, borderWidth: 1, borderColor: C.cardBorder },
+  btnAlt: { backgroundColor: C.rowBg, borderWidth: 1.5, borderColor: C.cardBorder },
   btnAltTxt: { color: C.text, fontWeight: '800', fontSize: 14 },
   btnOff: { opacity: 0.45 },
   btnTxt: { color: C.onAccent, fontWeight: '800', fontSize: 14 },
@@ -214,7 +214,7 @@ const s = StyleSheet.create({
   status: { color: C.sub, fontSize: 12.5, textAlign: 'center' },
 
   btnInner: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  btnGhost: { backgroundColor: C.rowBg, borderWidth: 1, borderColor: C.cardBorder },
+  btnGhost: { backgroundColor: C.rowBg, borderWidth: 1.5, borderColor: C.cardBorder },
   btnGhostTxt: { color: C.text, fontWeight: '800', fontSize: 14, textAlign: 'center' },
 
   // البطاقة القابلة للمشاركة

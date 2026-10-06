@@ -176,7 +176,7 @@ const s = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg },
   hero: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 12,
-    backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1, borderRadius: R.lg, padding: S.lg,
+    backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: R.lg, padding: S.lg,
   },
   heroOn: { borderColor: C.blueSoft },
   heroIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
@@ -188,7 +188,7 @@ const s = StyleSheet.create({
   warn: { backgroundColor: C.goldSoft, borderColor: C.amberSoft, borderWidth: 1, borderRadius: R.md, padding: S.md },
   warnText: { color: tFg('#9a6a12'), fontSize: 12.5, textAlign: 'right', lineHeight: 20 },
   grp: { color: C.text, fontSize: 13, fontWeight: '800', textAlign: 'right', marginTop: 4 },
-  card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1, borderRadius: R.lg, paddingHorizontal: S.lg },
+  card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: R.lg, paddingHorizontal: S.lg },
   cardOff: { opacity: 0.5 },
   row: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, paddingVertical: 13 },
   rowBorder: { borderBottomWidth: 1, borderBottomColor: C.line },

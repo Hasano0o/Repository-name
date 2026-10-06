@@ -113,7 +113,7 @@ export function CongestionCard({ routerId, signal, downBps, history }: {
 }
 
 const s = StyleSheet.create({
-  card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1, borderRadius: R.lg, padding: S.lg, gap: S.sm },
+  card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: R.lg, padding: S.lg, gap: S.sm },
   head: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
   title: { color: C.text, fontWeight: '800', fontSize: 15, textAlign: 'right' },
   badge: { fontWeight: '800', fontSize: 13 },

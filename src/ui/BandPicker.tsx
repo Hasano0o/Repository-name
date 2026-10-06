@@ -517,7 +517,7 @@ const s = StyleSheet.create({
   segCount: { color: C.muted, fontSize: 12, fontWeight: '700', writingDirection: 'rtl' },
   segText: { color: C.muted, fontSize: 13, fontWeight: '700', writingDirection: 'rtl' },
 
-  card: { backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, borderRadius: 22, overflow: 'hidden', padding: 12, gap: 10 },
+  card: { backgroundColor: C.card, borderWidth: 1.5, borderColor: C.cardBorder, borderRadius: 22, overflow: 'hidden', padding: 12, gap: 10 },
   legend: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4, paddingBottom: 2 },
   groupHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, paddingHorizontal: 4, marginTop: 4 },
   groupDot: { width: 8, height: 8, borderRadius: 4 },
@@ -540,7 +540,7 @@ const s = StyleSheet.create({
   bar: { width: 3, borderRadius: 2 },
   sub: { color: C.muted, fontSize: 11, fontWeight: '600', flexShrink: 1 },
   code: { color: C.muted, opacity: 0.75, fontSize: 11, fontWeight: '600' },
-  sw: { width: 38, height: 22, borderRadius: 999, padding: 2, flexDirection: 'row', backgroundColor: C.line, borderWidth: 1, borderColor: C.line },
+  sw: { width: 38, height: 22, borderRadius: 999, padding: 2, flexDirection: 'row', backgroundColor: C.line, borderWidth: 1.5, borderColor: C.line },
   knob: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#fff', shadowColor: '#0d2350', shadowOpacity: 0.2, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
   more: {
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, alignSelf: 'center',
@@ -601,7 +601,7 @@ const o = StyleSheet.create({
   segCount: { color: C.muted, fontSize: 12, fontWeight: '700', writingDirection: 'rtl' },
   segText: { color: C.muted, fontSize: 13, fontWeight: '700', writingDirection: 'rtl' },
 
-  card: { backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, borderRadius: 22, overflow: 'hidden', paddingBottom: 10, gap: 8 },
+  card: { backgroundColor: C.card, borderWidth: 1.5, borderColor: C.cardBorder, borderRadius: 22, overflow: 'hidden', paddingBottom: 10, gap: 8 },
   cardHead: {
     flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 22, paddingTop: 12, paddingBottom: 2,
@@ -626,7 +626,7 @@ const o = StyleSheet.create({
   sub: { color: C.muted, fontSize: 11, fontWeight: '600', flexShrink: 1 },
   code: { color: C.muted, opacity: 0.75, fontSize: 11, fontWeight: '600' },
   star: { width: 40, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  sw: { width: 44, height: 26, borderRadius: 999, padding: 2, flexDirection: 'row', backgroundColor: C.line, borderWidth: 1, borderColor: C.line },
+  sw: { width: 44, height: 26, borderRadius: 999, padding: 2, flexDirection: 'row', backgroundColor: C.line, borderWidth: 1.5, borderColor: C.line },
   knob: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', shadowColor: '#0d2350', shadowOpacity: 0.2, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
   more: {
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, alignSelf: 'center',

@@ -69,7 +69,7 @@ const s = StyleSheet.create({
   wrap: { gap: 8 },
   title: { color: C.text, fontWeight: '800', fontSize: 15, textAlign: 'right' },
   row: { flexDirection: 'row-reverse', gap: 8 },
-  chip: { flex: 1, alignItems: 'center', gap: 2, paddingVertical: 10, paddingHorizontal: 6, borderRadius: 16, backgroundColor: C.rowBg, borderWidth: 1, borderColor: C.cardBorder, borderStyle: 'dashed' },
+  chip: { flex: 1, alignItems: 'center', gap: 2, paddingVertical: 10, paddingHorizontal: 6, borderRadius: 16, backgroundColor: C.rowBg, borderWidth: 1.5, borderColor: C.cardBorder, borderStyle: 'dashed' },
   chipOn: { backgroundColor: C.card, borderStyle: 'solid', borderColor: C.blueSoft },
   dim: { opacity: 0.5 },
   icon: { fontSize: 22 },

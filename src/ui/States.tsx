@@ -115,7 +115,7 @@ export function EmptyState({ icon, title, text, children }: {
 
 const s = StyleSheet.create({
   card: {
-    backgroundColor: C.card, borderRadius: R.lg, borderWidth: 1, borderColor: C.line,
+    backgroundColor: C.card, borderRadius: R.lg, borderWidth: 1.5, borderColor: C.line,
     padding: 13, gap: S.sm,
   },
   row: { flexDirection: 'row-reverse', alignItems: 'center', gap: 11 },

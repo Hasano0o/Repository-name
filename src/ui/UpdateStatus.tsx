@@ -88,7 +88,7 @@ export function UpdateStatus() {
 }
 
 const s = StyleSheet.create({
-  box: { backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: C.cardBorder, padding: 12, gap: 6 },
+  box: { backgroundColor: C.card, borderRadius: 18, borderWidth: 1.5, borderColor: C.cardBorder, padding: 12, gap: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   title: { color: C.text, fontWeight: '800', fontSize: 13, textAlign: 'right' },
   sub: { color: C.sub, fontSize: 11.5, textAlign: 'right', marginTop: 2 },

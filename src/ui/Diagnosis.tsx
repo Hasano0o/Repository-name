@@ -50,7 +50,7 @@ export function DiagnosisCard({ routerId, signal, downBps }: { routerId: string;
 }
 
 const s = StyleSheet.create({
-  card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1, borderRadius: R.lg, padding: S.lg, gap: S.sm },
+  card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: R.lg, padding: S.lg, gap: S.sm },
   head: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
   title: { color: C.text, fontWeight: '800', fontSize: 15 },
   more: { color: C.blue, fontWeight: '700', fontSize: 12.5 },

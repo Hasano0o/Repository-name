@@ -157,7 +157,7 @@ const st = StyleSheet.create({
   back: { flex: 1, backgroundColor: 'rgba(8,12,28,0.55)', alignItems: 'center', justifyContent: 'center', padding: 22 },
   card: {
     alignSelf: 'stretch', backgroundColor: P.card, borderRadius: 24, padding: 18, gap: 14,
-    borderWidth: 1, borderColor: P.border,
+    borderWidth: 1.5, borderColor: P.border,
   },
   head: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   title: { flex: 1, color: P.text, fontSize: 17, fontWeight: '800', textAlign: 'right' },

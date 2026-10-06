@@ -144,7 +144,7 @@ export function TileGrid({ children }: { children: ReactNode }) {
 const s = StyleSheet.create({
   hero: { borderRadius: R.lg, padding: S.lg, gap: S.md },
   metric: {
-    backgroundColor: C.card, borderRadius: R.lg, borderWidth: 1, borderColor: C.line,
+    backgroundColor: C.card, borderRadius: R.lg, borderWidth: 1.5, borderColor: C.line,
     padding: S.md, gap: S.sm,
   },
   secHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },

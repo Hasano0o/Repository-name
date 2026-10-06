@@ -60,7 +60,7 @@ export function CityAsk() {
 }
 
 const s = StyleSheet.create({
-  box: { backgroundColor: P.card, borderColor: P.border, borderWidth: 1, borderRadius: 18, padding: 14, gap: 12 },
+  box: { backgroundColor: P.card, borderColor: P.border, borderWidth: 1.5, borderRadius: 18, padding: 14, gap: 12 },
   head: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: 10 },
   title: { color: P.text, fontWeight: '800', fontSize: 15 },
   sub: { color: P.sub, fontSize: 11.5, marginTop: 2, textAlign: 'right' },

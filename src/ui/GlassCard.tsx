@@ -71,7 +71,7 @@ const s = StyleSheet.create({
   headLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headRight: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
   chevBtn: {
-    width: 32, height: 32, borderRadius: 14, borderWidth: 1, borderColor: C.cardBorder,
+    width: 32, height: 32, borderRadius: 14, borderWidth: 1.5, borderColor: C.cardBorder,
     alignItems: 'center', justifyContent: 'center', backgroundColor: C.rowBg,
   },
   chev: { color: C.sub, fontSize: 12 },
@@ -79,7 +79,7 @@ const s = StyleSheet.create({
   subtitle: { color: C.muted, fontSize: 11.5, fontWeight: '600', textAlign: 'right', marginTop: 2 },
   iconBox: {
     width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: C.blueSoft, borderWidth: 1, borderColor: C.cardBorder,
+    backgroundColor: C.blueSoft, borderWidth: 1.5, borderColor: C.cardBorder,
   },
   icon: { fontSize: 16 },
   body: { marginTop: 12, gap: 10 },

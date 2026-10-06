@@ -273,7 +273,7 @@ const d = StyleSheet.create({
   trafficVal: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
   trafficUnit: { color: P.sub, fontSize: 12, fontWeight: '700' },
 
-  emptyCard: { backgroundColor: P.card, borderRadius: 24, padding: 24, alignItems: 'center', gap: 10, borderWidth: 1, borderColor: P.border },
+  emptyCard: { backgroundColor: P.card, borderRadius: 24, padding: 24, alignItems: 'center', gap: 10, borderWidth: 1.5, borderColor: P.border },
   emptyIcon: { width: 60, height: 60, borderRadius: 20, backgroundColor: P.redSoft, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { color: P.text, fontSize: 17, fontWeight: '800' },
 });

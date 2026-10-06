@@ -364,7 +364,7 @@ const s = StyleSheet.create({
   explain: { color: C.sub, fontSize: 12, textAlign: 'right', marginTop: 10, lineHeight: 18 },
   modeRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
   modeBtn: {
-    flex: 1, borderWidth: 1, borderColor: C.cardBorder,
+    flex: 1, borderWidth: 1.5, borderColor: C.cardBorder,
     borderRadius: 12, paddingVertical: 10, paddingHorizontal: 8,
     alignItems: 'center', backgroundColor: C.rowBg,
   },

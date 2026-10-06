@@ -200,7 +200,7 @@ const s = StyleSheet.create({
   pills: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
   pill: {
     flexBasis: '47%', flexGrow: 1, backgroundColor: C.rowBg, borderRadius: 13,
-    borderWidth: 1, borderColor: C.cardBorder, paddingHorizontal: 11, paddingVertical: 9, gap: 3,
+    borderWidth: 1.5, borderColor: C.cardBorder, paddingHorizontal: 11, paddingVertical: 9, gap: 3,
   },
   pillLabel: { color: C.muted, fontSize: 10, textAlign: 'right' },
   pillValue: { color: C.text, fontSize: 12.5, fontWeight: '700', textAlign: 'right' },
@@ -211,7 +211,7 @@ const s = StyleSheet.create({
   bar: { height: 7, borderRadius: 999 },
   planRow: { flexDirection: 'row-reverse', gap: 6, marginTop: 10, flexWrap: 'wrap' },
   planChip: {
-    backgroundColor: C.rowBg, borderRadius: 14, borderWidth: 1, borderColor: C.cardBorder,
+    backgroundColor: C.rowBg, borderRadius: 14, borderWidth: 1.5, borderColor: C.cardBorder,
     paddingHorizontal: 11, paddingVertical: 6,
   },
   planChipOn: { backgroundColor: C.blue, borderColor: C.blue },

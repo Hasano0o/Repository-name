@@ -150,7 +150,7 @@ export function GuardCard({
 }
 
 const s = StyleSheet.create({
-  card: { backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, borderRadius: 22, padding: 14, gap: 10 },
+  card: { backgroundColor: C.card, borderWidth: 1.5, borderColor: C.cardBorder, borderRadius: 22, padding: 14, gap: 10 },
   head: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   icon: { width: 38, height: 38, borderRadius: 12, backgroundColor: VIOLET_SOFT, alignItems: 'center', justifyContent: 'center' },
   title: { color: C.text, fontSize: 15, fontWeight: '700' },

@@ -232,7 +232,7 @@ const t = StyleSheet.create({
   tile: {
     width: '48.5%', flexDirection: 'row-reverse', alignItems: 'center', gap: 8,
     backgroundColor: P.soft, borderRadius: 14, paddingVertical: 8, paddingHorizontal: 10,
-    borderWidth: 1, borderColor: P.border,
+    borderWidth: 1.5, borderColor: P.border,
   },
   tileDark: { backgroundColor: tBg('rgba(255,255,255,0.06)'), borderColor: tBd('rgba(255,255,255,0.1)') },
   icon: { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },

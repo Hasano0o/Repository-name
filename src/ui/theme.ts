@@ -42,7 +42,7 @@ const LIGHT = {
   bgTop: '#f0f3f7',
   bgBottom: '#e2e8f0',
   card: '#f8fafc',
-  cardBorder: '#cdd6e3',
+  cardBorder: '#b7c3d3',
   rowBg: '#eff2f7',
   track: '#bdd9fd',
 
@@ -101,7 +101,7 @@ const DARK: typeof LIGHT = {
   bgTop: '#231d17',
   bgBottom: '#1b1612',
   card: '#2c251e',
-  cardBorder: '#56493b',
+  cardBorder: '#66563f',
   rowBg: '#352d24',
   track: '#5a4632',
 

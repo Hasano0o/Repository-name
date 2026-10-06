@@ -155,7 +155,7 @@ const s = StyleSheet.create({
   sub: { color: MUTED, fontSize: 12.5, textAlign: 'right' },
   section: {
     backgroundColor: CARD, borderRadius: 22, padding: 14, gap: 12,
-    borderWidth: 1, borderColor: BORDER,
+    borderWidth: 1.5, borderColor: BORDER,
   },
   secHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   secIcon: { fontSize: 24 },

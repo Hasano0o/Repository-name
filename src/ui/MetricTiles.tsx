@@ -47,7 +47,7 @@ export function MetricTiles({ items }: { items: TileSpec[] }) {
 
 const s = StyleSheet.create({
   grid: { gap: 10 },
-  tile: { backgroundColor: C.rowBg, borderRadius: 16, borderWidth: 1, borderColor: C.cardBorder, padding: 12, gap: 8 },
+  tile: { backgroundColor: C.rowBg, borderRadius: 16, borderWidth: 1.5, borderColor: C.cardBorder, padding: 12, gap: 8 },
   head: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   label: { color: C.text, fontWeight: '800', fontSize: 14, textAlign: 'right' },
   code: { color: C.muted, fontSize: 10.5, textAlign: 'right', marginTop: 1 },

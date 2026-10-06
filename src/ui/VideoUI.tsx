@@ -192,7 +192,7 @@ const v = StyleSheet.create({
   reqNo: { padding: 12, marginTop: 4 },
   reqNoTxt: { color: P.sub, fontSize: 14, fontWeight: '700' },
 
-  card: { backgroundColor: P.card, borderRadius: 22, padding: 12, borderWidth: 1, borderColor: P.border },
+  card: { backgroundColor: P.card, borderRadius: 22, padding: 12, borderWidth: 1.5, borderColor: P.border },
   head: { flexDirection: 'row-reverse', alignItems: 'center', gap: 7, marginBottom: 10, paddingHorizontal: 2 },
   title: { color: P.text, fontSize: 15, fontWeight: '800' },
   hint: { color: P.sub, fontSize: 11.5, fontWeight: '700' },

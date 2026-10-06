@@ -499,7 +499,7 @@ const s = StyleSheet.create({
   btnRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   iconBtn: {
     width: 46, height: 46, borderRadius: 15, backgroundColor: P.soft,
-    borderWidth: 1, borderColor: P.border, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: P.border, alignItems: 'center', justifyContent: 'center',
   },
   delBtn: { backgroundColor: P.redSoft, borderColor: tBd('#ffdde2') },
   pwRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: -4 },

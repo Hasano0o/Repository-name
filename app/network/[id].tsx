@@ -376,12 +376,12 @@ const s = StyleSheet.create({
   warn: { color: C.gold, fontSize: T.label, textAlign: 'right', lineHeight: 18, fontWeight: '700' },
   label: { color: C.sub, fontSize: T.label, textAlign: 'right', fontWeight: '700' },
   input: {
-    backgroundColor: C.rowBg, borderRadius: R.md, borderWidth: 1, borderColor: C.line,
+    backgroundColor: C.rowBg, borderRadius: R.md, borderWidth: 1.5, borderColor: C.line,
     paddingHorizontal: S.md, paddingVertical: 11, color: C.text, fontSize: T.body + 1,
   },
   row: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: S.sm,
-    backgroundColor: C.rowBg, borderRadius: R.md, borderWidth: 1, borderColor: C.line,
+    backgroundColor: C.rowBg, borderRadius: R.md, borderWidth: 1.5, borderColor: C.line,
     paddingHorizontal: S.md, paddingVertical: 10,
   },
   rowOn: { borderColor: C.blue, backgroundColor: C.blueSoft },
@@ -395,7 +395,7 @@ const s = StyleSheet.create({
   stateTxt: { color: C.text, fontWeight: '800', fontSize: T.body + 0.5, textAlign: 'right', flexShrink: 1 },
   wrap: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6 },
   chip: {
-    borderWidth: 1, borderColor: C.line, backgroundColor: C.rowBg,
+    borderWidth: 1.5, borderColor: C.line, backgroundColor: C.rowBg,
     borderRadius: R.md, paddingHorizontal: S.md, paddingVertical: 7,
   },
   chipOn: { backgroundColor: C.blue, borderColor: C.blue },

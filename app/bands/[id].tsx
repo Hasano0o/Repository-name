@@ -922,7 +922,7 @@ const st = StyleSheet.create({
 const s = StyleSheet.create({
   page: { padding: S.lg, gap: S.xl },
   skelCard: {
-    backgroundColor: C.card, borderRadius: R.lg, borderWidth: 1, borderColor: C.line,
+    backgroundColor: C.card, borderRadius: R.lg, borderWidth: 1.5, borderColor: C.line,
     padding: S.lg, gap: S.md, alignItems: 'flex-end',
   },
   statusCard: {
@@ -951,7 +951,7 @@ const s = StyleSheet.create({
   recBand: { color: C.text, fontWeight: '800', fontSize: T.h2 },
   recLine: { color: C.text, fontSize: T.label + 0.5, textAlign: 'right', lineHeight: 20 },
 
-  row: { backgroundColor: C.rowBg, borderRadius: R.md, borderWidth: 1, borderColor: C.line, padding: S.md, gap: 7 },
+  row: { backgroundColor: C.rowBg, borderRadius: R.md, borderWidth: 1.5, borderColor: C.line, padding: S.md, gap: 7 },
   rowHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   rowState: { flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 1 },
   rowNote: { color: C.sub, fontWeight: '700', fontSize: T.label },
@@ -966,17 +966,17 @@ const s = StyleSheet.create({
   dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.green },
 
   // المرحلة ٣
-  collapsed: { backgroundColor: C.card, borderRadius: R.md, borderWidth: 1, borderColor: C.line, padding: S.md },
+  collapsed: { backgroundColor: C.card, borderRadius: R.md, borderWidth: 1.5, borderColor: C.line, padding: S.md },
   collapsedText: { color: C.muted, fontSize: T.label, textAlign: 'right' },
   blockTitle: { color: C.text, fontWeight: '800', fontSize: T.body + 1, textAlign: 'right' },
   wrap: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 7 },
-  chip: { borderWidth: 1, borderColor: C.line, backgroundColor: C.rowBg, borderRadius: R.md, paddingHorizontal: S.md, paddingVertical: 8 },
+  chip: { borderWidth: 1.5, borderColor: C.line, backgroundColor: C.rowBg, borderRadius: R.md, paddingHorizontal: S.md, paddingVertical: 8 },
   chipOn: { backgroundColor: C.blue, borderColor: C.blue },
   chipText: { color: C.text, fontWeight: '700', fontSize: T.label + 0.5 },
   grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
   band: {
     flexBasis: '22%', flexGrow: 1, alignItems: 'center', paddingVertical: 9, borderRadius: R.md,
-    backgroundColor: C.rowBg, borderWidth: 1, borderColor: C.line,
+    backgroundColor: C.rowBg, borderWidth: 1.5, borderColor: C.line,
   },
   bandOn: { backgroundColor: C.blue, borderColor: C.blue },
   bandCard: {
@@ -1064,7 +1064,7 @@ const s = StyleSheet.create({
   bothRow: {
     flexDirection: 'row-reverse', justifyContent: 'space-between',
     alignItems: 'center', backgroundColor: C.rowBg, borderRadius: 14,
-    borderWidth: 1, borderColor: C.line, paddingHorizontal: 12, paddingVertical: 8,
+    borderWidth: 1.5, borderColor: C.line, paddingHorizontal: 12, paddingVertical: 8,
   },
   bothLabel: { color: C.muted, fontWeight: '800', fontSize: 13 },
   bothVal: { color: C.text, fontWeight: '700', fontSize: 13 },

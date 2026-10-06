@@ -322,7 +322,7 @@ const st = StyleSheet.create({
   },
   glassTxt: { color: tFg('#fff'), fontSize: 13.5, fontWeight: '800' },
 
-  section: { backgroundColor: P.card, borderRadius: 22, padding: 16, borderWidth: 1, borderColor: P.border, ...shadow },
+  section: { backgroundColor: P.card, borderRadius: 22, padding: 16, borderWidth: 1.5, borderColor: P.border, ...shadow },
   secHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   secIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   secTitle: { color: P.text, fontSize: 15.5, fontWeight: '800', textAlign: 'right' },
@@ -330,13 +330,13 @@ const st = StyleSheet.create({
 
   val: { flexDirection: 'row', alignItems: 'baseline', alignSelf: 'flex-end' },
 
-  meter: { backgroundColor: P.soft, borderRadius: 20, padding: 12, gap: 8, borderWidth: 1, borderColor: P.border },
+  meter: { backgroundColor: P.soft, borderRadius: 20, padding: 12, gap: 8, borderWidth: 1.5, borderColor: P.border },
   meterHead: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
   meterLbl: { color: P.sub, fontSize: 12, fontWeight: '700', flexShrink: 1, textAlign: 'right' },
   lvlPill: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   lvlPillTxt: { fontSize: 10.5, fontWeight: '800' },
 
-  info: { backgroundColor: P.soft, borderRadius: 18, paddingVertical: 10, paddingHorizontal: 12, gap: 2, borderWidth: 1, borderColor: P.border },
+  info: { backgroundColor: P.soft, borderRadius: 18, paddingVertical: 10, paddingHorizontal: 12, gap: 2, borderWidth: 1.5, borderColor: P.border },
   infoLbl: { color: P.sub, fontSize: 11, fontWeight: '600', textAlign: 'right' },
   infoVal: { color: P.text, fontSize: 15, fontWeight: '800', textAlign: 'right' },
 
