@@ -296,9 +296,18 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
   say('ننتظر الراوتر يتصل...');
   const online = await waitOnline(o.r, 45000, cancelled);
   if (!online) {
-    // ما اتصل: أهم شي ترجع الإشارة — نفك كل شي ويلقط أقوى برج (مو الإعداد السابق)
-    say('ما اتصل — نرجّع الإشارة...');
-    const back = await freeRelease(o.r, say);
+    // ما اتصل: أول نرجّع الإعداد اللي كان شغال قبل ثواني (مثلاً وضع الشبكة من SA لـ NSA) —
+    // سريع وبدون إعادة تشغيل. لو ما رجع، نفك كل شي ويلقط أقوى برج.
+    say('ما اتصل — نرجّع إعدادك السابق...');
+    let back = false;
+    try {
+      await withSession(o.r, o.revert, false);
+      back = await waitOnline(o.r, 40000, () => false);
+    } catch {}
+    if (!back) {
+      say('ما رجع — نفك التثبيتات عشان يلقط أقوى برج...');
+      back = await freeRelease(o.r, say);
+    }
     const res: TrialResult = { verdict: 'noconn', kept: false, before, after: null, restoreFailed: !back, freed: true };
     await record(o.r.id, o.key, o.label, res);
     return res;

@@ -6,7 +6,7 @@ import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { BandConfig, Carrier, CellTower } from '../../src/drivers/types';
-import { safeApply, trialMessage } from '../../src/utils/safeLock';
+import { safeApply, trialMessage, lastTrial, Trial } from '../../src/utils/safeLock';
 import { trafficBurst } from '../../src/utils/nrprobe';
 import { bandLabel, freqLabel } from '../../src/utils/bands';
 import { saveProfile } from '../../src/store/profiles';
@@ -43,6 +43,11 @@ export default function ComboScreen() {
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [verdict, setVerdict] = useState<{ ok: boolean; text: string } | null>(null);
+  /** آخر تجربة SA — لو ما اتصل نقول للمستخدم إنه غالباً مو متاح عنده بدل ما يجربه كل مرة */
+  const [saTrial, setSaTrial] = useState<Trial | undefined>();
+  useEffect(() => {
+    if (info) lastTrial(info.id, 'mode:08').then(t => mounted.current && setSaTrial(t)).catch(() => {});
+  }, [info, busy]);
   const mounted = useRef(true);
 
   useEffect(() => () => { mounted.current = false; }, []);
@@ -312,6 +317,11 @@ export default function ComboScreen() {
                   <Tile label="4G + 5G" sub="NSA — الحالي عند أغلب الناس" on={!onSa} color={C.blue} onPress={() => onSa && applySa(false)} />
                   <Tile label="5G فقط" sub="SA — الـ 5G أساسي" on={onSa} color={SA_COLOR} onPress={() => !onSa && applySa(true)} />
                 </View>
+                {!onSa && saTrial?.verdict === 'noconn' && Date.now() - saTrial.at < 14 * 86400000 && (
+                  <Text style={[s.hint, { color: C.red }]}>
+                    جرّبنا SA {Date.now() - saTrial.at < 86400000 ? 'اليوم' : 'قبل أيام'} وما اتصل — غالباً البرج عندك يدعم 5G بنظام NSA بس (فوق 4G)، أو شريحتك ما فيها SA.
+                  </Text>
+                )}
               </View>
             )}
 
