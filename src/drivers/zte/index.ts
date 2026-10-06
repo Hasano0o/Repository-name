@@ -722,7 +722,10 @@ export class ZteDriver implements RouterDriver {
       if (ok.length > before) break;
     }
     // ٤. وضع الشبكة: الأصلي أو تلقائي
-    const mode = (this.orig?.net_select || '').trim() || CODE_TO_ZTE['00'];
+    // «WL_AND_5G» فيها 3G — والـ 3G شبه متوقفة عندنا فيعلق على LIMITED_SERVICE_WCDMA.
+    // نرجّع الأصلي لو ما فيه 3G، وإلا 4G + 5G
+    const origMode = (this.orig?.net_select || '').trim();
+    const mode = origMode && !/^WL|WCDMA|GSM/i.test(origMode) ? origMode : CODE_TO_ZTE['0803'];
     await step('mode', () => this.act({ goformId: 'SET_BEARER_PREFERENCE', BearerPreference: mode }));
     this.log('restoreAll ok:', ok.join(','));
     if (!ok.length) throw new Error('الراوتر ما قبل أي أمر — تأكد إنك متصل بالواي فاي حقه وجرّب مرة ثانية');

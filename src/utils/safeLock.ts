@@ -117,6 +117,17 @@ export async function waitOnline(r: SavedRouter, timeoutMs: number, isCancelled:
   return false;
 }
 
+/** الراوتر قفل الدخول بسبب محاولات كثيرة؟ ننتظر المدة اللي قالها (أو دقيقتين) بدل ما نزيد القفل */
+const LOCKED = /قفل تسجيل الدخول|محاولات كثيرة|108007|locked/i;
+async function waitIfLocked(e: unknown, say: (s: string) => void): Promise<boolean> {
+  const msg = String((e as any)?.message ?? e);
+  if (!LOCKED.test(msg)) return false;
+  const mins = Number(msg.match(/(\d+)\s*دقيق/)?.[1] ?? 2);
+  say(`الراوتر قفل الدخول مؤقتاً — ننتظر ${mins} دقيقة وبعدها نكمّل...`);
+  await sleep((mins * 60 + 15) * 1000);
+  return true;
+}
+
 // ─── الإنقاذ: يرجّع الراوتر لإعداداته الأصلية بدون إعادة ضبط مصنع ───
 
 /** هل نوع هذا الراوتر يدعم «رجّع الإعدادات الأصلية»؟ */
@@ -135,9 +146,10 @@ export async function rescueRouter(r: SavedRouter, say: (s: string) => void = ()
   let lastErr: unknown;
   let sent = false;
   for (let i = 0; i < 5 && !sent; i++) {
-    if (i) { say('الراوتر ما رد — نعيد المحاولة...'); await sleep(10000); }
+    if (i) { say('الراوتر ما رد — نعيد المحاولة...'); await sleep(15000); }
     try {
-      dropSession(r.id);
+      // نعيد تسجيل الدخول بس بعد فشل — كل دخول زيادة يقرّب الراوتر من قفل الدخول
+      if (i) dropSession(r.id);
       say('نفك كل الأقفال ونرجّع الإعدادات الأصلية...');
       await withSession(r, d => {
         if (!d.restoreAll) throw new Error('هذا النوع من الراوترات ما يدعم الإرجاع التلقائي');
@@ -147,6 +159,7 @@ export async function rescueRouter(r: SavedRouter, say: (s: string) => void = ()
     } catch (e) {
       lastErr = e;
       if (/ما يدعم/.test(String((e as any)?.message))) break;
+      if (await waitIfLocked(e, say)) i--; // القفل ما يحسب محاولة
     }
   }
   if (!sent) throw lastErr ?? new Error('ما قدرنا نوصل للراوتر');
@@ -166,15 +179,27 @@ export async function freeRelease(r: SavedRouter, say: (s: string) => void = () 
   say('نفك كل التثبيتات عشان الراوتر يلقط أقوى برج...');
   let released = false;
   for (let i = 0; i < 3 && !released; i++) {
-    if (i) await sleep(5000);
+    if (i) await sleep(8000);
     try {
-      dropSession(r.id);
+      if (i) dropSession(r.id);
       await withSession(r, async d => {
         if (d.unlockCell) { try { await d.unlockCell(); } catch {} }
         if (d.setBand) { try { await d.setBand([], []); } catch {} }
+        // عالق على 3G/2G (مثل LIMITED_SERVICE_WCDMA): الـ 3G شبه متوقفة عندنا —
+        // نخلي الراوتر على 4G + 5G (أو 4G بس) عشان ما يرجع يعلق عليها
+        try {
+          const sig = d.getSignal ? await d.getSignal().catch(() => null) : null;
+          if (d.setNetworkMode && /WCDMA|UMTS|GSM|HSPA|\b[23]G\b/i.test(sig?.network ?? '')) {
+            const modes = d.getBandConfig ? (await d.getBandConfig().catch(() => null))?.modes ?? [] : [];
+            const pick = ['0803', '03'].find(m => modes.some(x => x.value === m));
+            if (pick) { say('الراوتر عالق على 3G — نحوّله على 4G و 5G...'); await d.setNetworkMode(pick); }
+          }
+        } catch {}
       }, false);
       released = true;
-    } catch {}
+    } catch (e) {
+      if (await waitIfLocked(e, say)) i--;
+    }
   }
   if (released) {
     say('ننتظر الراوتر يلقط أقوى برج...');
@@ -187,9 +212,12 @@ export async function freeRelease(r: SavedRouter, say: (s: string) => void = () 
   }
   say('ما رجعت الإشارة — نعيد تشغيل الراوتر...');
   try {
-    dropSession(r.id);
     await withSession(r, async d => { if (d.reboot) await d.reboot(); }, false);
-  } catch {}
+  } catch (e) {
+    if (await waitIfLocked(e, say)) {
+      try { await withSession(r, async d => { if (d.reboot) await d.reboot(); }, false); } catch {}
+    }
+  }
   dropSession(r.id);
   await sleep(25000);
   return waitOnline(r, 180000, () => false);

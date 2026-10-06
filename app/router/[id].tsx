@@ -193,8 +193,10 @@ export default function RouterDashboard() {
     }
   }, [applySignal]);
 
+  /** وقت «رجّع الإشارة» / الإنقاذ نوقف التحديث الدوري — كل طلب زيادة ممكن يقفل تسجيل الدخول */
+  const paused = useRef(false);
   const poll = useCallback(async (r: SavedRouter) => {
-    if (polling.current) return;
+    if (polling.current || paused.current) return;
     if (AppState.currentState !== 'active') return; // ما نستهلك بطارية/باقة والتطبيق بالخلفية
     polling.current = true;
     setSyncing(true);
@@ -343,9 +345,11 @@ export default function RouterDashboard() {
       {
         text: 'رجّعها', onPress: async () => {
           setBusy(true);
+          paused.current = true;
           setRescueStep('نبدأ...');
           let back = false;
           try { back = await freeRelease(info, st => setRescueStep(st)); } catch {}
+          paused.current = false;
           setRescueStep('');
           setBusy(false);
           await loadAll(info).catch(() => {});
@@ -369,6 +373,7 @@ export default function RouterDashboard() {
         {
           text: 'رجّعها', onPress: async () => {
             setBusy(true);
+            paused.current = true;
             setRescueStep('نبدأ...');
             try {
               const back = await rescueRouter(info, st => setRescueStep(st));
@@ -383,6 +388,7 @@ export default function RouterDashboard() {
             } catch (e: any) {
               Alert.alert('ما قدرنا نوصل للراوتر', `${e?.message ?? String(e)}\n\nتأكد إن جوالك متصل بواي فاي الراوتر نفسه وجرّب مرة ثانية.`);
             } finally {
+              paused.current = false;
               setRescueStep('');
               setBusy(false);
             }
