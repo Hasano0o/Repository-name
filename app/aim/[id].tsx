@@ -21,6 +21,7 @@ import { measureLatency, selectedRegion } from '../../src/utils/latency';
 import { LiveHost, createLiveSession, CmdAction, CMD_LABEL, LIVE_BASE } from '../../src/services/live';
 import Svg, { Circle, Path, Line, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { Icon, IconName } from '../../src/ui/Icon';
+import { copyText } from '../../src/utils/clipboard';
 import {
   P, shadow, Hero, Section, Ring, Chip, ToggleCard, PrimaryBtn, Collapse, lvlLabel,
 } from '../../src/ui/Pro';
@@ -215,6 +216,14 @@ export default function AimScreen() {
   }, []));
   // ═══ وضع الفني ═══
   const [live, setLive] = useState<{ code: string; url: string } | null>(null);
+  const [codeCopied, setCodeCopied] = useState(false);
+  const copyCode = async () => {
+    if (!live) return;
+    if (await copyText(live.code)) {
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    }
+  };
   const [liveBusy, setLiveBusy] = useState(false);
   const [liveOn, setLiveOn] = useState(false);
   const [viewers, setViewers] = useState<string[]>([]);
@@ -801,7 +810,12 @@ export default function AimScreen() {
                   </Pressable>
                 </View>
                 <Text style={a.liveLbl}>كود الجلسة</Text>
-                <Text style={a.liveCode}>{live.code.slice(0, 3)} {live.code.slice(3)}</Text>
+                <Pressable onPress={copyCode} hitSlop={6} style={({ pressed }) => [{ alignItems: 'center' }, pressed && { opacity: 0.7 }]}>
+                  <Text style={a.liveCode}>{live.code.slice(0, 3)} {live.code.slice(3)}</Text>
+                  <View style={[a.copyChip, codeCopied && a.copyChipOn]}>
+                    <Text style={[a.copyTxt, codeCopied && a.copyTxtOn]}>{codeCopied ? '✓ تم النسخ' : '📋 اضغط للنسخ'}</Text>
+                  </View>
+                </Pressable>
                 <Text style={a.liveViewers}>
                   {viewers.length ? `👀 ${viewers.join('، ')} يتابع قراءتك الحين` : 'بانتظار الفني يفتح الرابط…'}
                 </Text>
@@ -1151,6 +1165,10 @@ const a = StyleSheet.create({
   liveStopTxt: { color: DANGER, fontWeight: '800', fontSize: 12.5 },
   liveLbl: { color: MUTED, fontSize: 12, fontWeight: '700', marginTop: 12 },
   liveCode: { color: TEXT, fontSize: 40, fontWeight: '800', letterSpacing: 4 },
+  copyChip: { marginTop: 2, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.10)' },
+  copyChipOn: { backgroundColor: 'rgba(18,183,106,0.25)' },
+  copyTxt: { color: P.sub, fontSize: 12, fontWeight: '700' },
+  copyTxtOn: { color: '#3ddc97' },
   liveViewers: { color: tFg('#0b7f99'), fontSize: 13, fontWeight: '700', textAlign: 'center' },
   liveHint: { color: MUTED, fontSize: 11.5, textAlign: 'center', marginTop: 10, lineHeight: 17 },
   sayWrap: { position: 'absolute', left: 16, right: 16, zIndex: 50 },

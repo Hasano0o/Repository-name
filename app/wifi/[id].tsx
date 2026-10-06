@@ -10,6 +10,7 @@ import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
 import { getWifi, setWifi, SavedWifi } from '../../src/store/routers';
 import { wifiQrText } from '../../src/utils/routerLabel';
+import { copyText } from '../../src/utils/clipboard';
 import { LabelScannerHost, ensureScanner } from '../../src/ui/scanner';
 import { Icon } from '../../src/ui/Icon';
 import { C, tBd, tBg, tFg } from '../../src/ui/theme';
@@ -81,6 +82,9 @@ export default function WifiShare() {
           </Pressable>
 
           <View style={s.row}>
+            <Pressable onPress={async () => { if (wifi.password && await copyText(wifi.password)) Alert.alert('✓ تم النسخ', 'نسخنا كلمة سر الواي فاي'); }} style={s.ghost}>
+              <Text style={s.ghostTxt}>نسخ كلمة السر</Text>
+            </Pressable>
             <Pressable onPress={() => setEditing(true)} style={s.ghost}><Text style={s.ghostTxt}>تعديل</Text></Pressable>
             <Pressable onPress={remove} style={s.ghost}><Text style={[s.ghostTxt, { color: C.red }]}>حذف</Text></Pressable>
           </View>
