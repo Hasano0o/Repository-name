@@ -11,6 +11,7 @@ import { Icon, IconName } from './Icon';
 import { P, shadow } from './Pro';
 
 import { tBd, tBg, tFg } from './theme';
+import { LinearGradient } from 'expo-linear-gradient';
 export const pingLevel = (v?: number): Level =>
   v === undefined ? 'unknown' : v <= 40 ? 'excellent' : v <= 70 ? 'good' : v <= 120 ? 'fair' : 'poor';
 
@@ -66,13 +67,13 @@ function Gauge({ value, label, unit, level, r, dark, icon }: {
 }
 
 // ═══ خانة معلومة ═══
-function Tile({ icon, label, value, dark, accent }: {
-  icon: IconName; label: string; value?: string; dark?: boolean; accent?: string;
+function Tile({ icon, label, value, dark, accent, tint = '#b8c6ff' }: {
+  icon: IconName; label: string; value?: string; dark?: boolean; accent?: string; tint?: string;
 }) {
   return (
     <View style={[t.tile, dark && t.tileDark]}>
       <View style={[t.icon, { backgroundColor: dark ? tBg('rgba(255,255,255,0.1)') : P.blueSoft }]}>
-        <Icon name={icon} size={14} color={dark ? tFg('#b8c6ff') : P.blue} stroke={2.1} />
+        <Icon name={icon} size={14} color={dark ? tFg(tint) : P.blue} stroke={2.1} />
       </View>
       <View style={{ flex: 1, alignItems: 'flex-end' }}>
         <Text style={[t.lbl, dark && { color: tFg('rgba(255,255,255,0.6)') }]} numberOfLines={1}>{label}</Text>
@@ -86,16 +87,20 @@ function Tile({ icon, label, value, dark, accent }: {
 function Card({ tech, dark, active, children, badge }: {
   tech: '4G' | '5G'; dark?: boolean; active?: boolean; children: React.ReactNode; badge?: string;
 }) {
-  return (
-    <View style={[c.card, dark && c.cardDark, { borderColor: tech === '5G' ? tBd('rgba(160,120,255,0.55)') : tBd('rgba(47,107,255,0.35)') }]}>
+  // 4G الداكن = نفس أزرق ترويسة الرئيسية، و5G يبقى كحلي/بنفسجي — كل شبكة لونها
+  const blue = dark && tech === '4G';
+  const accentSoft = blue ? 'rgba(133,183,235,0.18)' : 'rgba(160,120,255,0.18)';
+  const accentFg = blue ? '#B5D4F4' : '#c7b8ff';
+  const body = (
+    <>
       <View style={c.head}>
-        <View style={[c.techPill, { backgroundColor: tech === '5G' ? P.violet : P.blue }]}>
-          <Text style={c.techTxt}>{tech}</Text>
+        <View style={[c.techPill, { backgroundColor: blue ? '#E6F1FB' : tech === '5G' ? P.violet : P.blue }]}>
+          <Text style={[c.techTxt, blue && { color: '#0C447C' }]}>{tech}</Text>
         </View>
         <View style={{ flex: 1, alignItems: 'flex-end' }}>
           <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6 }}>
-            <View style={[c.hIcon, { backgroundColor: dark ? tBg('rgba(160,120,255,0.18)') : P.blueSoft }]}>
-              <Icon name={tech === '5G' ? 'spark' : 'tower'} size={14} color={dark ? tFg('#c7b8ff') : P.blue} stroke={2.2} />
+            <View style={[c.hIcon, { backgroundColor: dark ? tBg(accentSoft) : P.blueSoft }]}>
+              <Icon name={tech === '5G' ? 'spark' : 'tower'} size={14} color={dark ? tFg(accentFg) : P.blue} stroke={2.2} />
             </View>
             <Text style={[c.title, dark && { color: tFg('#fff') }]}>{tech === '5G' ? 'شبكة 5G' : 'شبكة 4G LTE'}</Text>
           </View>
@@ -115,6 +120,19 @@ function Card({ tech, dark, active, children, badge }: {
         </View>
       </View>
       {children}
+    </>
+  );
+  if (blue) {
+    return (
+      <LinearGradient colors={['#0F4F8F', '#0C447C', '#0A3866']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }}
+        style={[c.card, c.cardBlue]}>
+        {body}
+      </LinearGradient>
+    );
+  }
+  return (
+    <View style={[c.card, dark && c.cardDark, { borderColor: tech === '5G' ? tBd('rgba(160,120,255,0.55)') : tBd('rgba(47,107,255,0.35)') }]}>
+      {body}
     </View>
   );
 }
@@ -166,20 +184,20 @@ export function NetPanel({ signal, ping, pingTo }: { signal: Signal | null; ping
   return (
     <View style={{ gap: 12 }}>
       <PingBar ping={ping} to={pingTo} />
-      <Card tech="4G" active={s.rsrp !== undefined} badge={`${lteBand || '—'}${lteRole ? ` · ${lteRole}` : ''} · ${mode}`}>
+      <Card tech="4G" dark active={s.rsrp !== undefined} badge={`${lteBand || '—'}${lteRole ? ` · ${lteRole}` : ''} · ${mode}`}>
         <View style={c.gauges}>
-          <Gauge icon="antenna" label="RSRP" unit="dBm" value={s.rsrp} level={rsrpLevel(s.rsrp)} r={ratio(s.rsrp, RANGES.rsrp)} />
-          <Gauge icon="chart" label="RSRQ" unit="dB" value={s.rsrq} level={rsrqLevel(s.rsrq)} r={ratio(s.rsrq, RANGES.rsrq)} />
-          <Gauge icon="spark" label="SINR" unit="dB" value={s.sinr} level={sinrLevel(s.sinr)} r={ratio(s.sinr, RANGES.sinr)} />
-          {s.cqi !== undefined && <Gauge icon="speed" label="CQI" unit="0–15" value={s.cqi} level={cqiLevel(s.cqi)} r={ratio(s.cqi, RANGES.cqi)} />}
+          <Gauge dark icon="antenna" label="RSRP" unit="dBm" value={s.rsrp} level={rsrpLevel(s.rsrp)} r={ratio(s.rsrp, RANGES.rsrp)} />
+          <Gauge dark icon="chart" label="RSRQ" unit="dB" value={s.rsrq} level={rsrqLevel(s.rsrq)} r={ratio(s.rsrq, RANGES.rsrq)} />
+          <Gauge dark icon="spark" label="SINR" unit="dB" value={s.sinr} level={sinrLevel(s.sinr)} r={ratio(s.sinr, RANGES.sinr)} />
+          {s.cqi !== undefined && <Gauge dark icon="speed" label="CQI" unit="0–15" value={s.cqi} level={cqiLevel(s.cqi)} r={ratio(s.cqi, RANGES.cqi)} />}
         </View>
         <View style={c.tiles}>
-          <Tile icon="bands" label="الباند" value={lteBand} accent={P.blue} />
-          <Tile icon="tower" label="PCI" value={s.pci} />
-          <Tile icon="antenna" label="Cell ID" value={s.cellId} />
-          <Tile icon="chart" label="RSSI" value={s.rssi !== undefined ? `${s.rssi} dBm` : undefined} />
-          <Tile icon="layers" label="EARFCN" value={s.earfcn} />
-          <Tile icon="speed" label="عرض النطاق" value={bw || undefined} />
+          <Tile dark tint="#B5D4F4" icon="bands" label="الباند" value={lteBand} accent="#9fd0ff" />
+          <Tile dark tint="#B5D4F4" icon="tower" label="PCI" value={s.pci} />
+          <Tile dark tint="#B5D4F4" icon="antenna" label="Cell ID" value={s.cellId} />
+          <Tile dark tint="#B5D4F4" icon="chart" label="RSSI" value={s.rssi !== undefined ? `${s.rssi} dBm` : undefined} />
+          <Tile dark tint="#B5D4F4" icon="layers" label="EARFCN" value={s.earfcn} />
+          <Tile dark tint="#B5D4F4" icon="speed" label="عرض النطاق" value={bw || undefined} />
         </View>
       </Card>
 
@@ -225,6 +243,7 @@ const c = StyleSheet.create({
   card: { backgroundColor: P.card, borderRadius: 22, padding: 14, gap: 12, borderWidth: 1.5, borderColor: P.border, ...shadow },
   hIcon: { width: 26, height: 26, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   cardDark: { backgroundColor: tBg('#14224a'), borderColor: tBd('#24366b') },
+  cardBlue: { borderColor: '#185FA5' },
   head: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   techPill: { borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6 },
   techTxt: { color: tFg('#fff'), fontSize: 17, fontWeight: '800' },
