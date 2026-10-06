@@ -20,7 +20,7 @@ import { HeroCard, MetricCard } from '../../src/ui/Cards';
 import { Icon } from '../../src/ui/Icon';
 import { Skeleton, ErrorCard } from '../../src/ui/States';
 import { trafficBurst } from '../../src/utils/nrprobe';
-import { safeApply, lastTrial, trialNote, trialMessage } from '../../src/utils/safeLock';
+import { safeApply, lastTrial, trialNote, trialMessage, freeRelease } from '../../src/utils/safeLock';
 
 type ScanStatus = 'pending' | 'testing' | 'done' | 'nocov' | 'error';
 interface ScanRow { tech: 'LTE' | 'NR'; band: number; status: ScanStatus; rsrp?: number; sinr?: number; score?: number; note?: string; }
@@ -204,9 +204,11 @@ export default function BandsScreen() {
       setStatus('ننتظر الراوتر يتصل بالشبكة...');
       const ok = await waitConnected(info, bands, 45000);
       if (!ok && bands.length) {
-        setStatus('ما اتصل — نرجع الإعداد السابق...');
-        await withSession(info, d => d.setBand!(prev), false);
-        Alert.alert('ما نجح التثبيت', 'الراوتر ما قدر يتصل على الترددات المختارة، فرجعنا الإعداد السابق تلقائياً.');
+        // أهم شي ترجع الإشارة: نفك كل التثبيتات ويلقط أقوى برج (مو الإعداد السابق)
+        const back = await freeRelease(info, st => setStatus(st));
+        Alert.alert('ما نجح التثبيت', back
+          ? 'الراوتر ما قدر يتصل على الترددات المختارة، ففكّينا كل التثبيتات ولقط أقوى برج تلقائياً — الإشارة رجعت.'
+          : 'الراوتر ما قدر يتصل، وفكّينا كل التثبيتات بس الشبكة ما رجعت للحين. انتظر دقيقة وتأكد من الشريحة والتغطية.');
       } else if (ok) {
         Alert.alert('تم', bands.length ? `الراوتر مثبّت الحين على ${names(bands)}` : 'ألغينا التثبيت — الراوتر يختار بنفسه');
       }

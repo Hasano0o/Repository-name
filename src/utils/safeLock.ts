@@ -154,6 +154,44 @@ export async function rescueRouter(r: SavedRouter, say: (s: string) => void = ()
   return waitOnline(r, 180000, () => false);
 }
 
+/**
+ * «رجّع الإشارة»: ما نرجع لإعداد سابق (ممكن يكون هو بعد مقفول على برج ميت) —
+ * نفك كل التثبيتات ونخلي الراوتر يلقط أقوى برج بنفسه، والمستخدم بعدها يتحكم براحته.
+ * ١. فك تثبيت الأبراج + الترددات على التلقائي (بدون إعادة تشغيل — أسرع)
+ * ٢. ما رجع؟ الإنقاذ الكامل (الإعدادات الأصلية + إعادة تشغيل) أو إعادة تشغيل عادية
+ */
+export async function freeRelease(r: SavedRouter, say: (s: string) => void = () => {}): Promise<boolean> {
+  say('نفك كل التثبيتات عشان الراوتر يلقط أقوى برج...');
+  let released = false;
+  for (let i = 0; i < 3 && !released; i++) {
+    if (i) await sleep(5000);
+    try {
+      dropSession(r.id);
+      await withSession(r, async d => {
+        if (d.unlockCell) { try { await d.unlockCell(); } catch {} }
+        if (d.setBand) { try { await d.setBand([], []); } catch {} }
+      }, false);
+      released = true;
+    } catch {}
+  }
+  if (released) {
+    say('ننتظر الراوتر يلقط أقوى برج...');
+    if (await waitOnline(r, 60000, () => false)) return true;
+  }
+  if (canRescue(r)) {
+    try { return await rescueRouter(r, say); } catch {}
+    return false;
+  }
+  say('ما رجعت الإشارة — نعيد تشغيل الراوتر...');
+  try {
+    dropSession(r.id);
+    await withSession(r, async d => { if (d.reboot) await d.reboot(); }, false);
+  } catch {}
+  dropSession(r.id);
+  await sleep(25000);
+  return waitOnline(r, 180000, () => false);
+}
+
 export type TrialVerdict = 'better' | 'same' | 'worse' | 'noconn';
 
 export interface TrialResult {
@@ -169,6 +207,8 @@ export interface TrialResult {
   towerChanged?: boolean;
   /** ثبتنا الجديد بناءً على طلب المستخدم رغم أنه أسوأ */
   userKeptAnyway?: boolean;
+  /** فكّينا كل التثبيتات (الراوتر على التلقائي يلقط أقوى برج) */
+  freed?: boolean;
 }
 
 export interface Trial {
@@ -225,14 +265,10 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
   say('ننتظر الراوتر يتصل...');
   const online = await waitOnline(o.r, 45000, cancelled);
   if (!online) {
-    say('ما اتصل — نرجع الإعداد السابق...');
-    try { await withSession(o.r, o.revert, false); } catch {}
-    let back = await waitOnline(o.r, 45000, () => false);
-    // الإرجاع العادي ما نفع (الراوتر بدون خدمة) — نرجّع إعداداته الأصلية كاملة بدل ما يعلق
-    if (!back && canRescue(o.r)) {
-      try { back = await rescueRouter(o.r, say); } catch {}
-    }
-    const res: TrialResult = { verdict: 'noconn', kept: false, before, after: null, restoreFailed: !back };
+    // ما اتصل: أهم شي ترجع الإشارة — نفك كل شي ويلقط أقوى برج (مو الإعداد السابق)
+    say('ما اتصل — نرجّع الإشارة...');
+    const back = await freeRelease(o.r, say);
+    const res: TrialResult = { verdict: 'noconn', kept: false, before, after: null, restoreFailed: !back, freed: true };
     await record(o.r.id, o.key, o.label, res);
     return res;
   }
@@ -269,9 +305,8 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
     say('نرجع الإعداد السابق...');
     try { await withSession(o.r, o.revert, false); } catch {}
     let back = await waitOnline(o.r, 45000, () => false);
-    if (!back && canRescue(o.r)) {
-      try { back = await rescueRouter(o.r, say); } catch {}
-    }
+    // السابق ما رجّع الخدمة — نفك كل شي ويلقط أقوى برج
+    if (!back) back = await freeRelease(o.r, say);
     restoreFailed = !back;
   }
 
@@ -400,6 +435,9 @@ export function trialMessage(res: TrialResult, label: string): { title: string; 
         body: `${warn}${label} خلّى الاتصال أسوأ بـ ${pct(res.change!)}${res.before && res.after && res.after.carriers < res.before.carriers ? ' — غالباً لأنه أوقف دمج الترددات' : ''}، فرجعنا إعدادك تلقائياً.\n\n${b}${tower}`,
       };
     default:
-      return { title: '↩️ ما اتصل', body: `${warn}الراوتر ما اتصل بعد ${label}، فرجعنا إعدادك السابق تلقائياً.` };
+      if (res.freed && !res.restoreFailed) {
+        return { title: '↩️ ما اتصل — ورجّعنا الإشارة', body: `الراوتر ما اتصل بعد ${label}، ففكّينا كل التثبيتات وخليناه يلقط أقوى برج تلقائياً.\n\nالإشارة رجعت — تقدر تجرّب إعداد ثاني براحتك.` };
+      }
+      return { title: '↩️ ما اتصل', body: `${warn}الراوتر ما اتصل بعد ${label}، فحاولنا نفك كل التثبيتات ونرجّع الإشارة.` };
   }
 }

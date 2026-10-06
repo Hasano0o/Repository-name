@@ -15,7 +15,7 @@ import {
 import { C, tBd, tBg, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { trafficBurst, collectNr, mb } from '../../src/utils/nrprobe';
-import { safeApply, lastTrial, trialNote, trialMessage, loadTrials, canRescue, rescueRouter } from '../../src/utils/safeLock';
+import { safeApply, lastTrial, trialNote, trialMessage, loadTrials, freeRelease } from '../../src/utils/safeLock';
 import { driverById } from '../../src/drivers/registry';
 import { SeenCell, rememberSeen, seenKey } from '../../src/store/seenCells';
 import { ManualLock, ManualTarget } from '../../src/ui/ManualLock';
@@ -335,12 +335,11 @@ export default function TowersScreen() {
             } catch {}
             if (!(await waitOnline(r, 120000))) {
               // ولا رجع — نرجّع الإعدادات الأصلية كاملة ونوقف الفحص
-              if (canRescue(r)) {
-                try {
-                  await rescueRouter(r, st => setScan(s0 => (s0 ? { ...s0, step: st } : { i: 0, n: 0, name: '', step: st })));
-                } catch {}
-              }
-              setScanDone(x => [...x, 'وقّفنا الفحص ورجّعنا إعدادات الراوتر الأصلية']);
+              // ولا رجع — نفك كل شي ويلقط أقوى برج، ونوقف الفحص
+              try {
+                await freeRelease(r, st => setScan(s0 => (s0 ? { ...s0, step: st } : { i: 0, n: 0, name: '', step: st })));
+              } catch {}
+              setScanDone(x => [...x, 'وقّفنا الفحص وفكّينا التثبيتات عشان يلقط أقوى برج']);
               touched.clear();
               break;
             }
@@ -376,10 +375,10 @@ export default function TowersScreen() {
               : d.unlockCell!(tech)), false);
           } catch {}
         }
-        if (touched.size && !(await waitOnline(r, 120000)) && canRescue(r)) {
-          // الإرجاع ما رجّع الخدمة — نرجّع إعدادات الراوتر الأصلية بدل ما يعلق بدون خدمة
+        if (touched.size && !(await waitOnline(r, 120000))) {
+          // الإرجاع ما رجّع الخدمة — نفك كل شي ويلقط أقوى برج بدل ما يعلق بدون خدمة
           try {
-            await rescueRouter(r, st => setScan(s0 => (s0 ? { ...s0, step: st } : { i: 0, n: 0, name: '', step: st })));
+            await freeRelease(r, st => setScan(s0 => (s0 ? { ...s0, step: st } : { i: 0, n: 0, name: '', step: st })));
           } catch {}
         }
       });

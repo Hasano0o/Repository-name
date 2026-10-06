@@ -22,6 +22,7 @@ import { desktop } from '../src/desktop/bridge';
 import { DevContact } from '../src/ui/DevContact';
 import { CityAsk } from '../src/ui/CityAsk';
 import { hostLabel } from '../src/drivers/device';
+import { freeRelease } from '../src/utils/safeLock';
 interface Status {
   loading: boolean;
   online?: boolean;
@@ -37,6 +38,8 @@ export default function RoutersList() {
   const [status, setStatus] = useState<Record<string, Status>>({});
   const [loaded, setLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  /** خطوة «رجّع الإشارة» الجارية لكل راوتر */
+  const [freeing, setFreeing] = useState<Record<string, string>>({});
   const insets = useSafeAreaInsets();
   const alive = useRef(true);
 
@@ -93,6 +96,30 @@ export default function RoutersList() {
     await loadAll();
     if (alive.current) setRefreshing(false);
   }, [loadAll]);
+
+  /** الراوتر بلا شبكة: نفك كل التثبيتات ويلقط أقوى برج — والمستخدم يتحكم بعدها براحته */
+  const onFree = (r: SavedRouter) => {
+    Alert.alert('رجّع الإشارة', 'بنفك تثبيت الأبراج والترددات ونخلي الراوتر يلقط أقوى برج بنفسه. لو ما رجعت، نعيد تشغيله.\n\nاسم الواي فاي وكلمة المرور ما يتغيرون.', [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'رجّعها', onPress: async () => {
+          const step = (t: string) => alive.current && setFreeing(f => ({ ...f, [r.id]: t }));
+          step('نبدأ...');
+          let back = false;
+          try { back = await freeRelease(r, step); } catch {}
+          if (!alive.current) return;
+          setFreeing(f => { const n = { ...f }; delete n[r.id]; return n; });
+          Alert.alert(
+            back ? '✅ رجعت الإشارة' : 'ما رجعت الشبكة للحين',
+            back
+              ? 'فكّينا التثبيتات والراوتر لقط أقوى برج. تقدر الحين تجرّب الأبراج والترددات براحتك.'
+              : 'فكّينا التثبيتات بس الشبكة ما رجعت. انتظر دقيقة، وتأكد من الشريحة والتغطية.',
+          );
+          probe(r);
+        },
+      },
+    ]);
+  };
 
   const add = () => router.push('/add-router' as Href);
   const explore = () => router.push('/probe' as Href);
@@ -331,6 +358,21 @@ export default function RoutersList() {
                 );
               })()}
 
+              {/* ─── بلا شبكة: زر رجّع الإشارة ─── */}
+              {(!!freeing[item.id] || (!st?.error && st?.online === false && !loading)) && (
+                freeing[item.id] ? (
+                  <View style={s.freeBusy}>
+                    <ActivityIndicator size="small" color={P.red} />
+                    <Text style={s.freeBusyTxt} numberOfLines={2}>{freeing[item.id]}</Text>
+                  </View>
+                ) : (
+                  <Pressable onPress={() => onFree(item)} style={({ pressed }) => [s.freeBtn, pressed && { opacity: 0.85 }]}>
+                    <Text style={s.freeBtnTxt}>رجّع الإشارة — يلقط أقوى برج</Text>
+                    <Icon name="refresh" size={16} color={tFg('#fff')} stroke={2.4} />
+                  </Pressable>
+                )
+              )}
+
               {/* ─── مربعات القراءات ─── */}
               {sig && (
                 <View style={s.tiles}>
@@ -502,6 +544,16 @@ const s = StyleSheet.create({
   techBadge: { borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 },
   techBadgeTxt: { fontSize: 18, fontWeight: '900' },
 
+  freeBtn: {
+    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: P.red, borderRadius: 14, paddingVertical: 12,
+  },
+  freeBtnTxt: { color: tFg('#fff'), fontSize: 14, fontWeight: '800' },
+  freeBusy: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 10,
+    backgroundColor: P.redSoft, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12,
+  },
+  freeBusyTxt: { flex: 1, color: P.red, fontSize: 12.5, fontWeight: '700', textAlign: 'right' },
   tiles: { flexDirection: 'row-reverse', gap: 6 },
   tile: { flex: 1, borderRadius: 14, paddingVertical: 8, paddingHorizontal: 4, alignItems: 'center' },
   tileLbl: { color: P.sub, fontSize: 10.5, fontWeight: '800', letterSpacing: 0.3 },
