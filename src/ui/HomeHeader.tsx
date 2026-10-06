@@ -3,10 +3,10 @@
  * لون الدائرة وكلمة الجودة يتغيّرون حسب المستوى.
  */
 import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle } from 'react-native-svg';
 import { Icon } from './Icon';
 import { FONT } from './fonts';
+import { Hero, P } from './Pro';
 import type { Level } from '../utils/signal';
 
 export type HeaderTone = Level | 'down';
@@ -27,27 +27,28 @@ export interface HomeHeaderProps {
   onExplore: () => void;
 }
 
+// على لون الترويسة الأصلي (أزرق→بنفسجي، وفي الداكن نحاسي) — كل شي داخلها أبيض شفاف أو ألوان فاتحة
 const RING: Record<HeaderTone, string> = {
-  excellent: '#3ddc97',
-  good: '#85B7EB',
-  fair: '#EF9F27',
-  poor: '#F09595',
-  down: '#F09595',
-  unknown: '#85B7EB',
+  excellent: '#5ff0b0',
+  good: '#ffffff',
+  fair: '#ffd166',
+  poor: '#ff9b9b',
+  down: '#ff9b9b',
+  unknown: 'rgba(255,255,255,0.7)',
 };
 const WORD: Record<HeaderTone, string> = {
-  excellent: '#9ff0cf',
-  good: '#B5D4F4',
-  fair: '#FAC775',
-  poor: '#F7C1C1',
-  down: '#F7C1C1',
-  unknown: '#B5D4F4',
+  excellent: '#b9ffdf',
+  good: '#ffffff',
+  fair: '#ffe08a',
+  poor: '#ffc4c4',
+  down: '#ffc4c4',
+  unknown: '#ffffff',
 };
 const CHIP = {
-  blue: { bg: '#185FA5', fg: '#E6F1FB' },
-  violet: { bg: '#3C3489', fg: '#CECBF6' },
-  red: { bg: '#791F1F', fg: '#F7C1C1' },
-  green: { bg: '#085041', fg: '#9FE1CB' },
+  blue: { bg: 'rgba(255,255,255,0.18)', fg: '#ffffff' },
+  violet: { bg: 'rgba(255,255,255,0.28)', fg: '#ffffff' },
+  red: { bg: 'rgba(255,90,90,0.35)', fg: '#ffffff' },
+  green: { bg: 'rgba(40,220,150,0.30)', fg: '#ffffff' },
 };
 
 const R = 36;
@@ -64,25 +65,25 @@ export function HomeHeader(p: HomeHeaderProps) {
   const num = p.loading && !score ? '' : String(Math.round(score * 100));
 
   return (
-    <LinearGradient colors={['#0F4F8F', '#0C447C', '#0A3866']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={s.card}>
+    <Hero style={s.card}>
       <View style={s.ringWrap}>
         <Svg width={96} height={96} viewBox="0 0 96 96">
-          <Circle cx={48} cy={48} r={44} fill="#042C53" />
-          <Circle cx={48} cy={48} r={R} fill="none" stroke="#185FA5" strokeWidth={8} strokeLinecap="round"
+          <Circle cx={48} cy={48} r={44} fill="rgba(0,0,0,0.16)" />
+          <Circle cx={48} cy={48} r={R} fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth={8} strokeLinecap="round"
             strokeDasharray={`${ARC} ${CIRC}`} rotation={135} origin="48, 48" />
           {prog > 0.5 && (
             <Circle cx={48} cy={48} r={R} fill="none" stroke={color} strokeWidth={8} strokeLinecap="round"
               strokeDasharray={`${prog} ${CIRC}`} rotation={135} origin="48, 48" />
           )}
-          {prog > 0.5 && <Circle cx={dot.x} cy={dot.y} r={5} fill="#FAEEDA" />}
-          {!!num && (
-            <SvgText x={48} y={54} textAnchor="middle" fontSize={26} fontFamily={FONT.bold} fontWeight="700" fill="#FFFFFF">{num}</SvgText>
-          )}
-          {!!num && (
-            <SvgText x={48} y={71} textAnchor="middle" fontSize={11} fontFamily={FONT.regular} fill="#85B7EB">من 100</SvgText>
-          )}
+          {prog > 0.5 && <Circle cx={dot.x} cy={dot.y} r={5} fill="#ffffff" />}
         </Svg>
-        {p.loading && !num && <ActivityIndicator style={StyleSheet.absoluteFill} color="#E6F1FB" />}
+        {!!num && (
+          <View style={s.ringTxt} pointerEvents="none">
+            <Text style={s.num}>{num}</Text>
+            <Text style={s.of}>من 100</Text>
+          </View>
+        )}
+        {p.loading && !num && <ActivityIndicator style={StyleSheet.absoluteFill} color="#ffffff" />}
       </View>
 
       <View style={s.mid}>
@@ -107,31 +108,31 @@ export function HomeHeader(p: HomeHeaderProps) {
       <View style={s.btns}>
         <Pressable onPress={p.onAdd} accessibilityLabel="إضافة راوتر" hitSlop={6}
           style={({ pressed }) => [s.btn, s.btnAdd, pressed && { opacity: 0.8 }]}>
-          <Icon name="plus" size={20} color="#0C447C" stroke={2.6} />
+          <Icon name="plus" size={20} color={P.blue} stroke={2.6} />
         </Pressable>
         <Pressable onPress={p.onExplore} accessibilityLabel="استكشاف جهاز غير مدعوم" hitSlop={6}
           style={({ pressed }) => [s.btn, s.btnAlt, pressed && { opacity: 0.8 }]}>
-          <Icon name="compass" size={19} color="#E6F1FB" stroke={2.1} />
+          <Icon name="compass" size={19} color="#ffffff" stroke={2.1} />
         </Pressable>
       </View>
-    </LinearGradient>
+    </Hero>
   );
 }
 
 const s = StyleSheet.create({
-  card: {
-    borderRadius: 22, paddingVertical: 18, paddingHorizontal: 16,
-    flexDirection: 'row-reverse', alignItems: 'center', gap: 14,
-  },
+  card: { flexDirection: 'row-reverse', alignItems: 'center', gap: 14, paddingHorizontal: 16 },
   ringWrap: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center' },
+  ringTxt: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', paddingTop: 4 },
+  num: { color: '#ffffff', fontSize: 26, fontWeight: '700', lineHeight: 30, fontFamily: FONT.bold },
+  of: { color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: '500', marginTop: -2 },
   mid: { flex: 1, minWidth: 0, alignItems: 'flex-end' },
-  brand: { color: '#85B7EB', fontSize: 12, fontWeight: '500', letterSpacing: 0.4 },
+  brand: { color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '500', letterSpacing: 0.4 },
   title: { color: '#FFFFFF', fontSize: 20, fontWeight: '700', marginTop: 2, textAlign: 'right' },
   chips: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 5, marginTop: 8 },
   chip: { borderRadius: 7, paddingHorizontal: 8, paddingVertical: 2 },
   chipTxt: { fontSize: 11.5, fontWeight: '500' },
   btns: { gap: 8 },
   btn: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  btnAdd: { backgroundColor: '#E6F1FB' },
-  btnAlt: { backgroundColor: '#185FA5' },
+  btnAdd: { backgroundColor: '#ffffff' },
+  btnAlt: { backgroundColor: 'rgba(255,255,255,0.18)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
 });
