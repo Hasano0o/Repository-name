@@ -23,6 +23,7 @@ import { DevContact } from '../src/ui/DevContact';
 import { CityAsk } from '../src/ui/CityAsk';
 import { HomeHeader, HeaderChip, HeaderTone } from '../src/ui/HomeHeader';
 import { hostLabel } from '../src/drivers/device';
+import { addDemoRouter } from '../src/drivers/demo';
 interface Status {
   loading: boolean;
   online?: boolean;
@@ -45,7 +46,9 @@ export default function RoutersList() {
   const probe = useCallback(async (r: SavedRouter) => {
     setStatus(s => ({ ...s, [r.id]: { ...(s[r.id] ?? {}), loading: true } }));
     let hasPw = false;
-    try { hasPw = !!(await getPassword(r.id)); } catch {}
+    // «هذا الجهاز» و«الراوتر التجريبي» ما لهم كلمة مرور أصلاً
+    if (r.driverId === 'device' || r.driverId === 'demo') hasPw = true;
+    else try { hasPw = !!(await getPassword(r.id)); } catch {}
     try {
       const [sig, net] = await withSession(r, async d => Promise.all([
         d.getSignal ? d.getSignal().catch(() => null) : Promise.resolve(null),
@@ -99,6 +102,10 @@ export default function RoutersList() {
 
   const add = () => router.push('/add-router' as Href);
   const explore = () => router.push('/probe' as Href);
+  const demo = async () => {
+    const id = await addDemoRouter();
+    router.push({ pathname: '/router/[id]', params: { id } });
+  };
   const open = (id: string) => router.push(`/router/${id}` as Href);
   const edit = (id: string) => router.push(`/add-router?id=${id}` as Href);
   const onDelete = (r: SavedRouter) => {
@@ -145,6 +152,10 @@ export default function RoutersList() {
         text="خلّ التطبيق يتصل براوترك ويعرض لك الإشارة والسرعة والأبراج والترددات مباشرة."
       >
         <PrimaryBtn text="إضافة راوتر" icon="plus" onPress={add} style={{ alignSelf: 'stretch' }} />
+        <Pressable style={s.demoBtn} onPress={demo}>
+          <Text style={s.demoTxt}>جرّب بدون راوتر</Text>
+          <Text style={s.demoSub}>راوتر تجريبي تشوف فيه كل المزايا</Text>
+        </Pressable>
         <Pressable style={s.link} onPress={explore}>
           <Icon name="compass" size={16} color={P.violet} />
           <Text style={s.linkTxt}>استكشاف جهاز غير مدعوم</Text>
@@ -524,4 +535,10 @@ const s = StyleSheet.create({
 
   link: { flexDirection: 'row-reverse', alignSelf: 'center', alignItems: 'center', gap: 6, paddingVertical: 14, paddingHorizontal: 14 },
   linkTxt: { color: P.violet, fontWeight: '700', fontSize: 13 },
+  demoBtn: {
+    alignSelf: 'stretch', alignItems: 'center', marginTop: 10, paddingVertical: 12, borderRadius: 16,
+    borderWidth: 1.5, borderColor: P.border, backgroundColor: P.card,
+  },
+  demoTxt: { color: P.blue, fontWeight: '800', fontSize: 15 },
+  demoSub: { color: P.sub, fontSize: 11.5, marginTop: 2 },
 });

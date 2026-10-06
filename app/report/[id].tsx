@@ -112,7 +112,7 @@ export default function ReportScreen() {
           <LinearGradient colors={[tBg('#f4f8ff'), tBg('#eaf2ff'), tBg('#e8f8f1')]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.shotInner}>
             <View style={s.shotHead}>
               <View style={s.brandDot}><Icon name="tower" size={16} color={C.onAccent} /></View>
-              <Text style={s.brand}>موجة</Text>
+              <Text style={s.brand}>Bandly</Text>
               <Text style={s.shotDate}>{today}</Text>
             </View>
 
@@ -149,7 +149,7 @@ export default function ReportScreen() {
               </View>
             )}
 
-            <Text style={s.shotFoot}>تقرير من تطبيق موجة · لإدارة ومراقبة الراوتر</Text>
+            <Text style={s.shotFoot}>تقرير من تطبيق Bandly · لإدارة ومراقبة الراوتر</Text>
           </LinearGradient>
         </View>
       )}

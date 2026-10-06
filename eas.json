@@ -28,9 +28,14 @@
       "env": {
         "BANDLY_ARM64": "1"
       }
+    },
+    "ios-store": {
+      "extends": "production",
+      "channel": "preview"
     }
   },
   "submit": {
-    "production": {}
+    "production": {},
+    "ios-store": {}
   }
 }

@@ -1,0 +1,58 @@
+{
+  "configVersion": 0,
+  "apple": {
+    "copyright": "2026 Hassan Alshehri",
+    "categories": ["UTILITIES", "PRODUCTIVITY"],
+    "advisory": {
+      "alcoholTobaccoOrDrugUseOrReferences": "NONE",
+      "contests": "NONE",
+      "gambling": false,
+      "gamblingSimulated": "NONE",
+      "horrorOrFearThemes": "NONE",
+      "matureOrSuggestiveThemes": "NONE",
+      "medicalOrTreatmentInformation": "NONE",
+      "profanityOrCrudeHumor": "NONE",
+      "sexualContentGraphicAndNudity": "NONE",
+      "sexualContentOrNudity": "NONE",
+      "unrestrictedWebAccess": false,
+      "violenceCartoonOrFantasy": "NONE",
+      "violenceRealistic": "NONE",
+      "violenceRealisticProlongedGraphicOrSadistic": "NONE"
+    },
+    "info": {
+      "ar-SA": {
+        "title": "Bandly - إشارة الراوتر",
+        "subtitle": "قوِّ إشارة راوتر 4G و5G",
+        "description": "Bandly يخليك تعرف وش يصير داخل راوتر 4G/5G في بيتك، ويساعدك تطلع منه أقوى إشارة وأسرع نت.\n\nوش يسوي لك:\n\n• قراءات حيّة: قوة الإشارة وجودتها (RSRP و SINR و RSRQ) للـ 4G والـ 5G، مع تقييم من 100 يفهمه أي أحد.\n• الأبراج: تشوف البرج اللي أنت عليه والأبراج اللي حولك، وتعرف هل فيه برج أفضل، وتثبّت على برج معيّن.\n• الترددات: تشغّل وتطفي الترددات، وتجرب تركيبات الدمج (4G+5G) وتعرف أيها الأسرع في مكانك.\n• «رجّع الإشارة»: لو طاحت الأبراج بعد أي تجربة، ضغطة وحدة ترجّع الراوتر يلقط أقوى برج.\n• مُحسّن الألعاب وكاشف اللاق: يقيس البنق لسيرفر لعبتك، ويقولك وش سبب اللاق ووش أفضل إعداد.\n• توجيه الراوتر: صوت واهتزاز يدلّك على أفضل اتجاه ومكان للراوتر.\n• مستشار الأنتنا: يقولك هل تحتاج أنتنا خارجية وأي نوع يناسبك.\n• امسح ملصق الراوتر بالكاميرا عشان تضيفه بسرعة، وشارك الواي فاي مع ضيوفك برمز QR.\n• وضع الفني: فني يساعدك عن بعد ويشوف قراءاتك حيّة، مع مكالمة وكاميرا.\n• تنبيهات لما تتغير حالة الاتصال.\n\nما يحتاج حساب ولا تسجيل. كلمة مرور الراوتر تنحفظ مشفّرة على جوالك فقط، والتطبيق يكلّم راوترك على شبكتك المحلية مباشرة.\n\nما عندك راوتر الحين؟ اضغط «جرّب بدون راوتر» وشوف كل المزايا على راوتر تجريبي.",
+        "keywords": ["راوتر", "إشارة", "ابراج", "برج", "تردد", "5G", "4G", "بنق", "لاق", "ألعاب", "سرعة", "انتنا", "تقوية", "واي فاي"],
+        "promoText": "أقوى إشارة لراوتر 4G/5G في بيتك: أبراج، ترددات، بنق الألعاب، و«رجّع الإشارة» بضغطة.",
+        "supportUrl": "https://has-host.com/bandly-docs/support-ar.html",
+        "privacyPolicyUrl": "https://has-host.com/bandly-docs/privacy-ar.html",
+        "marketingUrl": "https://t.me/NetGuide1_bot",
+        "releaseNotes": "أول نسخة من Bandly على الآيفون."
+      },
+      "en-US": {
+        "title": "Bandly: 4G/5G Router Signal",
+        "subtitle": "Boost your home router signal",
+        "description": "Bandly shows you what is happening inside your home 4G/5G router and helps you get the strongest signal and the fastest internet out of it.\n\n• Live readings: RSRP, SINR and RSRQ for 4G and 5G, plus an easy score out of 100.\n• Towers: see the tower you are on and the ones around you, find out if a better one exists, and lock to a specific tower.\n• Bands: turn bands on and off, try carrier-aggregation combos (4G+5G) and find the fastest one where you are.\n• Restore signal: if towers drop after an experiment, one tap brings the router back to the strongest tower.\n• Game optimizer and lag detector: measure ping to your game server and see what causes lag.\n• Router aiming: sound and vibration guide you to the best direction and spot.\n• Antenna advisor: tells you whether an external antenna will help and which type.\n• Scan the router label with the camera to add it quickly, and share Wi-Fi with guests using a QR code.\n• Technician mode: a technician helps you remotely and sees your readings live, with call and camera.\n• Alerts when the connection changes.\n\nNo account needed. Your router password is stored encrypted on your phone only, and the app talks to your router directly on your local network.\n\nNo router right now? Tap “Try without a router” to explore every feature on a demo router.\n\nThe interface is in Arabic.",
+        "keywords": ["router", "signal", "4G", "5G", "LTE", "tower", "band", "ping", "lag", "antenna", "speed", "cell", "wifi", "booster"],
+        "promoText": "The strongest signal for your home 4G/5G router: towers, bands, game ping and one-tap signal restore.",
+        "supportUrl": "https://has-host.com/bandly-docs/support-en.html",
+        "privacyPolicyUrl": "https://has-host.com/bandly-docs/privacy-en.html",
+        "marketingUrl": "https://t.me/NetGuide1_bot",
+        "releaseNotes": "First iPhone release of Bandly."
+      }
+    },
+    "release": {
+      "automaticRelease": true
+    },
+    "review": {
+      "firstName": "Hassan",
+      "lastName": "Alshehri",
+      "email": "ko.1416@hotmail.com",
+      "phone": "+966562294460",
+      "demoRequired": false,
+      "notes": "No account or sign-in is required.\n\nBandly manages a 4G/5G home router over the local Wi-Fi network (it reads signal data from the router's local web interface). Because reviewers usually do not have such a router, the app includes a built-in demo router:\n\n1. Open the app. On the first screen tap the outlined button \"جرّب بدون راوتر\" (Try without a router), right under the blue \"إضافة راوتر\" (Add router) button.\n2. A demo router opens with live-looking signal readings. Every screen works with it: towers, bands, carrier aggregation, game optimizer, antenna advisor, SMS, connected devices, technician report.\n\nThe app interface is in Arabic.\n\nPermissions: Local Network (to reach the user's router), Camera (only when the user taps \"Scan router label\" or turns on the camera during a technician call), Microphone (only for calls/voice messages with a technician), Notifications (optional local alerts).\n\nTechnician mode is optional: the user shares a session code with a technician they choose, and the session ends automatically."
+    }
+  }
+}

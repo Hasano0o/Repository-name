@@ -85,7 +85,7 @@ export default function MonitorScreen() {
     setBusy(true); setMsg('');
     const ok = await requestNotifyPermission();
     if (!ok) { setBusy(false); setMsg('لازم تسمح بالإشعارات أول.'); return; }
-    await notify('تجربة إشعار 🔔', 'كذا بتوصلك التنبيهات من موجة.');
+    await notify('تجربة إشعار 🔔', 'كذا بتوصلك التنبيهات من Bandly.');
     try { await runMonitorCheck(); } catch {}
     setBusy(false);
     setMsg('أرسلنا لك إشعار تجريبي. لو وصلك، كل شي تمام.');

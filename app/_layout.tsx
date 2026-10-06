@@ -40,6 +40,7 @@ const SCREENS: [string, string][] = [
   ['optimize/[id]', 'المُحسِّن التلقائي'],
   ['report/[id]', 'تقرير الاتصال'],
   ['wifi/[id]', 'مشاركة الواي فاي'],
+  ['nsacombo/[id]', 'دمج 4G + 5G'],
   ['device/[id]', 'الجهاز'],
   ['speed/[id]', 'اختبار السرعة'],
   ['network/[id]', 'إعدادات الشبكة'],

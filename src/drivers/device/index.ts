@@ -17,7 +17,7 @@ export const DEVICE_DRIVER_ID = 'device';
 
 export const isDeviceHost = (host?: string) => host === DEVICE_HOST;
 /** للعرض: بدل كلمة device نكتب «هذا الجهاز» */
-export const hostLabel = (host?: string) => (isDeviceHost(host) ? 'هذا الجهاز' : host ?? '');
+export const hostLabel = (host?: string) => (isDeviceHost(host) ? 'هذا الجهاز' : host === 'demo' ? 'وضع تجريبي' : host ?? '');
 
 /**
  * ما نعتمد على إعلان «الجهاز يدعم شبكة الجوال» — بعض أجهزة الإنترنت المنزلية

@@ -6,122 +6,92 @@
 <title>Privacy Policy — Bandly</title>
 <link rel="stylesheet" href="style.css">
 </head>
-<body class="ltr">
+<body>
 <header>
 <h1>Privacy Policy</h1>
-<p>Last updated: September 23, 2026</p>
+<p>Last updated: October 7, 2026</p>
 <nav class="lang">
-<a href="privacy-en.html">English</a>
 <a href="privacy-ar.html" class="ghost">العربية</a>
+<a href="privacy-en.html">English</a>
 </nav>
 </header>
 <main>
 
-<p class="lead">
-<strong>Bandly</strong> respects your privacy strictly. The app runs entirely on your device — we do not run any server that collects your data, and we never see any of your information.
-</p>
+<p class="lead"><strong>Bandly</strong> helps you monitor and tune your home 4G/5G router. Most of what the app does happens <strong>on your phone and directly between your phone and your router</strong>. This page explains exactly what leaves your phone and what does not.</p>
 
 <section>
-<h2>1. About the App</h2>
-<p>Bandly is a mobile app that helps you manage and monitor your LTE/4G/5G home router. It connects to your router through your local network to display signal, band, and speed data.</p>
-</section>
-
-<section>
-<h2>2. Data We Collect</h2>
-<p><span class="badge">We do not collect personal data</span></p>
-<p>The app does not collect or transmit any of the following to any server or third party:</p>
+<h2>1. What we never collect</h2>
+<p><span class="badge">No account or sign-up required</span></p>
 <ul>
-<li>Your name, email, or phone number</li>
-<li>Your router password (stays on your device only)</li>
-<li>Your router's or network's IP address</li>
-<li>Wi-Fi network name or password</li>
-<li>MAC address, IMEI, or IMSI</li>
-<li>Devices connected to your network</li>
-<li>SMS messages in the router</li>
-<li>Your location</li>
-<li>Contacts, photos, or files</li>
+<li>Your name, phone number or email</li>
+<li>Your router password or Wi-Fi password</li>
+<li>Your precise (GPS) location</li>
+<li>Contacts, photos or files</li>
+<li>SMS stored on the router or the list of devices connected to it</li>
 </ul>
 </section>
 
 <section>
-<h2>3. Data Stored on Your Device Only</h2>
-<p>The app stores the following on your device only and never sends it anywhere:</p>
+<h2>2. Stored on your phone only</h2>
 <table>
-<tr><th>Data Type</th><th>Storage Location</th><th>Purpose</th></tr>
-<tr><td>Router password</td><td>Secure Storage (Keychain / SecureStore)</td><td>Auto-login to your router</td></tr>
-<tr><td>Router name and address</td><td>App storage</td><td>Saved routers list</td></tr>
-<tr><td>Signal history and readings</td><td>App storage</td><td>Chart display</td></tr>
-<tr><td>App settings and preferences</td><td>App storage</td><td>Preserve preferences</td></tr>
+<tr><th>Data</th><th>Where</th><th>Why</th></tr>
+<tr><td>Router password and Wi-Fi details</td><td>System secure storage (Keychain / SecureStore)</td><td>Sign in to the router, share Wi-Fi</td></tr>
+<tr><td>Router name and address</td><td>App storage</td><td>Router list</td></tr>
+<tr><td>Signal history and trials</td><td>App storage</td><td>Charts and comparisons</td></tr>
+<tr><td>Settings</td><td>App storage</td><td>Your preferences</td></tr>
 </table>
-<p>You can delete all this data anytime via the "Delete Router" button in the app, or by uninstalling the app.</p>
 </section>
 
 <section>
-<h2>4. Network Connections</h2>
-<p>The app connects to the internet only for the following purposes:</p>
+<h2>3. What leaves your phone (anonymous)</h2>
+<p><strong>Usage statistics:</strong> once a day the app sends our server a random identifier generated inside the app (not tied to you or your device), the city you chose yourself (optional), phone model and OS version, app version, and the types of routers you added — so we know how many people use the app and can improve it.</p>
+<p><strong>Bandly Community (optional, off by default):</strong> if you turn it on, the app shares anonymous per-tower results (tower ID, carrier, the setting tried and the signal score) so everyone can see the best setting for the same tower. No location or name is sent.</p>
+<p><strong>Technician mode (only when you start it):</strong> signal readings are streamed to the technician you invite; if you start a call, camera or voice message it is relayed through our server. Sessions end automatically (2 hours max) and voice messages are deleted automatically. Your router password never passes through technician mode.</p>
+<p>This data is <strong>not linked to your identity</strong>, <strong>not used for tracking or advertising</strong>, and <strong>never sold or shared</strong> with third parties.</p>
+</section>
+
+<section>
+<h2>4. External connections</h2>
 <ul>
-<li><strong>Local Router:</strong> To read and control your router through your home network only. It does not connect to any router outside your network.</li>
-<li><strong>Speed Test and Latency:</strong> The app uses <a href="https://www.cloudflare.com/privacypolicy/" target="_blank">Cloudflare</a> servers to measure internet speed and connection quality. This is optional and only runs when you tap "Run Speed Test".</li>
+<li><strong>Your router</strong> on your local network only — the code blocks sending the password to any address outside your network.</li>
+<li><strong>Speed and ping tests</strong> (only when you run them): public measurement servers such as Cloudflare and game servers.</li>
+<li><strong>Bandly server</strong> (has-host.com): statistics, community and technician mode as described above.</li>
+<li><strong>App updates</strong> via the Expo update service.</li>
 </ul>
-<p><strong>There are no other connections.</strong></p>
 </section>
 
 <section>
-<h2>5. Notifications</h2>
-<p>The app may send local notifications on your device when connection status changes (network loss, signal improvement, etc.). These notifications are fully local and carry no data over the internet.</p>
-</section>
-
-<section>
-<h2>6. Permissions</h2>
-<p>The app requests only the following permissions:</p>
+<h2>5. Permissions</h2>
 <table>
-<tr><th>Permission</th><th>Purpose</th></tr>
-<tr><td>Internet</td><td>Connect to local router and speed test</td></tr>
-<tr><td>Network state</td><td>Verify router connection</td></tr>
-<tr><td>Wi-Fi state</td><td>Detect current connection type</td></tr>
-<tr><td>Notifications</td><td>Alert you on connection changes (optional)</td></tr>
+<tr><th>Permission</th><th>When and why</th></tr>
+<tr><td>Local network</td><td>Reach your router and read the signal</td></tr>
+<tr><td>Camera</td><td>Only when you tap “Scan router label” or turn on the camera with a technician. The label image is read on your phone and never uploaded.</td></tr>
+<tr><td>Microphone</td><td>Only for calls and voice messages with a technician</td></tr>
+<tr><td>Notifications</td><td>Local alerts when the connection changes (optional)</td></tr>
 </table>
-<p>We do not request: camera, location, contacts, microphone, photos, or any other sensitive permission.</p>
 </section>
 
 <section>
-<h2>7. Third-Party Sharing</h2>
-<p><strong>We do not share any data with any third party.</strong> We use no analytics, no ads, no social networks, no SDKs that track you.</p>
+<h2>6. Children</h2>
+<p>The app is not directed at children and we do not knowingly collect data from anyone.</p>
 </section>
 
 <section>
-<h2>8. Data Security</h2>
-<ul>
-<li>Passwords are stored using <strong>Keychain (iOS)</strong> and <strong>SecureStore (Android)</strong> — encryption systems provided by the OS itself.</li>
-<li>All router communication uses HTTPS when the router supports it, otherwise it runs on your local network secured by WPA2/WPA3.</li>
-<li>The app cannot send your data to any address outside your local network (technical protection enforced in code).</li>
-</ul>
+<h2>7. Your rights</h2>
+<p>Your personal data stays on your phone under your control. The anonymous data in section 3 cannot be linked to you; if you want anything related to a specific technician session deleted, contact us.</p>
 </section>
 
 <section>
-<h2>9. Children</h2>
-<p>The app is not directed to children under 13, and we do not knowingly collect data from anyone.</p>
+<h2>8. Changes</h2>
+<p>Any update will be published on this page with its date.</p>
 </section>
 
 <section>
-<h2>10. Your Rights (GDPR / CCPA)</h2>
-<p>Since we do not collect any data from you, all your rights (access, deletion, modification, portability) are inherently guaranteed — all your data is on your device, under your full control.</p>
-</section>
-
-<section>
-<h2>11. Policy Changes</h2>
-<p>Any updates to this policy will be posted on this page. Your continued use of the app after the update constitutes acceptance of the new policy.</p>
-</section>
-
-<section>
-<h2>12. Contact</h2>
-<p>For any inquiry or complaint, contact us at:</p>
-<p><strong>Email:</strong> <a href="mailto:ko.1416@hotmail.com">ko.1416@hotmail.com</a></p>
+<h2>9. Contact</h2>
+<p><strong>Email:</strong> <a href="mailto:ko.1416@hotmail.com">ko.1416@hotmail.com</a> — <strong>Telegram:</strong> <a href="https://t.me/hasa_n20">@hasa_n20</a></p>
 </section>
 
 </main>
-<footer>
-© 2026 Bandly. All rights reserved.
-</footer>
+<footer>© 2026 Bandly. All rights reserved.</footer>
 </body>
 </html>

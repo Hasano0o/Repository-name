@@ -17,6 +17,7 @@ import { Icon, IconName } from '../src/ui/Icon';
 import { C, R, S, T, tBd, tBg, tFg } from '../src/ui/theme';
 import { isLanHost } from '../src/utils/host';
 import { detectDriver } from '../src/drivers/registry';
+import { addDemoRouter } from '../src/drivers/demo';
 import { DesktopNetCard, explainDetectFailure, useDesktopNet } from '../src/ui/DesktopNet';
 import { getRouter, saveRouter, updateRouter, deleteRouter, SavedRouter, setWifi, SavedWifi } from '../src/store/routers';
 import { LabelScannerHost, ensureScanner } from '../src/ui/scanner';
@@ -316,6 +317,22 @@ export default function AddRouterScreen() {
             </Pressable>
           )}
 
+          {/* راوتر تجريبي — يشوف التطبيق كامل بدون راوتر */}
+          {!isEdit && (
+            <Pressable
+              onPress={async () => { const id = await addDemoRouter(); nav.replace({ pathname: '/router/[id]', params: { id } }); }}
+              disabled={busy}
+              style={({ pressed }) => [styles.deviceCard, styles.demoCard, pressed && { opacity: 0.8 }]}
+            >
+              <View style={[styles.deviceIcon, { backgroundColor: tBg('#f3edff') }]}><Text style={{ fontSize: 24 }}>🧪</Text></View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.deviceTitle}>جرّب بدون راوتر</Text>
+                <Text style={styles.deviceSub}>راوتر تجريبي بقراءات وأبراج وترددات — تشوف فيه كل المزايا قبل ما تربط راوترك</Text>
+              </View>
+              <Icon name="chevron" size={18} color={tFg('#7c3aed')} />
+            </Pressable>
+          )}
+
           {/* امسح ملصق الراوتر — يعبّي البيانات لحاله */}
           {!isDevice && canScan && (
             <Pressable
@@ -568,6 +585,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: tBd('#cfdcff'),
   },
   scanCard: { borderColor: tBd('#bfeed6') },
+  demoCard: { borderColor: tBd('#ddd0ff') },
   deviceIcon: {
     width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center',
     backgroundColor: tBg('#eef3ff'),

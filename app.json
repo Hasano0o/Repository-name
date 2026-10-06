@@ -8,13 +8,12 @@
     "scheme": "bandly",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.hasan.bandly",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
-          "fetch",
-          "processing"
+          "fetch"
         ],
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true,
@@ -26,7 +25,7 @@
         },
         "NSLocalNetworkUsageDescription": "Bandly يحتاج يوصل لراوترك على الشبكة المحلية عشان يقرأ الإشارة ويديره.",
         "NSMicrophoneUsageDescription": "Bandly يستخدم الميكروفون للمكالمات والرسائل الصوتية مع الفني أثناء ضبط الإشارة.",
-        "NSCameraUsageDescription": "Bandly يستخدم الكاميرا بس لما تشغّلها بنفسك أثناء المكالمة، عشان الفني يشوف الهوائي والراوتر ويوجّهك."
+        "NSCameraUsageDescription": "Bandly يستخدم الكاميرا لقراءة ملصق الراوتر، وأثناء المكالمة لما تشغّلها بنفسك عشان الفني يشوف الهوائي والراوتر."
       }
     },
     "android": {
