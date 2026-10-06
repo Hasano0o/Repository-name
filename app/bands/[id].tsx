@@ -20,7 +20,7 @@ import { HeroCard, MetricCard } from '../../src/ui/Cards';
 import { Icon } from '../../src/ui/Icon';
 import { Skeleton, ErrorCard } from '../../src/ui/States';
 import { trafficBurst } from '../../src/utils/nrprobe';
-import { safeApply, lastTrial, trialNote, trialMessage, freeRelease } from '../../src/utils/safeLock';
+import { safeApply, lastTrial, trialNote, trialMessage, freeRelease, waitOnline } from '../../src/utils/safeLock';
 
 type ScanStatus = 'pending' | 'testing' | 'done' | 'nocov' | 'error';
 interface ScanRow { tech: 'LTE' | 'NR'; band: number; status: ScanStatus; rsrp?: number; sinr?: number; score?: number; note?: string; }
@@ -529,6 +529,10 @@ export default function BandsScreen() {
           [{ text: 'حسناً' }],
         );
       }
+      // الإرجاع ما رجّع الخدمة؟ نفك كل التثبيتات ويلقط أقوى برج بدل ما يعلق
+      try {
+        if (!(await waitOnline(info, 60000, () => false))) await freeRelease(info);
+      } catch {}
       scanningRef.current = false;
       const at = Date.now();
       try {
@@ -549,6 +553,40 @@ export default function BandsScreen() {
         await load(info);
       }
     }
+  };
+
+  // نتائج الفحص الدقيق (تثبيت على كل تردد) تكمّل قراءات الأبراج المجاورة
+  // نتيجة فحص أقدم من أسبوع ما نعتمدها (الأبراج تتغيّر)
+  const scanFresh = scanning || (!!scanAt && Date.now() - scanAt < 7 * 86400000);
+  const scanRows = scanFresh ? scan : [];
+  const seenWithScan: Record<string, BandSeen> = { ...seenMap };
+  for (const r of scanRows) {
+    if (r.status !== 'done' || r.score === undefined) continue;
+    const k = r.tech + ':' + r.band;
+    if (!seenWithScan[k] || r.score > seenWithScan[k].score) seenWithScan[k] = { rsrp: r.rsrp, sinr: r.sinr, score: r.score };
+  }
+  const scanNone = scanRows.filter(r => r.status === 'nocov').map(r => r.tech + ':' + r.band);
+  const scanNote = (() => {
+    const i = scan.findIndex(r => r.status === 'testing');
+    if (i < 0) return '';
+    const r = scan[i];
+    return `نفحص ${r.tech === 'NR' ? 'n' : 'B'}${r.band} (${i + 1} من ${scan.length}) — النت ينقطع لحظات`;
+  })();
+
+  const confirmScanUnknown = (tech: 'LTE' | 'NR', bands: number[]) => {
+    const secs = bands.length * (tech === 'NR' ? 35 : 25);
+    const mins = Math.max(1, Math.round(secs / 60));
+    Alert.alert(
+      'نفحص الترددات',
+      `بنثبّت الراوتر على كل تردد لحاله ونشوف هل فيه برج: ${bands.map(b => (tech === 'NR' ? 'n' : 'B') + b).join('، ')}.\n\n` +
+        `ياخذ حوالي ${mins} ${mins === 1 ? 'دقيقة' : 'دقائق'}، والنت بينقطع لحظات مع كل تردد.` +
+        (tech === 'NR' ? ' وفحص 5G يحمّل شوي عشان يصحى (يستهلك من الباقة).' : '') +
+        '\n\nبالآخر نرجّع إعدادك زي ما هو.',
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        { text: 'ابدأ', onPress: () => runScan(bands.map(band => ({ tech, band }))) },
+      ],
+    );
   };
 
   const startDeepScan = () => {
@@ -674,13 +712,17 @@ export default function BandsScreen() {
           <Stage n={1} title="ترددات راوترك" sub={verdict}>
             <BandPicker
               cfg={cfg}
-              seen={seenMap}
+              seen={seenWithScan}
               carriers={carriers}
               activeLte={active}
               activeNr={[...knownNrLive]}
               busy={locked}
               onTry={confirmMix}
               onAuto={confirmAuto}
+              none={scanNone}
+              onScan={confirmScanUnknown}
+              scanning={scanning}
+              scanNote={scanNote}
             />
             <BestCombo
               rows={labRows}

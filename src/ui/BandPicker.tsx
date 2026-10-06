@@ -5,7 +5,7 @@
  * النجمة = التردد الأساسي الفعلي الحين (من النواقل) — للعرض فقط.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BandConfig, Carrier } from '../drivers/types';
@@ -88,9 +88,15 @@ export interface BandPickerProps {
   busy: boolean;
   onTry: (lte: number[], nr: number[] | undefined, label: string) => void;
   onAuto: () => void;
+  /** ترددات فحصناها (ثبّتنا عليها) وما مسك برج — المفتاح "LTE:7" */
+  none?: string[];
+  /** فحص الترددات اللي ما انقاست: يثبّت على كل واحد لحاله ويقيس */
+  onScan?: (tech: Tech, bands: number[]) => void;
+  scanning?: boolean;
+  scanNote?: string;
 }
 
-export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onTry, onAuto }: BandPickerProps) {
+export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onTry, onAuto, none = [], onScan, scanning, scanNote }: BandPickerProps) {
   const [tab, setTab] = useState<Tech>('LTE');
   const [showAll, setShowAll] = useState(false);
   // شكل القائمة: مربعات (الجديد) أو صفوف (القديم) — يتذكر اختيارك
@@ -114,6 +120,12 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
   const known = (t: Tech, b: number) =>
     !!seen[t + ':' + b] || (t === 'LTE' ? activeLte : activeNr).includes(b) ||
     (t === 'LTE' ? cfg.locked : cfg.nrLocked).includes(b);
+
+  /** «ما ظهر برج» كانت مضلّلة: الراوتر ما يقيس إلا ترددات قريبة من اللي ماسكه */
+  const sigText = (t: Tech, b: number, lvl: number) =>
+    lvl > 0 ? SIG_TEXT[lvl] : none.includes(t + ':' + b) ? 'ما فيه برج' : 'غير مفحوص';
+  const unknownOf = (t: Tech) => supported(t).filter(b =>
+    !seen[t + ':' + b] && !none.includes(t + ':' + b) && !(t === 'LTE' ? activeLte : activeNr).includes(b));
 
   const list = (t: Tech) => {
     const all = supported(t);
@@ -269,6 +281,20 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
             </Pressable>
           </View>
         </View>
+        {!!onScan && (scanning ? (
+          <View style={s.scanBox}>
+            <ActivityIndicator size="small" color={TECH_TONE[tab].fg} />
+            <Text style={[s.scanTxt, { color: TECH_TONE[tab].fg }]} numberOfLines={2}>{scanNote || 'نفحص الترددات...'}</Text>
+          </View>
+        ) : unknownOf(tab).length > 0 && (
+          <Pressable disabled={busy} onPress={() => onScan(tab, unknownOf(tab))}
+            style={({ pressed }) => [s.scanBox, { borderColor: TECH_TONE[tab].line, backgroundColor: TECH_TONE[tab].soft }, (pressed || busy) && { opacity: 0.7 }]}>
+            <Icon name="target" size={16} color={TECH_TONE[tab].fg} stroke={2.2} />
+            <Text style={[s.scanTxt, { color: TECH_TONE[tab].fg }]}>
+              نفحص لك {unknownOf(tab).length} {unknownOf(tab).length === 1 ? 'تردد' : 'ترددات'} غير مفحوصة
+            </Text>
+          </Pressable>
+        ))}
         {groups.map(g => (
           <View key={g.kind} style={{ gap: 8 }}>
             <View style={s.groupHead}>
@@ -320,7 +346,7 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
                         ))}
                       </View>
                       <Text style={[s.sub, live && { color: C.green }]} numberOfLines={1}>
-                        {live ? 'متصل عليه' : SIG_TEXT[lvl]}
+                        {live ? 'متصل عليه' : sigText(tab, b, lvl)}
                       </Text>
                       <View style={{ flex: 1 }} />
                       <Text style={s.code}>{(tab === 'NR' ? 'n' : 'B') + b}</Text>
@@ -391,7 +417,7 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
                   </View>
                   {(live || lvl > 0) && <View style={[o.dot, { backgroundColor: live ? C.green : barColor }]} />}
                   <Text style={[o.sub, live && { color: C.green }]} numberOfLines={1}>
-                    {live ? 'متصل عليه الحين' : SIG_TEXT[lvl]}
+                    {live ? 'متصل عليه الحين' : sigText(tab, b, lvl)}
                   </Text>
                   <Text style={o.code}>{(tab === 'NR' ? 'n' : 'B') + b}</Text>
                 </View>
@@ -522,6 +548,11 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: TECH_TONE.LTE.line, backgroundColor: TECH_TONE.LTE.soft,
   },
   moreText: { color: C.blue, fontSize: 12, fontWeight: '700' },
+  scanBox: {
+    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderRadius: 14, borderWidth: 1.5, borderColor: C.line, paddingVertical: 11, paddingHorizontal: 12,
+  },
+  scanTxt: { fontSize: 13, fontWeight: '800', textAlign: 'center', flexShrink: 1 },
 
   cta: { minHeight: 54, alignItems: 'center', justifyContent: 'center' },
   ctaText: { color: '#fff', fontSize: 15.5, fontWeight: '700' },
