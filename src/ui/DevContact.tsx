@@ -21,15 +21,18 @@ const open = (url: string) =>
 export function DevContact() {
   return (
     <View style={s.box}>
-      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+      <View style={s.head}>
         <Text style={s.title}>تواصل مع المطوّر</Text>
         <Text style={s.sub}>اقتراح أو مشكلة؟</Text>
       </View>
-      <View style={s.row}>
+      <View style={s.grid}>
         {WAYS.map(w => (
-          <Pressable key={w.id} onPress={() => open(w.url)} accessibilityLabel={w.label} hitSlop={4}
-            style={({ pressed }) => [s.btn, { backgroundColor: w.color }, pressed && { opacity: 0.75, transform: [{ scale: 0.94 }] }]}>
-            <Icon name={w.icon} size={19} color="#fff" stroke={2.2} />
+          <Pressable key={w.id} onPress={() => open(w.url)} accessibilityLabel={w.label}
+            style={({ pressed }) => [s.tile, pressed && { opacity: 0.75, transform: [{ scale: 0.96 }] }]}>
+            <View style={[s.btn, { backgroundColor: w.color }]}>
+              <Icon name={w.icon} size={20} color="#fff" stroke={2.2} />
+            </View>
+            <Text style={s.lbl} numberOfLines={1}>{w.label}</Text>
           </Pressable>
         ))}
       </View>
@@ -40,10 +43,16 @@ export function DevContact() {
 const s = StyleSheet.create({
   box: {
     backgroundColor: P.card, borderColor: P.border, borderWidth: 1, borderRadius: 18,
-    paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row-reverse', alignItems: 'center', gap: 12,
+    padding: 14, gap: 12,
   },
+  head: { alignItems: 'flex-end' },
   title: { color: P.text, fontWeight: '800', fontSize: 14 },
   sub: { color: P.sub, fontSize: 11.5, marginTop: 2 },
-  row: { flexDirection: 'row-reverse', gap: 8 },
-  btn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  grid: { flexDirection: 'row-reverse', gap: 8 },
+  tile: {
+    flex: 1, alignItems: 'center', gap: 7, paddingVertical: 12,
+    backgroundColor: P.soft, borderRadius: 16,
+  },
+  btn: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  lbl: { color: P.text, fontSize: 12, fontWeight: '700' },
 });

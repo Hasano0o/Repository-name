@@ -10,10 +10,10 @@ import { withSession } from '../src/store/sessions';
 import { Signal } from '../src/drivers/types';
 import { Icon, IconName } from '../src/ui/Icon';
 import { SkeletonRouterCard, EmptyState } from '../src/ui/States';
-import { overallLevel, parseBands, parseNrBands } from '../src/utils/signal';
+import { overallLevel, parseBands, parseNrBands, rsrpLevel, rsrqLevel, sinrLevel, Level } from '../src/utils/signal';
 import {
-  P, shadow, Hero, GlassBtn, Val, QBar, Chip, PrimaryBtn,
-  lvlColor, lvlSoft, lvlLabel, ratioOf, RANGE,
+  P, shadow, Hero, GlassBtn, Chip, PrimaryBtn,
+  lvlColor, lvlSoft,
 } from '../src/ui/Pro';
 
 import { tBd, tBg, tFg, THEME_PREF, ThemePref, setThemePref } from '../src/ui/theme';
@@ -244,15 +244,11 @@ export default function RoutersList() {
           const sig = st?.signal;
           const level = overallLevel(sig);
           const color = lvlColor(level);
-          const down = st?.error ? false : st?.online ?? undefined;
           const band = [...parseBands(sig?.band), ...parseNrBands(sig?.nrBand)];
           const hasNr = sig?.nrRsrp !== undefined || !!sig?.nrBand;
           const hasPw = st?.hasPw !== false;
           const loading = !!st?.loading;
 
-          const stTxt = loading ? 'نفحص…' : down === false ? 'غير متصل' : down ? 'متصل' : '—';
-          const stCol = loading ? P.sub : down === false ? P.red : down ? P.green : P.sub;
-          const stBg = loading ? P.soft : down === false ? P.redSoft : down ? P.greenSoft : P.soft;
 
           return (
             <View style={s.card}>
@@ -263,15 +259,11 @@ export default function RoutersList() {
                   start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                   style={s.avatar}
                 >
-                  <Icon name="tower" size={22} color={tFg('#fff')} stroke={2.1} />
+                  <Icon name="wifi" size={22} color={tFg('#fff')} stroke={2.1} />
                 </LinearGradient>
                 <View style={{ flex: 1, alignItems: 'flex-end', gap: 5 }}>
                   <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
                     <Text style={s.name} numberOfLines={1}>{item.name}</Text>
-                    <View style={[s.state, { backgroundColor: stBg }]}>
-                      <View style={[s.stateDot, { backgroundColor: stCol }]} />
-                      <Text style={[s.stateTxt, { color: stCol }]}>{stTxt}</Text>
-                    </View>
                   </View>
                   <View style={s.metaRow}>
                     <View style={s.meta}>
@@ -292,35 +284,62 @@ export default function RoutersList() {
                 <View style={s.flip}><Icon name="chevron" size={18} color={P.faint} /></View>
               </Pressable>
 
-              {/* ─── شريط الإشارة ─── */}
-              {sig ? (
-                <View style={[s.signal, { backgroundColor: lvlSoft(level) }]}>
-                  <View style={s.sigTop}>
-                    <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6 }}>
-                      <Text style={[s.sigLevel, { color }]}>الإشارة: {lvlLabel(level)}</Text>
-                      {band.slice(0, 2).map(b => (
-                        <Chip key={b} text={b}
-                          color={b.startsWith('n') ? P.violet : P.blue}
-                          bg={b.startsWith('n') ? P.violetSoft : P.blueSoft} />
-                      ))}
-                      {hasNr && !band.some(b => b.startsWith('n')) && <Chip text="5G" color={P.violet} bg={P.violetSoft} />}
+              {/* ─── بطاقة الحالة: تعرف وضعك من أول نظرة (اضغطها للتحديث) ─── */}
+              {(() => {
+                const noService = !st?.error && st?.online === false;
+                const tone = loading && !sig ? P.sub : st?.error || noService ? P.red : sig ? color : P.sub;
+                const bg = loading && !sig ? P.soft : st?.error || noService ? P.redSoft : sig ? lvlSoft(level) : P.soft;
+                const title = st?.error ? 'تعذّر الوصول للراوتر'
+                  : noService ? 'الراوتر بلا شبكة'
+                  : sig ? 'متصل'
+                  : loading ? 'نقرأ الإشارة…' : '—';
+                const sub = st?.error ? 'تأكد إنك متصل بواي فاي الراوتر'
+                  : noService ? 'الأبراج منقطعة — ادخل غيّر البرج أو التردد'
+                  : sig ? STATUS_SUB[level]
+                  : loading ? 'لحظات…' : '';
+                const tech = hasNr ? '5G' : sig ? (sig.network?.match(/\b[2-5]G\b/)?.[0] ?? '4G') : undefined;
+                return (
+                  <Pressable onPress={() => probe(item)} disabled={loading}
+                    style={({ pressed }) => [s.status, { backgroundColor: bg }, pressed && { opacity: 0.85 }]}>
+                    <View style={[s.statusIcon, { backgroundColor: tone }]}>
+                      {loading && !sig
+                        ? <ActivityIndicator size="small" color={tFg('#fff')} />
+                        : <Icon name="tower" size={20} color={tFg('#fff')} stroke={2.1} />}
                     </View>
-                    <Val v={sig.rsrp} unit="dBm" size={17} color={color} />
-                  </View>
-                  <QBar ratio={ratioOf(sig.rsrp, RANGE.rsrp)} color={color} track="rgba(255,255,255,0.8)" />
+                    <View style={{ flex: 1, alignItems: 'flex-end', gap: 2 }}>
+                      <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6 }}>
+                        <View style={[s.stateDot, { backgroundColor: tone }]} />
+                        <Text style={[s.statusTitle, { color: tone }]}>{title}</Text>
+                      </View>
+                      {!!sub && <Text style={s.statusSub} numberOfLines={1}>{sub}</Text>}
+                      {sig && band.length > 0 && (
+                        <View style={{ flexDirection: 'row-reverse', gap: 5, marginTop: 3 }}>
+                          {band.slice(0, 3).map(b => (
+                            <Chip key={b} text={b}
+                              color={b.startsWith('n') ? P.violet : P.blue}
+                              bg={b.startsWith('n') ? P.violetSoft : P.blueSoft} />
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                    {tech && (
+                      <View style={[s.techBadge, { borderColor: tone }]}>
+                        <Text style={[s.techBadgeTxt, { color: tone }]}>{tech}</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })()}
+
+              {/* ─── مربعات القراءات ─── */}
+              {sig && (
+                <View style={s.tiles}>
+                  <ReadTile label="SINR" v={sig.sinr} unit="dB" level={sinrLevel(sig.sinr)} />
+                  <ReadTile label="RSRQ" v={sig.rsrq} unit="dB" level={rsrqLevel(sig.rsrq)} />
+                  <ReadTile label="RSRP" v={sig.rsrp} unit="dBm" level={rsrpLevel(sig.rsrp)} />
+                  <ReadTile label="PCI" text={sig.pci} />
                 </View>
-              ) : st?.error ? (
-                <View style={[s.signal, { backgroundColor: P.redSoft }]}>
-                  <Text style={[s.sigLevel, { color: P.red, textAlign: 'right' }]} numberOfLines={2}>
-                    تعذّر الوصول للراوتر — تأكد إنك على شبكته
-                  </Text>
-                </View>
-              ) : loading ? (
-                <View style={[s.signal, { backgroundColor: P.soft }]}>
-                  <Text style={[s.sigLevel, { color: P.sub, textAlign: 'right' }]}>نقرأ الإشارة…</Text>
-                  <QBar ratio={0.15} color={P.faint} />
-                </View>
-              ) : null}
+              )}
 
               {/* ─── كلمة المرور + الأزرار ─── */}
               <View style={s.btnRow}>
@@ -341,16 +360,57 @@ export default function RoutersList() {
                   <Icon name="trash" size={18} color={P.red} />
                 </Pressable>
               </View>
-              {hasPw && (
+              {(hasPw || !!st?.at) && (
                 <View style={s.pwRow}>
-                  <Text style={s.pwTxt}>كلمة المرور محفوظة بأمان على جهازك</Text>
-                  <Icon name="lock" size={11} color={P.faint} stroke={2.2} />
+                  {!!st?.at && !loading && (
+                    <>
+                      <Text style={s.pwTxt}>آخر تحديث: {agoText(st.at)}</Text>
+                      <Icon name="clock" size={11} color={P.faint} stroke={2.2} />
+                    </>
+                  )}
+                  {!!st?.at && !loading && hasPw && <Text style={s.pwTxt}>·</Text>}
+                  {hasPw && (
+                    <>
+                      <Text style={s.pwTxt}>كلمة المرور محفوظة على جهازك</Text>
+                      <Icon name="lock" size={11} color={P.faint} stroke={2.2} />
+                    </>
+                  )}
                 </View>
               )}
             </View>
           );
         }}
       />
+    </View>
+  );
+}
+
+const STATUS_SUB: Record<Level, string> = {
+  excellent: 'الشبكة قوية ومستقرة',
+  good: 'الشبكة جيدة',
+  fair: 'الشبكة متوسطة — جرّب توجيه الأنتنا',
+  poor: 'الإشارة ضعيفة — جرّب برج أو تردد ثاني',
+  unknown: 'متصل بالراوتر',
+};
+
+function agoText(at: number): string {
+  const m = Math.floor((Date.now() - at) / 60000);
+  if (m < 1) return 'الآن';
+  if (m < 60) return `قبل ${m} د`;
+  return `قبل ${Math.floor(m / 60)} س`;
+}
+
+/** مربع قراءة صغير: الاسم فوق والرقم ملوّن حسب تقييمه */
+function ReadTile({ label, v, unit, level = 'unknown', text }: {
+  label: string; v?: number; unit?: string; level?: Level; text?: string;
+}) {
+  const col = level === 'unknown' ? P.text : lvlColor(level);
+  const val = text ?? (v === undefined ? '—' : String(Math.round(v)));
+  return (
+    <View style={[s.tile, { backgroundColor: level === 'unknown' ? P.soft : lvlSoft(level) }]}>
+      <Text style={s.tileLbl}>{label}</Text>
+      <Text style={[s.tileVal, { color: col }]} numberOfLines={1} adjustsFontSizeToFit>{val}</Text>
+      <Text style={s.tileUnit}>{v === undefined || !unit ? ' ' : unit}</Text>
     </View>
   );
 }
@@ -435,9 +495,18 @@ const s = StyleSheet.create({
   meta: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: P.soft, borderRadius: 14, paddingHorizontal: 7, paddingVertical: 3 },
   metaTxt: { color: P.sub, fontSize: 11.5, fontWeight: '700' },
 
-  signal: { borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
-  sigTop: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
-  sigLevel: { fontSize: 12.5, fontWeight: '800' },
+  status: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, borderRadius: 18, padding: 12 },
+  statusIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  statusTitle: { fontSize: 16, fontWeight: '800' },
+  statusSub: { color: P.sub, fontSize: 11.5, fontWeight: '600' },
+  techBadge: { borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 },
+  techBadgeTxt: { fontSize: 18, fontWeight: '900' },
+
+  tiles: { flexDirection: 'row-reverse', gap: 6 },
+  tile: { flex: 1, borderRadius: 14, paddingVertical: 8, paddingHorizontal: 4, alignItems: 'center' },
+  tileLbl: { color: P.sub, fontSize: 10.5, fontWeight: '800', letterSpacing: 0.3 },
+  tileVal: { fontSize: 18, fontWeight: '800', marginTop: 2 },
+  tileUnit: { color: P.sub, fontSize: 9.5, fontWeight: '600' },
 
   btnRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   iconBtn: {
