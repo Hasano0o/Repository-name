@@ -6,6 +6,8 @@ module.exports = ({ config }) => {
     config.web = { ...(config.web || {}), output: 'single' };
     return config;
   }
+  // الجوال بس — بدونها «eas update --platform all» يحاول يصدّر نسخة ويب ويفشل
+  config.platforms = ['ios', 'android'];
   if (process.env.BANDLY_ARM64 !== '1') return config;
   config.plugins = (config.plugins || []).map(p => {
     if (!Array.isArray(p) || p[0] !== 'expo-build-properties') return p;
