@@ -3,6 +3,7 @@ import { driverById } from '../drivers/registry';
 import { SavedRouter, getPassword } from './routers';
 import { assertLanHost } from '../utils/host';
 import { getBaseline, saveBaseline } from './baseline';
+import { http } from '../drivers/http';
 
 interface Sess { d: RouterDriver; authAt: number; }
 const sessions = new Map<string, Sess>();
@@ -30,6 +31,11 @@ async function doConnect(r: SavedRouter, force = false): Promise<RouterDriver> {
   // ═══ حماية: نتحقق أن العنوان لا يزال محلياً قبل إرسال كلمة المرور.
   // يمنع هجوم تعديل AsyncStorage لإرسال كلمة المرور لخادم خارجي.
   assertLanHost(r.host);
+  // ═══ قبل تسجيل الدخول: هل الراوتر أصلاً موجود على الشبكة؟
+  // بدونها لو المستخدم على راوتر ثاني، الدخول يجرّب طرق كثيرة وكل وحدة تنتظر مهلتها — دقايق «يتصل…»
+  if (r.host !== 'device' && r.host !== 'demo' && !(await reachable(r.host))) {
+    throw new Error('الراوتر ما رد — تأكد إنك متصل بشبكته');
+  }
   const pw = (await getPassword(r.id)) ?? '';
   try {
     await d.login(r.host, r.username, pw);
@@ -91,4 +97,17 @@ export async function withSession<T>(
 export function dropSession(id: string) {
   sessions.get(id)?.d.logout().catch(() => {});
   sessions.delete(id);
+}
+
+/** أي رد من الراوتر (حتى 404) يعني إنه موجود. نجرب http و https مع بعض، بمهلة قصيرة */
+async function reachable(host: string): Promise<boolean> {
+  const h = host.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+  const tryUrl = (u: string) => http(u, { method: 'GET' }, 5000).then(() => true);
+  const urls = /^https:/i.test(host) ? [`https://${h}/`] : [`http://${h}/`, `https://${h}/`];
+  return new Promise<boolean>(resolve => {
+    let left = urls.length;
+    for (const u of urls) {
+      tryUrl(u).then(() => resolve(true), () => { if (--left === 0) resolve(false); });
+    }
+  });
 }
