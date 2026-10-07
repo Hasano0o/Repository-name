@@ -2,6 +2,7 @@
   "configVersion": 0,
   "apple": {
     "copyright": "2026 Hassan Alshehri",
+    "version": "1.0",
     "categories": [
       "UTILITIES",
       "PRODUCTIVITY"
@@ -20,7 +21,10 @@
       "unrestrictedWebAccess": false,
       "violenceCartoonOrFantasy": "NONE",
       "violenceRealistic": "NONE",
-      "violenceRealisticProlongedGraphicOrSadistic": "NONE"
+      "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+      "kidsAgeBand": null,
+      "ageRatingOverride": "NONE",
+      "koreaAgeRatingOverride": "NONE"
     },
     "info": {
       "ar-SA": {
