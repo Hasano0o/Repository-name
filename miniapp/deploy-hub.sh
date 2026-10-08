@@ -91,7 +91,7 @@ def api(m, **p):
     data = urllib.parse.urlencode({k: json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else v for k, v in p.items()}).encode()
     return json.load(urllib.request.urlopen(f"https://api.telegram.org/bot{tok}/{m}", data=data, timeout=15))
 r1 = api("setMyDescription", description=
-  "📶 Bandly — اطلع أقوى إشارة من راوترك\n\n"
+  "📶 Bandly — اطلع أقوى إشارة من راوترك\n🍎 متوفر على App Store و 🤖 أندرويد\n\n"
   "🎯 وجّه الهوائي بالصوت والاهتزاز\n📊 كل أرقام 4G و 5G قدامك\n🗼 ثبّت أفضل برج وتردد\n📹 مكالمة فيديو مع فني يشوف إشارتك والهوائي\n🚀 قِس السرعة قبل وبعد\n\n"
   "اضغط «ابدأ» وحمّل التطبيق 👇")
 r2 = api("setMyShortDescription", short_description="اطلع أقوى إشارة من راوترك — وجّه الهوائي وثبّت أفضل برج 📶")

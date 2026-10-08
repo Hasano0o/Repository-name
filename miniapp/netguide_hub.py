@@ -38,9 +38,9 @@ class Btn(types.InlineKeyboardButton):
 WELCOME = (
     "📶 <b>Bandly — اطلع أقوى إشارة من راوترك</b>\n\n"
     "وجّه الهوائي، ثبّت أفضل برج، وكلّم فني يشوفك بالكاميرا ويساعدك عن بُعد 📹\n\n"
-    "📱 التطبيق متوفر الحين لأجهزة <b>أندرويد</b> كملف APK مباشر من الزر تحت 👇\n"
-    "🍎 وقريباً على <b>App Store</b> و ▶️ <b>Google Play</b>\n\n"
-    "⚠️ لو طلع لك تحذير وقت التثبيت، اضغط <b>«التثبيت على أي حال»</b>."
+    "🍎 <b>آيفون:</b> نزّله من <b>App Store</b>\n"
+    "🤖 <b>أندرويد:</b> ملف APK مباشر من الزر تحت 👇 (وقريباً على Google Play)\n\n"
+    "⚠️ بالأندرويد لو طلع لك تحذير وقت التثبيت، اضغط <b>«التثبيت على أي حال»</b>."
 )
 
 
@@ -70,6 +70,7 @@ def _api(method: str, path: str, body: dict | None = None) -> dict:
 
 
 APK = "https://has-host.com/dl/bandly.apk"
+IOS = "https://apps.apple.com/sa/app/id6819877993"
 # النسخة الصغيرة (arm64) اللي ينرسل كملف من البوت — حد البوتات في تيليجرام ٥٠ ميقا
 APK_FILE = "/var/www/has-host.com/dl/bandly-arm64.apk"
 APK_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "apk_cache.json")
@@ -124,9 +125,21 @@ RIYADH = timezone(timedelta(hours=3))
 
 PROMO = (
     "📶 <b>Bandly</b> — لقّط أقوى إشارة لراوترك\n\n"
-    "التطبيق متوفر الحين لأجهزة <b>أندرويد</b> كملف APK مباشر من الزر تحت 👇\n"
-    "🍎 وقريباً على <b>App Store</b> و ▶️ <b>Google Play</b>\n\n"
-    "⚠️ لو طلع لك تحذير وقت التثبيت، اضغط <b>«التثبيت على أي حال»</b> — لأن التطبيق من برا المتجر."
+    "🍎 <b>آيفون:</b> متوفر على App Store\n"
+    "🤖 <b>أندرويد:</b> ملف APK مباشر من الزر تحت 👇\n\n"
+    "⚠️ بالأندرويد لو طلع لك تحذير وقت التثبيت، اضغط <b>«التثبيت على أي حال»</b>."
+)
+
+ANNOUNCE = (
+    "🎉 <b>Bandly نزل رسمياً على App Store!</b>\n\n"
+    "اللي عندهم آيفون يقدرون الحين يحمّلونه مجاناً من المتجر 🍎\n\n"
+    "📶 وجّه الهوائي بالصوت والاهتزاز\n"
+    "🗼 ثبّت أفضل برج وتردد\n"
+    "📊 كل أرقام 4G و 5G قدامك\n"
+    "🎮 مُحسّن الألعاب وكاشف اللاق\n"
+    "📹 فني يساعدك بالكاميرا عن بُعد\n\n"
+    "وما عندك راوتر الحين؟ جرّب <b>الوضع التجريبي</b> داخل التطبيق 👌\n\n"
+    "🤖 وأصحاب الأندرويد التحميل متاح من الزر تحت 👇"
 )
 
 # ═══ قائمة المستخدمين (البوت ما كان يحفظهم) — تنبني من الحين ═══
@@ -164,11 +177,12 @@ def remember(user) -> None:
 
 def promo_kb() -> types.InlineKeyboardMarkup:
     kb = types.InlineKeyboardMarkup()
+    kb.row(Btn("🍎 تحميل للآيفون (App Store)", style="primary", url=IOS))
     kb.row(Btn("📥 تحميل التطبيق (أندرويد)", style="success", callback_data="hubapk"))
     return kb
 
 
-def broadcast(bot, owner_id: int = 0) -> tuple[int, int]:
+def broadcast(bot, owner_id: int = 0, text: str = "") -> tuple[int, int]:
     """يرسل رسالة التعريف لكل المستخدمين النشطين. اللي حظروا البوت ينشالون من القائمة."""
     with _ulock:
         d = _users()
@@ -176,7 +190,7 @@ def broadcast(bot, owner_id: int = 0) -> tuple[int, int]:
     ok = gone = 0
     for uid in ids:
         try:
-            bot.send_message(int(uid), PROMO, parse_mode="HTML", reply_markup=promo_kb(), disable_web_page_preview=True)
+            bot.send_message(int(uid), text or PROMO, parse_mode="HTML", reply_markup=promo_kb(), disable_web_page_preview=True)
             ok += 1
         except Exception as e:
             code = getattr(getattr(e, "result", None), "status_code", 0) or getattr(e, "error_code", 0)
@@ -214,6 +228,7 @@ def _scheduler(bot, owner_id: int) -> None:
 def keyboard() -> types.InlineKeyboardMarkup:
     kb = types.InlineKeyboardMarkup()
     wa = lambda text, page="": types.InlineKeyboardButton(text, web_app=types.WebAppInfo(APP + (f"#{page}" if page else "")))
+    kb.row(Btn("🍎 تحميل للآيفون (App Store)", style="primary", url=IOS))
     kb.row(Btn("📥 تحميل التطبيق (أندرويد)", style="success", callback_data="hubapk"))
     kb.row(Btn("📱 افتح تطبيق Bandly", style="primary", web_app=types.WebAppInfo(APP)))
     kb.row(wa("🛠️ سجّل كفني", "tech"), wa("📢 اطلب إعلان", "ad"))
@@ -284,6 +299,33 @@ def register(bot, is_owner, api_post=None, owner_id: int = 0):
         bot.reply_to(msg, "⏳ نرسل...")
         ok, gone = broadcast(bot, msg.from_user.id)
         bot.send_message(msg.chat.id, f"✅ انرسلت لـ {ok}" + (f" · {gone} حاظرين البوت" if gone else ""))
+
+    @bot.message_handler(commands=["announce_ios"])
+    def _announce(msg):
+        if not is_owner(msg):
+            return
+        bot.send_message(msg.chat.id, "👇 هذي الرسالة اللي بتنرسل:")
+        bot.send_message(msg.chat.id, ANNOUNCE, parse_mode="HTML", reply_markup=promo_kb(), disable_web_page_preview=True)
+        kb = types.InlineKeyboardMarkup()
+        kb.row(Btn("✅ أرسلها للكل", style="success", callback_data="hubann:go"),
+               Btn("✖️ إلغاء", style="danger", callback_data="hubann:no"))
+        bot.send_message(msg.chat.id, "ترسلها لكل مستخدمين البوت؟", reply_markup=kb)
+
+    @bot.callback_query_handler(func=lambda c: (c.data or "").startswith("hubann:"))
+    def _announce_go(call):
+        if not is_owner(call):
+            bot.answer_callback_query(call.id, "للمالك فقط")
+            return
+        try:
+            bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
+        except Exception:
+            pass
+        if call.data != "hubann:go":
+            bot.answer_callback_query(call.id, "انلغت")
+            return
+        bot.answer_callback_query(call.id, "⏳ نرسل...")
+        ok, gone = broadcast(bot, call.from_user.id, ANNOUNCE)
+        bot.send_message(call.message.chat.id, f"✅ انرسل الإعلان لـ {ok} مستخدم" + (f" · {gone} حاظرين البوت" if gone else ""))
 
     # أوامرنا أول القائمة: لو bot.py فيه معالج عام للمالك (يلقط أي رسالة) ما يبلعها
     @bot.message_handler(commands=["apk"])

@@ -116,9 +116,9 @@ textarea{min-height:96px;resize:vertical}
       <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10.5 18h3"/></svg></span>
       <span class="t"><b>Google Play</b><small>أندرويد</small></span><span class="soon">قريباً</span>
     </button>
-    <button class="dl store" data-store="App Store">
+    <button class="dl store" id="iosBtn">
       <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10.5 5.5h3"/><circle cx="12" cy="18" r="1"/></svg></span>
-      <span class="t"><b>App Store</b><small>آيفون</small></span><span class="soon">قريباً</span>
+      <span class="t"><b>App Store</b><small>آيفون — متاح الحين</small></span><span>‹</span>
     </button>
     <div class="meta"><span id="apkSize">📦 —</span><span id="apkDate">🗓️ —</span></div>
   </div>
@@ -258,7 +258,7 @@ textarea{min-height:96px;resize:vertical}
 <script>
 const tg = window.Telegram && Telegram.WebApp;
 if (tg) { try { tg.ready(); tg.expand(); tg.setHeaderColor('#2f6bff'); tg.setBackgroundColor('#e5eaf2'); } catch (e) {} }
-const APK = 'https://has-host.com/dl/bandly.apk', DEV = 'https://t.me/hasa_n20';
+const APK = 'https://has-host.com/dl/bandly.apk', IOS = 'https://apps.apple.com/sa/app/id6819877993', DEV = 'https://t.me/hasa_n20';
 const $ = id => document.getElementById(id);
 const haptic = t => { try { tg.HapticFeedback.impactOccurred(t || 'light'); } catch (e) {} };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -283,6 +283,7 @@ go(PAGES.includes(start) ? start : 'home', false);
 // ═══ التحميل والمتاجر ═══
 function downloadApk() { haptic('medium'); if (tg && tg.openLink) tg.openLink(APK); else location.href = APK; }
 $('apkBtn').onclick = downloadApk;
+$('iosBtn').onclick = () => { haptic('medium'); if (tg && tg.openLink) tg.openLink(IOS); else location.href = IOS; };
 $('devBtn').onclick = () => { haptic(); if (tg && tg.openTelegramLink) tg.openTelegramLink(DEV); else location.href = DEV; };
 const MSG = {
   'Google Play': 'نشتغل على نشر Bandly في Google Play، وبيكون متاح قريب جداً بإذن الله 💙<br>وإلى ذاك الوقت تقدر تحمّله مباشرة بملف APK — نفس التطبيق بالضبط.',
