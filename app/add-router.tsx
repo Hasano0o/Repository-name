@@ -326,7 +326,7 @@ export default function AddRouterScreen() {
             >
               <View style={[styles.deviceIcon, { backgroundColor: tBg('#f3edff') }]}><Text style={{ fontSize: 24 }}>🧪</Text></View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.deviceTitle}>جرّب بدون راوتر</Text>
+                <Text style={styles.deviceTitle}>جرّب بدون راوتر · Demo</Text>
                 <Text style={styles.deviceSub}>راوتر تجريبي بقراءات وأبراج وترددات — تشوف فيه كل المزايا قبل ما تربط راوترك</Text>
               </View>
               <Icon name="chevron" size={18} color={tFg('#7c3aed')} />

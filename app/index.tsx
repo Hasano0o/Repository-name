@@ -153,8 +153,8 @@ export default function RoutersList() {
       >
         <PrimaryBtn text="إضافة راوتر" icon="plus" onPress={add} style={{ alignSelf: 'stretch' }} />
         <Pressable style={s.demoBtn} onPress={demo}>
-          <Text style={s.demoTxt}>جرّب بدون راوتر</Text>
-          <Text style={s.demoSub}>راوتر تجريبي تشوف فيه كل المزايا</Text>
+          <Text style={s.demoTxt}>جرّب بدون راوتر · Demo</Text>
+          <Text style={s.demoSub}>راوتر تجريبي تشوف فيه كل المزايا · Try without a router</Text>
         </Pressable>
         <Pressable style={s.link} onPress={explore}>
           <Icon name="compass" size={16} color={P.violet} />
