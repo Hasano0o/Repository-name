@@ -3,9 +3,10 @@
 
   POST /live-api/stats/ping      ← التطبيق يرسلها مرة باليوم
   GET  /live-api/stats/summary   ← ملخص (يحتاج x-hub-secret)
+  GET  /live-api/stats/report    ← نفس الملخص كنص جاهز (أمر /stats في البوت)
 
 ما نستقبل اسم ولا رقم ولا موقع GPS: معرّف عشوائي للتطبيق + المدينة اللي اختارها
-المستخدم بنفسه + نوع الجوال ونسخة أندرويد ونسخة التطبيق + نوع الراوتر.
+المستخدم بنفسه + نوع الجوال ونوع النظام ونسخته ونسخة التطبيق + نوع الراوتر.
 وكل يوم الساعة ١١:٥٠ مساءً (توقيت الرياض) يوصل للمالك ملخص اليوم في البوت.
 """
 import asyncio
@@ -97,6 +98,7 @@ async def ping(req: Request):
         "brand": _clean(b.get("brand"), 24),
         "model": _clean(b.get("model"), 40),
         "android": _clean(b.get("android"), 10),
+        "os": _clean(b.get("os"), 8).lower(),
         "app": _clean(b.get("app"), 16),
         "update": _clean(b.get("update"), 24),
         "routers": routers,
@@ -115,6 +117,16 @@ async def ping(req: Request):
     return {"ok": True}
 
 
+def _os(r: dict) -> str:
+    """آيفون ولا أندرويد — النسخ القديمة من التطبيق ما ترسل النوع، فنستنتجه:
+    الآيفون يرسل الشركة فاضية ونسخة فيها نقطة (18.3.1 / 26.5)."""
+    o = (r.get("os") or "").lower()
+    if o in ("ios", "android"):
+        return o
+    v = r.get("android") or ""
+    return "ios" if not r.get("brand") and "." in v else "android"
+
+
 def build_summary(day: str | None = None) -> dict:
     day = day or _today()
     d = _load(DAYS / f"{day}.json", {})
@@ -125,7 +137,13 @@ def build_summary(day: str | None = None) -> dict:
         if p.stem >= week_ago:
             week |= set(_load(p, {}).keys())
     recs = list(d.values())
-    top = lambda key, n=6: Counter((r.get(key) or "غير محدد") for r in recs).most_common(n)
+    for r in recs:
+        r["os"] = _os(r)
+        if r["os"] == "ios" and not r.get("brand"):
+            r["brand"] = "Apple"
+    top = lambda key, n=6, rs=None: Counter((r.get(key) or "غير محدد") for r in (recs if rs is None else rs)).most_common(n)
+    ios = [r for r in recs if r["os"] == "ios"]
+    andr = [r for r in recs if r["os"] != "ios"]
     return {
         "day": day,
         "active_today": len(d),
@@ -134,7 +152,9 @@ def build_summary(day: str | None = None) -> dict:
         "total_devices": len(devs),
         "cities": top("city", 8),
         "brands": top("brand"),
-        "android": top("android"),
+        "os": {"ios": len(ios), "android": len(andr)},
+        "ios_ver": top("android", 6, ios),
+        "android": top("android", 6, andr),
         "app": top("update", 4),
         "routers": Counter(x for r in recs for x in (r.get("routers") or [])).most_common(6),
     }
@@ -167,9 +187,23 @@ def _fmt(s: dict) -> str:
         f"📱 كل الأجهزة: <b>{s['total_devices']}</b>\n\n"
         f"🏙️ المدن:\n{lines(s['cities'])}\n\n"
         f"📶 الراوترات:\n{lines(s['routers'])}\n\n"
-        f"📲 الجوالات:\n{lines(s['brands'])}\n\n"
-        f"🤖 أندرويد:\n{lines(s['android'])}"
+        f"📲 الأنظمة:\n  • 🍎 آيفون: {s['os']['ios']}\n  • 🤖 أندرويد: {s['os']['android']}\n\n"
+        f"🏷️ الجوالات:\n{lines(s['brands'])}\n\n"
+        f"🍎 نسخ iOS:\n{lines(s['ios_ver'])}\n\n"
+        f"🤖 نسخ أندرويد:\n{lines(s['android'])}"
     )
+
+
+@router.get("/report")
+async def report(req: Request, day: str | None = None):
+    """التقرير جاهز كنص — يطلبه البوت بأمر /stats أي وقت."""
+    sec = _secret("hub_secret")
+    import secrets as _s
+    if not sec or not _s.compare_digest(req.headers.get("x-hub-secret", ""), sec):
+        raise HTTPException(403)
+    if day and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
+        raise HTTPException(400)
+    return {"text": _fmt(build_summary(day))}
 
 
 def _send_owner(text: str) -> None:

@@ -285,6 +285,28 @@ def register(bot, is_owner, api_post=None, owner_id: int = 0):
         nxt = datetime.fromtimestamp(last + BROADCAST_EVERY, RIYADH).strftime("%Y-%m-%d") if last else "خلال أول ساعات المساء"
         bot.reply_to(msg, f"👥 مستخدمين البوت: {act}\n📣 آخر رسالة تعريف: {when}\n🗓️ الجاية: {nxt}")
 
+    @bot.message_handler(commands=["stats"])
+    def _stats(msg):
+        """/stats ← اليوم · /stats امس ← أمس · /stats 2026-10-08 ← يوم معيّن"""
+        if not is_owner(msg):
+            return
+        arg = (msg.text or "").split(maxsplit=1)[1].strip() if len((msg.text or "").split()) > 1 else ""
+        now = datetime.now(RIYADH)
+        if arg in ("امس", "أمس", "y", "yesterday"):
+            day = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+        elif re.fullmatch(r"\d{4}-\d{2}-\d{2}", arg):
+            day = arg
+        else:
+            day = now.strftime("%Y-%m-%d")
+        try:
+            url = f"http://127.0.0.1:{_port()}/live-api/stats/report?day={day}"
+            req = urllib.request.Request(url, headers={"x-hub-secret": _secret()})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                text = json.load(r)["text"]
+        except Exception as e:
+            text = f"✗ ما قدرت أجيب التقرير: {e}"
+        bot.send_message(msg.chat.id, text, parse_mode="HTML")
+
     @bot.message_handler(commands=["promo"])
     def _promo_preview(msg):
         if not is_owner(msg):

@@ -7,7 +7,7 @@ import { deviceId } from './community';
 import { listRouters } from '../store/routers';
 
 /* ═══ إحصائيات الاستخدام ═══
- * مرة باليوم: معرّف عشوائي + المدينة اللي اختارها المستخدم + نوع الجوال ونسخة أندرويد
+ * مرة باليوم: معرّف عشوائي + المدينة اللي اختارها المستخدم + نوع الجوال ونوع النظام (آيفون/أندرويد) ونسخته
  * ونسخة التطبيق + أنواع الراوترات المضافة. ما نرسل اسم ولا رقم ولا موقع GPS. */
 
 const CITY_KEY = 'bandly.city';
@@ -55,7 +55,8 @@ export async function pingDaily(force = false): Promise<void> {
       body: JSON.stringify({
         id: await deviceId(),
         city: city === '-' ? '' : city,
-        brand: String(pc.Brand ?? pc.Manufacturer ?? ''),
+        os: Platform.OS,
+        brand: Platform.OS === 'ios' ? 'Apple' : String(pc.Brand ?? pc.Manufacturer ?? ''),
         model: String(pc.Model ?? ''),
         android: String(pc.Release ?? Platform.Version ?? ''),
         app: Constants.expoConfig?.version ?? '',
