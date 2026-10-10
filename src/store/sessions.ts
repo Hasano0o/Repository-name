@@ -65,10 +65,14 @@ async function attachBaseline(r: SavedRouter, d: RouterDriver) {
 }
 
 /** يمنع تشغيل عمليتين تعديل على نفس الراوتر بنفس الوقت (قفل تردد + دمج مثلاً) */
+const LOCK_MAX_MS = 6 * 60 * 1000;
+
 export function withRouterLock<T>(id: string, fn: () => Promise<T>): Promise<T> {
   const prev = chains.get(id) ?? Promise.resolve();
   const next = prev.then(() => fn(), () => fn());
-  chains.set(id, next.then(() => {}, () => {}));
+  // لو عملية علقت لأي سبب، ما نخلي اللي بعدها تنتظر للأبد — بعد ٦ دقائق نفك الدور
+  const cap = new Promise<void>(res => setTimeout(res, LOCK_MAX_MS));
+  chains.set(id, Promise.race([next.then(() => {}, () => {}), cap]));
   return next;
 }
 

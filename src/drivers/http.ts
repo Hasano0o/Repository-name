@@ -11,6 +11,20 @@ import { isLanHost } from '../utils/host';
  * ⚠️ للطلبات الخارجية (Cloudflare speedtest، إلخ):
  *    استخدم fetch() مباشرة، لا تستخدم http().
  */
+/** قراءة الرد (text/json/arrayBuffer) بمهلة — بعض الراوترات ترسل الرأس وتعلق بالباقي،
+ *  وفي الآيفون ممكن الطلب يعلق للأبد لو التطبيق راح للخلفية. */
+function guardBody(res: Response, ms: number): Response {
+  const wrap = <K extends 'text' | 'json' | 'arrayBuffer'>(k: K) => {
+    const orig = (res as any)[k].bind(res);
+    (res as any)[k] = () => new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('الراوتر ما رد — تأكد إنك متصل بشبكته')), ms);
+      orig().then((v: unknown) => { clearTimeout(t); resolve(v); }, (e: unknown) => { clearTimeout(t); reject(e); });
+    });
+  };
+  try { wrap('text'); wrap('json'); wrap('arrayBuffer'); } catch {}
+  return res;
+}
+
 export async function http(
   url: string,
   init: RequestInit = {},
@@ -49,7 +63,7 @@ export async function http(
       if (e?.message === 'رفض: redirect خارجي') throw e;
     }
 
-    return res;
+    return guardBody(res, timeoutMs);
   } catch (e: any) {
     if (e?.name === 'AbortError') {
       throw new Error('الراوتر ما رد — تأكد إنك متصل بشبكته');

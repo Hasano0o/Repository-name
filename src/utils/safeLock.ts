@@ -10,6 +10,14 @@ import { isNoService } from './signal';
 import { progress, Tracker } from '../ui/Progress';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+/** يرجّع undefined لو الخطوة طوّلت أكثر من المسموح (بدل ما يعلق المستخدم ٤٠ دقيقة) */
+const STEP_TIMEOUT = Symbol('timeout');
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | typeof STEP_TIMEOUT> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => resolve(STEP_TIMEOUT), ms);
+    p.then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
+  });
+}
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : undefined);
 
 /** لقطة واحدة للوضع: الإشارة + النواقل + سعة تقديرية */
@@ -339,10 +347,17 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
   };
 
   say('نقيس الوضع الحالي...');
-  const before = await measure();
+  const b0 = await withTimeout(measure(), 60_000);
+  if (b0 === STEP_TIMEOUT) {
+    // ما غيّرنا شي للحين — نوقف بأمان بدل ما نعلق
+    throw new Error('الراوتر ما رد وقت القياس، وما غيّرنا أي شي. تأكد إن جوالك متصل بشبكة الراوتر وجرّب مرة ثانية.');
+  }
+  const before = b0;
 
   say('نطبّق التغيير...');
-  await withSession(o.r, o.apply, false);
+  // لو الأمر نفسه علق، نكمّل: الخطوة الجاية تتأكد من الاتصال وترجّع الإعداد لو لزم.
+  // (لو الراوتر رفض برسالة خطأ، الخطأ يطلع للمستخدم مثل قبل)
+  await withTimeout(withSession(o.r, o.apply, false), 60_000);
 
   say('ننتظر الراوتر يتصل...');
   const online = await waitOnline(o.r, 45000, cancelled);
@@ -367,7 +382,8 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
   say('ننتظر الإشارة تستقر...');
   await sleep(6000);
   say('نقيس بعد التغيير...');
-  const after = await measure();
+  const a0 = await withTimeout(measure(), 60_000);
+  const after = a0 === STEP_TIMEOUT ? null : a0;
 
   const change = before && after && before.cap > 0 ? (after.cap - before.cap) / before.cap : undefined;
   const towerChanged = !!(before?.pci && after?.pci && before.pci !== after.pci);
