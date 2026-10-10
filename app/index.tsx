@@ -263,6 +263,9 @@ export default function RoutersList() {
                 <View style={{ flex: 1, alignItems: 'flex-end', gap: 5 }}>
                   <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
                     <Text style={s.name} numberOfLines={1}>{item.name}</Text>
+                    {item.driverId === 'demo' && (
+                      <View style={s.demoTag}><Text style={s.demoTagTxt}>🧪 تجريبي · مو جهازك</Text></View>
+                    )}
                   </View>
                   <View style={s.metaRow}>
                     <View style={s.meta}>
@@ -535,6 +538,8 @@ const s = StyleSheet.create({
 
   link: { flexDirection: 'row-reverse', alignSelf: 'center', alignItems: 'center', gap: 6, paddingVertical: 14, paddingHorizontal: 14 },
   linkTxt: { color: P.violet, fontWeight: '700', fontSize: 13 },
+  demoTag: { backgroundColor: tBg('#f3edff'), borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  demoTagTxt: { color: tFg('#5b34c9'), fontSize: 11, fontWeight: '800' },
   demoBtn: {
     alignSelf: 'stretch', alignItems: 'center', marginTop: 10, paddingVertical: 12, borderRadius: 16,
     borderWidth: 1.5, borderColor: P.border, backgroundColor: P.card,

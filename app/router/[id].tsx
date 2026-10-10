@@ -576,6 +576,21 @@ export default function RouterDashboard() {
         contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 110 }]}
         refreshControl={<RefreshControl refreshing={busy} onRefresh={onRefresh} tintColor={C.blue} colors={[C.blue]} />}
       >
+        {info?.driverId === 'demo' && (
+          <View style={s.demoBar}>
+            <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: 18 }}>🧪</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={s.demoTitle}>هذا راوتر تجريبي — مو جهازك</Text>
+                <Text style={s.demoSub}>القراءات والأبراج وهمية عشان تشوف المزايا. عشان تشوف راوترك الحقيقي أضفه من هنا</Text>
+              </View>
+            </View>
+            <Pressable style={s.demoBtn} onPress={() => router.replace('/add-router' as Href)}>
+              <Text style={s.demoBtnTxt}>أضف راوترك الحقيقي</Text>
+            </Pressable>
+          </View>
+        )}
+
         {loading && (
           <View style={s.center}>
             <ActivityIndicator size="large" color={C.blue} />
@@ -958,6 +973,11 @@ const s = StyleSheet.create({
   chipNr: { backgroundColor: C.violetSoft, borderColor: C.cardBorder },
   nrBlock: { borderTopWidth: 1, borderTopColor: C.cardBorder, paddingTop: 10, gap: 10, marginTop: 2 },
   nrTitle: { color: C.violet, fontWeight: '800', textAlign: 'right' },
+  demoBar: { backgroundColor: tBg('#f3edff'), borderColor: tBd('#cdbcff'), borderWidth: 1.5, borderRadius: 18, padding: 12, gap: 10 },
+  demoTitle: { color: tFg('#4b2aa8'), fontWeight: '800', fontSize: 14, textAlign: 'right' },
+  demoSub: { color: tFg('#5d4a8f'), fontWeight: '600', fontSize: 12, textAlign: 'right', lineHeight: 18, marginTop: 2 },
+  demoBtn: { backgroundColor: tFg('#7a51e0'), borderRadius: 12, paddingVertical: 10, alignItems: 'center' },
+  demoBtnTxt: { color: '#fff', fontWeight: '800', fontSize: 13.5 },
   warnBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.goldSoft, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: 16, padding: 12 },
   warnText: { flex: 1, color: C.text, fontWeight: '700', textAlign: 'right', fontSize: 13 },
   warnBtn: { backgroundColor: C.gold, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8 },
