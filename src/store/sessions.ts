@@ -77,6 +77,7 @@ export function withRouterLock<T>(id: string, fn: () => Promise<T>): Promise<T> 
 }
 
 const AUTH_FAIL = /(كلمة المرور|جلسة عالقة|جلسة أخرى|محاولات كثيرة|تعذّر تسجيل الدخول|قفل تسجيل الدخول|مستخدم ثاني|108006|108007|108001|108002)/;
+const SESSION_GONE = /(ما عندك صلاحية|انتهت الجلسة|رمز الجلسة غير صالح|\b100003\b|\b125002\b|\b125003\b)/;
 const NET_FAIL = /(تعذر الاتصال بالراوتر|Network request failed|timed? ?out|timeout|aborted|AbortError|انتهت المهلة|ما رد|ECONN|ENETUNREACH)/i;
 
 export async function withSession<T>(
@@ -88,8 +89,14 @@ export async function withSession<T>(
   try {
     return await fn(d);
   } catch (e) {
-    if (!retry) throw e;
     const msg = String((e as any)?.message ?? e);
+    // الراوتر طلّعنا (انتهت الجلسة / دخل أحد من المتصفح / بعد تغيير الإعدادات) —
+    // ندخل من جديد ونكمّل مرة وحدة، حتى لو retry=false: الأوامر نفسها تتكرر بأمان (نفس القيم)
+    if (SESSION_GONE.test(msg)) {
+      const fresh = await connect(r, true);
+      return fn(fresh);
+    }
+    if (!retry) throw e;
     if (AUTH_FAIL.test(msg)) throw e;
     // انقطاع شبكة/مهلة: إعادة تسجيل الدخول ما تفيد وتصرف محاولات على الراوتر
     if (NET_FAIL.test(msg)) throw e;
