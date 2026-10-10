@@ -10,6 +10,7 @@ import { safeApply, trialMessage, lastTrial, Trial } from '../../src/utils/safeL
 import { trafficBurst } from '../../src/utils/nrprobe';
 import { bandLabel, freqLabel } from '../../src/utils/bands';
 import { saveProfile } from '../../src/store/profiles';
+import { useOperatorBands } from '../../src/store/operator';
 import { C } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 
@@ -33,6 +34,8 @@ export default function ComboScreen() {
   const insets = useSafeAreaInsets();
   const [info, setInfo] = useState<SavedRouter | null>(null);
   const [cfg, setCfg] = useState<BandConfig | null>(null);
+  const op = useOperatorBands(id);
+  const [allBands, setAllBands] = useState(false);
   const [cells, setCells] = useState<CellTower[]>([]);
   const [carriers, setCarriers] = useState<Carrier[] | null>(null);
   const [primary, setPrimary] = useState<number | null>(null);
@@ -210,8 +213,16 @@ export default function ComboScreen() {
   const nrSeen = bestBySeen(cells, 'NR');
   const sortBands = (list: number[], seen: Map<number, number>) =>
     [...list].sort((a, b) => (seen.has(b) ? 1 : 0) - (seen.has(a) ? 1 : 0) || (seen.get(b) ?? -999) - (seen.get(a) ?? -999) || a - b);
-  const lteList = cfg ? sortBands(cfg.supported, lteSeen) : [];
-  const nrList = cfg ? sortBands(cfg.nrSupported, nrSeen) : [];
+  // ترددات شبكة الشريحة أول (زين/موبايلي/stc) — وما نخفي أبداً تردد فيه برج أو مختار أو مقفل عليه
+  const keepLte = (b: number) => !op || allBands || op.bands.lte.includes(b) || lteSeen.has(b) ||
+    primary === b || extra.includes(b) || !!cfg?.locked.includes(b);
+  const keepNr = (b: number) => !op || allBands || op.bands.nr.includes(b) || nrSeen.has(b) ||
+    nr === b || !!cfg?.nrLocked.includes(b);
+  const lteAll = cfg ? sortBands(cfg.supported, lteSeen) : [];
+  const nrAll = cfg ? sortBands(cfg.nrSupported, nrSeen) : [];
+  const lteList = lteAll.filter(keepLte);
+  const nrList = nrAll.filter(keepNr);
+  const hiddenCount = op && !allBands ? (lteAll.length - lteList.length) + (nrAll.length - nrList.length) : 0;
 
   /** نفس تصميم أزرار شاشة الترددات: مربع صح + الاسم والتردد — وتحتها قوة الإشارة */
   const Tile = ({ label, sub, sig, on, onPress, color, faint }: {
@@ -382,6 +393,14 @@ export default function ComboScreen() {
               </View>
             </GlassCard>
 
+            {!!op && (hiddenCount > 0 || allBands) && (
+              <Pressable onPress={() => setAllBands(v => !v)} hitSlop={6} style={s.moreRow}>
+                <Text style={s.moreTxt}>
+                  {allBands ? `اعرض ترددات ${op.name} بس` : `معروض ترددات ${op.name} بس · اعرض كل ترددات الراوتر (+${hiddenCount})`}
+                </Text>
+              </Pressable>
+            )}
+
             <Pressable style={[s.btn, (busy || primary === null) && s.dim]} onPress={apply} disabled={busy || primary === null}>
               <Text style={s.btnTxt}>{primary === null ? 'اختر الأساسي أول' : 'طبّق وتأكد من الدمج'}</Text>
             </Pressable>
@@ -410,6 +429,8 @@ const s = StyleSheet.create({
   page: { padding: 16, gap: 14 },
   center: { alignItems: 'center', paddingVertical: 40 },
   hint: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 19 },
+  moreRow: { alignSelf: 'center', paddingVertical: 6, paddingHorizontal: 10 },
+  moreTxt: { color: C.blue, fontSize: 12.5, fontWeight: '700', textAlign: 'center' },
   errBox: { backgroundColor: C.redSoft, borderRadius: 14, padding: 12 },
   err: { color: C.red, fontWeight: '700', textAlign: 'right' },
   statusBox: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 10, backgroundColor: C.blueSoft, borderRadius: 14, padding: 12 },

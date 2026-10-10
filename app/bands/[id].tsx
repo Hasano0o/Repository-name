@@ -8,6 +8,7 @@ import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { BandConfig, Signal, CellTower, Carrier } from '../../src/drivers/types';
 import { BandPicker, BandSeen } from '../../src/ui/BandPicker';
+import { useOperatorBands } from '../../src/store/operator';
 import { BestCombo, GuardCard, comboLabel } from '../../src/ui/BestCombo';
 import { bestComboCandidates, runCaLab, LabRow } from '../../src/utils/bandLab';
 import { getGuard, saveGuard, GuardState } from '../../src/store/guard';
@@ -59,6 +60,7 @@ export default function BandsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const [info, setInfo] = useState<SavedRouter | null>(null);
+  const op = useOperatorBands(id);
   const [cfg, setCfg] = useState<BandConfig | null>(null);
   const [signal, setSignal] = useState<Signal | null>(null);
   const [selected, setSelected] = useState<number[]>([]);
@@ -723,6 +725,7 @@ export default function BandsScreen() {
               onScan={confirmScanUnknown}
               scanning={scanning}
               scanNote={scanNote}
+              op={op}
             />
             <BestCombo
               rows={labRows}

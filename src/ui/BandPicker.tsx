@@ -94,9 +94,11 @@ export interface BandPickerProps {
   onScan?: (tech: Tech, bands: number[]) => void;
   scanning?: boolean;
   scanNote?: string;
+  /** شبكة الشريحة وتردداتها — نعرضها أول بدل كل اللي يدعمها الراوتر */
+  op?: { name: string; bands: { lte: number[]; nr: number[] } } | null;
 }
 
-export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onTry, onAuto, none = [], onScan, scanning, scanNote }: BandPickerProps) {
+export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onTry, onAuto, none = [], onScan, scanning, scanNote, op }: BandPickerProps) {
   const [tab, setTab] = useState<Tech>('LTE');
   const [showAll, setShowAll] = useState(false);
   // شكل القائمة: مربعات (الجديد) أو صفوف (القديم) — يتذكر اختيارك
@@ -119,7 +121,8 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
   const isOn = (t: Tech, b: number) => !sel(t).length || sel(t).includes(b);
   const known = (t: Tech, b: number) =>
     !!seen[t + ':' + b] || (t === 'LTE' ? activeLte : activeNr).includes(b) ||
-    (t === 'LTE' ? cfg.locked : cfg.nrLocked).includes(b);
+    (t === 'LTE' ? cfg.locked : cfg.nrLocked).includes(b) ||
+    !!op && (t === 'LTE' ? op.bands.lte : op.bands.nr).includes(b);
 
   /** «ما ظهر برج» كانت مضلّلة: الراوتر ما يقيس إلا ترددات قريبة من اللي ماسكه */
   const sigText = (t: Tech, b: number, lvl: number) =>
@@ -360,7 +363,7 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
         ))}
         <Pressable onPress={() => setShowAll(v => !v)} style={s.more} hitSlop={6}>
           <Icon name={showAll ? 'up' : 'down'} size={14} color={C.blue} />
-          <Text style={s.moreText}>{showAll ? 'اعرض اللي فيها برج بس' : `اعرض كل ترددات ${tab === 'LTE' ? '4G' : '5G'} اللي يدعمها الراوتر`}</Text>
+          <Text style={s.moreText}>{showAll ? (op ? `اعرض ترددات ${op.name} بس` : 'اعرض اللي فيها برج بس') : `اعرض كل ترددات ${tab === 'LTE' ? '4G' : '5G'} اللي يدعمها الراوتر`}</Text>
         </Pressable>
       </View>
 
@@ -436,7 +439,7 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
         </Pressable>
         <Pressable onPress={() => setShowAll(v => !v)} style={o.more} hitSlop={6}>
           <Icon name={showAll ? 'up' : 'down'} size={14} color={C.blue} />
-          <Text style={o.moreText}>{showAll ? 'اعرض اللي فيها برج بس' : `اعرض كل ترددات ${tab === 'LTE' ? '4G' : '5G'} اللي يدعمها الراوتر`}</Text>
+          <Text style={o.moreText}>{showAll ? (op ? `اعرض ترددات ${op.name} بس` : 'اعرض اللي فيها برج بس') : `اعرض كل ترددات ${tab === 'LTE' ? '4G' : '5G'} اللي يدعمها الراوتر`}</Text>
         </Pressable>
       </View>
 

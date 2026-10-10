@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState, ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, LayoutAnimation, RefreshControl, AppState,
 } from 'react-native';
@@ -34,6 +35,9 @@ import { StoreAd } from '../../src/ui/StoreAd';
 import { ComboCard } from '../../src/ui/ComboCard';
 import { canRescue, rescueRouter, freeRelease } from '../../src/utils/safeLock';
 import { hostLabel } from '../../src/drivers/device';
+import { rememberOperator, learnOperatorBands } from '../../src/store/operator';
+import { hasInternet } from '../../src/utils/internet';
+import { reportOutage } from '../../src/services/community';
 
 interface Features {
   bands: boolean; sms: boolean; block: boolean; reboot: boolean; devices: boolean; cells: boolean; details: boolean; plan: boolean; network: boolean; carriers: boolean;
@@ -143,6 +147,66 @@ export default function RouterDashboard() {
   const moves = useRef<number[]>([]);
   const [prevSig, setPrevSig] = useState<Signal | null>(null);
   const [moving, setMoving] = useState(false);
+  /** فيه إشارة بس ما فيه إنترنت (يتأكد بفحصين ورا بعض) */
+  const [noNet, setNoNet] = useState(false);
+  const netFails = useRef(0);
+  const netDownSince = useRef<number | null>(null);
+  /** آخر دمج شفناه — الدمج يشتغل وقت التحميل بس، فنعرضه بدل ما «يختفي» */
+  const [lastCa, setLastCa] = useState<{ bands: string[]; n: number; at: number } | null>(null);
+
+  // ═══ آخر دمج: نقرأه من التخزين، ونحدّثه كل ما شفنا أكثر من ناقل — ونتعلّم ترددات الشبكة ═══
+  const caKey = `bandly.lastCa.${id}`;
+  useEffect(() => {
+    AsyncStorage.getItem(caKey).then(v => { if (v) setLastCa(JSON.parse(v)); }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+  useEffect(() => {
+    if (!signal || !id) return;
+    const lte = parseBands(signal.band);
+    const nrb = parseNrBands(signal.nrBand);
+    const all = [...new Set([...lte, ...nrb])];
+    const n = Math.max(all.length, signal.caCount ?? 0);
+    const num = (x: string) => parseInt(x.replace(/[^0-9]/g, ''), 10);
+    learnOperatorBands(id, lte.map(num), nrb.map(num)).catch(() => {});
+    if (n > 1 && all.length) {
+      const v = { bands: all, n, at: Date.now() };
+      setLastCa(v);
+      AsyncStorage.setItem(caKey, JSON.stringify(v)).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signal?.band, signal?.nrBand, signal?.caCount, id]);
+
+  // ═══ فحص الإنترنت: الإشارة زينة بس النت واقف؟ (كل ٤٥ ثانية والشاشة مفتوحة) ═══
+  const hasSignalNow = !!signal && (signal.rsrp !== undefined || signal.nrRsrp !== undefined);
+  useEffect(() => {
+    if (!hasSignalNow) return;
+    let alive = true;
+    const check = async () => {
+      if (!alive || AppState.currentState !== 'active') return;
+      const ok = await hasInternet();
+      if (!alive) return;
+      if (ok) {
+        if (netDownSince.current) {
+          const sig = lastSig.current;
+          const tower = sig?.enodebId || sig?.cellId;
+          if (tower) reportOutage({ tower: String(tower), operator: details?.operator ?? '' }, netDownSince.current, Date.now()).catch(() => {});
+        }
+        netFails.current = 0;
+        netDownSince.current = null;
+        setNoNet(false);
+      } else {
+        netFails.current += 1;
+        if (netFails.current >= 2) {
+          if (!netDownSince.current) netDownSince.current = Date.now() - 45000;
+          setNoNet(true);
+        }
+      }
+    };
+    const first = setTimeout(check, 4000);
+    const iv = setInterval(check, 45000);
+    return () => { alive = false; clearTimeout(first); clearInterval(iv); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasSignalNow]);
 
   const applySignal = useCallback((sig: Signal | null) => {
     const prev = lastSig.current;
@@ -187,6 +251,7 @@ export default function RouterDashboard() {
         setPlan(dp);
         setLock(lk);
         setDetails(det ? { ...det, operator: det.operator || net?.operator } : net ? { operator: net.operator } : null);
+        rememberOperator(r.id, det?.operator || net?.operator).catch(() => {});
       });
     } catch (e: any) {
       setError(e?.message ?? String(e));
@@ -473,6 +538,9 @@ export default function RouterDashboard() {
   // نعتمد عدد النواقل (caCount) كبديل عشان مؤشر الدمج يطلع صح
   const caCount = Math.max(allBands.length, signal?.caCount ?? 0);
   const caBw = signal?.caBandwidthMhz;
+  // الدمج يشتغل وقت التحميل بس: لو شفناه خلال آخر ساعتين على نفس الأساسي، نقول «جاهز» بدل «تردد واحد»
+  const caIdle = caCount <= 1 && !!lastCa && Date.now() - lastCa.at < 2 * 3600_000 &&
+    (!bands[0] || lastCa.bands.includes(bands[0]));
   const primary = hasNr && signal
     ? { rsrp: signal.nrRsrp, sinr: signal.nrSinr }
     : { rsrp: signal?.rsrp, sinr: signal?.sinr };
@@ -534,6 +602,28 @@ export default function RouterDashboard() {
           </View>
         )}
 
+        {!loading && noNet && !noService && (
+          <View style={[s.warnBanner, { backgroundColor: tBg('#e5484d14'), borderColor: tBd('#e5484d55') }]}>
+            {lock && (lock.bands.length > 0 || !!lock.pci) ? (
+              <Pressable style={[s.warnBtn, { backgroundColor: '#e5484d' }, busy && { opacity: 0.5 }]} onPress={onClearLock} disabled={busy}>
+                <Text style={s.warnBtnText}>رجوع للتلقائي</Text>
+              </Pressable>
+            ) : feat.reboot ? (
+              <Pressable style={[s.warnBtn, { backgroundColor: '#e5484d' }, busy && { opacity: 0.5 }]} onPress={onReboot} disabled={busy}>
+                <Text style={s.warnBtnText}>أعد التشغيل</Text>
+              </Pressable>
+            ) : null}
+            <Text style={s.warnText}>
+              ⚠️ الإشارة موجودة لكن ما فيه إنترنت{'\n'}
+              <Text style={{ fontWeight: '500', fontSize: 12 }}>
+                {lock && (lock.bands.length > 0 || !!lock.pci)
+                  ? 'غالباً من التثبيت — رجّع للتلقائي. ولو ما رجع: أعد تشغيل الراوتر أو شيّك على الباقة'
+                  : 'غالباً الباقة خلصت أو جلسة البيانات علقت — أعد تشغيل الراوتر، ولو ما رجع شيّك على الباقة'}
+              </Text>
+            </Text>
+          </View>
+        )}
+
         {!loading && lock && (lock.bands.length > 0 || lock.pci) && (
           <View style={s.warnBanner}>
             <Pressable style={[s.warnBtn, busy && { opacity: 0.5 }]} onPress={onClearLock} disabled={busy}>
@@ -583,7 +673,7 @@ export default function RouterDashboard() {
         {!loading && info && (
           <LinearGradient colors={HERO_BG[noService ? 'poor' : level]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.heroX}>
             <ArcGauge score={signalScore(primary)} label={LEVEL_LABEL[level]} color={LEVEL_COLOR[level]} size={172} />
-            <Text style={s.heroLine}>{disconnected ? 'الراوتر غير متصل' : noService ? 'الراوتر بلا شبكة' : `اتصالك ${LEVEL_LABEL[level]}`}</Text>
+            <Text style={s.heroLine}>{disconnected ? 'الراوتر غير متصل' : noService ? 'الراوتر بلا شبكة' : noNet ? `إشارتك ${LEVEL_LABEL[level]} · بدون إنترنت` : `اتصالك ${LEVEL_LABEL[level]}`}</Text>
             {noService ? (
               <Text style={s.heroSub}>الأبراج طايحة — اضغط «رجّع الإشارة» تحت</Text>
             ) : (
@@ -598,9 +688,12 @@ export default function RouterDashboard() {
                   <View style={s.heroCell}>
                     <Text style={s.heroCellLbl}>الدمج</Text>
                     <Text style={[s.heroCellVal, { color: caCount > 1 ? C.green : C.sub }]} numberOfLines={1}>
-                      {caCount > 1 ? '🔗 مدموج' : '◻️ تردد واحد'}
+                      {caCount > 1 ? '🔗 مدموج' : caIdle ? '💤 جاهز' : '◻️ تردد واحد'}
                     </Text>
                     {caCount > 1 && <Text style={s.heroCellSub}>{caCount} نواقل{caBw ? ` · ${caBw}MHz` : ''}</Text>}
+                    {caCount <= 1 && caIdle && lastCa && (
+                      <Text style={s.heroCellSub} numberOfLines={1} adjustsFontSizeToFit>آخر دمج {lastCa.bands.join('+')}</Text>
+                    )}
                   </View>
                   <View style={s.heroDiv} />
                   <View style={s.heroCell}>
