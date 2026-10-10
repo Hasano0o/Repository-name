@@ -548,8 +548,10 @@ export default function RouterDashboard() {
   const caCount = Math.max(allBands.length, signal?.caCount ?? 0);
   const caBw = signal?.caBandwidthMhz;
   // الدمج يشتغل وقت التحميل بس: لو شفناه خلال آخر ساعتين على نفس الأساسي، نقول «جاهز» بدل «تردد واحد»
-  const caIdle = caCount <= 1 && !!lastCa && Date.now() - lastCa.at < 2 * 3600_000 &&
-    (!bands[0] || lastCa.bands.includes(bands[0]));
+  const caRecent = !!lastCa && Date.now() - lastCa.at < 2 * 3600_000 && (!bands[0] || lastCa.bands.includes(bands[0]));
+  const caIdle = caCount <= 1 && caRecent;
+  // الدمج الحالي أقل من آخر دمج شفناه (مثلاً 4 قنوات وقت التحميل ← 2 بعده): نوضّح إنه يرجع وقت التحميل
+  const caShrunk = caCount > 1 && caRecent && !!lastCa && lastCa.n > caCount;
   const primary = hasNr && signal
     ? { rsrp: signal.nrRsrp, sinr: signal.nrSinr }
     : { rsrp: signal?.rsrp, sinr: signal?.sinr };
@@ -715,7 +717,10 @@ export default function RouterDashboard() {
                       {nrCc >= 2 ? '⚡ 5G ×2' : caCount > 1 ? '🔗 مدموج' : caIdle ? '💤 جاهز' : '◻️ تردد واحد'}
                     </Text>
                     {nrCc >= 2 && <Text style={s.heroCellSub}>دمج 5G مزدوج</Text>}
-                    {nrCc < 2 && caCount > 1 && <Text style={s.heroCellSub}>{caCount} نواقل{caBw ? ` · ${caBw}MHz` : ''}</Text>}
+                    {nrCc < 2 && caCount > 1 && !caShrunk && <Text style={s.heroCellSub}>{caCount} نواقل{caBw ? ` · ${caBw}MHz` : ''}</Text>}
+                    {nrCc < 2 && caShrunk && lastCa && (
+                      <Text style={s.heroCellSub} numberOfLines={2} adjustsFontSizeToFit>{caCount} الحين · وقت التحميل {lastCa.n}</Text>
+                    )}
                     {caCount <= 1 && caIdle && lastCa && (
                       <Text style={s.heroCellSub} numberOfLines={1} adjustsFontSizeToFit>آخر دمج {lastCa.bands.join('+')}</Text>
                     )}
@@ -724,7 +729,9 @@ export default function RouterDashboard() {
                   <View style={s.heroCell}>
                     <Text style={s.heroCellLbl}>الترددات</Text>
                     <Text style={s.heroCellVal} numberOfLines={1} adjustsFontSizeToFit>{allBands.length ? allBands.join(' + ') : '—'}</Text>
-                    <Text style={s.heroCellSub}>{bands.length ? `الأساسي ${bands[0]}` : netLabel}</Text>
+                    <Text style={s.heroCellSub} numberOfLines={1} adjustsFontSizeToFit>
+                      {caShrunk && lastCa ? `وقت التحميل: ${lastCa.bands.join('+')}` : bands.length ? `الأساسي ${bands[0]}` : netLabel}
+                    </Text>
                   </View>
                 </Pressable>
                 {!!traffic && <Text style={s.heroSub}>السرعة الحين {fmtRate(traffic.downBytesPerSec)}</Text>}
