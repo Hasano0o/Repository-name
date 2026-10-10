@@ -117,8 +117,8 @@ export function ProgressHost() {
       <View style={st.back}>
         <View style={st.card}>
           <View style={st.head}>
-            <ActivityIndicator color={P.blue} />
-            <Text style={st.title} numberOfLines={2}>{s.title}</Text>
+            <ActivityIndicator color={tFg('#2f6bff')} />
+            <Text style={st.title} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75}>{s.title}</Text>
           </View>
 
           <View style={st.steps}>
@@ -140,8 +140,20 @@ export function ProgressHost() {
 
           <View style={st.track}><View style={[st.fill, { width: `${Math.round(ratio * 100)}%` }]} /></View>
           <View style={st.timeRow}>
-            <Text style={st.time}>مرّ {fmt(elapsed)}</Text>
-            <Text style={st.time}>{left > 0 ? `باقي تقريباً ${fmt(left)}` : 'قربنا نخلص…'}</Text>
+            <View style={[st.chip, st.chipPast]}>
+              <Text style={[st.chipKey, { color: tFg('#5b6b8f') }]}>مرّ</Text>
+              <Text style={[st.chipVal, { color: tFg('#2f4a7a') }]}>{fmt(elapsed)}</Text>
+            </View>
+            <View style={[st.chip, st.chipLeft]}>
+              {left > 0 ? (
+                <>
+                  <Text style={[st.chipKey, { color: tFg('#2f7a68') }]}>باقي تقريباً</Text>
+                  <Text style={[st.chipVal, { color: tFg('#0f6b55') }]}>{fmt(left)}</Text>
+                </>
+              ) : (
+                <Text style={[st.chipVal, { color: tFg('#0f6b55') }]}>قربنا نخلص…</Text>
+              )}
+            </View>
           </View>
 
           <View style={st.warn}>
@@ -159,8 +171,13 @@ const st = StyleSheet.create({
     alignSelf: 'stretch', backgroundColor: P.card, borderRadius: 24, padding: 18, gap: 14,
     borderWidth: 1.5, borderColor: P.border,
   },
-  head: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
-  title: { flex: 1, color: P.text, fontSize: 17, fontWeight: '800', textAlign: 'right' },
+  // عنوان التركيبة في مربع خفيف بلون بارد
+  head: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 10,
+    backgroundColor: tBg('#eef3ff'), borderColor: tBd('#cddbff'), borderWidth: 1.5,
+    borderRadius: 16, paddingVertical: 10, paddingHorizontal: 12,
+  },
+  title: { flex: 1, color: tFg('#1d3f9e'), fontSize: 17, fontWeight: '800', textAlign: 'right' },
   steps: { gap: 10 },
   stepRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   dot: {
@@ -176,8 +193,15 @@ const st = StyleSheet.create({
   note: { color: P.sub, fontSize: 12.5, textAlign: 'right', lineHeight: 19 },
   track: { height: 8, borderRadius: 4, backgroundColor: P.soft, overflow: 'hidden' },
   fill: { height: 8, borderRadius: 4, backgroundColor: P.blue },
-  timeRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: -6 },
-  time: { color: P.sub, fontSize: 11.5, fontWeight: '600' },
+  timeRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', gap: 8, marginTop: -4 },
+  chip: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 5,
+    borderWidth: 1.5, borderRadius: 12, paddingVertical: 6, paddingHorizontal: 10,
+  },
+  chipPast: { backgroundColor: tBg('#f1f4fb'), borderColor: tBd('#d8e0f0') },
+  chipLeft: { backgroundColor: tBg('#e8f7f2'), borderColor: tBd('#b9e6d6') },
+  chipKey: { fontSize: 11.5, fontWeight: '600' },
+  chipVal: { fontSize: 12.5, fontWeight: '800' },
   warn: { backgroundColor: tBg('#fff7ed'), borderColor: tBd('#fed7aa'), borderWidth: 1, borderRadius: 12, padding: 10 },
   warnTxt: { color: tFg('#9a3412'), fontSize: 12.5, fontWeight: '700', textAlign: 'right', lineHeight: 19 },
 });
