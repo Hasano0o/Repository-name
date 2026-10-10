@@ -149,6 +149,8 @@ export default function RouterDashboard() {
   const [moving, setMoving] = useState(false);
   /** فيه إشارة بس ما فيه إنترنت (يتأكد بفحصين ورا بعض) */
   const [noNet, setNoNet] = useState(false);
+  /** عدد نواقل 5G الشغالة (٢ = دمج 5G مزدوج مثل n78+n78) */
+  const [nrCc, setNrCc] = useState(0);
   const netFails = useRef(0);
   const netDownSince = useRef<number | null>(null);
   /** آخر دمج شفناه — الدمج يشتغل وقت التحميل بس، فنعرضه بدل ما «يختفي» */
@@ -266,10 +268,17 @@ export default function RouterDashboard() {
     polling.current = true;
     setSyncing(true);
     try {
-      const [sig, trf] = await withSession(r, async d => Promise.all([
-        d.getSignal ? d.getSignal() : Promise.resolve(null),
-        d.getTraffic ? d.getTraffic().catch(() => null) : Promise.resolve(null),
-      ]));
+      const [sig, trf, car] = await withSession(r, async d => {
+        const [s1, t1] = await Promise.all([
+          d.getSignal ? d.getSignal() : Promise.resolve(null),
+          d.getTraffic ? d.getTraffic().catch(() => null) : Promise.resolve(null),
+        ]);
+        // نواقل 5G (عشان «5G ×2») — بس لما يكون فيه 5G، ما نزيد طلبات على غيره
+        const on5g = !!s1 && (s1.nrRsrp !== undefined || !!s1.nrBand);
+        const c1 = on5g && d.getCarriers ? await d.getCarriers().catch(() => null) : on5g ? null : [];
+        return [s1, t1, c1] as const;
+      });
+      if (car) setNrCc(car.filter(c => c.tech === 'NR').length);
       applySignal(sig);
       setTraffic(trf);
       setError('');
@@ -687,10 +696,11 @@ export default function RouterDashboard() {
                   <View style={s.heroDiv} />
                   <View style={s.heroCell}>
                     <Text style={s.heroCellLbl}>الدمج</Text>
-                    <Text style={[s.heroCellVal, { color: caCount > 1 ? C.green : C.sub }]} numberOfLines={1}>
-                      {caCount > 1 ? '🔗 مدموج' : caIdle ? '💤 جاهز' : '◻️ تردد واحد'}
+                    <Text style={[s.heroCellVal, { color: caCount > 1 || nrCc >= 2 ? C.green : C.sub }]} numberOfLines={1}>
+                      {nrCc >= 2 ? '⚡ 5G ×2' : caCount > 1 ? '🔗 مدموج' : caIdle ? '💤 جاهز' : '◻️ تردد واحد'}
                     </Text>
-                    {caCount > 1 && <Text style={s.heroCellSub}>{caCount} نواقل{caBw ? ` · ${caBw}MHz` : ''}</Text>}
+                    {nrCc >= 2 && <Text style={s.heroCellSub}>دمج 5G مزدوج</Text>}
+                    {nrCc < 2 && caCount > 1 && <Text style={s.heroCellSub}>{caCount} نواقل{caBw ? ` · ${caBw}MHz` : ''}</Text>}
                     {caCount <= 1 && caIdle && lastCa && (
                       <Text style={s.heroCellSub} numberOfLines={1} adjustsFontSizeToFit>آخر دمج {lastCa.bands.join('+')}</Text>
                     )}
