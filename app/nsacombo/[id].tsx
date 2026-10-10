@@ -8,9 +8,19 @@ import { withSession } from '../../src/store/sessions';
 import { BandConfig, Carrier, CellTower } from '../../src/drivers/types';
 import { snapshot, waitOnline, trialMessage, Snapshot, safeApply } from '../../src/utils/safeLock';
 import { C, R, S, tFg } from '../../src/ui/theme';
+import { trafficBurst } from '../../src/utils/nrprobe';
 
 const ACCENT = '#f59e0b';
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+const COMBO_MAX_MS = 90_000;
+const TIMEOUT = Symbol('timeout');
+/** حد أقصى لكل تركيبة — ما نخلي المستخدم ينتظر للأبد لو الراوتر علق */
+function capped<T>(p: Promise<T>, ms: number): Promise<T | typeof TIMEOUT> {
+  return new Promise(res => {
+    const t = setTimeout(() => res(TIMEOUT), ms);
+    p.then(v => { clearTimeout(t); res(v); }, () => { clearTimeout(t); res(TIMEOUT); });
+  });
+}
 
 interface Combo { lte: number[]; nr: number[] }
 
@@ -24,6 +34,7 @@ function comboName(c: Combo): string {
 interface Row extends Combo {
   status: 'pending' | 'testing' | 'done' | 'failed';
   note?: string;
+  startedAt?: number;
   snap?: Snapshot | null;
 }
 
@@ -52,6 +63,12 @@ export default function NsaCombo() {
   const [error, setError] = useState('');
   const cancel = useRef(false);
   const mounted = useRef(true);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => setTick(x => x + 1), 1000);
+    return () => clearInterval(t);
+  }, [running]);
 
   useEffect(() => {
     mounted.current = true;
@@ -123,27 +140,33 @@ export default function NsaCombo() {
       for (let i = 0; i < list.length; i++) {
         if (cancel.current) break;
         const c = list[i];
-        upd(i, { status: 'testing', note: 'نثبّت...' });
-        try {
+        upd(i, { status: 'testing', note: 'نثبّت...', startedAt: Date.now() });
+        setStatus(`تركيبة ${i + 1} من ${list.length}`);
+        let gone = false; // لو طوّلت وتخطيناها، ما نخلي بقيتها تكمّل بالخلفية وتلخبط التركيبة الجاية
+        const u = (p: Partial<Row>) => { if (!gone) upd(i, p); };
+        const one = async () => {
           await withSession(info, d => d.setBand!(c.lte, c.nr), false);
-          upd(i, { note: 'ننتظر الاتصال...' });
-          const ok = await waitOnline(info, 40000, () => cancel.current);
-          if (cancel.current) { upd(i, { status: 'pending', note: undefined }); break; }
-          if (!ok) { upd(i, { status: 'failed', note: 'ما اتصل' }); continue; }
-          upd(i, { note: 'نصحّي 5G...' });
-          // Wake 5G with traffic burst
-          try {
-            const { trafficBurst } = require('../../src/utils/nrprobe');
-            const burst = trafficBurst(8000, 20_000_000, () => cancel.current);
-            await sleep(2500);
-            const snap = await snapshot(info, true, 3);
-            await burst.catch(() => 0);
-            upd(i, { status: snap ? 'done' : 'failed', snap, note: snap ? undefined : 'فشل القياس' });
-          } catch {
-            upd(i, { note: 'نقيس...' });
-            await sleep(6000);
-            const snap = await snapshot(info, true, 3);
-            upd(i, { status: snap ? 'done' : 'failed', snap, note: snap ? undefined : 'فشل القياس' });
+          if (gone) return;
+          u({ note: 'ننتظر الاتصال...' });
+          const ok = await waitOnline(info, 40000, () => cancel.current || gone);
+          if (gone) return;
+          if (cancel.current) { u({ status: 'pending', note: undefined, startedAt: undefined }); return 'stop'; }
+          if (!ok) { u({ status: 'failed', note: 'ما اتصل' }); return; }
+          u({ note: 'نصحّي 5G...' });
+          const burst = trafficBurst(8000, 20_000_000, () => cancel.current || gone);
+          await sleep(2500);
+          if (gone) return;
+          u({ note: 'نقيس...' });
+          const snap = await snapshot(info, true, 3);
+          await burst.catch(() => 0);
+          u({ status: snap ? 'done' : 'failed', snap, note: snap ? undefined : 'فشل القياس' });
+        };
+        try {
+          const r = await capped(one(), COMBO_MAX_MS);
+          if (r === 'stop') break;
+          if (r === TIMEOUT) gone = true;
+          if (r === TIMEOUT && list[i].status === 'testing') {
+            upd(i, { status: 'failed', note: 'طوّل الراوتر — تخطيناها' });
           }
         } catch (e: any) {
           upd(i, { status: 'failed', note: e?.message ?? 'خطأ' });
@@ -230,7 +253,10 @@ export default function NsaCombo() {
               <View style={s.rowHead}>
                 <Text style={s.rowName}>{isBest ? '🏆 ' : ''}{comboName(r)}</Text>
                 {r.status === 'testing'
-                  ? <ActivityIndicator size="small" color={ACCENT} />
+                  ? <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6 }}>
+                      <ActivityIndicator size="small" color={ACCENT} />
+                      {!!r.startedAt && <Text style={s.secs}>{Math.round((Date.now() - r.startedAt) / 1000)}ث</Text>}
+                    </View>
                   : r.snap
                     ? <Text style={[s.rowPct, { color: (r.snap.nr ? C.green : C.sub) }]}>{r.snap.nr ? '5G✓' : '5G✗'}</Text>
                     : r.status === 'failed'
@@ -286,6 +312,7 @@ const s = StyleSheet.create({
   rowName: { color: C.text, fontWeight: '800', fontSize: 14.5 },
   rowPct: { fontWeight: '800', fontSize: 14, color: C.muted },
   rowLine: { color: C.sub, fontSize: 12, textAlign: 'right' },
+  secs: { color: C.muted, fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
   rowNote: { color: C.muted, fontSize: 12, textAlign: 'right' },
   verdict: { color: C.text, fontWeight: '800', fontSize: 14.5, textAlign: 'right', lineHeight: 22 },
   note: { color: C.muted, fontSize: 11.5, textAlign: 'right' },
