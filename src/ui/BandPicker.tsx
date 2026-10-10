@@ -322,8 +322,9 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
                     style={[
                       s.tile,
                       on && s.tileOn,
-                      live && { borderColor: isDark ? '#2f5a46' : '#bfead3' },
-                      on && { borderRightWidth: 4, borderRightColor: live ? C.green : TECH_TONE[tab].fg },
+                      on && { borderRightWidth: 4, borderRightColor: TECH_TONE[tab].fg },
+                      // المتصل عليه: إطار أخضر كامل — يبان من أول نظرة
+                      live && { borderWidth: 2, borderRightWidth: 2, borderColor: C.green, borderRightColor: C.green },
 
                     ]}
                   >
@@ -333,7 +334,7 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
                       </View>
                       <View style={{ flex: 1, alignItems: 'flex-end' }}>
                         <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 4 }}>
-                          <Text style={s.title}>{mhz || b}</Text>
+                          <Text style={s.titleBig}>{mhz || b}</Text>
                           {prim && <Text style={{ color: '#f0b020', fontSize: 13 }}>★</Text>}
                         </View>
                         <Text style={s.code}>ميقا</Text>
@@ -348,11 +349,13 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
                           <View key={n} style={[s.bar, { height: 3 + n * 2.25, backgroundColor: n <= lvl ? barColor : C.lineSoft }]} />
                         ))}
                       </View>
-                      <Text style={[s.sub, live && { color: C.green }]} numberOfLines={1}>
-                        {live ? 'متصل عليه' : sigText(tab, b, lvl)}
+                      <Text style={[s.sub, live && { color: C.green, fontWeight: '800' }]} numberOfLines={1}>
+                        {live ? 'متصل عليه ✓' : sigText(tab, b, lvl)}
                       </Text>
                       <View style={{ flex: 1 }} />
-                      <Text style={s.code}>{(tab === 'NR' ? 'n' : 'B') + b}</Text>
+                      <View style={[s.codeChip, { backgroundColor: k.bg }]}>
+                        <Text style={[s.codeChipText, { color: k.fg }]}>{(tab === 'NR' ? 'n' : 'B') + b}</Text>
+                      </View>
                     </View>
                   </Pressable>
                 );
@@ -538,6 +541,9 @@ const s = StyleSheet.create({
   badge: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   badgeText: { fontSize: 11.5, fontWeight: '700' },
   title: { color: C.text, fontSize: 16, fontWeight: '700' },
+  titleBig: { color: C.text, fontSize: 21, fontWeight: '800', lineHeight: 26 },
+  codeChip: { borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 },
+  codeChipText: { fontSize: 11, fontWeight: '800' },
   subRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
   bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 12 },
   bar: { width: 3, borderRadius: 2 },

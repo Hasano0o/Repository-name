@@ -15,6 +15,7 @@ import {
 } from '../../src/utils/lagDetector';
 import { C, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
+import { RegionGrid } from '../../src/ui/RegionGrid';
 
 const KEEP_TAG = 'bandly-lag';
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -180,13 +181,7 @@ export default function LagScreen() {
               <Text style={s.tip}>• إذا تلعب على بلايستيشن أو كمبيوتر أو جوال ثاني: خلّ هذا الجوال جنبك والتطبيق مفتوح — الشاشة ما تطفي</Text>
               <Text style={s.tip}>• إذا تلعب على نفس الجوال: أندرويد يوقف المراقبة لما تطلع للعبة، وبيوضح لك التقرير الفترات اللي ما انراقبت</Text>
             </View>
-            <View style={s.chips}>
-              {REGIONS.map(r => (
-                <Pressable key={r.id} onPress={() => { setRegion(r.id); AsyncStorage.setItem(REGION_KEY, r.id).catch(() => {}); }} style={[s.chip, r.id === region && s.chipOn]}>
-                  <Text style={[s.chipText, r.id === region && { color: C.onAccent }]}>{r.name}</Text>
-                </Pressable>
-              ))}
-            </View>
+            <RegionGrid value={region} onPick={id2 => { setRegion(id2); AsyncStorage.setItem(REGION_KEY, id2).catch(() => {}); }} />
             <Pressable style={s.btn} onPress={start}>
               <Text style={s.btnText}>ابدأ المراقبة</Text>
             </Pressable>

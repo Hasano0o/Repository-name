@@ -20,6 +20,7 @@ import { addGameLog, listGameLog, periodStats, PeriodStat } from '../../src/stor
 import { bandLabel, freqLabel } from '../../src/utils/bands';
 import { C, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
+import { RegionGrid, flagOf } from '../../src/ui/RegionGrid';
 
 type Tech = 'LTE' | 'NR';
 type Kind = 'base' | 'band' | 'lteOnly';
@@ -38,11 +39,6 @@ const lightColor = (l: Light) => (l === 'green' ? C.green : l === 'yellow' ? '#e
 const lightEmoji = (l: Light) => (l === 'green' ? '🟢' : l === 'yellow' ? '🟡' : '🔴');
 const scoreColor = (sc: number) => lightColor(scoreLight(sc));
 
-// أعلام المناطق — «أقرب سيرفر» ما له دولة فياخذ أيقونة
-const FLAG: Record<string, string> = {
-  ae: '🇦🇪', in: '🇮🇳', it: '🇮🇹', eu: '🇩🇪', fr: '🇫🇷', uk: '🇬🇧', se: '🇸🇪', sg: '🇸🇬', us: '🇺🇸', cf: '📍',
-};
-const flagOf = (id: string) => FLAG[id] ?? '🌐';
 
 // لون كل خيار في مُحسّن اللعبة: الحالي أزرق، 5G بنفسجي، 4G أخضر، «4G فقط» تركوازي
 const GREEN_DEEP = '#1f9e63';
@@ -471,21 +467,7 @@ export default function GameScreen() {
         )}
 
         {!loading && (
-          <View style={s.regionBar}>
-            <Text style={s.regionTitle}>سيرفر لعبتك</Text>
-            <View style={s.chips}>
-              {REGIONS.map(r => {
-                const on = r.id === region;
-                return (
-                  <Pressable key={r.id} onPress={() => pickRegion(r.id)} style={[s.chip, on && s.chipOn, (running || busy) && !on && s.dim]}>
-                    <Text style={[s.chipText, on && { color: C.onAccent }]}>{r.name}</Text>
-                    <Text style={s.chipFlag}>{flagOf(r.id)}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <Text style={s.hint}>{reg.hint}</Text>
-          </View>
+          <RegionGrid value={region} onPick={pickRegion} disabled={running || busy} />
         )}
 
         {!loading && (
