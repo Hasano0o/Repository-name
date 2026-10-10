@@ -501,6 +501,12 @@ export class HuaweiDriver implements RouterDriver {
   async reboot() {
     await this.post('device/control', '<Control>1</Control>');
   }
+  async reconnectData() {
+    // نطفي بيانات الجوال ونرجعها — الشركة تعطي جلسة (وآي بي) جديدة
+    await this.post('dialup/mobile-dataswitch', '<dataswitch>0</dataswitch>');
+    await new Promise(r => setTimeout(r, 4000));
+    await this.post('dialup/mobile-dataswitch', '<dataswitch>1</dataswitch>');
+  }
   async getBandConfig(): Promise<BandConfig> {
     const cur = await this.get('net/net-mode');
     let supported: number[] = [];

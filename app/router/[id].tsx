@@ -852,6 +852,14 @@ export default function RouterDashboard() {
                 </Pressable>
                 </>
               )}
+              {info.driverId !== 'device' && (
+                <Pressable style={[s.moreTile, { backgroundColor: tBg('#0e7d9312'), borderColor: tBd('#0e7d9330') }]} onPress={() => router.push(`/newip/${info.id}` as Href)}>
+                  <View style={[s.moreIcon, { backgroundColor: tBg('#0e7d93') }]}>
+                    <Icon name="refresh" size={18} color={tFg('#fff')} />
+                  </View>
+                  <Text style={s.moreLbl}>آي بي جديد</Text>
+                </Pressable>
+              )}
               <Pressable style={[s.moreTile, { backgroundColor: tBg('#f43f5e12'), borderColor: tBd('#f43f5e30') }]} onPress={() => router.push('/monitor' as Href)}>
                 <View style={[s.moreIcon, { backgroundColor: tBg('#f43f5e') }]}>
                   <Icon name="bell" size={18} color={tFg('#fff')} />

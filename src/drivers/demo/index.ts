@@ -169,7 +169,7 @@ export class DemoDriver implements RouterDriver {
     await this.alive();
     return {
       model: 'راوتر تجريبي 5G', imei: '860000000000000', software: '11.0.2.1', hardware: 'DEMO-5G',
-      wanIp: '10.84.21.17', dns: '212.26.18.41', operator: 'STC', simStatus: 'جاهزة',
+      wanIp: `10.84.21.${this.demoIp}`, dns: '212.26.18.41', operator: 'STC', simStatus: 'جاهزة',
     };
   }
 
@@ -202,6 +202,13 @@ export class DemoDriver implements RouterDriver {
     await this.alive();
     if (block) this.blocked.add(mac); else this.blocked.delete(mac);
   }
+
+  async reconnectData() {
+    await this.alive();
+    await new Promise(r => setTimeout(r, 3000));
+    this.demoIp = 10 + Math.floor(Math.random() * 200);
+  }
+  demoIp = 17;
 
   async reboot() {
     await this.alive();

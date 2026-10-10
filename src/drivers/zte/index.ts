@@ -958,4 +958,12 @@ export class ZteDriver implements RouterDriver {
     await this.ensure();
     await this.post({ goformId: 'REBOOT_DEVICE' });
   }
+  async reconnectData(): Promise<void> {
+    await this.ensure();
+    const off = await this.act({ goformId: 'DISCONNECT_NETWORK' });
+    if (!/success/i.test(off)) throw this.rejected('قطع الاتصال', off);
+    await sleep(4000);
+    const on = await this.act({ goformId: 'CONNECT_NETWORK' });
+    if (!/success/i.test(on)) throw this.rejected('إرجاع الاتصال', on);
+  }
 }
