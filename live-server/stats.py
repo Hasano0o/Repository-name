@@ -5,13 +5,15 @@
   GET  /live-api/stats/summary   ← ملخص (يحتاج x-hub-secret)
   GET  /live-api/stats/report    ← نفس الملخص كنص جاهز (أمر /stats في البوت)
 
-ما نستقبل اسم ولا رقم ولا موقع GPS: معرّف عشوائي للتطبيق + المدينة اللي اختارها
+ما نستقبل اسم ولا رقم ولا موقع GPS، والآي بي ما ينحفظ (نطلع منه الدولة بس): معرّف عشوائي للتطبيق + المدينة اللي اختارها
 المستخدم بنفسه + نوع الجوال ونوع النظام ونسخته ونسخة التطبيق + نوع الراوتر.
 وكل يوم الساعة ١١:٥٠ مساءً (توقيت الرياض) يوصل للمالك ملخص اليوم في البوت.
 """
 import asyncio
 import json
 import re
+import subprocess
+from functools import lru_cache
 import time
 import urllib.request
 from collections import Counter
@@ -65,6 +67,31 @@ def _ip(req: Request) -> str:
     return req.client.host if req.client else "?"
 
 
+COUNTRY_AR = {
+    "SA": "السعودية", "AE": "الإمارات", "KW": "الكويت", "QA": "قطر", "BH": "البحرين",
+    "OM": "عُمان", "YE": "اليمن", "EG": "مصر", "JO": "الأردن", "IQ": "العراق",
+    "SY": "سوريا", "LB": "لبنان", "SD": "السودان", "MA": "المغرب", "DZ": "الجزائر",
+    "TN": "تونس", "LY": "ليبيا", "US": "أمريكا", "GB": "بريطانيا", "DE": "ألمانيا",
+    "FR": "فرنسا", "NL": "هولندا", "IE": "أيرلندا", "TR": "تركيا", "IN": "الهند", "PK": "باكستان",
+}
+
+
+@lru_cache(maxsize=4096)
+def _country(ip: str) -> str:
+    """الدولة فقط من الآي بي (قاعدة محلية، بدون اتصال خارجي). الآي بي نفسه ما ينحفظ."""
+    if not ip or ip == "?" or ip.startswith(("127.", "10.", "192.168.")) or ip == "::1":
+        return ""
+    try:
+        cmd = ["geoiplookup6" if ":" in ip else "geoiplookup", ip]
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=3).stdout
+        m = re.search(r":\s*([A-Z]{2}),\s*([^\n]+)", out)
+        if not m:
+            return ""
+        return COUNTRY_AR.get(m.group(1), m.group(2).strip()[:24])
+    except Exception:
+        return ""
+
+
 @router.post("/ping")
 async def ping(req: Request):
     # إحصائية صغيرة جدًا؛ لا يوجد سبب لقبول body كبير.
@@ -93,7 +120,9 @@ async def ping(req: Request):
     if not re.fullmatch(r"[a-z0-9]{12,32}", did):
         raise HTTPException(400)
     routers = [_clean(x, 24) for x in (b.get("routers") or [])[:6] if isinstance(x, str)]
+    country = await asyncio.to_thread(_country, ip)
     rec = {
+        "country": country,
         "city": _clean(b.get("city"), 30),
         "brand": _clean(b.get("brand"), 24),
         "model": _clean(b.get("model"), 40),
@@ -150,6 +179,7 @@ def build_summary(day: str | None = None) -> dict:
         "new_today": sum(1 for v in devs.values() if v.get("first") == day),
         "active_7d": len(week),
         "total_devices": len(devs),
+        "countries": top("country", 8),
         "cities": top("city", 8),
         "brands": top("brand"),
         "os": {"ios": len(ios), "android": len(andr)},
@@ -185,6 +215,7 @@ def _fmt(s: dict) -> str:
         f"🆕 جدد اليوم: <b>{s['new_today']}</b>\n"
         f"📅 نشطين آخر ٧ أيام: <b>{s['active_7d']}</b>\n"
         f"📱 كل الأجهزة: <b>{s['total_devices']}</b>\n\n"
+        f"🌍 الدول:\n{lines(s.get('countries') or [])}\n\n"
         f"🏙️ المدن:\n{lines(s['cities'])}\n\n"
         f"📶 الراوترات:\n{lines(s['routers'])}\n\n"
         f"📲 الأنظمة:\n  • 🍎 آيفون: {s['os']['ios']}\n  • 🤖 أندرويد: {s['os']['android']}\n\n"

@@ -19,6 +19,10 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
 fi
 command -v ffmpeg >/dev/null 2>&1 && ok "ffmpeg موجود" || echo "  ⚠ ffmpeg غير مثبت — الصوت يشتغل بدون تحويل"
 
+echo "🌍 قاعدة الدول (للإحصائيات)..."
+command -v geoiplookup >/dev/null 2>&1 || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq geoip-bin geoip-database >/dev/null 2>&1 || { apt-get update -qq >/dev/null 2>&1; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq geoip-bin geoip-database >/dev/null 2>&1; } || true
+command -v geoiplookup >/dev/null 2>&1 && ok "geoiplookup موجود" || echo "  ⚠ geoiplookup غير مثبت — الدولة بتطلع غير محدد"
+
 echo "📞 خادم المكالمات (TURN)..."
 command -v turnserver >/dev/null 2>&1 || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq coturn >/dev/null 2>&1 || true
 if command -v turnserver >/dev/null 2>&1; then
