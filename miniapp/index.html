@@ -120,6 +120,10 @@ textarea{min-height:96px;resize:vertical}
       <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10.5 5.5h3"/><circle cx="12" cy="18" r="1"/></svg></span>
       <span class="t"><b>App Store</b><small>آيفون — متاح الحين</small></span><span>‹</span>
     </button>
+    <button class="dl store" id="winBtn">
+      <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span>
+      <span class="t"><b>ويندوز</b><small>للكمبيوتر — يتحدّث لحاله</small></span><span>‹</span>
+    </button>
     <div class="meta"><span id="apkSize">📦 —</span><span id="apkDate">🗓️ —</span></div>
   </div>
 
@@ -283,6 +287,8 @@ go(PAGES.includes(start) ? start : 'home', false);
 // ═══ التحميل والمتاجر ═══
 function downloadApk() { haptic('medium'); if (tg && tg.openLink) tg.openLink(APK); else location.href = APK; }
 $('apkBtn').onclick = downloadApk;
+const WIN = 'https://has-host.com/dl/Bandly-Setup.exe';
+$('winBtn').onclick = () => { haptic('medium'); if (tg && tg.openLink) tg.openLink(WIN); else location.href = WIN; };
 $('iosBtn').onclick = () => { haptic('medium'); if (tg && tg.openLink) tg.openLink(IOS); else location.href = IOS; };
 $('devBtn').onclick = () => { haptic(); if (tg && tg.openTelegramLink) tg.openTelegramLink(DEV); else location.href = DEV; };
 const MSG = {

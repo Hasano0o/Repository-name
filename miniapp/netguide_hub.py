@@ -39,7 +39,8 @@ WELCOME = (
     "📶 <b>Bandly — اطلع أقوى إشارة من راوترك</b>\n\n"
     "وجّه الهوائي، ثبّت أفضل برج، وكلّم فني يشوفك بالكاميرا ويساعدك عن بُعد 📹\n\n"
     "🍎 <b>آيفون:</b> نزّله من <b>App Store</b>\n"
-    "🤖 <b>أندرويد:</b> ملف APK مباشر من الزر تحت 👇 (وقريباً على Google Play)\n\n"
+    "🤖 <b>أندرويد:</b> ملف APK مباشر من الزر تحت 👇 (وقريباً على Google Play)\n"
+    "💻 <b>الكمبيوتر:</b> نسخة ويندوز تتحدّث لحالها\n\n"
     "⚠️ بالأندرويد لو طلع لك تحذير وقت التثبيت، اضغط <b>«التثبيت على أي حال»</b>."
 )
 
@@ -70,6 +71,7 @@ def _api(method: str, path: str, body: dict | None = None) -> dict:
 
 
 APK = "https://has-host.com/dl/bandly.apk"
+WIN = "https://has-host.com/dl/Bandly-Setup.exe"
 IOS = "https://apps.apple.com/sa/app/id6819877993"
 # النسخة الصغيرة (arm64) اللي ينرسل كملف من البوت — حد البوتات في تيليجرام ٥٠ ميقا
 APK_FILE = "/var/www/has-host.com/dl/bandly-arm64.apk"
@@ -126,7 +128,8 @@ RIYADH = timezone(timedelta(hours=3))
 PROMO = (
     "📶 <b>Bandly</b> — لقّط أقوى إشارة لراوترك\n\n"
     "🍎 <b>آيفون:</b> متوفر على App Store\n"
-    "🤖 <b>أندرويد:</b> ملف APK مباشر من الزر تحت 👇\n\n"
+    "🤖 <b>أندرويد:</b> ملف APK مباشر من الزر تحت 👇\n"
+    "💻 <b>الكمبيوتر:</b> نسخة ويندوز من الزر تحت\n\n"
     "⚠️ بالأندرويد لو طلع لك تحذير وقت التثبيت، اضغط <b>«التثبيت على أي حال»</b>."
 )
 
@@ -179,6 +182,7 @@ def promo_kb() -> types.InlineKeyboardMarkup:
     kb = types.InlineKeyboardMarkup()
     kb.row(Btn("🍎 تحميل للآيفون (App Store)", style="primary", url=IOS))
     kb.row(Btn("📥 تحميل التطبيق (أندرويد)", style="success", callback_data="hubapk"))
+    kb.row(Btn("💻 نسخة الكمبيوتر (ويندوز)", url=WIN))
     return kb
 
 
@@ -230,6 +234,7 @@ def keyboard() -> types.InlineKeyboardMarkup:
     wa = lambda text, page="": types.InlineKeyboardButton(text, web_app=types.WebAppInfo(APP + (f"#{page}" if page else "")))
     kb.row(Btn("🍎 تحميل للآيفون (App Store)", style="primary", url=IOS))
     kb.row(Btn("📥 تحميل التطبيق (أندرويد)", style="success", callback_data="hubapk"))
+    kb.row(Btn("💻 نسخة الكمبيوتر (ويندوز)", url=WIN))
     kb.row(Btn("📱 افتح تطبيق Bandly", style="primary", web_app=types.WebAppInfo(APP)))
     kb.row(wa("🛠️ سجّل كفني", "tech"), wa("📢 اطلب إعلان", "ad"))
     kb.row(wa("🔌 أضف جهازك", "device"), wa("💬 ملاحظاتك", "feedback"))
