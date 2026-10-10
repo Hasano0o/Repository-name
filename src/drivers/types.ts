@@ -189,7 +189,7 @@ export interface RouterDriver {
   getUsage?(): Promise<Usage>;
   reboot?(): Promise<void>;
   /** يقطع اتصال البيانات ويرجّعه (آي بي جديد من الشركة) بدون إعادة تشغيل */
-  reconnectData?(): Promise<void>;
+  reconnectData?(opts?: { holdSecs?: number }): Promise<void>;
   getBandConfig?(): Promise<BandConfig>;
   setBand?(bands: number[], nrBands?: number[]): Promise<void>;
   lockCell?(target: CellLockTarget): Promise<void>;

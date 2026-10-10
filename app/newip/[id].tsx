@@ -65,9 +65,10 @@ export default function NewIp() {
       if (!r) { setError('الراوتر غير موجود'); setLoading(false); return; }
       setInfo(r);
       try {
-        const can = await withSession(r, async d => !!d.reconnectData, false).catch(() => false);
+        const [can, reb] = await withSession(r, async d => [!!d.reconnectData, !!d.reboot] as const, false).catch(() => [false, false] as const);
         if (!mounted.current) return;
         setSupported(can);
+        setCanReboot(reb && r.driverId !== 'device');
         setBefore(await readIps(r));
       } finally {
         if (mounted.current) setLoading(false);
@@ -76,9 +77,18 @@ export default function NewIp() {
     return () => { mounted.current = false; };
   }, [id]);
 
-  const run = () => {
+  const [canReboot, setCanReboot] = useState(false);
+  const [mode, setMode] = useState<'normal' | 'long' | 'reboot'>('normal');
+
+  const run = (m: 'normal' | 'long' | 'reboot' = 'normal') => {
     if (!info) return;
-    Alert.alert('آي بي جديد', 'بنقطع النت ثواني ونرجّعه عشان الشركة تعطيك آي بي جديد.\n\nأي تحميل أو لعبة شغالة بتنقطع لحظات.', [
+    const msg = m === 'reboot'
+      ? 'بنعيد تشغيل الراوتر — هذي أقوى طريقة لآي بي جديد. النت بينقطع حوالي دقيقتين.'
+      : m === 'long'
+        ? 'بنقطع النت ٤٠ ثانية تقريباً — الشركة تحتاج وقت أطول عشان تفك الآي بي القديم.'
+        : 'بنقطع النت ثواني ونرجّعه عشان الشركة تعطيك آي بي جديد.\n\nأي تحميل أو لعبة شغالة بتنقطع لحظات.';
+    setMode(m);
+    Alert.alert('آي بي جديد', msg, [
       { text: 'إلغاء', style: 'cancel' },
       {
         text: 'يلا', onPress: async () => {
@@ -86,11 +96,17 @@ export default function NewIp() {
           try {
             const old = before ?? await readIps(info);
             if (mounted.current) setBefore(old);
-            setStatus('نقطع الاتصال ونرجّعه...');
-            await withSession(info, d => d.reconnectData!(), false);
+            if (m === 'reboot') {
+              setStatus('نعيد تشغيل الراوتر...');
+              await withSession(info, d => d.reboot!(), false);
+              await sleep(30000);
+            } else {
+              setStatus(m === 'long' ? 'نقطع الاتصال ~٤٠ ثانية...' : 'نقطع الاتصال ونرجّعه...');
+              await withSession(info, d => d.reconnectData!({ holdSecs: m === 'long' ? 35 : 10 }), false);
+              await sleep(3000);
+            }
             setStatus('ننتظر الراوتر يتصل...');
-            await sleep(3000);
-            const ok = await waitOnline(info, 60000, () => !mounted.current);
+            const ok = await waitOnline(info, m === 'reboot' ? 150000 : 60000, () => !mounted.current);
             if (!ok) throw new Error('الراوتر ما رجع يتصل خلال دقيقة — انتظر شوي أو أعد تشغيله');
             setStatus('نقرأ الآي بي الجديد...');
             // أول ثواني بعد الاتصال ممكن ما يكون فيه نت — نحاول كم مرة
@@ -151,7 +167,7 @@ export default function NewIp() {
           )}
 
           {!loading && supported && (
-            <Pressable style={[s.btn, busy && { opacity: 0.6 }]} onPress={run} disabled={busy}>
+            <Pressable style={[s.btn, busy && { opacity: 0.6 }]} onPress={() => run('normal')} disabled={busy}>
               {busy ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>{after ? '🔄 جرّب مرة ثانية' : '🔄 خذ آي بي جديد'}</Text>}
             </Pressable>
           )}
@@ -173,7 +189,25 @@ export default function NewIp() {
             ) : (
               <>
                 <Text style={[s.verdict, { color: tFg('#a15c00') }]}>الشركة رجّعت نفس الآي بي</Text>
-                <Text style={s.note}>جرّب مرة ثانية بعد دقيقة أو دقيقتين — أحياناً تحتاج أكثر من محاولة.</Text>
+                <Text style={s.note}>
+                  {mode === 'reboot'
+                    ? 'حتى بعد إعادة التشغيل — الشركة مثبّتة نفس الآي بي لشريحتك حالياً. جرّب بعد ساعة.'
+                    : 'الشركة تحفظ آي بي الشريحة فترة قصيرة بعد الانقطاع. جرّب انقطاع أطول، ولو ما نفع أعد تشغيل الراوتر.'}
+                </Text>
+                {mode !== 'reboot' && (
+                  <View style={{ gap: 8, marginTop: 4 }}>
+                    {mode === 'normal' && (
+                      <Pressable style={[s.btn2, busy && { opacity: 0.6 }]} onPress={() => run('long')} disabled={busy}>
+                        <Text style={s.btn2Text}>⏱ جرّب بانقطاع أطول (٤٠ ثانية)</Text>
+                      </Pressable>
+                    )}
+                    {canReboot && (
+                      <Pressable style={[s.btn2, busy && { opacity: 0.6 }]} onPress={() => run('reboot')} disabled={busy}>
+                        <Text style={s.btn2Text}>⏻ أعد تشغيل الراوتر (أقوى طريقة)</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                )}
               </>
             )}
           </View>
@@ -201,6 +235,8 @@ const s = StyleSheet.create({
   warn: { color: tFg('#b45309'), fontSize: 12.5, textAlign: 'right', fontWeight: '700', lineHeight: 19 },
   btn: { backgroundColor: ACCENT, borderRadius: R.md, paddingVertical: 13, alignItems: 'center', marginTop: 4 },
   btnText: { color: C.onAccent, fontWeight: '800', fontSize: 14 },
+  btn2: { borderColor: ACCENT, borderWidth: 1.5, borderRadius: R.md, paddingVertical: 11, alignItems: 'center' },
+  btn2Text: { color: tFg(ACCENT), fontWeight: '800', fontSize: 13.5 },
   statusText: { color: ACCENT, fontSize: 12.5, fontWeight: '700', textAlign: 'right' },
   err: { color: C.red, fontSize: 12.5, textAlign: 'right', lineHeight: 19 },
   verdict: { fontWeight: '800', fontSize: 15, textAlign: 'right', lineHeight: 23 },

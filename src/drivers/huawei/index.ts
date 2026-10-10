@@ -501,11 +501,30 @@ export class HuaweiDriver implements RouterDriver {
   async reboot() {
     await this.post('device/control', '<Control>1</Control>');
   }
-  async reconnectData() {
-    // نطفي بيانات الجوال ونرجعها — الشركة تعطي جلسة (وآي بي) جديدة
+  async reconnectData(opts?: { holdSecs?: number }) {
+    // نطفي بيانات الجوال، نتأكد إن الجلسة انقطعت فعلاً، ونخليها مقطوعة شوي
+    // (الشركة ما تفك الآي بي لو رجعنا بسرعة) — وبعدها نرجّعها
+    const sleepMs = (ms: number) => new Promise(r => setTimeout(r, ms));
+    const waitDown = async () => {
+      for (let i = 0; i < 6; i++) {
+        await sleepMs(2000);
+        if (!(await this.isConnected().catch(() => true))) return true;
+      }
+      return false;
+    };
+    let via: 'switch' | 'dial' = 'switch';
     await this.post('dialup/mobile-dataswitch', '<dataswitch>0</dataswitch>');
-    await new Promise(r => setTimeout(r, 4000));
-    await this.post('dialup/mobile-dataswitch', '<dataswitch>1</dataswitch>');
+    if (!(await waitDown())) {
+      // بعض الموديلات تتجاهل مفتاح البيانات — نجرّب قطع الاتصال المباشر
+      await this.post('dialup/mobile-dataswitch', '<dataswitch>1</dataswitch>').catch(() => '');
+      await this.post('dialup/dial', '<Action>0</Action>');
+      via = 'dial';
+      await waitDown();
+    }
+    this.log('reconnect: down via', via);
+    await sleepMs((opts?.holdSecs ?? 10) * 1000);
+    if (via === 'dial') await this.post('dialup/dial', '<Action>1</Action>');
+    else await this.post('dialup/mobile-dataswitch', '<dataswitch>1</dataswitch>');
   }
   async getBandConfig(): Promise<BandConfig> {
     const cur = await this.get('net/net-mode');

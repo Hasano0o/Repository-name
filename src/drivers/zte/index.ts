@@ -958,11 +958,17 @@ export class ZteDriver implements RouterDriver {
     await this.ensure();
     await this.post({ goformId: 'REBOOT_DEVICE' });
   }
-  async reconnectData(): Promise<void> {
+  async reconnectData(opts?: { holdSecs?: number }): Promise<void> {
     await this.ensure();
     const off = await this.act({ goformId: 'DISCONNECT_NETWORK' });
     if (!/success/i.test(off)) throw this.rejected('قطع الاتصال', off);
-    await sleep(4000);
+    // ننتظر الجلسة تنقطع فعلاً، ونخليها مقطوعة شوي عشان الشركة تفك الآي بي
+    for (let i = 0; i < 6; i++) {
+      await sleep(2000);
+      const r = await this.get(['ppp_status']).catch(() => ({} as Record<string, string>));
+      if (/disconnected/i.test(r.ppp_status || '')) break;
+    }
+    await sleep((opts?.holdSecs ?? 10) * 1000);
     const on = await this.act({ goformId: 'CONNECT_NETWORK' });
     if (!/success/i.test(on)) throw this.rejected('إرجاع الاتصال', on);
   }

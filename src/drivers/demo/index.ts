@@ -203,7 +203,7 @@ export class DemoDriver implements RouterDriver {
     if (block) this.blocked.add(mac); else this.blocked.delete(mac);
   }
 
-  async reconnectData() {
+  async reconnectData(_opts?: { holdSecs?: number }) {
     await this.alive();
     await new Promise(r => setTimeout(r, 3000));
     this.demoIp = 10 + Math.floor(Math.random() * 200);
