@@ -1,4 +1,5 @@
 import '../src/desktop/install'; // نسخة الويندوز: توجيه الطلبات عبر البرنامج (ما يأثر على الجوال)
+import '../src/desktop/scrollbar'; // نسخة الويندوز: شريط تمرير ظاهر تسحبه بالماوس
 import { useEffect } from 'react';
 import { pingDaily } from '../src/services/stats';
 import { Stack } from 'expo-router';
