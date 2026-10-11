@@ -51,6 +51,12 @@ export interface RouterExtras {
   autoReboot?: { on: boolean; everyDays: number; from: number; to: number };
   /** منافذ فتحتها الألعاب/الأجهزة عبر UPnP */
   upnpMaps?: { app: string; ip: string; port: string; proto: string }[];
+  /** شبكة الضيوف — offHours: 0 = بدون إطفاء، 4 ساعات، 24 = يوم */
+  guest?: { on: boolean; name: string; open: boolean; offHours: number; remainSecs?: number };
+  /** تشغيل/إطفاء كل شبكة واي فاي */
+  bands?: { band: '2.4' | '5'; on: boolean }[];
+  /** مدة تشغيل الراوتر كما يرجعها (مثل 3:12:05 أو 2 يوم) */
+  uptime?: string;
 }
 
 export interface ConnectedDevice { mac: string; ip?: string; name?: string; blocked?: boolean; }
@@ -265,4 +271,6 @@ export interface RouterDriver {
   setDmz?(on: boolean, ip: string, mac?: string): Promise<void>;
   setLedNight?(on: boolean, start: string, end: string): Promise<void>;
   setAutoReboot?(on: boolean): Promise<void>;
+  setGuest?(on: boolean, offHours: number): Promise<void>;
+  setBandOn?(band: '2.4' | '5', on: boolean): Promise<void>;
 }

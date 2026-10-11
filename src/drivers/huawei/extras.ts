@@ -50,7 +50,68 @@ export async function getExtras(io: Io): Promise<RouterExtras> {
       });
     }
   }
+  // ── شبكة الضيوف ──
+  const mb = await ok(io, 'wlan/multi-basic-settings');
+  if (mb) {
+    const g = ssidBlocks(mb).find(b => tag(b, 'wifiisguestnetwork') === '1');
+    if (g) {
+      out.guest = {
+        on: tag(g, 'WifiEnable') === '1',
+        name: unesc(tag(g, 'WifiSsid') ?? ''),
+        open: /^open$/i.test(tag(g, 'WifiAuthmode') ?? ''),
+        offHours: Number(tag(g, 'wifiguestofftime') ?? 0) || 0,
+      };
+      if (out.guest.on) {
+        const gt = await ok(io, 'wlan/guesttime-setting');
+        const rem = Number(gt && tag(gt, 'remaintime'));
+        if (rem > 0) out.guest.remainSecs = rem;
+      }
+    }
+  }
+  // ── تشغيل/إطفاء كل شبكة ──
+  const sw = await ok(io, 'wlan/status-switch-settings');
+  if (sw) {
+    const rs = radioBlocks(sw);
+    if (rs.length) out.bands = rs.map(b => ({ band: radioBand(b), on: tag(b, 'wifienable') === '1' }));
+  }
+  // ── مدة التشغيل ──
+  const bt = await ok(io, 'device/boot_time');
+  if (bt && tag(bt, 'boot_time')) out.uptime = tag(bt, 'boot_time');
   return out;
+}
+
+const unesc = (s = '') => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+const ssidBlocks = (x: string) => [...x.matchAll(/<Ssid>([\s\S]*?)<\/Ssid>/g)].map(m => m[1]);
+const radioBlocks = (x: string) => [...x.matchAll(/<radio>([\s\S]*?)<\/radio>/g)].map(m => m[1]);
+/** Radio.1 = 2.4، Radio.2 = 5 (أو index 0/1) */
+const radioBand = (b: string): '2.4' | '5' => {
+  const n = (tag(b, 'ID') ?? '').match(/Radio\.(\d+)/)?.[1] ?? String(Number(tag(b, 'index') ?? 0) + 1);
+  return n === '1' ? '2.4' : '5';
+};
+/** نشيل كلمات السر قبل الإرسال — مثل صفحة الراوتر (clearSecureData) عشان ما تتغيّر */
+const SECRET = /key|psk|wep/i;
+const stripSecrets = (b: string) => b.replace(/<(\w+)>[^<]*<\/\1>/g, (m, k) => (SECRET.test(k) ? '' : m));
+
+/** الضيوف: نرسل كل الشبكات (الإطفاء ما يمشي لو أرسلنا شبكة الضيوف لحالها) */
+export async function setGuest(io: Io, on: boolean, offHours: number) {
+  const x = await io.get('wlan/multi-basic-settings');
+  const blocks = ssidBlocks(x).map(b => {
+    let c = stripSecrets(b);
+    if (tag(b, 'wifiisguestnetwork') === '1') {
+      c = c.replace(/<WifiEnable>[^<]*<\/WifiEnable>/, `<WifiEnable>${on ? '1' : '0'}</WifiEnable>`)
+        .replace(/<wifiguestofftime>[^<]*<\/wifiguestofftime>/, `<wifiguestofftime>${offHours}</wifiguestofftime>`);
+    }
+    return `<Ssid>${c}</Ssid>`;
+  });
+  await io.post('wlan/multi-basic-settings', `<Ssids>${blocks.join('')}</Ssids><WifiRestart>1</WifiRestart>`);
+}
+
+export async function setBandOn(io: Io, band: '2.4' | '5', on: boolean) {
+  const x = await io.get('wlan/status-switch-settings');
+  const rs = radioBlocks(x).map(b => (radioBand(b) === band
+    ? b.replace(/<wifienable>[^<]*<\/wifienable>/, `<wifienable>${on ? '1' : '0'}</wifienable>`) : b));
+  if (!rs.some(b => tag(b, 'wifienable') === '1')) throw new Error('ما نقدر نطفي كل الشبكات — بتنقطع عن الراوتر');
+  await io.post('wlan/status-switch-settings', `<radios>${rs.map(b => `<radio>${b}</radio>`).join('')}</radios><WifiRestart>1</WifiRestart>`);
 }
 
 export async function setNat(io: Io, t: 'cone' | 'symmetric') {

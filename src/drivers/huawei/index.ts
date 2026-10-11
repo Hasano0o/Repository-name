@@ -775,6 +775,8 @@ export class HuaweiDriver implements RouterDriver {
   setDmz(on: boolean, ip: string, mac?: string) { return extras.setDmz(this.io(), on, ip, mac); }
   setLedNight(on: boolean, start: string, end: string) { return extras.setLedNight(this.io(), on, start, end); }
   setAutoReboot(on: boolean) { return extras.setAutoReboot(this.io(), on); }
+  setGuest(on: boolean, offHours: number) { return extras.setGuest(this.io(), on, offHours); }
+  setBandOn(band: '2.4' | '5', on: boolean) { return extras.setBandOn(this.io(), band, on); }
   setDns(cfg: DnsConfig) { return setDns(this.io(), cfg); }
   async getDeviceDetails(): Promise<DeviceDetails> {
     const out: DeviceDetails = {};

@@ -1,6 +1,6 @@
 /**
  * مركز التحكم — إعدادات الراوتر المتقدمة في مكان واحد ومرتب:
- *   🎮 الألعاب (NAT / UPnP / DMZ)   📶 الواي فاي   🌙 الليل (الأنوار)   🛠 الصيانة (إعادة تشغيل تلقائية)
+ *   🎮 الألعاب (NAT / UPnP / DMZ)   📶 الواي فاي (الشبكات + القناة)   👥 الضيوف   🌙 الليل (الأنوار)   🛠 الصيانة
  * كل قسم يظهر بس لو الراوتر يدعمه. وكل تغيير نقرأه بعد الحفظ ونتأكد إنه انحفظ فعلاً.
  */
 import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
@@ -17,9 +17,24 @@ import { Icon, IconName } from '../../src/ui/Icon';
 import { P, shadow } from '../../src/ui/Pro';
 import { C, tBg, tBd, tFg } from '../../src/ui/theme';
 
-type Key = 'nat' | 'upnp' | 'dmz' | 'led' | 'reboot';
+type Key = 'nat' | 'upnp' | 'dmz' | 'led' | 'reboot' | 'guest' | 'b2.4' | 'b5';
 
 const hhmm = (mins: number) => `${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')}`;
+/** مدة التشغيل: «01:01:47» → «ساعة و ١ دقيقة» */
+function uptimeText(u: string): string {
+  const m = u.match(/^(\d+):(\d{2}):(\d{2})$/);
+  if (!m) return u;
+  const h = Number(m[1]), min = Number(m[2]);
+  if (h >= 24) { const d = Math.floor(h / 24), r = h % 24; return `${d} يوم${r ? ` و ${r} ساعة` : ''}`; }
+  if (h === 0) return `${min} دقيقة`;
+  return `${h} ساعة${min ? ` و ${min} دقيقة` : ''}`;
+}
+const remainText = (secs: number) => {
+  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
+  return h ? `${h} ساعة و ${m} دقيقة` : `${m} دقيقة`;
+};
+const GUEST_TIMES = [{ h: 4, label: '٤ ساعات' }, { h: 24, label: 'يوم كامل' }, { h: 0, label: 'بدون إطفاء' }];
+
 const LED_PRESETS = [
   { label: '١٢ص – ٦ص', start: '00:00', end: '06:00' },
   { label: '١١م – ٧ص', start: '23:00', end: '07:00' },
@@ -141,7 +156,24 @@ export default function ControlCenter() {
     setPicker(devs.filter(d => d.ip));
   };
 
-  const empty = ex && !ex.nat && ex.upnp === undefined && !ex.dmz && !ex.ledNight && !ex.autoReboot;
+  const bandOff = (band: '2.4' | '5') => Alert.alert(
+    `إطفاء شبكة ${band === '5' ? '٥ جيجا' : '٢.٤'}`,
+    'الأجهزة المتصلة عليها بتنقطع وتنتقل للشبكة الثانية لو تقدر. لو جوالك عليها بينقطع ثواني ويرجع.',
+    [{ text: 'إلغاء', style: 'cancel' }, {
+      text: 'اطفها', style: 'destructive',
+      onPress: () => apply(`b${band}` as Key, d => d.setBandOn(band, false), x => !!x.bands?.find(b => b.band === band && !b.on)),
+    }]);
+
+  const guestOn = (hours: number) => {
+    const go = () => apply('guest', d => d.setGuest(true, hours), x => !!x.guest?.on);
+    if (ex?.guest?.open) {
+      Alert.alert('شبكة الضيوف مفتوحة', 'شبكة الضيوف في راوترك بدون كلمة سر — أي أحد قريب يقدر يتصل. ننصح تخليها تنطفي بعد ٤ ساعات.', [
+        { text: 'إلغاء', style: 'cancel' }, { text: 'شغّلها', onPress: go },
+      ]);
+    } else go();
+  };
+
+  const empty = ex && !ex.nat && ex.upnp === undefined && !ex.dmz && !ex.ledNight && !ex.autoReboot && !ex.guest && !ex.bands;
   const games = ex && (ex.nat || ex.upnp !== undefined || ex.dmz);
 
   return (
@@ -214,15 +246,49 @@ export default function ControlCenter() {
               </Section>
             )}
 
-            {wifiCh && (
-              <Section icon="wifi" title="الواي فاي" caption="اتصال أنظف بين أجهزتك والراوتر" colors={['#38bdf8', '#2563eb']}>
-                <Pressable onPress={() => info && router.push(`/wifich/${info.id}` as Href)} style={({ pressed }) => [s.navRow, pressed && { opacity: 0.7 }]}>
-                  <View style={{ flex: 1, gap: 3 }}>
-                    <Text style={s.rowTitle}>قناة الواي فاي</Text>
-                    <Text style={s.rowSub}>نجرّب القنوات ونثبّت الأنظف — يقل التذبذب والتقطيع.</Text>
-                  </View>
-                  <View style={s.chev}><Icon name="chevron" size={16} color={tFg('#2563eb')} stroke={2.4} /></View>
-                </Pressable>
+            {(wifiCh || !!ex?.bands?.length) && (
+              <Section icon="wifi" title="الواي فاي" caption="شبكاتك واتصال أنظف بين أجهزتك والراوتر" colors={['#38bdf8', '#2563eb']}>
+                {ex?.bands?.map(b => (
+                  <Row key={b.band} title={b.band === '5' ? 'شبكة ٥ جيجا' : 'شبكة ٢.٤ جيجا'}
+                    sub={b.band === '5' ? 'أسرع وأقرب — للجوالات والتلفزيون' : 'أبعد مدى — للأجهزة الذكية والغرف البعيدة'}
+                    right={<Toggle value={b.on} busy={busy === `b${b.band}`} color="#2563eb"
+                      onChange={v => (v ? apply(`b${b.band}` as Key, d => d.setBandOn(b.band, true), x => !!x.bands?.find(y => y.band === b.band && y.on)) : bandOff(b.band))} />} />
+                ))}
+                {wifiCh && (
+                  <Pressable onPress={() => info && router.push(`/wifich/${info.id}` as Href)} style={({ pressed }) => [s.navRow, pressed && { opacity: 0.7 }]}>
+                    <View style={{ flex: 1, gap: 3 }}>
+                      <Text style={s.rowTitle}>قناة الواي فاي</Text>
+                      <Text style={s.rowSub}>نجرّب القنوات ونثبّت الأنظف — يقل التذبذب والتقطيع.</Text>
+                    </View>
+                    <View style={s.chev}><Icon name="chevron" size={16} color={tFg('#2563eb')} stroke={2.4} /></View>
+                  </Pressable>
+                )}
+              </Section>
+            )}
+
+            {ex?.guest && (
+              <Section icon="user" title="شبكة الضيوف" caption="نت للضيوف بدون ما يشوفون أجهزتك" colors={['#fbbf24', '#d97706']}>
+                <Row title={ex.guest.name || 'شبكة الضيوف'} last
+                  sub={ex.guest.on
+                    ? (ex.guest.remainSecs ? `شغّالة — تنطفي بعد ${remainText(ex.guest.remainSecs)}` : 'شغّالة بدون وقت إطفاء')
+                    : 'طافية'}
+                  right={<Toggle value={ex.guest.on} busy={busy === 'guest'} color="#d97706"
+                    onChange={v => (v ? guestOn(ex.guest!.offHours || 4) : apply('guest', d => d.setGuest(false, ex.guest!.offHours), x => !x.guest?.on))} />}>
+                  {ex.guest.open && <Badge text="⚠️ بدون كلمة سر — أي أحد قريب يقدر يتصل" tone="warn" />}
+                  {ex.guest.on && (
+                    <View style={s.chips}>
+                      {GUEST_TIMES.map(t => {
+                        const on = ex.guest!.offHours === t.h;
+                        return (
+                          <Pressable key={t.h} disabled={!!busy || on} style={[s.chip, on && s.chipGuest]}
+                            onPress={() => apply('guest', d => d.setGuest(true, t.h), x => x.guest?.offHours === t.h)}>
+                            <Text style={[s.chipTxt, on && s.chipTxtOn]}>{t.label}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  )}
+                </Row>
               </Section>
             )}
 
@@ -249,14 +315,18 @@ export default function ControlCenter() {
               </Section>
             )}
 
-            {ex?.autoReboot && (
+            {(ex?.autoReboot || ex?.uptime) && (
               <Section icon="refresh" title="الصيانة" caption="راوتر مرتاح = سرعة ثابتة" colors={['#2dd4bf', '#0f766e']}>
-                <Row title="إعادة تشغيل تلقائية" last
+                {!!ex?.uptime && (
+                  <Row title="الراوتر شغّال من" last={!ex.autoReboot}
+                    right={<Badge text={uptimeText(ex.uptime)} tone="info" />} />
+                )}
+                {ex?.autoReboot && <Row title="إعادة تشغيل تلقائية" last
                   sub={ex.autoReboot.on
                     ? `كل ${ex.autoReboot.everyDays} أيام، وقت ما أحد يستخدم النت (بين ${hhmm(ex.autoReboot.from)} و ${hhmm(ex.autoReboot.to)} الفجر).`
                     : 'طافية. ننصح تشغّلها — تنظّف ذاكرة الراوتر وتمنع البطء مع الأيام.'}
                   right={<Toggle value={ex.autoReboot.on} busy={busy === 'reboot'} color="#0f766e"
-                    onChange={v => apply('reboot', d => d.setAutoReboot(v), x => x.autoReboot?.on === v)} />} />
+                    onChange={v => apply('reboot', d => d.setAutoReboot(v), x => x.autoReboot?.on === v)} />} />}
               </Section>
             )}
 
@@ -335,6 +405,7 @@ const s = StyleSheet.create({
   chips: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: C.rowBg, borderWidth: 1.5, borderColor: C.cardBorder },
   chipOn: { backgroundColor: tBg('#4f46e5'), borderColor: tBd('#4f46e5') },
+  chipGuest: { backgroundColor: tBg('#d97706'), borderColor: tBd('#d97706') },
   chipTxt: { color: C.text, fontSize: 13, fontWeight: '800' },
   chipTxtOn: { color: tFg('#ffffff') },
   err: { backgroundColor: tBg('#fff1f2'), borderRadius: 14, padding: 12, borderWidth: 1, borderColor: tBd('#fecdd3') },

@@ -232,6 +232,9 @@ export class DemoDriver implements RouterDriver {
     ledNight: { on: false, start: '00:00', end: '06:00' },
     autoReboot: { on: true, everyDays: 7, from: 60, to: 300 },
     upnpMaps: [],
+    guest: { on: false, name: 'Bandly_Guest', open: true, offHours: 4 },
+    bands: [{ band: '2.4', on: true }, { band: '5', on: true }],
+    uptime: '3 يوم 04:12:09',
   };
   async getExtras() {
     await this.alive();
@@ -246,6 +249,16 @@ export class DemoDriver implements RouterDriver {
   async setDmz(on: boolean, ip: string) { await this.tick(); this.ex.dmz = { on, ip }; }
   async setLedNight(on: boolean, start: string, end: string) { await this.tick(); this.ex.ledNight = { on, start, end }; }
   async setAutoReboot(on: boolean) { await this.tick(); this.ex.autoReboot = { ...this.ex.autoReboot!, on }; }
+  async setGuest(on: boolean, offHours: number) {
+    await this.tick();
+    this.ex.guest = { ...this.ex.guest!, on, offHours, remainSecs: on && offHours ? offHours * 3600 : undefined };
+  }
+  async setBandOn(band: '2.4' | '5', on: boolean) {
+    await this.tick();
+    const next = this.ex.bands!.map(b => (b.band === band ? { ...b, on } : b));
+    if (!next.some(b => b.on)) throw new Error('ما نقدر نطفي كل الشبكات — بتنقطع عن الراوتر');
+    this.ex.bands = next;
+  }
   /** بنق محاكى بين الجوال والراوتر حسب زحمة القناة */
   demoLanPing(band: '2.4' | '5'): number | null {
     const busy: Record<string, number> = { '6': 3.2, '1': 1.6, '11': 1.1, '40': 2.4, '36': 1.3, '44': 1, '48': 1.4, '149': 0.9, '157': 1.2, '0': 1.8 };
