@@ -80,6 +80,10 @@ const AUTH_FAIL = /(كلمة المرور|جلسة عالقة|جلسة أخرى|
 const SESSION_GONE = /(ما عندك صلاحية|انتهت الجلسة|رمز الجلسة غير صالح|\b100003\b|\b125002\b|\b125003\b)/;
 const NET_FAIL = /(تعذر الاتصال بالراوتر|Network request failed|timed? ?out|timeout|aborted|AbortError|انتهت المهلة|ما رد|ECONN|ENETUNREACH)/i;
 
+/** الراوتر يطلّعنا كل ما دخلنا — غالباً جهاز ثاني ماسك الجلسة (الراوتر يقبل جلسة وحدة) */
+const KICKED_MSG = 'الراوتر يطلّع التطبيق كل ما يدخل — غالباً تطبيق «HUAWEI AI Life» أو صفحة الراوتر مفتوحة في جوال أو كمبيوتر ثاني. سكّرها وجرّب مرة ثانية.';
+const kickedAt = new Map<string, number>();
+
 export async function withSession<T>(
   r: SavedRouter,
   fn: (d: RouterDriver) => Promise<T>,
@@ -93,8 +97,20 @@ export async function withSession<T>(
     // الراوتر طلّعنا (انتهت الجلسة / دخل أحد من المتصفح / بعد تغيير الإعدادات) —
     // ندخل من جديد ونكمّل مرة وحدة، حتى لو retry=false: الأوامر نفسها تتكرر بأمان (نفس القيم)
     if (SESSION_GONE.test(msg)) {
-      const fresh = await connect(r, true);
-      return fn(fresh);
+      // لو طُردنا قبل شوي وما زبط الدخول: نوقف بسرعة بدل ما نعيد مع كل تركيبة
+      if (Date.now() - (kickedAt.get(r.id) ?? 0) < 30_000) throw new Error(KICKED_MSG);
+      // ندخل من جديد ونعيد — مرتين بمهلة بسيطة (أحياناً جهاز ثاني ماسك الجلسة لحظات)
+      for (const wait of [1200, 3000]) {
+        await new Promise(res => setTimeout(res, wait));
+        try {
+          const fresh = await connect(r, true);
+          return await fn(fresh);
+        } catch (e2) {
+          if (!SESSION_GONE.test(String((e2 as any)?.message ?? e2))) throw e2;
+        }
+      }
+      kickedAt.set(r.id, Date.now());
+      throw new Error(KICKED_MSG);
     }
     if (!retry) throw e;
     if (AUTH_FAIL.test(msg)) throw e;
