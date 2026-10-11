@@ -62,6 +62,8 @@ export default function NrDual() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [hasCarriers, setHasCarriers] = useState(true);
+  const [pick, setPick] = useState<number | null>(null);
+  const [manual, setManual] = useState<{ band: number; count: number; bw?: number } | null>(null);
   const cancel = useRef(false);
   const mounted = useRef(true);
 
@@ -196,6 +198,61 @@ export default function NrDual() {
     ]);
   };
 
+  /** يدوي: المستخدم يختار التردد ونقفل عليه ونخليه (بدون رجوع تلقائي) */
+  const manualLock = () => {
+    if (!info || !cfg || pick === null) return;
+    const b = pick;
+    Alert.alert(
+      `قفل الـ 5G على n${b}`,
+      'نقفل الـ 5G على هالتردد ونخليه مثبّت — ينقطع الاتصال لحظات.\nتقدر ترجع لإعدادك القديم بزر «رجّع إعدادي».',
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'ثبّت', onPress: async () => {
+            cancel.current = false;
+            setRunning(true); setError(''); setManual(null);
+            try {
+              setStatus(`نقفل الـ 5G على n${b}...`);
+              await withSession(info, d => d.setBand!(cfg.locked, [b]), false);
+              const after = await withSession(info, d => (d.getBandConfig ? d.getBandConfig() : Promise.resolve(null)), false).catch(() => null);
+              if (after && !after.nrLocked.includes(b)) throw new Error('راوترك ما يسمح بقفل 5G على تردد معيّن');
+              setStatus('ننتظر الاتصال...');
+              const ok = await waitOnline(info, 40000, () => cancel.current);
+              if (!ok) throw new Error('ما اتصل على هالتردد — اضغط «رجّع إعدادي»');
+              setStatus('نحمّل شوي ونشوف هل البرج شغّل الدمج...');
+              const nr = (await readNr(info, () => cancel.current)).filter(c => c.band === b);
+              const bw = nr.reduce((a, c) => a + (c.bandwidth ?? 0), 0);
+              if (mounted.current) setManual({ band: b, count: nr.length, bw: bw || undefined });
+              await saveProfile({ routerId: info.id, name: `5G مقفل n${b}`, bands: cfg.locked, nrBands: [b], mode: cfg.mode }).catch(() => {});
+            } catch (e: any) {
+              if (mounted.current) setError(e?.message ?? String(e));
+              reportError('nrdual', e, info);
+            } finally {
+              if (mounted.current) { setRunning(false); setStatus(''); }
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const manualRevert = async () => {
+    if (!info || !cfg) return;
+    setRunning(true); setError('');
+    try {
+      setStatus('نرجّع إعدادك...');
+      await withSession(info, d => d.setBand!(cfg.locked, cfg.nrLocked), false);
+      const back = await waitOnline(info, 45000, () => false);
+      if (!back) await freeRelease(info, st => { if (mounted.current) setStatus(st); }).catch(() => false);
+      if (mounted.current) setManual(null);
+    } catch (e: any) {
+      if (mounted.current) setError(e?.message ?? String(e));
+      reportError('nrdual', e, info);
+    } finally {
+      if (mounted.current) { setRunning(false); setStatus(''); }
+    }
+  };
+
   return (
     <LinearGradient colors={[C.bgTop, C.bgBottom]} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 40 }]}>
@@ -240,6 +297,45 @@ export default function NrDual() {
           {!!status && <Text style={s.statusText}>{status}</Text>}
           {!!error && <Text style={s.err}>{error}</Text>}
         </View>
+
+        {!loading && rows.length > 0 && hasCarriers && (
+          <View style={s.card}>
+            <Text style={s.title}>✋ يدوي — اختر بنفسك</Text>
+            <Text style={s.body}>تعرف تردد برجك؟ اختره ونقفل الـ 5G عليه ونخليه مثبّت، ونقول لك هل شغّل الدمج.</Text>
+            <View style={s.chips}>
+              {rows.map(r => {
+                const on = pick === r.band;
+                return (
+                  <Pressable key={r.band} disabled={running} onPress={() => setPick(r.band)}
+                    style={[s.chip, on && { backgroundColor: ACCENT, borderColor: ACCENT }]}>
+                    <Text style={[s.chipTxt, on && { color: '#fff' }]}>n{r.band}</Text>
+                    <Text style={[s.chipSub, on && { color: '#e9e2ff' }]}>{MHZ[r.band] ?? ''}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Pressable style={[s.btn, (pick === null || running) && { opacity: 0.5 }]} disabled={pick === null || running} onPress={manualLock}>
+              <Text style={s.btnText}>{pick === null ? 'اختر التردد أول' : `🔒 ثبّت على n${pick}`}</Text>
+            </Pressable>
+            {manual && (
+              <View style={[s.nowBox, manual.count >= 2 && s.nowOk]}>
+                <Text style={[s.nowTxt, manual.count >= 2 && { color: tFg('#0f7a52') }]}>
+                  {manual.count >= 2
+                    ? `✓ الدمج شغال: n${manual.band}+n${manual.band}${manual.bw ? ` (${Math.round(manual.bw)} MHz)` : ''}`
+                    : manual.count === 1
+                      ? `مقفل على n${manual.band} — قناة وحدة بس حالياً`
+                      : `مقفل على n${manual.band} — ما مسك 5G عليه`}
+                </Text>
+                <Text style={s.note}>انحفظ في «الملفات». لو ما عجبك:</Text>
+              </View>
+            )}
+            {manual && (
+              <Pressable style={s.btnGhost} disabled={running} onPress={manualRevert}>
+                <Text style={s.btnGhostTxt}>↩︎ رجّع إعدادي</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
 
         {rows.map(r => {
           const ok = r.status === 'done' && (r.nrCount ?? 0) >= 2;
@@ -322,4 +418,10 @@ const s = StyleSheet.create({
   rowNote: { color: C.muted, fontSize: 12, textAlign: 'right' },
   verdict: { color: C.text, fontWeight: '800', fontSize: 15, textAlign: 'right', lineHeight: 23 },
   note: { color: C.muted, fontSize: 11.5, textAlign: 'right', lineHeight: 18 },
+  chips: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
+  chip: { borderWidth: 1.5, borderColor: C.cardBorder, borderRadius: 14, paddingVertical: 8, paddingHorizontal: 14, alignItems: 'center', backgroundColor: C.card },
+  chipTxt: { color: C.text, fontWeight: '800', fontSize: 15 },
+  chipSub: { color: C.muted, fontSize: 10.5, fontWeight: '600' },
+  btnGhost: { borderWidth: 1.5, borderColor: ACCENT, borderRadius: R.md, paddingVertical: 11, alignItems: 'center' },
+  btnGhostTxt: { color: ACCENT, fontWeight: '800', fontSize: 14 },
 });
