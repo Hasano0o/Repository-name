@@ -27,14 +27,7 @@ const chLabel = (c: string) => (c === '0' ? 'تلقائي' : c);
 
 /** القنوات اللي نجربها: 1/6/11 ما تتداخل مع بعض. في الـ5 نتجنب قنوات الرادار (52–144) */
 function candidates(r: WifiRadio): string[] {
-  if (r.band === '2.4') {
-    // ١ و٦ و١١ ما تتداخل — بس بعض الراوترات تقفل ١–٤ (هواوي مع 4G)، فناخذ المسموح منها
-    if (!r.allowed?.length) return ['1', '6', '11'];
-    const ok = r.allowed.filter(c => c !== '0');
-    const pick = ['1', '6', '11', '13'].filter(c => ok.includes(c)).slice(0, 3);
-    if (pick.length < 3 && ok.length) { const first = ok[0]; if (!pick.includes(first)) pick.unshift(first); }
-    return pick.slice(0, 3);
-  }
+  if (r.band === '2.4') return ['1', '6', '11'];
   // من القنوات اللي الراوتر يسمح فيها بس (غيرها يرفضه الراوتر)
   if (r.allowed?.length) {
     const ok = r.allowed.filter(c => c !== '0');
