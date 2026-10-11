@@ -377,7 +377,7 @@ async def list_techs(city: str | None = None):
         if city and city not in (t.get("city") or ""):
             continue
         avg, n = rating_of(key)
-        out.append({**{k: t.get(k) for k in ("name", "city", "phone", "note")}, "rating": avg, "rating_n": n})
+        out.append({**{k: t.get(k) for k in ("name", "city", "phone", "note", "areas", "years")}, "rating": avg, "rating_n": n})
     out.sort(key=lambda x: (-(x["rating"] or 0) * min(x["rating_n"], 5), x["name"] or ""))
     return {"techs": out}
 
@@ -1044,7 +1044,7 @@ async def hub_decide(rid: str, req: Request):
         t = techs()
         key = "T" + secrets.token_hex(4).upper()
         t[key] = {"name": f.get("name") or rec["user"]["name"], "phone": f.get("phone", ""), "city": f.get("city", ""),
-                  "note": f.get("services", ""), "expires": int(time.time() + int(body.get("days") or 30) * 86400),
+                  "note": f.get("services", ""), "areas": f.get("areas", ""), "years": f.get("years", ""), "expires": int(time.time() + int(body.get("days") or 30) * 86400),
                   "active": True, "listed": True, "created": int(time.time()), "tg": uid}
         TECHS_FILE.write_text(json.dumps(t, ensure_ascii=False, indent=1), "utf-8")
         rec["status"] = "ok"; rec["tech_key"] = key

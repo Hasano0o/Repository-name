@@ -45,6 +45,7 @@ const SCREENS: [string, string][] = [
   ['newip/[id]', 'آي بي جديد'],
   ['wifich/[id]', 'قناة الواي فاي'],
   ['control/[id]', 'مركز التحكم'],
+  ['techs', 'الفنيين'],
   ['device/[id]', 'الجهاز'],
   ['speed/[id]', 'اختبار السرعة'],
   ['network/[id]', 'إعدادات الشبكة'],

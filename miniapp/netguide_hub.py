@@ -242,8 +242,26 @@ def keyboard() -> types.InlineKeyboardMarkup:
     return kb
 
 
+DEEP = {
+    # t.me/NetGuide1_bot?start=tech ← زر «فني أنتينا؟ سجّل معنا» في التطبيق
+    "tech": ("🛠️ <b>سجّل كفني أنتينا في Bandly</b>\n\n"
+             "اسمك يطلع للعملاء في مدينتك داخل التطبيق، ويتواصلون معك واتساب مباشرة.\n"
+             "وتاخذ «مفتاح الفني» عشان تشوف قراءات العميل وتوجّهه عن بُعد 📹\n\n"
+             "اضغط الزر تحت وعبّي بياناتك 👇", "🛠️ سجّل بياناتك", "tech"),
+    "techs": ("👷 <b>فنيين Bandly المعتمدين</b>\n\nاضغط الزر تحت وشوف الفنيين القريبين منك 👇", "👷 الفنيين", "techs"),
+}
+
+
 def public_start(bot, msg):
     remember(msg.from_user)
+    parts = (msg.text or "").split(maxsplit=1)
+    deep = DEEP.get(parts[1].strip().lower()) if len(parts) > 1 else None
+    if deep:
+        text, btn, page = deep
+        kb = types.InlineKeyboardMarkup()
+        kb.row(Btn(btn, style="success", web_app=types.WebAppInfo(f"{APP}#{page}")))
+        bot.send_message(msg.chat.id, text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
+        return
     bot.send_message(msg.chat.id, WELCOME, parse_mode="HTML", reply_markup=keyboard(), disable_web_page_preview=True)
 
 

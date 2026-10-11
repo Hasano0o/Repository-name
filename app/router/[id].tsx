@@ -32,6 +32,7 @@ import { UsageRing } from '../../src/ui/UsageRing';
 import { DeviceRow } from '../../src/ui/DeviceRow';
 import { SyncIcon } from '../../src/ui/SyncIcon';
 import { StoreAd } from '../../src/ui/StoreAd';
+import { TechStrip } from '../../src/ui/TechStrip';
 import { ComboCard } from '../../src/ui/ComboCard';
 import { canRescue, rescueRouter, freeRelease } from '../../src/utils/safeLock';
 import { hostLabel } from '../../src/drivers/device';
@@ -904,6 +905,7 @@ export default function RouterDashboard() {
         )}
 
         <StoreAd />
+        <TechStrip />
       </ScrollView>
 
     </LinearGradient>
