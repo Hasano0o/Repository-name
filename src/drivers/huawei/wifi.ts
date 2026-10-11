@@ -146,9 +146,36 @@ async function allowed5g(io: Io, code: string): Promise<string[] | null> {
   return allowed5;
 }
 
+/** قنوات ٢.٤ المسموحة: في نفس الجدول <sa>5-13</sa> = من ٥ إلى ١٣.
+ *  هواوي يقفل ١–٤ لأنها لاصقة بتردد 4G حق الراوتر نفسه (B40) — إرسال ١ يطلع خطأ 9003. */
+let allowed24: string[] | null | undefined;
+async function allowed24g(io: Io, code: string): Promise<string[] | null> {
+  if (allowed24 !== undefined) return allowed24;
+  allowed24 = null;
+  try {
+    if (!io.page) return null;
+    const x = await io.page('config/wifi/countryChannel.xml');
+    const cc = code.toLowerCase();
+    const m = x.match(new RegExp(`<${cc}>(\\d+)-(\\d+)</${cc}>`));
+    if (!m) return null;
+    const a = Number(m[1]), b = Number(m[2]);
+    if (!(a >= 1 && b <= 14 && a <= b)) return null;
+    allowed24 = ['0', ...Array.from({ length: b - a + 1 }, (_, i) => String(a + i))];
+  } catch {}
+  return allowed24;
+}
+
 export async function getWifiRadios(io: Io): Promise<WifiRadio[]> {
   const locs = await locate(io);
   const out: WifiRadio[] = locs.map(l => ({ band: l.band, channel: l.value, writable: true }));
+  const two = out.find(r => r.band === '2.4');
+  if (two) {
+    const loc = locs.find(l => l.band === '2.4')!;
+    const body = inner(await io.get(loc.src).catch(() => ''));
+    const code = body.match(/<WifiCode>([A-Za-z]{2})</)?.[1] ?? '';
+    const a = code ? await allowed24g(io, code) : null;
+    if (a) two.allowed = a;
+  }
   const five = out.find(r => r.band === '5');
   if (five) {
     const loc = locs.find(l => l.band === '5')!;
