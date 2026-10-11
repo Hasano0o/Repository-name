@@ -68,35 +68,61 @@ export async function getWifiRadios(io: Io): Promise<WifiRadio[]> {
   return locs.map(l => ({ band: l.band, channel: l.value, writable: true }));
 }
 
+/** آخر محاولات الكتابة — تطلع في تقرير الدعم */
+let attempts: string[] = [];
+
+const decode = (v: string) => v
+  .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+  .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d)));
+/** حقول الراديو اللي صفحة الإعدادات المتقدمة ترسلها مع القناة */
+const RADIO = /^(wifichannel|wifimode|wifibandwidth|wificode|wificountry|wifiautocountryswitch|wifirate|wifitxpwrpcnt|wifi5g\w*channel)$/i;
+
 export async function setWifiChannel(io: Io, band: '2.4' | '5', channel: string): Promise<void> {
+  attempts = [];
   const loc = (await locate(io)).find(l => l.band === band);
   if (!loc) throw new Error('ما لقينا إعداد القناة في هذا الراوتر');
   const body = inner(await io.get(loc.src));
   const put = (block: string) => block.replace(
     new RegExp(`<${loc.tag}>[^<]*</${loc.tag}>`), `<${loc.tag}>${channel}</${loc.tag}>`);
+  const tags = (f: [string, string][]) => f.map(([k, v]) => `<${k}>${v}</${k}>`).join('');
 
-  let full: string;
+  const tries: [string, string][] = [];
   if (loc.block !== null) {
     const blocks = blocksOf(body);
-    // نفس القناة لكل الشبكات اللي على نفس الراديو (الضيف وغيره)
     const out = blocks.map((b, i) => {
       if (i === loc.block) return put(b);
-      const own = channelsIn(loc.src, b);
-      return own.some(o => o.band === band && o.tag === loc.tag) ? put(b) : b;
+      return channelsIn(loc.src, b).some(o => o.band === band && o.tag === loc.tag) ? put(b) : b;
     });
-    full = `<Ssids>${out.map(b => `<Ssid>${b}</Ssid>`).join('')}</Ssids><WifiRestart>1</WifiRestart>`;
+    tries.push(['ssids', `<Ssids>${out.map(b => `<Ssid>${b}</Ssid>`).join('')}</Ssids><WifiRestart>1</WifiRestart>`]);
   } else {
-    const f = fieldsOf(body).map(([k, v]) => [k, k === loc.tag ? channel : k === 'WifiRestart' ? '1' : v] as [string, string]);
-    if (!f.some(([k]) => k === 'WifiRestart')) f.push(['WifiRestart', '1']);
-    full = f.map(([k, v]) => `<${k}>${v}</${k}>`).join('');
+    const all = fieldsOf(body).map(([k, v]) => [k, k === loc.tag ? channel : decode(v)] as [string, string])
+      .filter(([k]) => k !== 'WifiRestart');
+    tries.push(['short', `<${loc.tag}>${channel}</${loc.tag}><WifiRestart>1</WifiRestart>`]);
+    tries.push(['radio', tags(all.filter(([k]) => RADIO.test(k))) + '<WifiRestart>1</WifiRestart>']);
+    tries.push(['full', tags(all) + '<WifiRestart>1</WifiRestart>']);
   }
-  try {
-    await io.post(loc.src, full);
-  } catch (e) {
-    io.log('wifi full set failed', loc.src, e);
-    // بعض الفيرمويرات ترفض الحقول للقراءة فقط — نرسل المختصر
-    await io.post(loc.src, `<${loc.tag}>${channel}</${loc.tag}><WifiRestart>1</WifiRestart>`);
+
+  for (const [name, req] of tries) {
+    try {
+      const res = await io.post(loc.src, req);
+      attempts.push(`${name}: ${res.replace(/<\?xml[^>]*>/, '').slice(0, 60)}`);
+    } catch (e: any) {
+      const code = e?.code ?? String(e?.message ?? e);
+      attempts.push(`${name}: خطأ ${code}`);
+      // الواي فاي طفى وهو يطبّق = غالباً انقبل
+      if (/network|abort|timeout|مهلة/i.test(String(e?.message ?? e))) return;
+      continue;
+    }
+    // نتأكد فوراً: الإعداد يتحفظ قبل ما الراديو يعيد التشغيل
+    try {
+      const now = channelsIn(loc.src, inner(await io.get(loc.src))).find(l => l.tag === loc.tag)?.value;
+      attempts.push(`${name}: بعدها ${now ?? '?'}`);
+      if (now === undefined || now === channel) return;
+    } catch {
+      return; // ما نقدر نقرا = الواي فاي يعيد التشغيل
+    }
   }
+  throw new Error(`الراوتر ما قبل تغيير القناة (${attempts.join(' | ').slice(0, 120)})`);
 }
 
 export async function wifiDebug(io: Io): Promise<string> {
@@ -110,5 +136,6 @@ export async function wifiDebug(io: Io): Promise<string> {
       parts.push(`[${src}] خطأ ${e?.code ?? e?.message ?? e}`);
     }
   }
+  if (attempts.length) parts.unshift(`[آخر محاولة]\n${attempts.join('\n')}`);
   return parts.join('\n\n');
 }
