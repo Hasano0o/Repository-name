@@ -1151,6 +1151,35 @@ async def app_error(req: Request):
     return {"ok": True}
 
 
+REPORT_HITS: dict[str, list[float]] = {}
+
+
+@app.post("/live-api/app/report")
+async def app_report(req: Request):
+    """زر «أرسل التفاصيل للدعم» في التطبيق: التقرير يوصل للمالك في البوت كملف نصي."""
+    ip = req.headers.get("x-real-ip") or (req.client.host if req.client else "?")
+    if not _limit(REPORT_HITS, ip, 5, 3600):
+        raise HTTPException(429, "أرسلت تقارير كثيرة — جرّب بعد ساعة")
+    try:
+        b = await req.json()
+    except Exception:
+        raise HTTPException(400, "bad json")
+    text = str(b.get("text") or "")[:20000]
+    feat, rtr = _cl(b.get("feature"), 30), _cl(b.get("router"), 60)
+    if not text.strip():
+        raise HTTPException(400, "empty")
+    owner = _owner()
+    if not owner:
+        raise HTTPException(503, "no owner")
+    cap = (f"📎 تقرير دعم من مستخدم\n• الميزة: {FEATURE_AR.get(feat, feat) or '—'}\n• الراوتر: {rtr or '—'}"
+           f"\n• {_cl(b.get('os'), 12) or '?'} · نسخة {_cl(b.get('ver'), 20) or '?'}")
+    name = f"bandly-{feat or 'report'}-{time.strftime('%m%d-%H%M')}.txt"
+    r = _tg("sendDocument", {"chat_id": owner, "caption": cap}, files={"document": (name, text.encode("utf-8"))})
+    if not r.get("ok"):
+        raise HTTPException(502, "ما وصل للبوت")
+    return {"ok": True}
+
+
 # ═══════════════ طلب فني من التطبيق ═══════════════
 # العميل يرسل مدينته ورقمه وش يحتاج → يوصل لكل الفنيين المعتمدين في مدينته (في البوت) وللمالك.
 REQ_HITS: dict[str, list[float]] = {}

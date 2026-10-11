@@ -5,12 +5,12 @@
  * بين الجوال والراوتر، ونثبّت الأفضل. لو القناة الحالية هي الأفضل نرجّعها كما كانت.
  */
 import { useEffect, useRef, useState } from 'react';
-import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, Share } from 'react-native';
+import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, Share, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
-import { reportError } from '../../src/services/errors';
+import { reportError, sendSupportReport, DEV_TELEGRAM } from '../../src/services/errors';
 import { withSession } from '../../src/store/sessions';
 import { progress } from '../../src/ui/Progress';
 import { WifiRadio } from '../../src/drivers/types';
@@ -238,11 +238,27 @@ export default function WifiChannel() {
     ]);
   };
 
+  const [sendingDbg, setSendingDbg] = useState(false);
   const sendDebug = async () => {
-    if (!info) return;
+    if (!info || sendingDbg) return;
+    setSendingDbg(true);
     const txt = await withSession(info, async d => (d.wifiDebug ? d.wifiDebug() : 'غير مدعوم'), false).catch(e => String(e?.message ?? e));
-    Share.share({ message: `Bandly — قناة الواي فاي\nالراوتر: ${info.driverName}\n\n${txt}` }).catch(() => {});
+    const full = `Bandly — قناة الواي فاي\nالراوتر: ${info.driverName}\n${error ? `الخطأ: ${error}\n` : ''}\n${txt}`;
+    const ok = await sendSupportReport('wifich', full, info);
+    setSendingDbg(false);
+    if (ok) Alert.alert('✓ وصلت التفاصيل', 'وصلت للمطوّر مباشرة. بنشوفها ونضيف دعم راوترك في تحديث قريب.');
+    else Share.share({ message: full }).catch(() => {});
   };
+  const DevButtons = ({ top = 0 }: { top?: number }) => (
+    <View style={[s.devRow, { marginTop: top }]}>
+      <Pressable onPress={sendDebug} disabled={sendingDbg} style={[s.ghost, { flex: 1 }]}>
+        {sendingDbg ? <ActivityIndicator color={C.text} /> : <Text style={s.ghostTxt}>📎 أرسل التفاصيل للمطوّر</Text>}
+      </Pressable>
+      <Pressable onPress={() => Linking.openURL(DEV_TELEGRAM).catch(() => {})} style={[s.tgBtn]}>
+        <Text style={s.tgTxt}>💬 تلغرام</Text>
+      </Pressable>
+    </View>
+  );
 
   const best = tried.filter(x => x.q).reduce<Tried | null>((a, x) => (!a || x.q!.score < a.q!.score ? x : a), null);
   const worst = Math.max(1, ...tried.map(x => x.q?.score ?? 0));
@@ -264,7 +280,7 @@ export default function WifiChannel() {
           <View style={s.card}>
             <Text style={s.cardTitle}>ما قدرنا نقرأ قناة الواي فاي من راوترك</Text>
             <Text style={s.cardSub}>بعض الموديلات تخفي هالإعداد. أرسل لنا التفاصيل ونضيف دعم راوترك.</Text>
-            <Pressable onPress={sendDebug} style={s.ghost}><Text style={s.ghostTxt}>أرسل التفاصيل للدعم</Text></Pressable>
+            <DevButtons />
           </View>
         ) : (
           <>
@@ -312,7 +328,7 @@ export default function WifiChannel() {
               <View style={s.err}>
                 <Text style={s.errTxt}>{error}</Text>
                 {/قبل/.test(error) && (
-                  <Pressable onPress={sendDebug} style={[s.ghost, { marginTop: 8 }]}><Text style={s.ghostTxt}>أرسل التفاصيل للدعم</Text></Pressable>
+                  <DevButtons top={8} />
                 )}
               </View>
             )}
@@ -384,6 +400,9 @@ const s = StyleSheet.create({
   primary: { alignItems: 'center', justifyContent: 'center', backgroundColor: tBg(ACCENT), borderRadius: 16, paddingVertical: 14, marginTop: 4 },
   primaryTxt: { color: tFg('#fff'), fontSize: 15.5, fontWeight: '800' },
   ghost: { alignItems: 'center', paddingVertical: 12, borderRadius: 14, backgroundColor: C.rowBg, borderWidth: 1.5, borderColor: C.cardBorder },
+  devRow: { flexDirection: 'row-reverse', gap: 8 },
+  tgBtn: { paddingHorizontal: 16, justifyContent: 'center', borderRadius: 14, backgroundColor: tBg('#229ED9') },
+  tgTxt: { color: tFg('#ffffff'), fontSize: 14, fontWeight: '800' },
   ghostTxt: { color: C.text, fontSize: 14, fontWeight: '700' },
   seg: { flexDirection: 'row-reverse', backgroundColor: C.rowBg, borderRadius: 16, padding: 4, gap: 4 },
   segBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 12 },

@@ -39,3 +39,22 @@ export async function reportError(feature: string, err: unknown, router?: { driv
     clearTimeout(t);
   } catch {}
 }
+
+export const DEV_TELEGRAM = 'https://t.me/hasa_n20';
+
+/** «أرسل التفاصيل للدعم»: التقرير يوصل للمطوّر في البوت كملف — بدون مشاركة يدوية */
+export async function sendSupportReport(feature: string, text: string, router?: { driverName?: string } | null): Promise<boolean> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const r = await fetch(`${LIVE_BASE}/live-api/app/report`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
+      body: JSON.stringify({ feature, text, router: router?.driverName ?? '', os: Platform.OS, ver: Constants.expoConfig?.version ?? '' }),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(t);
+  }
+}
