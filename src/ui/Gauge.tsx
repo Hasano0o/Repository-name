@@ -1,7 +1,9 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
+import { View, Text } from '../i18n/rn';
 import Svg, { Circle } from 'react-native-svg';
 import { C } from './theme';
 
+import { sheet } from '../i18n';
 export function Gauge({ score, color, label, sub, size = 220 }: {
   score: number; color: string; label: string; sub: string; size?: number;
 }) {
@@ -29,7 +31,7 @@ export function Gauge({ score, color, label, sub, size = 220 }: {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   label: { fontSize: 32, fontWeight: '800' },
   sub: { color: C.sub, fontSize: 14, marginTop: 4, fontWeight: '600' },
 });

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, RefreshControl, Modal } from 'react-native';
+import { ActivityIndicator, Alert, RefreshControl, Modal } from 'react-native';
+import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router';
@@ -24,6 +25,7 @@ import { TowerPing, loadTowerPings, saveTowerPing, towerPingKey, pingAgo } from 
 import { measureUrl, regionUrls, selectedRegion, gameScore } from '../../src/utils/latency';
 import { withRouterLock } from '../../src/store/sessions';
 
+import { sheet } from '../../src/i18n';
 const BADGE_BG: Record<TowerGroup['badge'], string> = {
   active: tBg('#e8f8f0'), confirmed: tBg('#e8f8f0'), likely: tBg('#eaf0ff'), single: tBg('#f3f4fb'),
 };
@@ -919,7 +921,7 @@ export default function TowersScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   pingChip: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 7, paddingVertical: 3, backgroundColor: C.card },
   pingVal: { fontWeight: '900', fontSize: 12 },
   pingAgo: { color: C.sub, fontSize: 9.5, fontWeight: '700' },

@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { ScrollView, View, Text, TextInput, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { ActivityIndicator, Alert, } from 'react-native';
+import { ScrollView, View, Text, TextInput, Pressable } from '../../src/i18n/rn';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
@@ -9,6 +10,7 @@ import { C } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { fmtTime } from '../../src/utils/format';
 
+import { sheet } from '../../src/i18n';
 export default function ProfilesScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [info, setInfo] = useState<SavedRouter | null>(null);
@@ -193,7 +195,7 @@ export default function ProfilesScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   wrap: { flex: 1, backgroundColor: C.bg },
   content: { padding: 14, gap: 12, paddingBottom: 40 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg },

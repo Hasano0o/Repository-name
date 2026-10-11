@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, View, Text, Pressable, TextInput, Alert, ActivityIndicator, StyleSheet } from 'react-native';
+import { Alert, ActivityIndicator, } from 'react-native';
+import { ScrollView, View, Text, Pressable, TextInput } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
@@ -11,6 +12,7 @@ import { MetricCard, Section } from '../../src/ui/Cards';
 import { Icon } from '../../src/ui/Icon';
 import { Skeleton, ErrorCard } from '../../src/ui/States';
 
+import { sheet } from '../../src/i18n';
 const AUTH: { value: string; label: string }[] = [
   { value: '0', label: 'بدون' },
   { value: '1', label: 'PAP' },
@@ -369,7 +371,7 @@ function Field({
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   page: { padding: S.lg, gap: S.xl },
   title: { color: C.text, fontWeight: '800', fontSize: T.h2, textAlign: 'right' },
   hint: { color: C.muted, fontSize: T.label, textAlign: 'right', lineHeight: 19 },

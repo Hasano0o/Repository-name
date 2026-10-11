@@ -6,7 +6,8 @@
  * الصورة بنسبة ٣:٤ عند الطرفين وبنفس القص (cover) عشان مكان المؤشر يطابق.
  */
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Animated, Image, Easing, Modal, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { Animated, Image, Easing, Modal, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable } from '../i18n/rn';
 import { RTCView } from 'react-native-webrtc';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
@@ -16,6 +17,7 @@ import { P } from './Pro';
 import { CallInfo } from '../services/call';
 
 import { tBg, tFg } from './theme';
+import { sheet } from '../i18n';
 /** دائرة نابضة مكان المؤشر */
 function Ping({ x, y, w, h, color = '#ffd21f', label }: { x: number; y: number; w: number; h: number; color?: string; label?: string }) {
   const a = useRef(new Animated.Value(0)).current;
@@ -171,7 +173,7 @@ export function RemoteVideo({ info, onPoint, onFlip }: { info: CallInfo; onPoint
   );
 }
 
-const v = StyleSheet.create({
+const v = sheet({
   float: { position: 'absolute', zIndex: 55, alignItems: 'center' },
   ctrls: { flexDirection: 'row-reverse', gap: 8, marginTop: 8, backgroundColor: tBg('#0f1f45'), borderRadius: 999, padding: 5 },
   mini: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, minWidth: 36, height: 36, borderRadius: 18, paddingHorizontal: 9, justifyContent: 'center', backgroundColor: tBg('rgba(255,255,255,0.14)') },

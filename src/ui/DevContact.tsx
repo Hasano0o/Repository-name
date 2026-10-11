@@ -1,7 +1,9 @@
-import { View, Text, Pressable, Linking, Alert, StyleSheet } from 'react-native';
+import { Linking, Alert, } from 'react-native';
+import { View, Text, Pressable } from '../i18n/rn';
 import { Icon, IconName } from './Icon';
 import { P } from './Pro';
 
+import { sheet } from '../i18n';
 /** معلومات تواصل صاحب التطبيق — تُعرض أسفل الرئيسية مع المظهر ونسخة التطبيق */
 const PHONE = '0562294460';
 const PHONE_INTL = '966562294460';
@@ -40,7 +42,7 @@ export function DevContact() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   box: {
     backgroundColor: P.card, borderColor: P.border, borderWidth: 1.5, borderRadius: 18,
     padding: 14, gap: 12,

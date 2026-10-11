@@ -9,11 +9,13 @@
  * عمليات متداخلة (رجّع الإشارة داخل التجربة) تكمّل على نفس النافذة.
  */
 import { useEffect, useState } from 'react';
-import { Modal, View, Text, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { Modal, Alert, ActivityIndicator } from 'react-native';
+import { View, Text } from '../i18n/rn';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { P } from './Pro';
 import { tBd, tBg, tFg } from './theme';
 
+import { sheet } from '../i18n';
 interface State {
   title: string;
   steps: string[];
@@ -165,7 +167,7 @@ export function ProgressHost() {
   );
 }
 
-const st = StyleSheet.create({
+const st = sheet({
   back: { flex: 1, backgroundColor: 'rgba(8,12,28,0.55)', alignItems: 'center', justifyContent: 'center', padding: 22 },
   card: {
     alignSelf: 'stretch', backgroundColor: P.card, borderRadius: 24, padding: 18, gap: 14,

@@ -1,9 +1,11 @@
 import { ReactNode } from 'react';
-import { View, Text, Pressable, StyleSheet, ViewStyle } from 'react-native';
+import { ViewStyle } from 'react-native';
+import { View, Text, Pressable } from '../i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { C, R, S, T, tBd, tBg, tFg } from './theme';
 import { Icon, IconName } from './Icon';
 
+import { sheet } from '../i18n';
 /** البطاقة البطل — الحالة الرئيسية، بخلفية متدرجة خفيفة وبدون حد */
 export function HeroCard({ children, style }: { children: ReactNode; style?: ViewStyle }) {
   return (
@@ -141,7 +143,7 @@ export function TileGrid({ children }: { children: ReactNode }) {
   return <View style={s.grid}>{children}</View>;
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   hero: { borderRadius: R.lg, padding: S.lg, gap: S.md },
   metric: {
     backgroundColor: C.card, borderRadius: R.lg, borderWidth: 1.5, borderColor: C.line,

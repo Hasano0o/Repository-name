@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Animated, Easing, StyleSheet } from 'react-native';
+import { Animated, Easing, StyleSheet } from 'react-native';
+import { View, Text } from '../i18n/rn';
 import Svg, { Path, Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { C, tFg } from './theme';
 
+import { sheet } from '../i18n';
 const SWEEP = 270;
 const START = 135; // يبدأ من تحت يسار ويلف لتحت يمين
 
@@ -64,7 +66,7 @@ export function ArcGauge({ score, label, color, size = 150 }: {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   num: { color: C.text, fontWeight: '800', letterSpacing: -1, marginTop: 6 },
   of: { color: C.muted, fontWeight: '600', marginTop: -4 },
   pill: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 3, marginTop: 6 },

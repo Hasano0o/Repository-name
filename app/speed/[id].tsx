@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, Animated, Easing, StyleSheet } from 'react-native';
+import { Animated, Easing, } from 'react-native';
+import { View, Text, Pressable } from '../../src/i18n/rn';
 import { useLocalSearchParams } from 'expo-router';
 import Svg, { Circle } from 'react-native-svg';
 import { runSpeedTest, SpeedResult } from '../../src/utils/speedtest';
@@ -7,6 +8,7 @@ import { Icon, IconName } from '../../src/ui/Icon';
 import { MetricCard } from '../../src/ui/Cards';
 import { C, R, S, T } from '../../src/ui/theme';
 
+import { sheet } from '../../src/i18n';
 type Phase = 'idle' | 'running' | 'done' | 'error';
 
 function Stat({ icon, label, value, unit, color }: {
@@ -156,7 +158,7 @@ export default function SpeedScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   cloudflareNote: {
     color: C.muted,
     fontSize: 11,

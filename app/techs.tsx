@@ -3,7 +3,8 @@
  * مدينة المستخدم أول، وبعدها باقي المدن. تواصل واتساب أو اتصال مباشر.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, View, Text, Pressable, ActivityIndicator, StyleSheet, Linking, RefreshControl, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { ActivityIndicator, Linking, RefreshControl, Modal, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { ScrollView, View, Text, Pressable, TextInput } from '../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchTechs, sameCity, waNumber, BOT_TECH_SIGNUP, Tech, requestTech } from '../src/services/techs';
@@ -13,6 +14,7 @@ import { router as nav, Href } from 'expo-router';
 import { P, shadow } from '../src/ui/Pro';
 import { C, tBd, tBg, tFg } from '../src/ui/theme';
 
+import { sheet } from '../src/i18n';
 const NEEDS = ['تركيب أنتينا', 'توجيه الأنتينا', 'تمديد كيبل', 'فحص الإشارة'];
 
 const AV = [['#38bdf8', '#2563eb'], ['#a78bfa', '#6d28d9'], ['#34d399', '#047857'], ['#fb923c', '#c2410c'], ['#f472b6', '#be185d']] as const;
@@ -232,7 +234,7 @@ export default function Techs() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   page: { padding: 16, gap: 12 },
   hero: { borderRadius: 26, padding: 20, overflow: 'hidden', gap: 6 },
   ring: { position: 'absolute', width: 200, height: 200, borderRadius: 100, borderWidth: 24, borderColor: 'rgba(255,255,255,0.07)', left: -60, top: -50 },

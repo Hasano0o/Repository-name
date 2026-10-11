@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, AppState } from 'react-native';
+import { ActivityIndicator, Alert, AppState } from 'react-native';
+import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
@@ -17,6 +18,7 @@ import { C, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { RegionGrid } from '../../src/ui/RegionGrid';
 
+import { sheet } from '../../src/i18n';
 const KEEP_TAG = 'bandly-lag';
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const scoreCol = (sc: number) => (sc >= 70 ? C.green : sc >= 45 ? '#e0a100' : C.red);
@@ -313,7 +315,7 @@ function ReportCard({ r, onNew, onGo }: { r: LagReport; onNew: () => void; onGo:
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   page: { padding: 16, gap: 14 },
   center: { alignItems: 'center', paddingVertical: 40 },
   hint: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 19 },

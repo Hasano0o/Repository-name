@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, Switch } from 'react-native';
+import { ActivityIndicator, Alert, Switch } from 'react-native';
+import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
@@ -10,6 +11,7 @@ import { labBands, seenBands, buildAllCombos, runCaLab, LabRow, Combo } from '..
 import { snapshot, safeApply, trialMessage, Snapshot } from '../../src/utils/safeLock';
 import { C, R, S, tBd, tBg, tFg } from '../../src/ui/theme';
 
+import { sheet } from '../../src/i18n';
 const ACCENT = '#0ea5a4';
 
 const rowLabel = (r: { bands: number[]; nrBands?: number[] }) =>
@@ -317,7 +319,7 @@ export default function CaLab() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   page: { padding: S.lg, gap: S.md },
   card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: R.lg, padding: S.lg, gap: S.sm },
   title: { color: C.text, fontWeight: '800', fontSize: 17, textAlign: 'right' },

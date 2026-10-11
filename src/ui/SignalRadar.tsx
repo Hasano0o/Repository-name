@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text } from '../i18n/rn';
 import Svg, { G, Rect, Line, Circle, Text as SvgText } from 'react-native-svg';
 import { C } from './theme';
 import { LEVEL_COLOR, overallLevel } from '../utils/signal';
 
+import { sheet } from '../i18n';
 export interface RadarPoint { rsrp?: number; sinr?: number; }
 
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
@@ -56,6 +57,6 @@ export function SignalRadar({ history }: { history: RadarPoint[] }) {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   caption: { color: C.sub, textAlign: 'center', fontSize: 12, marginTop: 4 },
 });

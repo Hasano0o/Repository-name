@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable } from '../i18n/rn';
 import * as Updates from 'expo-updates';
 import { C, isDark, tFg } from './theme';
 
+import { sheet } from '../i18n';
 /**
  * تحديث عن بُعد — التطبيق ينزّل التحديث بالخلفية عند الفتح،
  * ولما يجهز يطلع شريط صغير «أعد التشغيل» بدل ما ينتظر المستخدم يقفل التطبيق.
@@ -35,7 +36,7 @@ export function UpdateBanner() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   wrap: { position: 'absolute', left: 0, right: 0, bottom: 24, alignItems: 'center', paddingHorizontal: 16 },
   bar: {
     flexDirection: 'row', alignItems: 'center', gap: 10, width: '100%',

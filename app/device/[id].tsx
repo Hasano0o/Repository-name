@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { ActivityIndicator, Alert, } from 'react-native';
+import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
@@ -11,6 +12,7 @@ import { Icon } from '../../src/ui/Icon';
 import { C } from '../../src/ui/theme';
 import { fmtBytes } from '../../src/utils/format';
 
+import { sheet } from '../../src/i18n';
 function Pill({ label, value, wide }: { label: string; value?: string; wide?: boolean }) {
   return (
     <View style={[s.pill, wide && { flexBasis: '100%' }]}>
@@ -193,7 +195,7 @@ export default function DeviceScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   wrap: { flex: 1, backgroundColor: C.bg },
   page: { padding: 13, gap: 10, paddingBottom: 40 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg },

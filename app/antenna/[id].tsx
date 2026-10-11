@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ScrollView, View, Text, Pressable, RefreshControl, ActivityIndicator,
-  StyleSheet, Dimensions,
-} from 'react-native';
+import { RefreshControl, ActivityIndicator, Dimensions } from 'react-native';
+import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, Href } from 'expo-router';
@@ -16,6 +14,7 @@ import { Icon } from '../../src/ui/Icon';
 import { Level, LEVEL_COLOR, LEVEL_LABEL, rsrpLevel, rsrqLevel, sinrLevel, rssiLevel } from '../../src/utils/signal';
 
 import { C, tBg, tFg } from '../../src/ui/theme';
+import { sheet } from '../../src/i18n';
 const { width: SCREEN_W } = Dimensions.get('window');
 
 // ═══ Design tokens (هوية Bandly) ═══
@@ -364,7 +363,7 @@ export default function AntennaAdvisor() {
   );
 }
 
-const g = StyleSheet.create({
+const g = sheet({
   container: { flex: 1, backgroundColor: BG },
   content: { paddingHorizontal: 16, paddingTop: 14, gap: 12 },
 

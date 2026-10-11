@@ -1,16 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from '../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Icon, IconName } from '../src/ui/Icon';
@@ -28,6 +18,7 @@ import {
 } from '../src/drivers/device';
 import { cellModuleAvailable, cellNative } from '../modules/bandly-cell/src';
 
+import { sheet } from '../src/i18n';
 /** عناوين الراوترات الشائعة — اختصار بضغطة */
 const COMMON_HOSTS: { host: string; hint: string }[] = [
   { host: '192.168.8.1', hint: 'هواوي' },
@@ -516,7 +507,7 @@ function Field({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = sheet({
   flex: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg },
   content: { padding: S.lg, paddingBottom: 200, gap: 14 },

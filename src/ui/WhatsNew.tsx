@@ -3,7 +3,8 @@
  * لنشرة جديدة: غيّر WN_ID والعناصر. اللي ثبّت التطبيق لأول مرة ما تطلع له (يشوف كل شي جديد أصلاً).
  */
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, } from 'react-native';
+import { Pressable, Text, View } from '../i18n/rn';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, Href } from 'expo-router';
@@ -13,6 +14,7 @@ import { Icon, IconName } from './Icon';
 import { FONT } from './fonts';
 import { C, tBg, tFg } from './theme';
 
+import { sheet } from '../i18n';
 const WN_ID = '2026-10-11';
 const KEY = 'bandly.whatsnew';
 const FIRST_KEY = 'bandly.firstSeen';
@@ -102,7 +104,7 @@ export function WhatsNew() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   backdrop: { flex: 1, backgroundColor: 'rgba(8,12,30,0.55)', alignItems: 'center', justifyContent: 'center', padding: 20 },
   card: { width: '100%', maxWidth: 440, backgroundColor: C.card, borderRadius: 28, overflow: 'hidden' },
   head: { padding: 22, paddingBottom: 20, gap: 4, overflow: 'hidden' },

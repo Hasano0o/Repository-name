@@ -4,11 +4,13 @@
  * في الجوال ما تظهر أبداً.
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, } from 'react-native';
+import { Pressable, Text, View } from '../i18n/rn';
 import { desktop, NetDiag } from '../desktop/bridge';
 import { Icon } from './Icon';
 import { C, tBd, tBg, tFg } from './theme';
 
+import { sheet } from '../i18n';
 export const hasNetTools = !!desktop?.netDiag;
 
 export function useDesktopNet() {
@@ -166,7 +168,7 @@ export function DesktopNetCard({ net }: { net: ReturnType<typeof useDesktopNet> 
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   card: { borderRadius: 16, borderWidth: 1, padding: 12, marginBottom: 14, gap: 10 },
   cardOk: { backgroundColor: tBg('#ecfdf3'), borderColor: tBd('#c6f0d8') },
   cardBad: { backgroundColor: tBg('#fff7ea'), borderColor: tBd('#fbdcae') },

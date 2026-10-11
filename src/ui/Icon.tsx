@@ -8,7 +8,7 @@ export type IconName =
   | 'eye' | 'eye-off'
   | 'antenna' | 'layers' | 'pin' | 'clock' | 'bell' | 'share'
   | 'trash' | 'plus' | 'compass' | 'check' | 'vibrate' | 'sound' | 'wifi' | 'login' | 'mic' | 'call' | 'hangup' | 'mic-off' | 'speaker' | 'earpiece'
-  | 'video' | 'video-off' | 'flip' | 'camera' | 'star' | 'target' | 'send' | 'mail' | 'sun' | 'moon';
+  | 'video' | 'video-off' | 'flip' | 'camera' | 'star' | 'target' | 'send' | 'mail' | 'sun' | 'moon' | 'globe';
 
 export function Icon({
   name, size = 20, color = C.sub, stroke = 2.0,
@@ -24,6 +24,7 @@ export function Icon({
       {name === 'folder' && <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" {...p} />}
       {name === 'report' && <><Path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" {...p} /><Path d="M14 2v6h6" {...p} /><Path d="M16 13H8" {...p} /><Path d="M16 17H8" {...p} /><Path d="M10 9H8" {...p} /></>}
       {name === 'settings' && <><Circle cx={12} cy={12} r={3} {...p} /><Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9" {...p} /></>}
+      {name === 'globe' && <><Circle cx={12} cy={12} r={9.5} {...p} /><Path d="M2.5 12h19" {...p} /><Path d="M12 2.5c2.6 2.6 3.9 5.8 3.9 9.5s-1.3 6.9-3.9 9.5c-2.6-2.6-3.9-5.8-3.9-9.5s1.3-6.9 3.9-9.5z" {...p} /></>}
       {name === 'chevron' && <Path d="M9 18l6-6-6-6" {...p} />}
       {name === 'down' && <><Path d="M12 5v14" {...p} /><Path d="M19 12l-7 7-7-7" {...p} /></>}
       {name === 'up' && <><Path d="M12 19V5" {...p} /><Path d="M5 12l7-7 7 7" {...p} /></>}

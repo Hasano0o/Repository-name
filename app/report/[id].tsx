@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import { ScrollView, View, Text, Pressable, ActivityIndicator, Share, StyleSheet } from 'react-native';
+import { ActivityIndicator, Share, } from 'react-native';
+import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
@@ -15,6 +16,7 @@ import { C, tBg } from '../../src/ui/theme';
 import { Icon } from '../../src/ui/Icon';
 import { GlassCard } from '../../src/ui/GlassCard';
 
+import { sheet } from '../../src/i18n';
 export default function ReportScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [input, setInput] = useState<ReportInput | null>(null);
@@ -193,7 +195,7 @@ export default function ReportScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   wrap: { flex: 1, backgroundColor: C.bg },
   content: { padding: 14, gap: 12, paddingBottom: 40 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg },

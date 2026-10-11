@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { View, Animated, Easing, StyleSheet } from 'react-native';
+import { Animated, Easing, } from 'react-native';
+import { View } from '../i18n/rn';
 import Svg, {
   Circle, Path, Line, Ellipse, Rect, G, Defs,
   LinearGradient as SvgLinearGradient,
@@ -7,6 +8,7 @@ import Svg, {
   Stop,
 } from 'react-native-svg';
 
+import { sheet } from '../i18n';
 interface Props {
   color: string;        // لون الإشارة (أخضر/برتقالي/أحمر)
   active?: boolean;     // تشغيل نبض الموجات
@@ -225,7 +227,7 @@ export function AntennaHero({ color, active = true, width = 180, height = 230 }:
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   wrap: {
     alignItems: 'center',
     justifyContent: 'center',

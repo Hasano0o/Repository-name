@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { ScrollView, View, Text, Switch, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { Switch, ActivityIndicator, } from 'react-native';
+import { ScrollView, View, Text, Pressable } from '../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
@@ -12,6 +13,7 @@ import { listRouters } from '../src/store/routers';
 import { Icon, IconName } from '../src/ui/Icon';
 import { C, R, S, T, tFg } from '../src/ui/theme';
 
+import { sheet } from '../src/i18n';
 interface AlertRow { key: keyof MonitorAlerts; title: string; sub: string; icon: IconName; color: string; }
 
 const ALERT_ROWS: AlertRow[] = [
@@ -171,7 +173,7 @@ export default function MonitorScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   page: { padding: S.lg, gap: S.md },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg },
   hero: {

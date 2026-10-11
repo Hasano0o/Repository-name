@@ -1,11 +1,13 @@
 /** تقييم الفني بعد ما يخلص العميل الجلسة — النجوم تطلع في دليل الفنيين */
 import { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Modal, TextInput, ActivityIndicator } from 'react-native';
+import { Modal, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, TextInput } from '../i18n/rn';
 import { Icon } from './Icon';
 import { P } from './Pro';
 import { rateSession } from '../services/live';
 
 import { tBg, tFg } from './theme';
+import { sheet } from '../i18n';
 export interface RateTarget { code: string; token: string; names: string[] }
 const WORDS = ['', 'سيئ', 'مقبول', 'جيد', 'ممتاز', 'رهيب 🔥'];
 
@@ -58,7 +60,7 @@ export function RateTech({ target, onClose }: { target: RateTarget | null; onClo
   );
 }
 
-const r = StyleSheet.create({
+const r = sheet({
   dim: { flex: 1, backgroundColor: tBg('rgba(8,15,40,0.55)'), justifyContent: 'center', padding: 24 },
   box: { backgroundColor: P.card, borderRadius: 26, padding: 22, alignItems: 'center' },
   big: { fontSize: 44 },

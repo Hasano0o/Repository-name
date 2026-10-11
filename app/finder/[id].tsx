@@ -1,10 +1,11 @@
-import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, Href } from 'expo-router';
 import { Icon, IconName } from '../../src/ui/Icon';
 
 import { C, tBg, tFg } from '../../src/ui/theme';
+import { sheet } from '../../src/i18n';
 const BLUE = '#3567F5';
 const PURPLE = '#7655F5';
 const TEXT = C.text;
@@ -156,7 +157,7 @@ export default function Finder() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   page: { padding: 16, gap: 16 },
   header: { gap: 3 },
   lead: { color: TEXT, fontSize: 22, fontWeight: '900', textAlign: 'right' },

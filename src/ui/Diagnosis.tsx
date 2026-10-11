@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable } from '../i18n/rn';
 import { Signal } from '../drivers/types';
 import { linkHealth, HEALTH_COLOR } from '../utils/linkHealth';
 import { loadLevel, LOAD_LABEL, LOAD_COLOR } from '../utils/congestion';
@@ -7,6 +7,7 @@ import { LinkHealthCard } from './LinkHealth';
 import { CongestionCard, useLoadHistory } from './Congestion';
 import { C, R, S } from './theme';
 
+import { sheet } from '../i18n';
 /**
  * "التشخيص": ملخص سطر واحد (كفاءة · إرسال · مسارات · زحمة) — والتفاصيل تنفتح بضغطة.
  * يجمع بطاقتي صحة الوصلة وزحمة البرج بدل ما يكونون فوق بعض.
@@ -49,7 +50,7 @@ export function DiagnosisCard({ routerId, signal, downBps }: { routerId: string;
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: R.lg, padding: S.lg, gap: S.sm },
   head: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
   title: { color: C.text, fontWeight: '800', fontSize: 15 },

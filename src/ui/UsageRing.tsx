@@ -1,8 +1,10 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
+import { View, Text } from '../i18n/rn';
 import Svg, { Circle } from 'react-native-svg';
 import { C } from './theme';
 import { fmtBytes } from '../utils/format';
 
+import { sheet } from '../i18n';
 export function UsageRing({ download, upload, size = 176 }: { download: number; upload: number; size?: number }) {
   const stroke = 14;
   const r = (size - stroke) / 2;
@@ -47,7 +49,7 @@ function Stat({ arrow, color, label, value }: { arrow: string; color: string; la
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   total: { color: C.text, fontSize: 22, fontWeight: '800' },
   totalLabel: { color: C.sub, fontSize: 12, marginTop: 2 },
   row: { flexDirection: 'row', justifyContent: 'space-around' },

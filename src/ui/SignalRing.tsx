@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { View, Text, Animated, Easing, StyleSheet } from 'react-native';
+import { Animated, Easing, StyleSheet } from 'react-native';
+import { View, Text } from '../i18n/rn';
 import Svg, { G, Circle, Rect } from 'react-native-svg';
 import { C } from './theme';
 
+import { sheet } from '../i18n';
 const SEGMENTS = 16;
 const AC = Animated.createAnimatedComponent(Rect);
 
@@ -68,7 +70,7 @@ export function SignalRing({ score, color, label, sub, note, size = 150 }: {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   ringPct: { fontWeight: '800', letterSpacing: -0.5 },
   ringPctSign: { color: C.muted, fontWeight: '700' },
   ringLabel: { fontWeight: '800', marginTop: -2 },

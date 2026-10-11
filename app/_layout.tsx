@@ -1,5 +1,6 @@
 import '../src/desktop/install'; // نسخة الويندوز: توجيه الطلبات عبر البرنامج (ما يأثر على الجوال)
 import '../src/desktop/scrollbar'; // نسخة الويندوز: شريط تمرير ظاهر تسحبه بالماوس
+import { patchAlert, tr } from '../src/i18n';
 import { useEffect } from 'react';
 import { pingDaily } from '../src/services/stats';
 import { Stack } from 'expo-router';
@@ -22,6 +23,7 @@ import '../src/tasks/monitor'; // يسجّل تعريف مهمة المراقب�
 import { ProgressHost } from '../src/ui/Progress';
 
 initNotificationHandler();
+patchAlert(); // بالإنجليزي: نوافذ التنبيه تنترجم
 
 const SCREENS: [string, string][] = [
   ['index', 'راوتراتي'],
@@ -98,7 +100,9 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: C.bg },
         }}
       >
-        {SCREENS.map(([name, title]) => (
+        {SCREENS.map(([name, ar]) => {
+          const title = tr(ar); // بالإنجليزي: عنوان الشريط العلوي
+          return (
           <Stack.Screen
             key={name}
             name={name}
@@ -110,7 +114,8 @@ export default function RootLayout() {
                   : { title }
             }
           />
-        ))}
+          );
+        })}
       </Stack>
       <UpdateBanner />
       <ProgressHost />

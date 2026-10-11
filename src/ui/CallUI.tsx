@@ -3,13 +3,15 @@
  * نفس الشكل عند العميل (مساعد التوجيه) وعند الفني (وضع الفني).
  */
 import { useEffect, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Modal } from 'react-native';
+import { Modal } from 'react-native';
+import { View, Text, Pressable } from '../i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Icon, IconName } from './Icon';
 import { P } from './Pro';
 import { CallInfo } from '../services/call';
 
 import { tBd, tBg, tFg } from './theme';
+import { sheet } from '../i18n';
 const mmss = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000));
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
@@ -119,7 +121,7 @@ export function CallEnded({ info }: { info: CallInfo }) {
   return <View style={c.endPill}><Text style={c.endTxt}>📞 {show}</Text></View>;
 }
 
-const c = StyleSheet.create({
+const c = sheet({
   big: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 15 },
   bigIc: { width: 34, height: 34, borderRadius: 17, backgroundColor: tBg('rgba(255,255,255,0.22)'), alignItems: 'center', justifyContent: 'center' },
   bigTxt: { color: tFg('#fff'), fontSize: 16, fontWeight: '800' },

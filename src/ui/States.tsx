@@ -1,9 +1,11 @@
 import { useEffect, ReactNode } from 'react';
-import { View, Text, Pressable, StyleSheet, ViewStyle, DimensionValue } from 'react-native';
+import { ViewStyle, DimensionValue } from 'react-native';
+import { View, Text, Pressable } from '../i18n/rn';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 import { C, R, S, T } from './theme';
 import { Icon, IconName } from './Icon';
 
+import { sheet } from '../i18n';
 /** مستطيل نابض — يحل محل الفراغ أثناء التحميل */
 export function Skeleton({ w = '100%', h = 14, radius = R.sm, style }: {
   w?: DimensionValue; h?: number; radius?: number; style?: ViewStyle;
@@ -113,7 +115,7 @@ export function EmptyState({ icon, title, text, children }: {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   card: {
     backgroundColor: C.card, borderRadius: R.lg, borderWidth: 1.5, borderColor: C.line,
     padding: 13, gap: S.sm,

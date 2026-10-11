@@ -3,12 +3,13 @@
  * يستخدمه مساعد التوجيه (عند العميل) ووضع الفني (عند الفني) بنفس الشكل.
  */
 import { ReactNode } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text } from '../i18n/rn';
 import Svg, { Circle, Path, Line, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { Icon } from './Icon';
 import { P, Hero } from './Pro';
 
 import { tBd, tBg, tFg } from './theme';
+import { sheet } from '../i18n';
 export type Trend = 'up' | 'down' | 'flat';
 export const trendOf = (now?: number, prev?: number): Trend =>
   now !== undefined && prev !== undefined ? (now > prev + 0.5 ? 'up' : now < prev - 0.5 ? 'down' : 'flat') : 'flat';
@@ -133,7 +134,7 @@ export function AimMeter({ value, best, delta, sinr, trend, levelLabel, cellLabe
   );
 }
 
-const a = StyleSheet.create({
+const a = sheet({
   mTop: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   mTag: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 6, flexShrink: 1,

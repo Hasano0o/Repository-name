@@ -1,8 +1,9 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text } from '../i18n/rn';
 import Svg, { Circle } from 'react-native-svg';
 import { C, tFg } from './theme';
 import { Level, LEVEL_COLOR, LEVEL_LABEL } from '../utils/signal';
 
+import { sheet } from '../i18n';
 export interface RingSpec {
   label: string;
   value?: number;
@@ -76,7 +77,7 @@ export function MetricRings({ items, size = 62 }: { items: RingSpec[]; size?: nu
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   row: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'flex-start' },
   center: { position: 'absolute', top: 0, left: 0, alignItems: 'center', justifyContent: 'center' },
   value: { color: C.text, fontWeight: '700', lineHeight: undefined },

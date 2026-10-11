@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable } from '../i18n/rn';
 import { checkManual } from '../utils/arfcn';
 import { bandLabel, freqLabel } from '../utils/bands';
 import { SeenCell, seenKey } from '../store/seenCells';
 import { C } from './theme';
 import { GlassCard } from './GlassCard';
 
+import { sheet } from '../i18n';
 export interface ManualTarget { tech: 'LTE' | 'NR'; band: number; arfcn: string; pci: string }
 
 function ago(t: number): string {
@@ -109,7 +110,7 @@ export function ManualLock({ seen, visible, busy, onLock, initial }: {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   copied: { color: C.violet, fontWeight: '800', fontSize: 12, textAlign: 'right', backgroundColor: C.card, borderRadius: 14, padding: 8 },
   hint: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 19 },
   seg: { flexDirection: 'row', gap: 8 },

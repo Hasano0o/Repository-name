@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import { ScrollView, View, Text, Pressable, ActivityIndicator, StyleSheet, RefreshControl } from 'react-native';
+import { ActivityIndicator, RefreshControl } from 'react-native';
+import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
@@ -17,6 +18,7 @@ import {
 
 import { tBg, tFg } from '../../src/ui/theme';
 import { hostLabel } from '../../src/drivers/device';
+import { sheet } from '../../src/i18n';
 type Info = { label: string; value?: string; accent?: string };
 
 /** يعرض الخانات المتوفرة فقط — أول [max] خانات، والباقي خلف «عرض الكل» عشان الصفحة ما تزدحم */
@@ -243,7 +245,7 @@ function TrafficTile({ label, value, icon, color, bg }: {
   );
 }
 
-const d = StyleSheet.create({
+const d = sheet({
   page: { padding: 16, gap: 14 },
   center: { alignItems: 'center', gap: 10, paddingVertical: 60 },
   muted: { color: P.sub, textAlign: 'center', lineHeight: 20, fontSize: 13 },

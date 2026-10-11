@@ -1,12 +1,14 @@
 /**
  * «لقّ لي أفضل تركيبة» + «حارس 5G» — تحت شاشة اختيار الترددات.
  */
-import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { ActivityIndicator, } from 'react-native';
+import { View, Text, Pressable } from '../i18n/rn';
 import { LabRow, comboScore } from '../utils/bandLab';
 import { BAND_FREQ, NR_FREQ } from '../utils/bands';
 import { C, isDark } from './theme';
 import { Icon } from './Icon';
 
+import { sheet } from '../i18n';
 const VIOLET = isDark ? '#c9b8ff' : '#7a51e0';
 const VIOLET_SOFT = isDark ? '#33294f' : '#f4efff';
 const VIOLET_LINE = isDark ? '#53447f' : '#dccdff';
@@ -149,7 +151,7 @@ export function GuardCard({
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   card: { backgroundColor: C.card, borderWidth: 1.5, borderColor: C.cardBorder, borderRadius: 22, padding: 14, gap: 10 },
   head: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   icon: { width: 38, height: 38, borderRadius: 12, backgroundColor: VIOLET_SOFT, alignItems: 'center', justifyContent: 'center' },

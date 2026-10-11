@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { ActivityIndicator, } from 'react-native';
+import { View, Text, Pressable } from '../i18n/rn';
 import { useFocusEffect, router, Href } from 'expo-router';
 import { SavedRouter } from '../store/routers';
 import { withSession } from '../store/sessions';
@@ -8,6 +9,7 @@ import { bandLabel } from '../utils/bands';
 import { Icon } from './Icon';
 import { C, R } from './theme';
 
+import { sheet } from '../i18n';
 /**
  * بطاقة بارزة في صفحة الراوتر: تعرض الأساسي والثانوي الحين (من الناقلات الفعلية)
  * وتودّي لشاشة تغييرهم. كانت مجرد مربع صغير تحت «إعدادات وأدوات».
@@ -84,7 +86,7 @@ export function ComboCard({ r }: { r: SavedRouter }) {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   card: {
     backgroundColor: C.card, borderRadius: R.lg, padding: 14, gap: 12,
     borderWidth: 1.5, borderColor: C.blue + '55', marginBottom: 4,

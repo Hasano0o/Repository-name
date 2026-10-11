@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { View } from '../i18n/rn';
 import Svg, { Circle, Path, Line, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { tBd } from './theme';
 

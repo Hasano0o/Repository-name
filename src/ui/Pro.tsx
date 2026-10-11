@@ -3,13 +3,15 @@
  * التخطيط: row-reverse للعربي، والأرقام دايماً LTR عشان الإشارة السالبة ما تنقلب.
  */
 import { ReactNode, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ViewStyle, ActivityIndicator } from 'react-native';
+import { StyleSheet, ViewStyle, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable } from '../i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-svg';
 import { Icon, IconName } from './Icon';
 import { Level, LEVEL_COLOR, LEVEL_LABEL, LEVEL_SOFT } from '../utils/signal';
 import { C, isDark, tBd, tBg, tFg } from './theme';
 
+import { sheet } from '../i18n';
 // ═══ الألوان ═══
 const P_LIGHT = {
   bg: C.bg,
@@ -312,7 +314,7 @@ export function Collapse({ title, icon, tone, toneSoft, children, defaultOpen = 
   );
 }
 
-const st = StyleSheet.create({
+const st = sheet({
   hero: { borderRadius: 28, padding: 18, overflow: 'hidden' },
   blob: { position: 'absolute', borderRadius: 999, backgroundColor: tBg('#ffffff'), opacity: 0.1 },
   glass: {

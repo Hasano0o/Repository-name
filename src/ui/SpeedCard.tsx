@@ -3,7 +3,8 @@
  * «قبل» ينحفظ للراوتر (يبقى لو طلعت ورجعت)، و«بعد» تقيسه لما تخلص التوجيه.
  */
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
+import { Alert } from 'react-native';
+import { View, Text, Pressable } from '../i18n/rn';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Section, PrimaryBtn, P } from './Pro';
 import { Icon } from './Icon';
@@ -11,6 +12,7 @@ import { speedTest, SpeedPhase, fmtMbps } from '../utils/speedLive';
 import { SpeedPair, SpeedPoint } from '../services/live';
 
 import { tBg, tFg } from './theme';
+import { sheet } from '../i18n';
 const KEY = (id: string) => `bandly_speed_${id}`;
 const PHASE_TXT: Record<SpeedPhase, string> = { ping: 'نقيس البنق…', down: 'نقيس التحميل…', up: 'نقيس الرفع…' };
 
@@ -98,7 +100,7 @@ export function SpeedCard({ routerId, onResult, onPair }: {
   );
 }
 
-const st = StyleSheet.create({
+const st = sheet({
   row: { flexDirection: 'row-reverse', gap: 8, marginTop: 12 },
   box: { flex: 1, backgroundColor: P.soft, borderRadius: 16, padding: 12, alignItems: 'center', borderWidth: 1.5, minHeight: 104, justifyContent: 'center' },
   boxTitle: { fontSize: 12.5, fontWeight: '800', marginBottom: 2 },

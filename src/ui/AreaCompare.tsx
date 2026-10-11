@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, TextInput, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { ActivityIndicator, } from 'react-native';
+import { View, Text, TextInput, Pressable } from '../i18n/rn';
 import { AreaOp, Consent, fetchArea, getArea, setArea } from '../services/community';
 import { C } from './theme';
 import { GlassCard } from './GlassCard';
 
+import { sheet } from '../i18n';
 const col = (sc: number | null) => (sc === null ? C.sub : sc >= 70 ? C.green : sc >= 45 ? '#e0a100' : C.red);
 
 /** أي شريحة أفضل في حيّك — من فحوصات «جاهز للعب؟» عند الناس في نفس الحي */
@@ -88,7 +90,7 @@ export function AreaCompare({ consent, region, regionName, refresh }: {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   hint: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 19 },
   row: { flexDirection: 'row', gap: 8 },
   input: { flex: 1, backgroundColor: C.rowBg, borderRadius: 12, borderWidth: 1.5, borderColor: C.cardBorder, paddingHorizontal: 12, paddingVertical: 10, color: C.text, fontSize: 14, textAlign: 'right' },

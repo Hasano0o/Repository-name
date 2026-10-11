@@ -2,7 +2,8 @@
  * شريط تحت البنر: «فنيين قريبين» + «فني أنتينا؟ سجّل معنا» (يفتح البوت على صفحة التسجيل)
  */
 import type { ReactNode } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, } from 'react-native';
+import { Pressable, Text, View } from '../i18n/rn';
 import { router, Href } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -10,6 +11,7 @@ import { BOT_TECH_SIGNUP } from '../services/techs';
 import { FONT } from './fonts';
 import { C, tBd, tBg } from './theme';
 
+import { sheet, EN_MODE } from '../i18n';
 /** دبوس موقع وفوقه موجات إشارة */
 function NearIcon() {
   return (
@@ -39,7 +41,7 @@ function JoinIcon() {
 function Chevron({ color }: { color: string }) {
   return (
     <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
-      <Path d="M15 18l-6-6 6-6" stroke={color} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d={EN_MODE ? 'M9 18l6-6-6-6' : 'M15 18l-6-6 6-6'} stroke={color} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
 }
@@ -71,7 +73,7 @@ export function TechStrip() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   row: { flexDirection: 'row-reverse', gap: 10, marginTop: 6 },
   tile: {
     flex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: 9, paddingVertical: 10, paddingHorizontal: 10,

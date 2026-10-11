@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {
-  ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, LayoutAnimation, RefreshControl, AppState,
-} from 'react-native';
+import { ActivityIndicator, Alert, LayoutAnimation, RefreshControl, AppState } from 'react-native';
+import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router';
@@ -40,6 +39,7 @@ import { rememberOperator, learnOperatorBands } from '../../src/store/operator';
 import { hasInternet } from '../../src/utils/internet';
 import { reportOutage } from '../../src/services/community';
 
+import { sheet, tr } from '../../src/i18n';
 interface Features {
   bands: boolean; sms: boolean; block: boolean; reboot: boolean; devices: boolean; cells: boolean; details: boolean; plan: boolean; network: boolean; carriers: boolean;
 }
@@ -573,7 +573,7 @@ export default function RouterDashboard() {
       colors={error || disconnected ? [C.dangerTop, C.dangerBottom] : [tBg('#eaf2ff'), tBg('#f3efff'), tBg('#eaf9f3')]}
       style={{ flex: 1 }}
     >
-      <Stack.Screen options={{ title: info?.name ?? 'الراوتر' }} />
+      <Stack.Screen options={{ title: tr(info?.name ?? 'الراوتر') }} />
 
       <ScrollView
         contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 110 }]}
@@ -912,7 +912,7 @@ export default function RouterDashboard() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   moveBar: { backgroundColor: C.blueSoft, borderColor: C.blue, borderWidth: 1, borderRadius: 14, padding: 12 },
   moveText: { color: C.blue, fontWeight: '800', fontSize: 13, textAlign: 'right', lineHeight: 20 },
   page: { padding: 13, gap: 10 },

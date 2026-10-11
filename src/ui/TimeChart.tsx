@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text } from '../i18n/rn';
 import Svg, { G, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import { C } from './theme';
 
+import { sheet } from '../i18n';
 export interface Series {
   label: string;
   color: string;
@@ -85,7 +86,7 @@ export function TimeChart({ times, series, height = 170 }: {
   );
 }
 
-const s2 = StyleSheet.create({
+const s2 = sheet({
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyText: { color: C.muted, fontSize: 12 },
   legend: { flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 6 },

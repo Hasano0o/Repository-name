@@ -3,9 +3,8 @@
  * نشارك كلمة سر الواي فاي بس — كلمة مرور الإدارة أبداً.
  */
 import { useCallback, useState } from 'react';
-import {
-  Alert, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View,
-} from 'react-native';
+import { Alert, Platform, Share, } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from '../../src/i18n/rn';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
 import { getWifi, setWifi, SavedWifi } from '../../src/store/routers';
@@ -15,6 +14,7 @@ import { LabelScannerHost, ensureScanner } from '../../src/ui/scanner';
 import { Icon } from '../../src/ui/Icon';
 import { C, tBd, tBg, tFg } from '../../src/ui/theme';
 
+import { sheet } from '../../src/i18n';
 export default function WifiShare() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [wifi, setW] = useState<SavedWifi | null>(null);
@@ -127,7 +127,7 @@ export default function WifiShare() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   root: { flex: 1, backgroundColor: C.bg },
   content: { padding: 16, gap: 14, paddingBottom: 60 },
   qrCard: {

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { View, Text, Pressable, TextInput, StyleSheet } from 'react-native';
+import { View, Text, Pressable, TextInput } from '../i18n/rn';
 import { CITIES, getCity, setCity } from '../services/stats';
 import { P } from './Pro';
 
+import { sheet } from '../i18n';
 /**
  * سؤال لمرة وحدة في الرئيسية: وش مدينتك؟ — للإحصائيات بس، واختياري.
  * يختفي بعد ما يختار أو يضغط «لاحقاً».
@@ -59,7 +60,7 @@ export function CityAsk() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   box: { backgroundColor: P.card, borderColor: P.border, borderWidth: 1.5, borderRadius: 18, padding: 14, gap: 12 },
   head: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: 10 },
   title: { color: P.text, fontWeight: '800', fontSize: 15 },

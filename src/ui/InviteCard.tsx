@@ -2,13 +2,15 @@
  * «ادعُ ربعك» — مشاركة رابط البوت بكود المستخدم (t.me/NetGuide1_bot?start=r_CODE).
  * البوت يعدّ كل شخص مرة وحدة لكل كود (/refs عند المالك). الكود من المعرّف العشوائي للجهاز — مو اسم ولا رقم.
  */
-import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { Share, } from 'react-native';
+import { Pressable, Text, View } from '../i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { deviceId } from '../services/community';
 import { FONT } from './fonts';
 import { C, tBd, tBg, tFg } from './theme';
 
+import { sheet } from '../i18n';
 const IOS = 'https://apps.apple.com/sa/app/id6819877993';
 
 async function invite() {
@@ -49,7 +51,7 @@ export function InviteCard() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   card: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 12, padding: 14, borderRadius: 22,
     backgroundColor: tBg('#fdf4ff'), borderWidth: 1.5, borderColor: tBd('#f5d0fe'),

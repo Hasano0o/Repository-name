@@ -1,11 +1,13 @@
 import { useCallback, useState } from 'react';
-import { View, Text, Pressable, Alert, ActivityIndicator, StyleSheet } from 'react-native';
+import { Alert, ActivityIndicator, } from 'react-native';
+import { View, Text, Pressable } from '../i18n/rn';
 import { useFocusEffect, router, Href } from 'expo-router';
 import { SavedRouter } from '../store/routers';
 import { Profile, Role, ROLES, roleProfiles, profileSummary } from '../store/profiles';
 import { applyProfile } from '../utils/applyProfile';
 import { C } from './theme';
 
+import { sheet } from '../i18n';
 /** شريط «الأوضاع بضغطة» في صفحة الراوتر */
 export function ModeChips({ r, onApplied }: { r: SavedRouter; onApplied?: () => void }) {
   const [roles, setRoles] = useState<Partial<Record<Role, Profile>>>({});
@@ -65,7 +67,7 @@ export function ModeChips({ r, onApplied }: { r: SavedRouter; onApplied?: () => 
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   wrap: { gap: 8 },
   title: { color: C.text, fontWeight: '800', fontSize: 15, textAlign: 'right' },
   row: { flexDirection: 'row-reverse', gap: 8 },

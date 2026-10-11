@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  View, Text, TextInput, Pressable, ScrollView, StyleSheet, Alert, Share, Vibration, ActivityIndicator,
-} from 'react-native';
+import { Alert, Share, Vibration, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView } from '../src/i18n/rn';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,6 +25,7 @@ import {
 
 import { tBd, tBg, tFg } from '../src/ui/theme';
 import { desktop } from '../src/desktop/bridge';
+import { sheet } from '../src/i18n';
 const K_KEY = 'bandly_tech_key';
 const K_NAME = 'bandly_tech_name';
 
@@ -416,7 +416,7 @@ function TechScreen() {
 const deltaColor = (v?: number, base?: number) =>
   v == null || base == null ? P.sub : v - base > 0.5 ? '#13B783' : v - base < -0.5 ? '#DC2626' : '#71809A';
 
-const s = StyleSheet.create({
+const s = sheet({
   page: { padding: 16, gap: 14 },
   kicker: { color: tFg('rgba(255,255,255,0.8)'), fontSize: 12, fontWeight: '700', textAlign: 'right' },
   heroTitle: { color: tFg('#fff'), fontSize: 24, fontWeight: '800', textAlign: 'right' },

@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { ActivityIndicator, } from 'react-native';
+import { View, Text, Pressable } from '../i18n/rn';
 import * as Updates from 'expo-updates';
 import { C } from './theme';
 import { desktop } from '../desktop/bridge';
 
+import { sheet } from '../i18n';
 const when = (d: Date | null) => {
   if (!d) return '—';
   return d.toLocaleString('ar-SA', { weekday: 'long', day: 'numeric', month: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -87,7 +89,7 @@ export function UpdateStatus() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   box: { backgroundColor: C.card, borderRadius: 18, borderWidth: 1.5, borderColor: C.cardBorder, padding: 12, gap: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   title: { color: C.text, fontWeight: '800', fontSize: 13, textAlign: 'right' },

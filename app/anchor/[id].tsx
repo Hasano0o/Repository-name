@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { ActivityIndicator, Alert, } from 'react-native';
+import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
@@ -10,6 +11,7 @@ import { labBands, seenBands, runAnchorScan, AnchorRow } from '../../src/utils/b
 import { safeApply, trialMessage } from '../../src/utils/safeLock';
 import { C, R, S } from '../../src/ui/theme';
 
+import { sheet } from '../../src/i18n';
 const ACCENT = C.violet;
 
 export default function Anchor5G() {
@@ -195,7 +197,7 @@ export default function Anchor5G() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   page: { padding: S.lg, gap: S.md },
   card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: R.lg, padding: S.lg, gap: S.sm },
   title: { color: C.text, fontWeight: '800', fontSize: 17, textAlign: 'right' },

@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Linking, } from 'react-native';
+import { Pressable, Text, View } from '../i18n/rn';
 import type { StoreAd } from '../services/stores';
 import { C, tBd, tBg, tFg } from './theme';
 
+import { sheet } from '../i18n';
 /**
  * بطاقة الإعلان المدفوع أسفل الشاشة.
  * المحتوى (الصورة/الرابط/الواتساب/التفعيل) يجي من البوت عبر has-host.com/bandly/stores/active
@@ -55,7 +57,7 @@ export function StoreAdCard({ store }: { store: StoreAd }) {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   section: { marginTop: 18, marginBottom: 12, gap: 8 },
   head: {
     flexDirection: 'row-reverse',

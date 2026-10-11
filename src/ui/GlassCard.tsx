@@ -1,7 +1,9 @@
 import { ReactNode, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { LayoutAnimation, Platform, UIManager } from 'react-native';
+import { View, Text, Pressable } from '../i18n/rn';
 import { C } from './theme';
 
+import { sheet } from '../i18n';
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   try { UIManager.setLayoutAnimationEnabledExperimental(true); } catch {}
 }
@@ -54,7 +56,7 @@ export function GlassCard({
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   card: {
     backgroundColor: C.card,
     borderColor: C.cardBorder,

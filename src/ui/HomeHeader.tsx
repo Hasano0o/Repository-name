@@ -2,13 +2,15 @@
  * ترويسة الرئيسية: دائرة جودة الاتصال (أفضل راوتر) + سطر الحالة + شارات المشغّل والتقنية والترددات.
  * لون الدائرة وكلمة الجودة يتغيّرون حسب المستوى.
  */
-import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, Pressable } from '../i18n/rn';
 import Svg, { Circle } from 'react-native-svg';
 import { Icon } from './Icon';
 import { FONT } from './fonts';
 import { Hero, P } from './Pro';
 import type { Level } from '../utils/signal';
 
+import { sheet, EN_MODE } from '../i18n';
 export type HeaderTone = Level | 'down';
 
 export interface HeaderChip { text: string; tone?: 'blue' | 'violet' | 'red' | 'green' }
@@ -89,7 +91,7 @@ export function HomeHeader(p: HomeHeaderProps) {
       <View style={s.mid}>
         <Text style={s.brand}>Bandly · راوتراتي</Text>
         <Text style={s.title} numberOfLines={1}>
-          {p.lead ? `${p.lead} ` : ''}<Text style={{ color: WORD[p.tone] }}>{p.word}</Text>
+          {p.lead && !EN_MODE ? `${p.lead} ` : ''}<Text style={{ color: WORD[p.tone] }}>{p.word}</Text>
         </Text>
         {p.chips.length > 0 && (
           <View style={s.chips}>
@@ -119,7 +121,7 @@ export function HomeHeader(p: HomeHeaderProps) {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   card: { flexDirection: 'row-reverse', alignItems: 'center', gap: 14, paddingHorizontal: 16 },
   ringWrap: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center' },
   ringTxt: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', paddingTop: 4 },

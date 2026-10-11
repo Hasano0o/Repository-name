@@ -4,9 +4,8 @@
  * كل قسم يظهر بس لو الراوتر يدعمه. وكل تغيير نقرأه بعد الحفظ ونتأكد إنه انحفظ فعلاً.
  */
 import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, Switch, Modal, TextInput,
-} from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Switch, Modal } from 'react-native';
+import { ScrollView, View, Text, Pressable, TextInput } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams, Href } from 'expo-router';
@@ -18,6 +17,7 @@ import { Icon, IconName } from '../../src/ui/Icon';
 import { P, shadow } from '../../src/ui/Pro';
 import { C, tBg, tBd, tFg } from '../../src/ui/theme';
 
+import { sheet } from '../../src/i18n';
 type Key = 'nat' | 'upnp' | 'dmz' | 'led' | 'reboot' | 'guest' | 'b2.4' | 'b5' | 'rule' | 'url';
 
 const hhmm = (mins: number) => `${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')}`;
@@ -535,7 +535,7 @@ export default function ControlCenter() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   page: { padding: 16, gap: 16 },
   hero: { borderRadius: 26, padding: 20, paddingTop: 22, overflow: 'hidden', gap: 4 },
   heroRing: { position: 'absolute', width: 220, height: 220, borderRadius: 110, borderWidth: 26, borderColor: 'rgba(255,255,255,0.06)', left: -70, top: -60 },

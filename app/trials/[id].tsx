@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { ScrollView, View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { ActivityIndicator, } from 'react-native';
+import { ScrollView, View, Text } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -8,6 +9,7 @@ import { Trial, TrialVerdict, loadTrials, trialNote } from '../../src/utils/safe
 import { Icon, IconName } from '../../src/ui/Icon';
 import { C, R, S } from '../../src/ui/theme';
 
+import { sheet } from '../../src/i18n';
 const V: Record<TrialVerdict, { label: string; color: string; soft: string; icon: IconName }> = {
   better: { label: 'صار أفضل', color: C.green, soft: C.greenSoft, icon: 'spark' },
   same: { label: 'ما فرق', color: C.sub, soft: C.rowBg, icon: 'chevron' },
@@ -83,7 +85,7 @@ export default function TrialsScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   page: { padding: S.lg, gap: S.md },
   card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: R.lg, padding: S.lg, gap: S.sm },
   title: { color: C.text, fontWeight: '800', fontSize: 17, textAlign: 'right' },

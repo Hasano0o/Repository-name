@@ -1,7 +1,8 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text } from '../i18n/rn';
 import { HealthItem, HEALTH_COLOR } from '../utils/linkHealth';
 import { C, R, S } from './theme';
 
+import { sheet } from '../i18n';
 /** بطاقة "صحة الوصلة": ثلاثة أسطر، كل سطر بشريط وجملة تشرح وش يعني */
 export function LinkHealthCard({ items }: { items: HealthItem[] }) {
   if (!items.length) return null;
@@ -41,7 +42,7 @@ export function LinkHealthChips({ items }: { items: HealthItem[] }) {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: R.lg, padding: S.lg, gap: S.md },
   title: { color: C.text, fontWeight: '800', fontSize: 15, textAlign: 'right' },
   sub: { color: C.muted, fontSize: 11.5, textAlign: 'right', marginTop: -S.sm },

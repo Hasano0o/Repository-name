@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet,
-  Share, Vibration, Platform, Linking,
-} from 'react-native';
+import { ActivityIndicator, Alert, Share, Vibration, Platform, Linking } from 'react-native';
+import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
@@ -53,6 +51,7 @@ import { trafficBurst } from '../../src/utils/nrprobe';
 import { AimBeeper } from '../../src/utils/aimSound';
 
 import { tBd, tBg, tFg } from '../../src/ui/theme';
+import { sheet } from '../../src/i18n';
 // ═══ Design tokens ═══
 const BLUE = P.blue;
 const PURPLE = P.violet;
@@ -1020,7 +1019,7 @@ export default function AimScreen() {
   );
 }
 
-const a = StyleSheet.create({
+const a = sheet({
   container: { flex: 1, backgroundColor: P.bg },
   content: { paddingHorizontal: 16, paddingTop: 10, gap: 14 },
   header: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },

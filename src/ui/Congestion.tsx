@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text } from '../i18n/rn';
 import { Signal } from '../drivers/types';
 import {
   estimateLoad, loadLevel, LOAD_LABEL, LOAD_COLOR, LoadSample,
@@ -7,6 +7,7 @@ import {
 } from '../utils/congestion';
 import { C, R, S } from './theme';
 
+import { sheet } from '../i18n';
 const NOTE = {
   free: 'البرج شبه فاضي — السرعة اللي تشوفها هي أقصى ما تعطيه إشارتك.',
   normal: 'ضغط طبيعي على البرج.',
@@ -112,7 +113,7 @@ export function CongestionCard({ routerId, signal, downBps, history }: {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: R.lg, padding: S.lg, gap: S.sm },
   head: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
   title: { color: C.text, fontWeight: '800', fontSize: 15, textAlign: 'right' },

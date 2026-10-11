@@ -3,9 +3,8 @@
  * لا تستورد هذا الملف مباشرة — استخدم LabelScannerHost من ./scanner (يتأكد إن الكاميرا موجودة).
  */
 import { useRef, useState } from 'react';
-import {
-  ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
-} from 'react-native';
+import { ActivityIndicator, Modal, StyleSheet } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from '../i18n/rn';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Icon } from './Icon';
@@ -14,6 +13,7 @@ import type { ScannerProps } from './scanner';
 import { LabelData, labelCount, parseLabelText, parseWifiQr } from '../utils/routerLabel';
 import { ocrAvailable, recognizeText } from '../../modules/bandly-cell/src';
 
+import { sheet } from '../i18n';
 type Field = { key: keyof Flat; label: string; secret?: boolean };
 interface Flat { host: string; username: string; adminPassword: string; ssid: string; wifiPassword: string }
 
@@ -182,7 +182,7 @@ export function LabelScanner({ mode = 'full', onClose, onResult }: ScannerProps)
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   root: { flex: 1, backgroundColor: '#0b1020' },
   top: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10 },
   close: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.12)' },

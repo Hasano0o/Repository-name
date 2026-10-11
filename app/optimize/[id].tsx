@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { ActivityIndicator, Alert, } from 'react-native';
+import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
@@ -15,6 +16,7 @@ import {
   BandTestResult, TestMode,
 } from '../../src/utils/bandTest';
 
+import { sheet } from '../../src/i18n';
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 function scoreColor(sc: number): string {
@@ -352,7 +354,7 @@ export default function OptimizeScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   wrap: { flex: 1, backgroundColor: C.bg },
   content: { padding: 14, gap: 12, paddingBottom: 40 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg },

@@ -3,7 +3,8 @@
  * التسجيل m4a (AAC) أحادي ويرفع للسيرفر، والطرف الثاني يشغّله تلقائياً.
  */
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Vibration, Alert, ActivityIndicator, Platform } from 'react-native';
+import { Vibration, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, Pressable } from '../i18n/rn';
 import {
   useAudioRecorder, RecordingPresets, RecordingOptions, requestRecordingPermissionsAsync,
   setAudioModeAsync, createAudioPlayer, AudioPlayer,
@@ -12,6 +13,7 @@ import { Icon } from './Icon';
 import { P } from './Pro';
 
 import { tBd, tBg, tFg } from './theme';
+import { sheet } from '../i18n';
 const PRESET: RecordingOptions = {
   ...RecordingPresets.HIGH_QUALITY,
   sampleRate: 22050,
@@ -171,7 +173,7 @@ export function VoiceNote({ from, dur, onReplay }: { from: string; dur: number; 
   );
 }
 
-const v = StyleSheet.create({
+const v = sheet({
   btn: {
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 10,
     borderRadius: 18, borderWidth: 1.5, paddingVertical: 14, paddingHorizontal: 14, marginTop: 12,

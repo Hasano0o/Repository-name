@@ -1,8 +1,10 @@
 import { useRef } from 'react';
-import { View, Text, Pressable, StyleSheet, Animated, PanResponder } from 'react-native';
+import { Animated, PanResponder } from 'react-native';
+import { View, Text, Pressable } from '../i18n/rn';
 import { ConnectedDevice } from '../drivers/types';
 import { C } from './theme';
 
+import { sheet } from '../i18n';
 const ACTION_W = 176;
 
 export function deviceIcon(name = ''): string {
@@ -64,7 +66,7 @@ export function DeviceRow({ device, onBlock, onLimit }: {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   wrap: { borderRadius: 14, overflow: 'hidden' },
   actions: { position: 'absolute', left: 0, top: 0, bottom: 0, width: ACTION_W, flexDirection: 'row', gap: 6, padding: 6 },
   action: { flex: 1, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },

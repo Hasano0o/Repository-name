@@ -3,7 +3,8 @@
  * وخانات المعلومات (Cell ID · PCI · الباند · RSSI/ARFCN · EARFCN · BW).
  * تظهر في مساعد التوجيه تحت العدادين الأصليين.
  */
-import { View, Text, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
+import { View, Text } from '../i18n/rn';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { Signal } from '../drivers/types';
 import { Level, LEVEL_COLOR, rsrpLevel, sinrLevel, rsrqLevel, parseBands, parseNrBands } from '../utils/signal';
@@ -12,6 +13,7 @@ import { P, shadow } from './Pro';
 
 import { tBd, tBg, tFg } from './theme';
 import { LinearGradient } from 'expo-linear-gradient';
+import { sheet } from '../i18n';
 export const pingLevel = (v?: number): Level =>
   v === undefined ? 'unknown' : v <= 40 ? 'excellent' : v <= 70 ? 'good' : v <= 120 ? 'fair' : 'poor';
 
@@ -158,7 +160,7 @@ function PingBar({ ping, to }: { ping?: number; to?: string }) {
   );
 }
 
-const pb = StyleSheet.create({
+const pb = sheet({
   bar: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: tBg('#ffffff'), borderRadius: 20, paddingVertical: 12, paddingHorizontal: 14, borderWidth: 1.5, borderColor: P.border },
   valBox: { flexDirection: 'row', alignItems: 'baseline', gap: 3, minWidth: 74 },
   val: { fontSize: 30, fontWeight: '900', letterSpacing: -0.5 },
@@ -221,14 +223,14 @@ export function NetPanel({ signal, ping, pingTo }: { signal: Signal | null; ping
   );
 }
 
-const g = StyleSheet.create({
+const g = sheet({
   wrap: { flex: 1, alignItems: 'center' },
   val: { fontWeight: '800', letterSpacing: -0.5, maxWidth: 50, textAlign: 'center' },
   lblRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 3, marginTop: -4 },
   lbl: { fontSize: 11.5, fontWeight: '800' },
   unit: { fontSize: 9.5, color: P.sub, fontWeight: '600' },
 });
-const t = StyleSheet.create({
+const t = sheet({
   tile: {
     width: '48.5%', flexDirection: 'row-reverse', alignItems: 'center', gap: 8,
     backgroundColor: P.soft, borderRadius: 14, paddingVertical: 8, paddingHorizontal: 10,
@@ -239,7 +241,7 @@ const t = StyleSheet.create({
   lbl: { color: P.sub, fontSize: 10.5, fontWeight: '700' },
   val: { color: P.text, fontSize: 14.5, fontWeight: '800' },
 });
-const c = StyleSheet.create({
+const c = sheet({
   card: { backgroundColor: P.card, borderRadius: 22, padding: 14, gap: 12, borderWidth: 1.5, borderColor: P.border, ...shadow },
   hIcon: { width: 26, height: 26, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   cardDark: { backgroundColor: tBg('#14224a'), borderColor: tBd('#24366b') },

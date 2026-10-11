@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, View, Text, Pressable, RefreshControl, StyleSheet } from 'react-native';
+import { RefreshControl, } from 'react-native';
+import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, Href } from 'expo-router';
@@ -13,6 +14,7 @@ import { HeroCard, MetricCard, Section } from '../../src/ui/Cards';
 import { Icon } from '../../src/ui/Icon';
 import { Skeleton, ErrorCard } from '../../src/ui/States';
 
+import { sheet } from '../../src/i18n';
 /** الجملة التي تترجم الجدول إلى قرار */
 function verdictOf(list: Carrier[]): { text: string; tone: 'ok' | 'warn'; weak?: Carrier } {
   if (!list.length) {
@@ -227,7 +229,7 @@ function Stat({ k, v }: { k: string; v?: number }) {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   page: { padding: S.lg, gap: S.xl },
   title: { color: C.text, fontWeight: '800', fontSize: T.h2, textAlign: 'right' },
   hint: { color: C.muted, fontSize: T.label, textAlign: 'right', lineHeight: 19 },

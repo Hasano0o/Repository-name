@@ -5,7 +5,8 @@
  * النجمة = التردد الأساسي الفعلي الحين (من النواقل) — للعرض فقط.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { ActivityIndicator } from 'react-native';
+import { View, Text, Pressable } from '../i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BandConfig, Carrier } from '../drivers/types';
@@ -14,6 +15,7 @@ import { C, isDark } from './theme';
 import { Icon } from './Icon';
 import Svg, { Path, Circle, Rect, Text as SvgText } from 'react-native-svg';
 
+import { sheet } from '../i18n';
 /** رسمة برج خفيفة لزاوية البطاقة */
 function TowerArt() {
   const w = 'rgba(255,255,255,';
@@ -484,7 +486,7 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   hero: { borderRadius: 22, padding: 16, gap: 12 },
   heroTop: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 },
   speedBox: {
@@ -571,7 +573,7 @@ const s = StyleSheet.create({
 });
 
 /** ستايل الشكل القديم (صفوف) — للي يفضّله */
-const o = StyleSheet.create({
+const o = sheet({
   hero: { borderRadius: 22, padding: 16, gap: 12 },
   heroTop: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 },
   speedBox: {

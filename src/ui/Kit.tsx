@@ -1,7 +1,9 @@
-import { View, Text, Pressable, StyleSheet, ViewStyle } from 'react-native';
+import { ViewStyle } from 'react-native';
+import { View, Text, Pressable } from '../i18n/rn';
 import { C, R, S, T } from './theme';
 import { Icon, IconName } from './Icon';
 
+import { sheet } from '../i18n';
 export type Tone = 'violet' | 'cyan' | 'mint' | 'green' | 'blue' | 'amber' | 'pink';
 
 export const TONE: Record<Tone, { fg: string; bg: string }> = {
@@ -104,7 +106,7 @@ export function Banner({ tone = 'warn', title, text, cta, onPress }:
   );
 }
 
-const st = StyleSheet.create({
+const st = sheet({
   num: { flexDirection: 'row', alignItems: 'baseline' },
   pill: { height: 34, paddingHorizontal: S.md, borderRadius: R.pill,
           flexDirection: 'row', alignItems: 'center', gap: S.xs, alignSelf: 'flex-start' },

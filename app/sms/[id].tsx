@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react';
-import {
-  ScrollView, View, Text, TextInput, Pressable, ActivityIndicator, Alert, StyleSheet, RefreshControl,
-} from 'react-native';
+import { ActivityIndicator, Alert, RefreshControl } from 'react-native';
+import { ScrollView, View, Text, TextInput, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -11,6 +10,7 @@ import { SmsMessage } from '../../src/drivers/types';
 import { C } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 
+import { sheet } from '../../src/i18n';
 type Box = 'inbox' | 'sent';
 
 export default function SmsScreen() {
@@ -149,7 +149,7 @@ export default function SmsScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   page: { padding: 16, gap: 12 },
   input: {
     backgroundColor: C.rowBg, borderRadius: 12, padding: 12,

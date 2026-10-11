@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, Share, ActivityIndicator, Switch } from 'react-native';
+import { Share, ActivityIndicator, Switch } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView } from '../src/i18n/rn';
 import { useLocalSearchParams } from 'expo-router';
 import { GlassCard } from '../src/ui/GlassCard';
 import { C } from '../src/ui/theme';
@@ -12,6 +13,7 @@ import {
 import { guessApiStyle } from '../src/store/discovery';
 import { ZteDriver } from '../src/drivers/zte';
 
+import { sheet } from '../src/i18n';
 export default function ProbeScreen() {
   const params = useLocalSearchParams<{ host?: string }>();
   const [host, setHost] = useState(params.host || '192.168.0.1');
@@ -322,7 +324,7 @@ export default function ProbeScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   wrap: { flex: 1, backgroundColor: C.bg },
   content: { padding: 14, gap: 12, paddingBottom: 40 },
   p: { color: C.sub, fontSize: 13, lineHeight: 21, textAlign: 'right' },

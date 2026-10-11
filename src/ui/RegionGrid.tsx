@@ -3,10 +3,11 @@
  * «أقرب سيرفر» ما له دولة فيطلع بأيقونة الموقع. تحت: وصف المنطقة المختارة.
  * نفس المكوّن في مُحسّن الألعاب وكاشف اللاق.
  */
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable } from '../i18n/rn';
 import { REGIONS, regionById } from '../utils/latency';
 import { C, isDark } from './theme';
 
+import { sheet } from '../i18n';
 const FLAG: Record<string, string> = {
   ae: '🇦🇪', in: '🇮🇳', it: '🇮🇹', eu: '🇩🇪', fr: '🇫🇷', uk: '🇬🇧', se: '🇸🇪', sg: '🇸🇬', us: '🇺🇸', cf: '📍',
 };
@@ -54,7 +55,7 @@ export function RegionGrid({ value, onPick, disabled, title = 'سيرفر لعب
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: 20, padding: 12, gap: 10 },
   head: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, paddingHorizontal: 2 },
   headIcon: { fontSize: 16 },

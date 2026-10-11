@@ -1,7 +1,8 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text } from '../i18n/rn';
 import { C } from './theme';
 import { Level, LEVEL_COLOR, LEVEL_SOFT, LEVEL_LABEL } from '../utils/signal';
 
+import { sheet } from '../i18n';
 export interface TileSpec {
   label: string; code: string; value?: number; unit: string;
   level: Level; min: number; max: number; note: string;
@@ -45,7 +46,7 @@ export function MetricTiles({ items }: { items: TileSpec[] }) {
   return <View style={s.grid}>{items.map((t, i) => <MetricTile key={i} t={t} />)}</View>;
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   grid: { gap: 10 },
   tile: { backgroundColor: C.rowBg, borderRadius: 16, borderWidth: 1.5, borderColor: C.cardBorder, padding: 12, gap: 8 },
   head: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },

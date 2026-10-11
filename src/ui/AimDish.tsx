@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text } from '../i18n/rn';
 import Svg, {
   G, Path, Circle, Line, Text as SvgText, Defs,
   RadialGradient, LinearGradient as SvgLinearGradient, Stop,
@@ -7,6 +7,7 @@ import Svg, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { C } from './theme';
 
+import { sheet } from '../i18n';
 interface Props {
   score: number;
   label: string;
@@ -330,7 +331,7 @@ function describeGlassArc(cx: number, cy: number, r: number): string {
   return `M ${start.x} ${start.y} A ${r} ${r} 0 1 1 ${end.x} ${end.y} Z`;
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   card: {
     alignItems: 'center',
     justifyContent: 'center',

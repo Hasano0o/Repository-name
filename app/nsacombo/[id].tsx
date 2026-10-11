@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { ActivityIndicator, Alert, } from 'react-native';
+import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
@@ -11,6 +12,7 @@ import { snapshot, waitOnline, trialMessage, Snapshot, safeApply } from '../../s
 import { C, R, S, tFg } from '../../src/ui/theme';
 import { trafficBurst } from '../../src/utils/nrprobe';
 
+import { sheet } from '../../src/i18n';
 const ACCENT = '#f59e0b';
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const COMBO_MAX_MS = 90_000;
@@ -299,7 +301,7 @@ export default function NsaCombo() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   page: { padding: S.lg, gap: S.md },
   card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: R.lg, padding: S.lg, gap: S.sm },
   title: { color: C.text, fontWeight: '800', fontSize: 17, textAlign: 'right' },

@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import {
-  View, Text, Pressable, FlatList, ActivityIndicator, RefreshControl, StyleSheet, Alert,
-} from 'react-native';
+import { FlatList, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import { View, Text, Pressable } from '../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect, Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,10 +21,12 @@ import { desktop } from '../src/desktop/bridge';
 import { DevContact } from '../src/ui/DevContact';
 import { CityAsk } from '../src/ui/CityAsk';
 import { WhatsNew } from '../src/ui/WhatsNew';
+import { LangPicker, LangAsk, LangLink } from '../src/ui/LangPicker';
 import { InviteCard } from '../src/ui/InviteCard';
 import { HomeHeader, HeaderChip, HeaderTone } from '../src/ui/HomeHeader';
 import { hostLabel } from '../src/drivers/device';
 import { addDemoRouter } from '../src/drivers/demo';
+import { sheet } from '../src/i18n';
 interface Status {
   loading: boolean;
   online?: boolean;
@@ -153,6 +154,7 @@ export default function RoutersList() {
         title="أضف أول راوتر"
         text="خلّ التطبيق يتصل براوترك ويعرض لك الإشارة والسرعة والأبراج والترددات مباشرة."
       >
+        <LangAsk />
         <PrimaryBtn text="إضافة راوتر" icon="plus" onPress={add} style={{ alignSelf: 'stretch' }} />
         <Pressable style={s.demoBtn} onPress={demo}>
           <Text style={s.demoTxt}>جرّب بدون راوتر · Demo</Text>
@@ -169,6 +171,7 @@ export default function RoutersList() {
             <Text style={[s.linkTxt, { color: P.blue }]}>أنا فني — وضع الفني</Text>
           </Pressable>
         )}
+        <LangLink />
       </EmptyState>
     );
   }
@@ -210,6 +213,7 @@ export default function RoutersList() {
         ListHeaderComponent={
           <View style={{ gap: 12, marginBottom: 4 }}>
           <HomeHeader {...header} onAdd={add} onExplore={explore} />
+          <LangAsk />
           <CityAsk />
           </View>
         }
@@ -238,6 +242,7 @@ export default function RoutersList() {
           </Pressable>
           <InviteCard />
           <ThemePicker />
+          <LangPicker />
           <DevContact />
           <UpdateStatus />
           </View>
@@ -458,7 +463,7 @@ function ThemePicker() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   theme: {
     backgroundColor: P.card, borderColor: P.border, borderWidth: 1.5, borderRadius: 18,
     paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row-reverse', alignItems: 'center', gap: 12,

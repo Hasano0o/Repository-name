@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { ActivityIndicator, Alert, } from 'react-native';
+import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,6 +23,7 @@ import { C, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { RegionGrid, flagOf } from '../../src/ui/RegionGrid';
 
+import { sheet } from '../../src/i18n';
 type Tech = 'LTE' | 'NR';
 type Kind = 'base' | 'band' | 'lteOnly';
 interface Target { key: string; kind: Kind; tech?: Tech; band?: number; label: string; sub?: string }
@@ -808,7 +810,7 @@ function Stat({ v, u, l, c }: { v: string; u: string; l: string; c: string }) {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   inlineStatus: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, justifyContent: 'center', paddingVertical: 4 },
   inlineStatusTxt: { color: C.blue, fontWeight: '800', fontSize: 13 },
   fallbackNote: { color: tFg('#b45309'), fontSize: 12, textAlign: 'right', lineHeight: 19, backgroundColor: C.amberSoft, borderRadius: 12, padding: 10 },

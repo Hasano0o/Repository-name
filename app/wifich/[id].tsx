@@ -5,7 +5,8 @@
  * بين الجوال والراوتر، ونثبّت الأفضل. لو القناة الحالية هي الأفضل نرجّعها كما كانت.
  */
 import { useEffect, useRef, useState } from 'react';
-import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, Share, Linking } from 'react-native';
+import { ActivityIndicator, Alert, Share, Linking } from 'react-native';
+import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
@@ -17,6 +18,7 @@ import { WifiRadio } from '../../src/drivers/types';
 import { DEMO_DRIVER_ID, DemoDriver } from '../../src/drivers/demo';
 import { C, tBg, tBd, tFg } from '../../src/ui/theme';
 
+import { sheet } from '../../src/i18n';
 const ACCENT = '#2f6bff';
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 type Band = '2.4' | '5';
@@ -386,7 +388,7 @@ export default function WifiChannel() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   page: { padding: 16, gap: 14 },
   hero: { backgroundColor: tBg('#eef3ff'), borderRadius: 22, padding: 16, borderWidth: 1.5, borderColor: tBd('#cddbff'), gap: 6 },
   heroTitle: { color: tFg('#1d3f9e'), fontSize: 20, fontWeight: '900', textAlign: 'right' },

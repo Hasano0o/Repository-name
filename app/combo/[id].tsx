@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { ActivityIndicator, Alert, } from 'react-native';
+import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -14,6 +15,7 @@ import { useOperatorBands } from '../../src/store/operator';
 import { C } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 
+import { sheet } from '../../src/i18n';
 const LTE_ONLY = '03';
 type NrPick = 'any' | 'none' | number;
 
@@ -425,7 +427,7 @@ export default function ComboScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   page: { padding: 16, gap: 14 },
   center: { alignItems: 'center', paddingVertical: 40 },
   hint: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 19 },

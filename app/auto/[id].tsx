@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { ScrollView, View, Text, Pressable, Switch, ActivityIndicator, StyleSheet } from 'react-native';
+import { Switch, ActivityIndicator, } from 'react-native';
+import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router';
@@ -11,6 +12,7 @@ import { getMonitorSettings } from '../../src/store/monitor';
 import { C, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 
+import { sheet } from '../../src/i18n';
 const NIGHTLY: { id: NightlyMode; title: string; sub: string }[] = [
   { id: 'off', title: 'متوقفة', sub: 'ما نعيد تشغيل الراوتر أبداً' },
   { id: 'smart', title: 'بس إذا يحتاج', sub: 'لو صار بطيء، أو شغال أكثر من يومين، أو الإشارة ضعفت' },
@@ -171,7 +173,7 @@ export default function AutoScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const s = sheet({
   page: { padding: 16, gap: 14 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg },
   hint: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 19 },

@@ -3,7 +3,8 @@
  * نفس البطاقة عند العميل (مساعد التوجيه) وعند الفني (نهاية الجلسة).
  */
 import { useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Modal, ScrollView, ActivityIndicator, Share } from 'react-native';
+import { Modal, ActivityIndicator, Share } from 'react-native';
+import { View, Text, Pressable, ScrollView } from '../i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
@@ -12,6 +13,7 @@ import { P } from './Pro';
 import { SpeedPair } from '../services/live';
 
 import { tBd, tBg, tFg } from './theme';
+import { sheet } from '../i18n';
 export interface ShareData {
   router: string;
   before?: number; after?: number; best?: number;   // RSRP
@@ -127,7 +129,7 @@ export function ShareCardModal({ data, onClose }: { data: ShareData | null; onCl
   );
 }
 
-const c = StyleSheet.create({
+const c = sheet({
   card: { backgroundColor: P.card, borderRadius: 26, overflow: 'hidden', borderWidth: 1.5, borderColor: P.border },
   head: { padding: 18, paddingBottom: 16 },
   logo: { width: 30, height: 30, borderRadius: 14, backgroundColor: tBg('rgba(255,255,255,0.22)'), alignItems: 'center', justifyContent: 'center' },
