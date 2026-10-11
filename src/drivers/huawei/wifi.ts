@@ -70,6 +70,8 @@ export async function getWifiRadios(io: Io): Promise<WifiRadio[]> {
 
 /** آخر محاولات الكتابة — تطلع في تقرير الدعم */
 let attempts: string[] = [];
+const winner: Record<string, string> = {};
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 const decode = (v: string) => v
   .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
@@ -97,10 +99,18 @@ export async function setWifiChannel(io: Io, band: '2.4' | '5', channel: string)
   } else {
     const all = fieldsOf(body).map(([k, v]) => [k, k === loc.tag ? channel : decode(v)] as [string, string])
       .filter(([k]) => k !== 'WifiRestart');
+    const full = (f: [string, string][]) => tags(f) + '<WifiRestart>1</WifiRestart>';
+    // الكامل أول (H138 يرفض الناقص بخطأ 9003)، وبعده نفس الشي مع إيقاف «الدولة التلقائية» اللي تجبر القناة على تلقائي
+    tries.push(['full', full(all)]);
+    if (all.some(([k, v]) => /^wifiautocountryswitch$/i.test(k) && v === '1') && channel !== '0') {
+      tries.push(['full-noauto', full(all.map(([k, v]) => [k, /^wifiautocountryswitch$/i.test(k) ? '0' : v] as [string, string]))]);
+    }
     tries.push(['short', `<${loc.tag}>${channel}</${loc.tag}><WifiRestart>1</WifiRestart>`]);
-    tries.push(['radio', tags(all.filter(([k]) => RADIO.test(k))) + '<WifiRestart>1</WifiRestart>']);
-    tries.push(['full', tags(all) + '<WifiRestart>1</WifiRestart>']);
+    tries.push(['radio', full(all.filter(([k]) => RADIO.test(k)))]);
   }
+  // اللي نجحت قبل نبدأ فيها على طول (التجربة الذكية تغيّر القناة كذا مرة)
+  const w = winner[loc.src];
+  if (w) tries.sort((a, b) => (a[0] === w ? -1 : b[0] === w ? 1 : 0));
 
   for (const [name, req] of tries) {
     try {
@@ -113,14 +123,20 @@ export async function setWifiChannel(io: Io, band: '2.4' | '5', channel: string)
       if (/network|abort|timeout|مهلة/i.test(String(e?.message ?? e))) return;
       continue;
     }
-    // نتأكد فوراً: الإعداد يتحفظ قبل ما الراديو يعيد التشغيل
-    try {
-      const now = channelsIn(loc.src, inner(await io.get(loc.src))).find(l => l.tag === loc.tag)?.value;
-      attempts.push(`${name}: بعدها ${now ?? '?'}`);
-      if (now === undefined || now === channel) return;
-    } catch {
-      return; // ما نقدر نقرا = الواي فاي يعيد التشغيل
+    // الراوتر ممكن يطبّق بعد ثواني (مع إعادة تشغيل الواي فاي) — ننتظر لين ١٠ ثواني
+    let now: string | undefined;
+    for (let i = 0; i < 5; i++) {
+      await sleep(i === 0 ? 1000 : 2000);
+      try {
+        now = channelsIn(loc.src, inner(await io.get(loc.src))).find(l => l.tag === loc.tag)?.value;
+      } catch {
+        attempts.push(`${name}: الواي فاي يعيد التشغيل`);
+        winner[loc.src] = name;
+        return; // ما نقدر نقرا = الواي فاي يعيد التشغيل — الشاشة تتأكد بعده
+      }
+      if (now === undefined || now === channel) { attempts.push(`${name}: ✓ ${now ?? '?'}`); winner[loc.src] = name; return; }
     }
+    attempts.push(`${name}: بعدها ${now ?? '?'}`);
   }
   throw new Error(`الراوتر ما قبل تغيير القناة (${attempts.join(' | ').slice(0, 120)})`);
 }
