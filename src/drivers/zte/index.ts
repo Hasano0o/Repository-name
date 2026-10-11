@@ -7,6 +7,7 @@ import {
   SignalSnapshot, CellLockState, CellLockTarget, WifiRadio,
 } from '../types';
 import { http } from '../http';
+import { ZteIo, zteExtras, zteSetUpnp, zteSetDmz, zteSetLedNight, zteSetBandOn, zteSetGuest, zteSetUrlBlocks } from './extras';
 import {
   parsePci, decodeBandMask, encodeBandMask, parseZteCa, bandLabel,
 } from '../../utils/normalize';
@@ -1009,6 +1010,18 @@ export class ZteDriver implements RouterDriver {
     });
     if (!/success/i.test(out)) throw this.rejected('تغيير القناة', out);
   }
+
+  // ───── مركز التحكم ─────
+  private io(): ZteIo {
+    return { get: f => this.get(f), getRaw: f => this.getRaw(f), act: b => this.act(b) };
+  }
+  async getExtras() { await this.ensure(); return zteExtras(this.io()); }
+  async setUpnp(on: boolean) { await this.ensure(); return zteSetUpnp(this.io(), on); }
+  async setDmz(on: boolean, ip: string) { await this.ensure(); return zteSetDmz(this.io(), on, ip); }
+  async setLedNight(on: boolean, start: string, end: string) { await this.ensure(); return zteSetLedNight(this.io(), on, start, end); }
+  async setBandOn(band: '2.4' | '5', on: boolean) { await this.ensure(); return zteSetBandOn(this.io(), band, on); }
+  async setGuest(on: boolean, offHours: number) { await this.ensure(); return zteSetGuest(this.io(), on, offHours); }
+  async setUrlBlocks(list: { url: string; macs: string[] }[]) { await this.ensure(); return zteSetUrlBlocks(this.io(), list); }
 
   async wifiDebug(): Promise<string> {
     await this.ensure();
