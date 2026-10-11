@@ -5,6 +5,8 @@ export interface Io {
   get(path: string): Promise<string>;
   post(path: string, body: string): Promise<string>;
   log(...a: unknown[]): void;
+  /** صفحة/ملف خام من واجهة الراوتر (مو api) */
+  page?(path: string): Promise<string>;
 }
 
 const tag = (xml: string, t: string) =>

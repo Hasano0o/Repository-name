@@ -755,6 +755,7 @@ export class HuaweiDriver implements RouterDriver {
       get: (p: string) => this.get(p),
       post: (p: string, b: string) => this.post(p, b),
       log: (...a: unknown[]) => this.log(...a),
+      page: async (p: string) => (await http(`http://${this.host}/${p.replace(/^\//, '')}`, { headers: this.headers() }, 10000)).text(),
     };
   }
   getApnProfiles() { return getApnProfiles(this.io()); }

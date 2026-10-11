@@ -50,9 +50,49 @@ function channelsIn(src: string, body: string): Loc[] {
   return out;
 }
 
+/* ═══ اكتشاف المسارات من واجهة الراوتر نفسها ═══
+ * كل موديل يحفظ القناة في مسار مختلف. نقرأ ملفات الـJS اللي تفتحها صفحة الراوتر
+ * ونطلع منها كل مسارات wlan/… — مرة وحدة لكل تشغيل. */
+let discovered: string[] | null = null;
+let discoverLog: string[] = [];
+
+async function discover(io: Io): Promise<string[]> {
+  if (discovered) return discovered;
+  discoverLog = [];
+  const found = new Set<string>();
+  if (!io.page) return (discovered = []);
+  const scripts = new Set<string>();
+  for (const pg of ['', 'html/index.html', 'html/home.html', 'html/wlanadvanced.html', 'html/wifiadvanced.html']) {
+    try {
+      const html = await io.page(pg);
+      for (const m of html.matchAll(/<script[^>]+src=["']([^"']+\.js)[^"']*["']/gi)) {
+        let src = m[1].replace(/^\.\//, '');
+        if (/^https?:/i.test(src)) continue;
+        if (!src.startsWith('/')) src = (pg.includes('/') ? pg.replace(/[^/]*$/, '') : '') + src;
+        scripts.add(src.replace(/^\//, '').replace(/[^/]+\/\.\.\//g, ''));
+      }
+      for (const m of html.matchAll(/wlan\/[a-z0-9_\-]+/gi)) found.add(m[0]);
+    } catch {}
+  }
+  discoverLog.push(`ملفات js: ${scripts.size}`);
+  for (const js of [...scripts].slice(0, 40)) {
+    try {
+      const code = await io.page(js);
+      let n = 0;
+      for (const m of code.matchAll(/wlan\/[a-z0-9_\-]+/gi)) { found.add(m[0]); n++; }
+      if (n) discoverLog.push(`${js}: ${n}`);
+    } catch {}
+  }
+  discovered = [...found].filter(p => !SOURCES.includes(p));
+  return discovered;
+}
+
 async function locate(io: Io): Promise<Loc[]> {
   const found: Loc[] = [];
-  for (const src of SOURCES) {
+  const extra = await discover(io).catch(() => [] as string[]);
+  // المسارات المكتشفة اللي اسمها يوحي بإعدادات الراديو أول — basic-settings في بعض الموديلات للقراءة بس
+  const radioish = extra.filter(p => /adv|radio|channel|wifi-?mode|feature|basic|band/i.test(p) && !/host|mac|wps|guest|statistic|pin|switch$/i.test(p));
+  for (const src of [...radioish, ...SOURCES]) {
     try {
       const body = inner(await io.get(src));
       if (body) found.push(...channelsIn(src, body));
@@ -153,5 +193,20 @@ export async function wifiDebug(io: Io): Promise<string> {
     }
   }
   if (attempts.length) parts.unshift(`[آخر محاولة]\n${attempts.join('\n')}`);
+  // المسارات المكتشفة: نقرأ كل وحدة ونعرض اللي فيها قناة كاملة
+  const extra = await discover(io).catch(() => [] as string[]);
+  const withCh: string[] = [];
+  const other: string[] = [];
+  for (const src of extra.slice(0, 60)) {
+    try {
+      const body = inner(await io.get(src));
+      if (/channel/i.test(body)) withCh.push(`[${src}] ★\n${body.replace(/<(\w+)>([^<]*)<\/\1>/g, (m, k) => (SECRET.test(k) ? `<${k}>***</${k}>` : m)).slice(0, 1200)}`);
+      else other.push(`${src} ✓`);
+    } catch (e: any) {
+      other.push(`${src} ✗${e?.code ?? ''}`);
+    }
+  }
+  parts.push(`[اكتشاف] ${discoverLog.join(' · ')}\n${other.join(' ، ')}`);
+  parts.push(...withCh);
   return parts.join('\n\n');
 }
