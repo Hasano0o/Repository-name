@@ -187,7 +187,26 @@ def build_summary(day: str | None = None) -> dict:
         "android": top("android", 6, andr),
         "app": top("update", 4),
         "routers": Counter(x for r in recs for x in (r.get("routers") or [])).most_common(6),
+        "history": _history(day, devs),
     }
+
+
+WD_AR = ["الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
+
+
+def _history(day: str, devs: dict, n: int = 7) -> list[dict]:
+    """الأيام اللي قبل اليوم (الأحدث أول): كم نشط وكم جديد في كل يوم."""
+    base = datetime.strptime(day, "%Y-%m-%d")
+    firsts = Counter(v.get("first") for v in devs.values())
+    out = []
+    for i in range(1, n + 1):
+        dt = base - timedelta(days=i)
+        k = dt.strftime("%Y-%m-%d")
+        p = DAYS / f"{k}.json"
+        if not p.exists():
+            continue
+        out.append({"day": k, "wd": WD_AR[dt.weekday()], "active": len(_load(p, {})), "new": firsts.get(k, 0)})
+    return out
 
 
 def _secret(name: str) -> str:
@@ -209,10 +228,26 @@ async def summary(req: Request, day: str | None = None):
 def _fmt(s: dict) -> str:
     def lines(pairs):
         return "\n".join(f"  • {k}: {v}" for k, v in pairs) or "  —"
+    hist = s.get("history") or []
+
+    def diff(now: int, before: int | None) -> str:
+        if before is None:
+            return ""
+        d = now - before
+        return f" ({'↑' if d > 0 else '↓'}{abs(d)} عن أمس)" if d else " (نفس أمس)"
+
+    y = hist[0] if hist and hist[0]["day"] == (datetime.strptime(s["day"], "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d") else None
+    past = ""
+    if hist:
+        top = max([s["active_today"]] + [h["active"] for h in hist]) or 1
+        bar = lambda v: "▇" * max(1, round(v / top * 8)) if v else "·"
+        rows = "\n".join(f"  {h['wd']} {h['day'][5:]}: {bar(h['active'])} {h['active']} نشط · {h['new']} جديد" for h in hist)
+        avg = round(sum(h["active"] for h in hist) / len(hist))
+        past = f"\n\n📈 <b>الأيام السابقة</b> (متوسط {avg} نشط باليوم):\n{rows}"
     return (
         f"📊 <b>إحصائيات Bandly — {s['day']}</b>\n\n"
-        f"👥 نشطين اليوم: <b>{s['active_today']}</b>\n"
-        f"🆕 جدد اليوم: <b>{s['new_today']}</b>\n"
+        f"👥 نشطين اليوم: <b>{s['active_today']}</b>{diff(s['active_today'], y['active'] if y else None)}\n"
+        f"🆕 جدد اليوم: <b>{s['new_today']}</b>{diff(s['new_today'], y['new'] if y else None)}\n"
         f"📅 نشطين آخر ٧ أيام: <b>{s['active_7d']}</b>\n"
         f"📱 كل الأجهزة: <b>{s['total_devices']}</b>\n\n"
         f"🌍 الدول:\n{lines(s.get('countries') or [])}\n\n"
@@ -222,6 +257,7 @@ def _fmt(s: dict) -> str:
         f"🏷️ الجوالات:\n{lines(s['brands'])}\n\n"
         f"🍎 نسخ iOS:\n{lines(s['ios_ver'])}\n\n"
         f"🤖 نسخ أندرويد:\n{lines(s['android'])}"
+        f"{past}"
     )
 
 
