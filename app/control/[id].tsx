@@ -18,7 +18,7 @@ import { P, shadow } from '../../src/ui/Pro';
 import { C, tBg, tBd, tFg } from '../../src/ui/theme';
 
 import { sheet } from '../../src/i18n';
-type Key = 'nat' | 'upnp' | 'dmz' | 'led' | 'reboot' | 'guest' | 'b2.4' | 'b5' | 'rule' | 'url';
+type Key = 'nat' | 'upnp' | 'dmz' | 'led' | 'reboot' | 'guest' | 'b2.4' | 'b5' | 'rule' | 'url' | 'recover' | 'sleep';
 
 const hhmm = (mins: number) => `${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')}`;
 /** مدة التشغيل: «01:01:47» → «ساعة و ١ دقيقة» */
@@ -38,6 +38,7 @@ const remainText = (secs: number) => {
   const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
   return h ? `${h} ساعة و ${m} دقيقة` : `${m} دقيقة`;
 };
+const SLEEP_OPTS = [{ m: -1, label: 'دايماً شغّال' }, { m: 30, label: '٣٠ دقيقة' }, { m: 60, label: 'ساعة' }, { m: 10, label: '١٠ دقائق' }];
 const GUEST_TIMES = [{ h: 4, label: '٤ ساعات' }, { h: 24, label: 'يوم كامل' }, { h: 0, label: 'بدون إطفاء' }];
 
 /* ═══ أوقات النت — الراوتر يرتّب الأيام من الاثنين (خانة 0) للأحد (خانة 6) ═══ */
@@ -235,7 +236,7 @@ export default function ControlCenter() {
   };
   const removeUrl = (u: string) => apply('url', d => d.setUrlBlocks((ex?.urlBlocks ?? []).filter(x => x.url !== u)), x => !x.urlBlocks?.some(y => y.url === u));
 
-  const empty = ex && !ex.nat && ex.upnp === undefined && !ex.dmz && !ex.ledNight && !ex.autoReboot && !ex.guest && !ex.bands && !ex.timeRules && !ex.urlBlocks;
+  const empty = ex && !ex.nat && ex.upnp === undefined && !ex.dmz && !ex.ledNight && !ex.autoReboot && !ex.guest && !ex.bands && !ex.timeRules && !ex.urlBlocks && ex.autoRecover === undefined && ex.wifiSleep === undefined && !ex.health;
   const games = ex && (ex.nat || ex.upnp !== undefined || ex.dmz);
 
   return (
@@ -430,8 +431,40 @@ export default function ControlCenter() {
               </Section>
             )}
 
-            {(ex?.autoReboot || ex?.uptime) && (
+            {(ex?.autoReboot || ex?.uptime || ex?.autoRecover !== undefined || ex?.wifiSleep !== undefined || ex?.health) && (
               <Section icon="refresh" title="الصيانة" caption="راوتر مرتاح = سرعة ثابتة" colors={['#2dd4bf', '#0f766e']}>
+                {!!ex?.health && (
+                  <Row title="صحة الجهاز" last={!ex.uptime && !ex.autoReboot && ex.autoRecover === undefined && ex.wifiSleep === undefined}
+                    sub={ex.health.throttle
+                      ? '🔥 الراوتر حار وقاعد يخفّف قوته — السرعة تنزل. حطه في مكان مهوّى بعيد عن الشمس.'
+                      : (ex.health.tempC ?? 0) >= 60 ? 'حرارته عالية — لو زادت ينزّل السرعة. هوّه شوي.' : 'الحرارة طبيعية.'}
+                    right={<View style={{ flexDirection: 'row-reverse', gap: 6 }}>
+                      {ex.health.battery !== undefined && <Badge text={`${ex.health.charging ? '⚡' : '🔋'} ${ex.health.battery}%`} tone={ex.health.battery <= 20 && !ex.health.charging ? 'warn' : 'info'} />}
+                      {ex.health.tempC !== undefined && <Badge text={`🌡️ ${ex.health.tempC}°`} tone={ex.health.throttle || ex.health.tempC >= 60 ? 'warn' : 'good'} />}
+                    </View>} />
+                )}
+                {ex?.autoRecover !== undefined && (
+                  <Row title="رجّع النت لحاله لو طاح" last={!ex.uptime && !ex.autoReboot && ex.wifiSleep === undefined}
+                    sub={ex.autoRecover ? 'شغّال — لو انقطعت الخدمة (No Service) الراوتر يعيد الاتصال بنفسه.' : 'طافي. ننصح تشغّله — يرجّع الشبكة لحالها بدل ما تطفي وتشغّل.'}
+                    right={<Toggle value={ex.autoRecover} busy={busy === 'recover'} color="#0f766e"
+                      onChange={v => apply('recover', d => d.setAutoRecover(v), x => x.autoRecover === v)} />} />
+                )}
+                {ex?.wifiSleep !== undefined && (
+                  <Row title="نوم الواي فاي" last={!ex.uptime && !ex.autoReboot}
+                    sub={ex.wifiSleep < 0 ? 'الواي فاي شغّال دايماً.' : `الواي فاي ينطفي لحاله بعد ${ex.wifiSleep} دقيقة لو ما فيه أجهزة متصلة — يوفّر البطارية بس ممكن يفصل أجهزة البيت.`}>
+                    <View style={s.chips}>
+                      {SLEEP_OPTS.map(o => {
+                        const on = ex.wifiSleep === o.m;
+                        return (
+                          <Pressable key={o.m} disabled={!!busy || on} style={[s.chip, on && s.chipOn]}
+                            onPress={() => apply('sleep', d => d.setWifiSleep(o.m), x => x.wifiSleep === o.m)}>
+                            <Text style={[s.chipTxt, on && s.chipTxtOn]}>{o.label}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </Row>
+                )}
                 {!!ex?.uptime && (
                   <Row title="الراوتر شغّال من" last={!ex.autoReboot}
                     right={<Badge text={uptimeText(ex.uptime)} tone="info" />} />

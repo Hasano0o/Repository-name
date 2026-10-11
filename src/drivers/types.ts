@@ -62,6 +62,12 @@ export interface RouterExtras {
   timeRuleMax?: number;
   /** حجب المواقع — macs فاضية = على كل الأجهزة */
   urlBlocks?: { url: string; macs: string[] }[];
+  /** يرجّع الاتصال لحاله لو طاحت الخدمة (No Service) */
+  autoRecover?: boolean;
+  /** الواي فاي ينام بعد كذا دقيقة بدون أجهزة — -1 = دايماً شغّال (راوترات البطارية) */
+  wifiSleep?: number;
+  /** صحة الجهاز: البطارية والحرارة (°م) — throttle = الراوتر قاعد يخفّف قوته بسبب الحرارة */
+  health?: { battery?: number; charging?: boolean; tempC?: number; throttle?: boolean };
 }
 
 export interface TimeRule { id: string; mac: string; on: boolean; days: string; start: string; end: string; raw?: string }
@@ -283,4 +289,6 @@ export interface RouterDriver {
   addTimeRule?(r: { mac: string; name: string; days: string; start: string; end: string }): Promise<void>;
   updateTimeRule?(r: TimeRule, action: 'update' | 'delete', on?: boolean): Promise<void>;
   setUrlBlocks?(list: { url: string; macs: string[] }[]): Promise<void>;
+  setAutoRecover?(on: boolean): Promise<void>;
+  setWifiSleep?(mins: number): Promise<void>;
 }

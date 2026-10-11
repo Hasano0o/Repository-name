@@ -37,7 +37,9 @@ export async function zteExtras(io: ZteIo): Promise<RouterExtras> {
   const f = await io.get([
     'upnpEnabled', 'DMZEnable', 'DMZIPAddress',
     'night_mode_switch', 'night_mode_start_time', 'night_mode_end_time',
-    'websURLFilters',
+    'websURLFilters', 'ps_no_service_restart_flag', 'sysIdleTimeToSleep',
+    'battery_vol_percent', 'battery_charging', 'battery_temp', 'pm_sensor_mdm', 'pm_sensor_pa1', 'pm_sensor_ambient',
+    'therm_pa_level', 'therm_tj_level',
   ]).catch(() => ({} as Record<string, string>));
 
   if (f.upnpEnabled === '0' || f.upnpEnabled === '1') ex.upnp = f.upnpEnabled === '1';
@@ -48,6 +50,19 @@ export async function zteExtras(io: ZteIo): Promise<RouterExtras> {
   if (f.websURLFilters !== undefined) {
     ex.urlBlocks = f.websURLFilters.split(';').map(s => s.trim()).filter(Boolean).map(url => ({ url, macs: [] }));
   }
+  if (f.ps_no_service_restart_flag === '0' || f.ps_no_service_restart_flag === '1') ex.autoRecover = f.ps_no_service_restart_flag === '1';
+  if (/^-?\d+$/.test(f.sysIdleTimeToSleep ?? '')) ex.wifiSleep = Number(f.sysIdleTimeToSleep);
+  const temps = [f.pm_sensor_mdm, f.pm_sensor_pa1, f.pm_sensor_ambient].map(Number).filter(t => t > 0 && t < 120);
+  const bat = Number(f.battery_vol_percent);
+  if (temps.length || f.battery_vol_percent) {
+    ex.health = {
+      battery: f.battery_vol_percent && bat >= 0 && bat <= 100 ? bat : undefined,
+      charging: f.battery_charging === '1',
+      tempC: temps.length ? Math.max(...temps) : undefined,
+      throttle: Number(f.therm_pa_level) > 0 || Number(f.therm_tj_level) > 0,
+    };
+  }
+
   const aps = await accessPoints(io);
   const main = aps.filter(a => a.AccessPointIndex === '0');
   if (main.length) {
@@ -176,4 +191,16 @@ export async function zteSetChannel(io: ZteIo, band: '2.4' | '5', channel: strin
     if (String(now?.Channel) === channel) return;
   }
   throw fail('تغيير القناة', out);
+}
+
+/** يرجّع الاتصال لحاله لو انقطعت الخدمة (مجرّب على MU5001) */
+export async function zteSetAutoRecover(io: ZteIo, on: boolean) {
+  const out = await io.act({ goformId: 'PS_NO_SERVICE_RESTART_SET', ps_no_service_restart_flag: on ? '1' : '0' });
+  if (!ok(out)) throw fail('الإرجاع التلقائي', out);
+}
+
+/** نوم الواي فاي: -1 دايماً شغّال، أو دقائق (5/10/20/30/60/120) — مجرّب على MU5001 */
+export async function zteSetWifiSleep(io: ZteIo, mins: number) {
+  const out = await io.act({ goformId: 'SET_WIFI_SLEEP_INFO', sysIdleTimeToSleep: String(mins) });
+  if (!ok(out)) throw fail('نوم الواي فاي', out);
 }

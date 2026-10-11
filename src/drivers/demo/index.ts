@@ -238,6 +238,9 @@ export class DemoDriver implements RouterDriver {
     timeRules: [{ id: 'r1', mac: '3C:22:FB:7E:10:42', on: true, days: '1111001', start: '16:00', end: '21:00' }],
     timeRuleMax: 16,
     urlBlocks: [{ url: 'tiktok.com', macs: [] }],
+    autoRecover: false,
+    wifiSleep: 10,
+    health: { battery: 64, charging: false, tempC: 46, throttle: false },
   };
   private rid = 2;
   async getExtras() {
@@ -268,6 +271,8 @@ export class DemoDriver implements RouterDriver {
       : this.ex.timeRules!.map(x => (x.id === r.id ? { ...x, on: on ?? x.on } : x));
   }
   async setUrlBlocks(list: { url: string; macs: string[] }[]) { await this.tick(); this.ex.urlBlocks = list; }
+  async setAutoRecover(on: boolean) { await this.tick(); this.ex.autoRecover = on; }
+  async setWifiSleep(mins: number) { await this.tick(); this.ex.wifiSleep = mins; }
   async setBandOn(band: '2.4' | '5', on: boolean) {
     await this.tick();
     const next = this.ex.bands!.map(b => (b.band === band ? { ...b, on } : b));

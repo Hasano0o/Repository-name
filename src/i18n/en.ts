@@ -110,6 +110,17 @@ export const EN: Record<string, string> = {
   'اللغة': 'Language',
   'النسخة الأصلية': 'Original version',
 
+  'صحة الجهاز': 'Device health',
+  '🔥 الراوتر حار وقاعد يخفّف قوته — السرعة تنزل. حطه في مكان مهوّى بعيد عن الشمس.': '🔥 The router is hot and throttling — speed drops. Move it somewhere ventilated, away from the sun.',
+  'حرارته عالية — لو زادت ينزّل السرعة. هوّه شوي.': 'Running hot — if it rises it will slow down. Give it some air.',
+  'الحرارة طبيعية.': 'Temperature is normal.',
+  'رجّع النت لحاله لو طاح': 'Auto-recover if internet drops',
+  'شغّال — لو انقطعت الخدمة (No Service) الراوتر يعيد الاتصال بنفسه.': 'On — if service drops (No Service) the router reconnects by itself.',
+  'طافي. ننصح تشغّله — يرجّع الشبكة لحالها بدل ما تطفي وتشغّل.': 'Off. Recommended — it restores the network by itself instead of a power cycle.',
+  'نوم الواي فاي': 'Wi-Fi sleep',
+  'الواي فاي شغّال دايماً.': 'Wi-Fi is always on.',
+  'دايماً شغّال': 'Always on', '٣٠ دقيقة': '30 min', 'ساعة': '1 hour', '١٠ دقائق': '10 min',
+
   // ═══ حالات ═══
   'ما وصلنا للراوتر': "Couldn't reach the router",
   'صار خطأ': 'Something went wrong',
@@ -532,6 +543,7 @@ export const EN: Record<string, string> = {
 };
 
 export const EN_PATTERNS: Record<string, string> = {
+  'الواي فاي ينطفي لحاله بعد {0} دقيقة لو ما فيه أجهزة متصلة — يوفّر البطارية بس ممكن يفصل أجهزة البيت.': 'Wi-Fi turns off after {0} min with no devices — saves battery but may disconnect home devices.',
   'تبي تحذف "{0}" من التطبيق؟\n\nكلمة المرور المُحفوظة راح تنحذف أيضاً.': 'Delete "{0}" from the app?\n\nThe saved password will be deleted too.',
   'تبي تحذف "{0}" من التطبيق؟ بتنحذف كلمة المرور المحفوظة معه.': 'Delete "{0}" from the app? Its saved password will be deleted too.',
   'تبي تحذف "{0}" من التطبيق؟': 'Delete "{0}" from the app?',
