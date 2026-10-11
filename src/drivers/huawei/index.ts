@@ -13,6 +13,7 @@ import { trafficBurst } from '../../utils/nrprobe';
 import { getApnProfiles, setApn, selectApn, getDns, setDns } from './apn-dns';
 import { carriersFrom } from './carriers';
 import { getWifiRadios, setWifiChannel, wifiDebug } from './wifi';
+import * as extras from './extras';
 import { parseTxPower, parseDlMcs, parseUlMcs } from '../../utils/linkHealth';
 import { buildSnapshot } from '../../utils/snapshot';
 
@@ -767,6 +768,13 @@ export class HuaweiDriver implements RouterDriver {
   getWifiRadios() { return getWifiRadios(this.io()); }
   setWifiChannel(band: '2.4' | '5', channel: string) { return setWifiChannel(this.io(), band, channel); }
   wifiDebug() { return wifiDebug(this.io()); }
+  // ───── مركز التحكم (extras.ts) ─────
+  getExtras() { return extras.getExtras(this.io()); }
+  setNat(t: 'cone' | 'symmetric') { return extras.setNat(this.io(), t); }
+  setUpnp(on: boolean) { return extras.setUpnp(this.io(), on); }
+  setDmz(on: boolean, ip: string, mac?: string) { return extras.setDmz(this.io(), on, ip, mac); }
+  setLedNight(on: boolean, start: string, end: string) { return extras.setLedNight(this.io(), on, start, end); }
+  setAutoReboot(on: boolean) { return extras.setAutoReboot(this.io(), on); }
   setDns(cfg: DnsConfig) { return setDns(this.io(), cfg); }
   async getDeviceDetails(): Promise<DeviceDetails> {
     const out: DeviceDetails = {};

@@ -821,11 +821,11 @@ export default function RouterDashboard() {
                 </Pressable>
               )}
               {['huawei-lte', 'zte', 'demo'].includes(info.driverId) && (
-                <Pressable style={[s.moreTile, { backgroundColor: tBg('#0ea5e912'), borderColor: tBd('#0ea5e930') }]} onPress={() => router.push(`/wifich/${info.id}` as Href)}>
-                  <View style={[s.moreIcon, { backgroundColor: tBg('#0ea5e9') }]}>
-                    <Icon name="wifi" size={18} color={tFg('#fff')} />
+                <Pressable style={[s.moreTile, { backgroundColor: tBg('#4338ca12'), borderColor: tBd('#4338ca35') }]} onPress={() => router.push(`/control/${info.id}` as Href)}>
+                  <View style={[s.moreIcon, { backgroundColor: tBg('#4338ca') }]}>
+                    <Icon name="settings" size={18} color={tFg('#fff')} />
                   </View>
-                  <Text style={s.moreLbl}>قناة الواي فاي</Text>
+                  <Text style={s.moreLbl}>مركز التحكم</Text>
                 </Pressable>
               )}
               {feat.sms && (

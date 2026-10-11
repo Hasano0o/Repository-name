@@ -39,6 +39,20 @@ export interface WifiRadio {
   writable: boolean;
 }
 
+/** إعدادات «مركز التحكم» — كل حقل موجود بس لو الراوتر يدعمه */
+export interface RouterExtras {
+  /** cone = مفتوح (أفضل للألعاب)، symmetric = مقيّد */
+  nat?: 'cone' | 'symmetric';
+  upnp?: boolean;
+  dmz?: { on: boolean; ip: string };
+  /** إطفاء أنوار الراوتر بالليل — الوقت HH:MM */
+  ledNight?: { on: boolean; start: string; end: string };
+  /** إعادة تشغيل تلقائية — from/to بالدقائق من منتصف الليل */
+  autoReboot?: { on: boolean; everyDays: number; from: number; to: number };
+  /** منافذ فتحتها الألعاب/الأجهزة عبر UPnP */
+  upnpMaps?: { app: string; ip: string; port: string; proto: string }[];
+}
+
 export interface ConnectedDevice { mac: string; ip?: string; name?: string; blocked?: boolean; }
 export interface Usage { downloadBytes: number; uploadBytes: number; }
 export interface NetworkModeOption { value: string; label: string; }
@@ -244,4 +258,11 @@ export interface RouterDriver {
   setWifiChannel?(band: '2.4' | '5', channel: string): Promise<void>;
   /** نص خام للدعم لو الراوتر ما قبل التغيير */
   wifiDebug?(): Promise<string>;
+  /** مركز التحكم */
+  getExtras?(): Promise<RouterExtras>;
+  setNat?(t: 'cone' | 'symmetric'): Promise<void>;
+  setUpnp?(on: boolean): Promise<void>;
+  setDmz?(on: boolean, ip: string, mac?: string): Promise<void>;
+  setLedNight?(on: boolean, start: string, end: string): Promise<void>;
+  setAutoReboot?(on: boolean): Promise<void>;
 }

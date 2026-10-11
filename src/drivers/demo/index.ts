@@ -1,7 +1,7 @@
 import {
   RouterDriver, Capability, Signal, SignalSnapshot, CellTower, Carrier, NetworkInfo,
   DeviceDetails, Traffic, ConnectedDevice, Usage, BandConfig, CellLockTarget, CellLockState,
-  ActiveLock, DataPlan, SmsMessage, ApnProfile, DnsConfig, WifiRadio,
+  ActiveLock, DataPlan, SmsMessage, ApnProfile, DnsConfig, WifiRadio, RouterExtras,
 } from '../types';
 import { buildSnapshot } from '../../utils/snapshot';
 import { listRouters, saveRouter } from '../../store/routers';
@@ -225,6 +225,27 @@ export class DemoDriver implements RouterDriver {
     this.wifiCh[band] = channel;
   }
   async wifiDebug() { return JSON.stringify(this.wifiCh); }
+
+  // ───── مركز التحكم (محاكاة) ─────
+  private ex: RouterExtras = {
+    nat: 'symmetric', upnp: false, dmz: { on: false, ip: '192.168.8.100' },
+    ledNight: { on: false, start: '00:00', end: '06:00' },
+    autoReboot: { on: true, everyDays: 7, from: 60, to: 300 },
+    upnpMaps: [],
+  };
+  async getExtras() {
+    await this.alive();
+    return JSON.parse(JSON.stringify(this.ex)) as RouterExtras;
+  }
+  private async tick() { await this.alive(); await new Promise(r => setTimeout(r, 700)); }
+  async setNat(t: 'cone' | 'symmetric') { await this.tick(); this.ex.nat = t; }
+  async setUpnp(on: boolean) {
+    await this.tick(); this.ex.upnp = on;
+    this.ex.upnpMaps = on ? [{ app: 'PlayStation', ip: '192.168.8.102', port: '3478', proto: 'UDP' }] : [];
+  }
+  async setDmz(on: boolean, ip: string) { await this.tick(); this.ex.dmz = { on, ip }; }
+  async setLedNight(on: boolean, start: string, end: string) { await this.tick(); this.ex.ledNight = { on, start, end }; }
+  async setAutoReboot(on: boolean) { await this.tick(); this.ex.autoReboot = { ...this.ex.autoReboot!, on }; }
   /** بنق محاكى بين الجوال والراوتر حسب زحمة القناة */
   demoLanPing(band: '2.4' | '5'): number | null {
     const busy: Record<string, number> = { '6': 3.2, '1': 1.6, '11': 1.1, '40': 2.4, '36': 1.3, '44': 1, '48': 1.4, '149': 0.9, '157': 1.2, '0': 1.8 };
