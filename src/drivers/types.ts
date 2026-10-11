@@ -57,7 +57,14 @@ export interface RouterExtras {
   bands?: { band: '2.4' | '5'; on: boolean }[];
   /** مدة تشغيل الراوتر كما يرجعها (مثل 3:12:05 أو 2 يوم) */
   uptime?: string;
+  /** أوقات النت للأجهزة — الجهاز يشتغل عليه النت بس داخل الوقت. days: ٧ خانات تبدأ بالاثنين */
+  timeRules?: TimeRule[];
+  timeRuleMax?: number;
+  /** حجب المواقع — macs فاضية = على كل الأجهزة */
+  urlBlocks?: { url: string; macs: string[] }[];
 }
+
+export interface TimeRule { id: string; mac: string; on: boolean; days: string; start: string; end: string; raw?: string }
 
 export interface ConnectedDevice { mac: string; ip?: string; name?: string; blocked?: boolean; }
 export interface Usage { downloadBytes: number; uploadBytes: number; }
@@ -273,4 +280,7 @@ export interface RouterDriver {
   setAutoReboot?(on: boolean): Promise<void>;
   setGuest?(on: boolean, offHours: number): Promise<void>;
   setBandOn?(band: '2.4' | '5', on: boolean): Promise<void>;
+  addTimeRule?(r: { mac: string; name: string; days: string; start: string; end: string }): Promise<void>;
+  updateTimeRule?(r: TimeRule, action: 'update' | 'delete', on?: boolean): Promise<void>;
+  setUrlBlocks?(list: { url: string; macs: string[] }[]): Promise<void>;
 }

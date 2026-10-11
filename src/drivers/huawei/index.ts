@@ -6,8 +6,7 @@ import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils';
 import {
   RouterDriver, Capability, Signal, ConnectedDevice, Usage, NetworkInfo, Traffic,
   BandConfig, SmsMessage, DeviceDetails, CellTower, CellLockTarget, CellLockState, DataPlan, ActiveLock,
-  ApnProfile, DnsConfig, Carrier, SignalSnapshot,
-} from '../types';
+  ApnProfile, DnsConfig, Carrier, SignalSnapshot, TimeRule } from '../types';
 import { http } from '../http';
 import { trafficBurst } from '../../utils/nrprobe';
 import { getApnProfiles, setApn, selectApn, getDns, setDns } from './apn-dns';
@@ -777,6 +776,9 @@ export class HuaweiDriver implements RouterDriver {
   setAutoReboot(on: boolean) { return extras.setAutoReboot(this.io(), on); }
   setGuest(on: boolean, offHours: number) { return extras.setGuest(this.io(), on, offHours); }
   setBandOn(band: '2.4' | '5', on: boolean) { return extras.setBandOn(this.io(), band, on); }
+  addTimeRule(r: { mac: string; name: string; days: string; start: string; end: string }) { return extras.addTimeRule(this.io(), r); }
+  updateTimeRule(r: TimeRule, action: 'update' | 'delete', on?: boolean) { return extras.updateTimeRule(this.io(), r, action, on); }
+  setUrlBlocks(list: { url: string; macs: string[] }[]) { return extras.setUrlBlocks(this.io(), list); }
   setDns(cfg: DnsConfig) { return setDns(this.io(), cfg); }
   async getDeviceDetails(): Promise<DeviceDetails> {
     const out: DeviceDetails = {};

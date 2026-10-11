@@ -7,7 +7,7 @@
  *   diagnosis/time_reboot  enable (بعض الموديلات ما تسمح بتعديل الوقت — نغيّر التشغيل بس)
  * أي مسار يرجع خطأ = الراوتر ما يدعم الميزة، فما نعرضها.
  */
-import { RouterExtras } from '../types';
+import { RouterExtras, TimeRule } from '../types';
 import { ensureSession, type Io } from './apn-dns';
 
 const tag = (xml: string, t: string) => xml.match(new RegExp(`<${t}>([^<]*)</${t}>`))?.[1];
@@ -74,6 +74,27 @@ export async function getExtras(io: Io): Promise<RouterExtras> {
     const rs = radioBlocks(sw);
     if (rs.length) out.bands = rs.map(b => ({ band: radioBand(b), on: tag(b, 'wifienable') === '1' }));
   }
+  // ── أوقات النت ──
+  const tr = await ok(io, 'timerule/timerule');
+  if (tr && tag(tr, 'TimeRuleMaxNum') !== undefined) {
+    out.timeRuleMax = Number(tag(tr, 'TimeRuleMaxNum')) || 16;
+    out.timeRules = [...tr.matchAll(/<TimeControlRule>([\s\S]*?)<\/TimeControlRule>/g)].map(m => {
+      const b = m[1];
+      return {
+        id: tag(b, 'ID') ?? '', mac: (tag(b, 'DevicesMAC') ?? '').toUpperCase(),
+        on: tag(b, 'Enable') === '1', days: tag(b, 'WeekEnable') ?? '1111111',
+        start: tag(b, 'StartTime') ?? '00:00', end: tag(b, 'EndTime') ?? '00:00', raw: b,
+      } as TimeRule;
+    });
+  }
+  // ── حجب المواقع ──
+  const uf = await ok(io, 'security/url-filter');
+  if (uf && /<urlfilters/.test(uf)) {
+    out.urlBlocks = [...uf.matchAll(/<urlfilter>([\s\S]*?)<\/urlfilter>/g)].map(m => ({
+      url: unesc(tag(m[1], 'value') ?? ''),
+      macs: [...m[1].matchAll(/<devicemac>([^<]*)<\/devicemac>/g)].map(x => x[1].toUpperCase()),
+    })).filter(x => x.url);
+  }
   // ── مدة التشغيل ──
   const bt = await ok(io, 'device/boot_time');
   if (bt && tag(bt, 'boot_time')) out.uptime = tag(bt, 'boot_time');
@@ -112,6 +133,32 @@ export async function setBandOn(io: Io, band: '2.4' | '5', on: boolean) {
     ? b.replace(/<wifienable>[^<]*<\/wifienable>/, `<wifienable>${on ? '1' : '0'}</wifienable>`) : b));
   if (!rs.some(b => tag(b, 'wifienable') === '1')) throw new Error('ما نقدر نطفي كل الشبكات — بتنقطع عن الراوتر');
   await io.post('wlan/status-switch-settings', `<radios>${rs.map(b => `<radio>${b}</radio>`).join('')}</radios><WifiRestart>1</WifiRestart>`);
+}
+
+const ruleXml = (r: Record<string, string>, mac: string, name: string) =>
+  `<TimeControlRules><TimeControlRule><Action>${r.Action}</Action><Enable>${r.Enable}</Enable><TimeMode>${r.TimeMode}</TimeMode>`
+  + `<ID>${esc(r.ID)}</ID><DevicesMACs><DevicesMAC>${esc(mac)}</DevicesMAC></DevicesMACs><DevicesNames><DevicesName>${esc(name)}</DevicesName></DevicesNames>`
+  + `<WeekEnable>${r.WeekEnable}</WeekEnable><StartTime>${r.StartTime}</StartTime><EndTime>${r.EndTime}</EndTime></TimeControlRule></TimeControlRules>`;
+
+export async function addTimeRule(io: Io, r: { mac: string; name: string; days: string; start: string; end: string }) {
+  await io.post('timerule/timerule', ruleXml({
+    Action: 'create', Enable: '1', TimeMode: r.days === '1111111' ? '0' : '1', ID: '',
+    WeekEnable: r.days, StartTime: r.start, EndTime: r.end,
+  }, r.mac, r.name));
+}
+export async function updateTimeRule(io: Io, r: TimeRule, action: 'update' | 'delete', on?: boolean) {
+  const b = r.raw ?? '';
+  await io.post('timerule/timerule', ruleXml({
+    Action: action, Enable: on === undefined ? (r.on ? '1' : '0') : (on ? '1' : '0'),
+    TimeMode: tag(b, 'TimeMode') ?? (r.days === '1111111' ? '0' : '1'), ID: r.id,
+    WeekEnable: r.days, StartTime: r.start, EndTime: r.end,
+  }, r.mac, tag(b, 'DevicesName') ?? r.mac));
+}
+export async function setUrlBlocks(io: Io, list: { url: string; macs: string[] }[]) {
+  const items = list.map(x => `<urlfilter><value>${esc(x.url)}</value><status>1</status>`
+    + (x.macs.length ? `<devicemacs>${x.macs.map(m => `<devicemac>${esc(m)}</devicemac>`).join('')}</devicemacs>` : '')
+    + '</urlfilter>').join('');
+  await io.post('security/url-filter', `<urlfilters>${items}</urlfilters>`);
 }
 
 export async function setNat(io: Io, t: 'cone' | 'symmetric') {

@@ -1,7 +1,7 @@
 import {
   RouterDriver, Capability, Signal, SignalSnapshot, CellTower, Carrier, NetworkInfo,
   DeviceDetails, Traffic, ConnectedDevice, Usage, BandConfig, CellLockTarget, CellLockState,
-  ActiveLock, DataPlan, SmsMessage, ApnProfile, DnsConfig, WifiRadio, RouterExtras,
+  ActiveLock, DataPlan, SmsMessage, ApnProfile, DnsConfig, WifiRadio, RouterExtras, TimeRule,
 } from '../types';
 import { buildSnapshot } from '../../utils/snapshot';
 import { listRouters, saveRouter } from '../../store/routers';
@@ -234,8 +234,12 @@ export class DemoDriver implements RouterDriver {
     upnpMaps: [],
     guest: { on: false, name: 'Bandly_Guest', open: true, offHours: 4 },
     bands: [{ band: '2.4', on: true }, { band: '5', on: true }],
-    uptime: '3 يوم 04:12:09',
+    uptime: '76:12:09',
+    timeRules: [{ id: 'r1', mac: '3C:22:FB:7E:10:42', on: true, days: '1111100', start: '16:00', end: '21:00' }],
+    timeRuleMax: 16,
+    urlBlocks: [{ url: 'tiktok.com', macs: [] }],
   };
+  private rid = 2;
   async getExtras() {
     await this.alive();
     return JSON.parse(JSON.stringify(this.ex)) as RouterExtras;
@@ -253,6 +257,17 @@ export class DemoDriver implements RouterDriver {
     await this.tick();
     this.ex.guest = { ...this.ex.guest!, on, offHours, remainSecs: on && offHours ? offHours * 3600 : undefined };
   }
+  async addTimeRule(r: { mac: string; name: string; days: string; start: string; end: string }) {
+    await this.tick();
+    this.ex.timeRules = [...(this.ex.timeRules ?? []), { id: 'r' + this.rid++, mac: r.mac, on: true, days: r.days, start: r.start, end: r.end }];
+  }
+  async updateTimeRule(r: TimeRule, action: 'update' | 'delete', on?: boolean) {
+    await this.tick();
+    this.ex.timeRules = action === 'delete'
+      ? this.ex.timeRules!.filter(x => x.id !== r.id)
+      : this.ex.timeRules!.map(x => (x.id === r.id ? { ...x, on: on ?? x.on } : x));
+  }
+  async setUrlBlocks(list: { url: string; macs: string[] }[]) { await this.tick(); this.ex.urlBlocks = list; }
   async setBandOn(band: '2.4' | '5', on: boolean) {
     await this.tick();
     const next = this.ex.bands!.map(b => (b.band === band ? { ...b, on } : b));

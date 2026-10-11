@@ -1,23 +1,23 @@
 /**
  * مركز التحكم — إعدادات الراوتر المتقدمة في مكان واحد ومرتب:
- *   🎮 الألعاب (NAT / UPnP / DMZ)   📶 الواي فاي (الشبكات + القناة)   👥 الضيوف   🌙 الليل (الأنوار)   🛠 الصيانة
+ *   🎮 الألعاب (NAT / UPnP / DMZ)   📶 الواي فاي (الشبكات + القناة)   👥 الضيوف   🔒 العائلة (أوقات النت + حجب المواقع)   🌙 الليل   🛠 الصيانة
  * كل قسم يظهر بس لو الراوتر يدعمه. وكل تغيير نقرأه بعد الحفظ ونتأكد إنه انحفظ فعلاً.
  */
 import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, Switch, Modal,
+  ScrollView, View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, Switch, Modal, TextInput,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams, Href } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
-import { ConnectedDevice, RouterExtras } from '../../src/drivers/types';
+import { ConnectedDevice, RouterExtras, TimeRule } from '../../src/drivers/types';
 import { Icon, IconName } from '../../src/ui/Icon';
 import { P, shadow } from '../../src/ui/Pro';
 import { C, tBg, tBd, tFg } from '../../src/ui/theme';
 
-type Key = 'nat' | 'upnp' | 'dmz' | 'led' | 'reboot' | 'guest' | 'b2.4' | 'b5';
+type Key = 'nat' | 'upnp' | 'dmz' | 'led' | 'reboot' | 'guest' | 'b2.4' | 'b5' | 'rule' | 'url';
 
 const hhmm = (mins: number) => `${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')}`;
 /** مدة التشغيل: «01:01:47» → «ساعة و ١ دقيقة» */
@@ -34,6 +34,30 @@ const remainText = (secs: number) => {
   return h ? `${h} ساعة و ${m} دقيقة` : `${m} دقيقة`;
 };
 const GUEST_TIMES = [{ h: 4, label: '٤ ساعات' }, { h: 24, label: 'يوم كامل' }, { h: 0, label: 'بدون إطفاء' }];
+
+/* ═══ أوقات النت — الراوتر يرتّب الأيام من الاثنين (خانة 0) للأحد (خانة 6) ═══ */
+const DAYS_AR: { i: number; short: string }[] = [
+  { i: 5, short: 'سبت' }, { i: 6, short: 'أحد' }, { i: 0, short: 'اثنين' }, { i: 1, short: 'ثلاثاء' },
+  { i: 2, short: 'أربعاء' }, { i: 3, short: 'خميس' }, { i: 4, short: 'جمعة' },
+];
+function daysText(d: string) {
+  if (d === '1111111') return 'كل يوم';
+  if (d === '1111001') return 'الأحد – الخميس';
+  if (d === '0000110') return 'الويكند';
+  return DAYS_AR.filter(x => d[x.i] === '1').map(x => x.short).join('، ');
+}
+function time12(t: string) {
+  const [h, m] = t.split(':').map(Number);
+  const pm = h >= 12, hh = h % 12 || 12;
+  return `${hh}${m ? ':' + String(m).padStart(2, '0') : ''} ${pm ? 'م' : 'ص'}`;
+}
+const shiftTime = (t: string, mins: number) => {
+  const [h, m] = t.split(':').map(Number);
+  const v = (h * 60 + m + mins + 1440) % 1440;
+  return `${String(Math.floor(v / 60)).padStart(2, '0')}:${String(v % 60).padStart(2, '0')}`;
+};
+/** «https://www.TikTok.com/foo» → «tiktok.com» */
+const cleanUrl = (u: string) => u.trim().toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/^www\./, '').replace(/[/?#].*$/, '');
 
 const LED_PRESETS = [
   { label: '١٢ص – ٦ص', start: '00:00', end: '06:00' },
@@ -105,6 +129,8 @@ export default function ControlCenter() {
   const [error, setError] = useState('');
   const [picker, setPicker] = useState<ConnectedDevice[] | null>(null);
   const [devNames, setDevNames] = useState<Record<string, string>>({});
+  const [ruleSheet, setRuleSheet] = useState<{ devs: ConnectedDevice[]; mac: string; days: string; start: string; end: string } | null>(null);
+  const [urlInput, setUrlInput] = useState('');
   const mounted = useRef(true);
 
   const read = useCallback(async (r: SavedRouter) => {
@@ -124,7 +150,7 @@ export default function ControlCenter() {
         if (mounted.current) setWifiCh(caps.wifi);
         await read(r);
         const devs = await withSession(r, d => (d.getDevices ? d.getDevices() : Promise.resolve([] as ConnectedDevice[])), false).catch(() => []);
-        if (mounted.current) setDevNames(Object.fromEntries(devs.filter(x => x.ip).map(x => [x.ip!, x.name || x.mac])));
+        if (mounted.current) setDevNames(Object.fromEntries(devs.flatMap(x => [[x.mac.toUpperCase(), x.name || x.mac], ...(x.ip ? [[x.ip, x.name || x.mac]] : [])])));
       } catch (e: any) {
         if (mounted.current) setError(e?.message ?? String(e));
       } finally {
@@ -173,7 +199,35 @@ export default function ControlCenter() {
     } else go();
   };
 
-  const empty = ex && !ex.nat && ex.upnp === undefined && !ex.dmz && !ex.ledNight && !ex.autoReboot && !ex.guest && !ex.bands;
+  const openRuleSheet = async () => {
+    if (!info) return;
+    const devs = await withSession(info, d => (d.getDevices ? d.getDevices() : Promise.resolve([] as ConnectedDevice[])), false).catch(() => []);
+    setRuleSheet({ devs, mac: '', days: '1111001', start: '16:00', end: '21:00' });
+  };
+  const saveRule = () => {
+    const r = ruleSheet;
+    if (!r?.mac) { Alert.alert('اختر جهاز', 'اختر الجهاز اللي تبي تحدد له وقت النت.'); return; }
+    if (r.days === '0000000') { Alert.alert('اختر الأيام', 'اختر يوم واحد على الأقل.'); return; }
+    setRuleSheet(null);
+    const name = r.devs.find(d => d.mac === r.mac)?.name || r.mac;
+    apply('rule', d => d.addTimeRule({ mac: r.mac, name, days: r.days, start: r.start, end: r.end }),
+      x => !!x.timeRules?.some(y => y.mac === r.mac.toUpperCase() && y.start === r.start));
+  };
+  const removeRule = (r: TimeRule) => Alert.alert('حذف الوقت', `بنرجّع النت مفتوح لـ ${devNames[r.mac] || r.mac} طول الوقت.`, [
+    { text: 'إلغاء', style: 'cancel' },
+    { text: 'احذف', style: 'destructive', onPress: () => apply('rule', d => d.updateTimeRule(r, 'delete'), x => !x.timeRules?.some(y => y.id === r.id)) },
+  ]);
+  const addUrl = () => {
+    const u = cleanUrl(urlInput);
+    if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(u)) { Alert.alert('الرابط غير صحيح', 'اكتب اسم الموقع مثل tiktok.com'); return; }
+    const cur = ex?.urlBlocks ?? [];
+    if (cur.some(x => x.url === u)) { setUrlInput(''); return; }
+    setUrlInput('');
+    apply('url', d => d.setUrlBlocks([...cur, { url: u, macs: [] }]), x => !!x.urlBlocks?.some(y => y.url === u));
+  };
+  const removeUrl = (u: string) => apply('url', d => d.setUrlBlocks((ex?.urlBlocks ?? []).filter(x => x.url !== u)), x => !x.urlBlocks?.some(y => y.url === u));
+
+  const empty = ex && !ex.nat && ex.upnp === undefined && !ex.dmz && !ex.ledNight && !ex.autoReboot && !ex.guest && !ex.bands && !ex.timeRules && !ex.urlBlocks;
   const games = ex && (ex.nat || ex.upnp !== undefined || ex.dmz);
 
   return (
@@ -292,6 +346,59 @@ export default function ControlCenter() {
               </Section>
             )}
 
+            {(ex?.timeRules || ex?.urlBlocks) && (
+              <Section icon="lock" title="العائلة" caption="أوقات النت للعيال وحجب المواقع" colors={['#fb7185', '#be123c']}>
+                {ex.timeRules && (
+                  <Row title="أوقات النت" last={!ex.urlBlocks}
+                    sub="الجهاز يشتغل عليه النت بس في الوقت اللي تحدده، وباقي اليوم ينقطع عنه."
+                    right={busy === 'rule' ? <ActivityIndicator color="#be123c" /> : undefined}>
+                    {ex.timeRules.map(r => (
+                      <View key={r.id} style={s.rule}>
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <Text style={s.ruleDev} numberOfLines={1}>{devNames[r.mac] || r.mac}</Text>
+                          <Text style={s.ruleTime}>{time12(r.start)} – {time12(r.end)} · {daysText(r.days)}</Text>
+                        </View>
+                        <Switch value={r.on} disabled={!!busy}
+                          onValueChange={v => apply('rule', d => d.updateTimeRule(r, 'update', v), x => !!x.timeRules?.some(y => y.id === r.id && y.on === v))}
+                          trackColor={{ true: '#be123c', false: '#cbd5e1' }} thumbColor="#ffffff" ios_backgroundColor="#cbd5e1" />
+                        <Pressable onPress={() => removeRule(r)} disabled={!!busy} hitSlop={8} style={s.ruleDel}>
+                          <Icon name="trash" size={16} color={tFg('#be123c')} />
+                        </Pressable>
+                      </View>
+                    ))}
+                    {ex.timeRules.length < (ex.timeRuleMax ?? 16) && (
+                      <Pressable onPress={openRuleSheet} disabled={!!busy} style={s.addBtn}>
+                        <Icon name="plus" size={16} color={tFg('#be123c')} stroke={2.4} />
+                        <Text style={s.addTxt}>أضف وقت لجهاز</Text>
+                      </Pressable>
+                    )}
+                  </Row>
+                )}
+                {ex.urlBlocks && (
+                  <Row title="حجب المواقع" last sub="المواقع اللي تضيفها ما تفتح على أي جهاز في البيت."
+                    right={busy === 'url' ? <ActivityIndicator color="#be123c" /> : undefined}>
+                    {ex.urlBlocks.length > 0 && (
+                      <View style={s.chips}>
+                        {ex.urlBlocks.map(u => (
+                          <Pressable key={u.url} onPress={() => removeUrl(u.url)} disabled={!!busy} style={s.urlChip}>
+                            <Text style={s.urlTxt}>{u.url}</Text>
+                            <Text style={s.urlX}>✕</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    )}
+                    <View style={s.urlRow}>
+                      <TextInput value={urlInput} onChangeText={setUrlInput} placeholder="مثال: tiktok.com" placeholderTextColor={P.faint}
+                        autoCapitalize="none" autoCorrect={false} keyboardType="url" onSubmitEditing={addUrl} style={s.urlInput} />
+                      <Pressable onPress={addUrl} disabled={!!busy || !urlInput.trim()} style={[s.urlAdd, (!urlInput.trim() || !!busy) && { opacity: 0.5 }]}>
+                        <Text style={s.urlAddTxt}>احجب</Text>
+                      </Pressable>
+                    </View>
+                  </Row>
+                )}
+              </Section>
+            )}
+
             {ex?.ledNight && (
               <Section icon="moon" title="وضع الليل" caption="أنوار الراوتر تنطفي وقت النوم" colors={['#6366f1', '#312e81']}>
                 <Row title="إطفاء الأنوار بالليل" last
@@ -362,6 +469,60 @@ export default function ControlCenter() {
           </ScrollView>
         </View>
       </Modal>
+
+      <Modal visible={!!ruleSheet} transparent animationType="slide" onRequestClose={() => setRuleSheet(null)}>
+        <Pressable style={s.backdrop} onPress={() => setRuleSheet(null)} />
+        {ruleSheet && (
+          <View style={[s.sheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={s.grip} />
+            <Text style={s.sheetTitle}>وقت النت لجهاز</Text>
+            <Text style={s.sheetSub}>النت يشتغل على الجهاز بس داخل هالوقت.</Text>
+
+            <Text style={s.label}>الجهاز</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, flexDirection: 'row-reverse' }}>
+              {ruleSheet.devs.length ? ruleSheet.devs.map(d => {
+                const on = ruleSheet.mac === d.mac;
+                return (
+                  <Pressable key={d.mac} onPress={() => setRuleSheet({ ...ruleSheet, mac: d.mac })} style={[s.chip, on && s.chipRose]}>
+                    <Text style={[s.chipTxt, on && s.chipTxtOn]} numberOfLines={1}>{d.name || d.ip || d.mac}</Text>
+                  </Pressable>
+                );
+              }) : <Text style={s.rowSub}>ما لقينا أجهزة متصلة</Text>}
+            </ScrollView>
+
+            <Text style={s.label}>الأيام</Text>
+            <View style={s.chips}>
+              {DAYS_AR.map(x => {
+                const on = ruleSheet.days[x.i] === '1';
+                return (
+                  <Pressable key={x.i} style={[s.dayChip, on && s.chipRose]}
+                    onPress={() => { const a = ruleSheet.days.split(''); a[x.i] = on ? '0' : '1'; setRuleSheet({ ...ruleSheet, days: a.join('') }); }}>
+                    <Text style={[s.chipTxt, on && s.chipTxtOn]}>{x.short}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={s.label}>الوقت المسموح</Text>
+            <View style={s.timeRow}>
+              {(['start', 'end'] as const).map(k => (
+                <View key={k} style={s.timeBox}>
+                  <Text style={s.timeLbl}>{k === 'start' ? 'من' : 'إلى'}</Text>
+                  <View style={s.stepper}>
+                    <Pressable hitSlop={6} style={s.stepBtn} onPress={() => setRuleSheet({ ...ruleSheet, [k]: shiftTime(ruleSheet[k], 30) })}><Text style={s.stepTxt}>+</Text></Pressable>
+                    <Text style={s.timeVal}>{time12(ruleSheet[k])}</Text>
+                    <Pressable hitSlop={6} style={s.stepBtn} onPress={() => setRuleSheet({ ...ruleSheet, [k]: shiftTime(ruleSheet[k], -30) })}><Text style={s.stepTxt}>−</Text></Pressable>
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            <Pressable onPress={saveRule} style={({ pressed }) => [s.saveBtn, pressed && { opacity: 0.85 }]}>
+              <Text style={s.saveTxt}>احفظ</Text>
+            </Pressable>
+          </View>
+        )}
+      </Modal>
     </View>
   );
 }
@@ -405,6 +566,31 @@ const s = StyleSheet.create({
   chips: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: C.rowBg, borderWidth: 1.5, borderColor: C.cardBorder },
   chipOn: { backgroundColor: tBg('#4f46e5'), borderColor: tBd('#4f46e5') },
+  chipRose: { backgroundColor: tBg('#be123c'), borderColor: tBd('#be123c') },
+  rule: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, backgroundColor: tBg('#fff1f2'), borderRadius: 16, padding: 12 },
+  ruleDev: { color: C.text, fontSize: 14.5, fontWeight: '800', textAlign: 'right' },
+  ruleTime: { color: tFg('#9f1239'), fontSize: 12.5, fontWeight: '700', textAlign: 'right' },
+  ruleDel: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: tBg('#ffe4e6') },
+  addBtn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 11, borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', borderColor: tBd('#fda4af') },
+  addTxt: { color: tFg('#be123c'), fontSize: 14, fontWeight: '800' },
+  urlChip: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: tBg('#fff1f2'), borderWidth: 1, borderColor: tBd('#fecdd3') },
+  urlTxt: { color: tFg('#9f1239'), fontSize: 13, fontWeight: '800' },
+  urlX: { color: tFg('#be123c'), fontSize: 12, fontWeight: '900' },
+  urlRow: { flexDirection: 'row-reverse', gap: 8 },
+  urlInput: { flex: 1, backgroundColor: C.rowBg, borderRadius: 14, paddingHorizontal: 12, minHeight: 44, color: C.text, fontSize: 14.5, textAlign: 'left', writingDirection: 'ltr' },
+  urlAdd: { paddingHorizontal: 18, borderRadius: 14, backgroundColor: tBg('#be123c'), alignItems: 'center', justifyContent: 'center' },
+  urlAddTxt: { color: tFg('#ffffff'), fontSize: 14, fontWeight: '900' },
+  label: { color: C.text, fontSize: 13.5, fontWeight: '900', textAlign: 'right', marginTop: 10, marginBottom: 6 },
+  dayChip: { minWidth: 58, alignItems: 'center', paddingVertical: 8, paddingHorizontal: 8, borderRadius: 12, backgroundColor: C.rowBg, borderWidth: 1.5, borderColor: C.cardBorder },
+  timeRow: { flexDirection: 'row-reverse', gap: 10 },
+  timeBox: { flex: 1, backgroundColor: C.rowBg, borderRadius: 16, padding: 10, gap: 6, alignItems: 'center' },
+  timeLbl: { color: P.sub, fontSize: 12, fontWeight: '800' },
+  stepper: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
+  stepBtn: { width: 34, height: 34, borderRadius: 11, backgroundColor: tBg('#ffffff'), borderWidth: 1, borderColor: C.cardBorder, alignItems: 'center', justifyContent: 'center' },
+  stepTxt: { color: tFg('#be123c'), fontSize: 20, fontWeight: '900', lineHeight: 22 },
+  timeVal: { color: C.text, fontSize: 17, fontWeight: '900', minWidth: 64, textAlign: 'center' },
+  saveBtn: { marginTop: 16, backgroundColor: tBg('#be123c'), borderRadius: 16, paddingVertical: 14, alignItems: 'center' },
+  saveTxt: { color: tFg('#ffffff'), fontSize: 16, fontWeight: '900' },
   chipGuest: { backgroundColor: tBg('#d97706'), borderColor: tBd('#d97706') },
   chipTxt: { color: C.text, fontSize: 13, fontWeight: '800' },
   chipTxtOn: { color: tFg('#ffffff') },
