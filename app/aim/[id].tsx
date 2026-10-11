@@ -182,7 +182,7 @@ function DirStat({ icon, label, value, color, bg }: { icon: IconName; label: str
 
 // ═══ الشاشة ═══
 export default function AimScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, share: autoShare, wa: shareTo, tname } = useLocalSearchParams<{ id: string; share?: string; wa?: string; tname?: string }>();
   const insets = useSafeAreaInsets();
   const [info, setInfo] = useState<SavedRouter | null>(null);
   const [signal, setSignal] = useState<Signal | null>(null);
@@ -532,9 +532,14 @@ export default function AimScreen() {
   // ═══ وضع الفني — المشاركة ═══
   const shareLink = (c = live) => {
     if (!c) return;
-    Share.share({
-      message: `ساعدني أضبط إشارة الراوتر 📡\nافتح الرابط وشوف قراءتي مباشرة:\n${c.url}\n\nأو اكتب الكود في Bandly ← وضع الفني: ${c.code}`,
-    }).catch(() => {});
+    const message = `ساعدني أضبط إشارة الراوتر 📡\nافتح الرابط وشوف قراءتي مباشرة:\n${c.url}\n\nأو اكتب الكود في Bandly ← وضع الفني: ${c.code}`;
+    // جاي من «فنيين قريبين» ← نرسلها لواتساب الفني نفسه مباشرة
+    if (shareTo) {
+      Linking.openURL(`https://wa.me/${String(shareTo).replace(/\D/g, '')}?text=${encodeURIComponent(message)}`)
+        .catch(() => Share.share({ message }).catch(() => {}));
+      return;
+    }
+    Share.share({ message }).catch(() => {});
   };
 
   const startShare = async () => {
@@ -576,12 +581,15 @@ export default function AimScreen() {
       liveRef.current = host;
       liveTokenRef.current = s.token;
       viewersRef.current = [];
-      callRef.current = new CallController({
-        role: 'cust', peerLabel: 'الفني',
-        send: (kind, data, to) => host.rtc(kind, data, to),
-        getIce: () => host.iceServers(),
-        onChange: setCallInfo,
-      });
+      // المكالمة الصوتية/الكاميرا تحتاج مكتبة الجوال (WebRTC أصلي) — في نسخة الكمبيوتر المشاركة تشتغل بدونها
+      if (Platform.OS !== 'web') {
+        callRef.current = new CallController({
+          role: 'cust', peerLabel: 'الفني',
+          send: (kind, data, to) => host.rtc(kind, data, to),
+          getIce: () => host.iceServers(),
+          onChange: setCallInfo,
+        });
+      }
       setLive({ code: s.code, url: s.url });
       activateKeepAwakeAsync('bandly-live').catch(() => {});
       shareLink({ code: s.code, url: s.url });
@@ -591,6 +599,17 @@ export default function AimScreen() {
       setLiveBusy(false);
     }
   };
+
+  // جاي من «فنيين قريبين» (زر «ساعدني عن بُعد»): نبدأ المشاركة ونرسلها للفني بعد تأكيد
+  const autoAsked = useRef(false);
+  useEffect(() => {
+    if (autoShare !== '1' || !info || loading || autoAsked.current || live) return;
+    autoAsked.current = true;
+    Alert.alert('📹 مساعدة عن بُعد', `بنفتح جلسة مباشرة ونرسل رابطها${tname ? ` لـ ${tname}` : ' للفني'} في واتساب.\n\nالفني يشوف قراءات إشارتك لحظة بلحظة ويوجّهك وأنت تحرك الأنتينا، ويقدر يكلمك صوت.`, [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'ابدأ', onPress: () => { startShare(); } },
+    ]);
+  }, [autoShare, info, loading, live]);
 
   const stopShare = () => {
     Alert.alert('إيقاف المشاركة', 'الفني ما راح يشوف قراءتك بعدها. توقف؟', [
@@ -821,7 +840,7 @@ export default function AimScreen() {
                 <Text style={a.liveViewers}>
                   {viewers.length ? `👀 ${viewers.join('، ')} يتابع قراءتك الحين` : 'بانتظار الفني يفتح الرابط…'}
                 </Text>
-                <View style={{ alignSelf: 'stretch' }}>
+                {Platform.OS !== 'web' && <View style={{ alignSelf: 'stretch' }}>
                   <CallButton label="اتصل بالفني" disabled={!viewers.length || callInfo.state !== 'idle'}
                     onPress={() => callRef.current?.call()}
                     hint={viewers.length ? 'مكالمة حيّة — وتقدر تشغّل الكاميرا 📹 عشان الفني يشوف الهوائي' : 'الزر يتفعّل أول ما يفتح الفني الرابط'} />
@@ -829,7 +848,7 @@ export default function AimScreen() {
                   <PushToTalk label="أو أرسل رسالة صوتية (اضغط مطوّل)" color={tFg('#0b7f99')} disabled={!viewers.length}
                     onSend={(uri, dur) => liveRef.current ? liveRef.current.voice(uri, dur) : Promise.resolve()} />
                   {!!lastVoice && <VoiceNote from={lastVoice.from} dur={lastVoice.dur} onReplay={() => playVoice(lastVoice.url)} />}
-                </View>
+                </View>}
                 <PrimaryBtn small text="أرسل الرابط للفني" icon="share" onPress={() => shareLink()}
                   colors={[tBg('#0ea5c6'), tBg('#2f6bff')]} style={{ marginTop: 10, alignSelf: 'stretch' }} />
                 <Text style={a.liveHint}>خلّ التطبيق مفتوح على هذي الشاشة لين يخلص الفني — الشاشة ما راح تنطفي.</Text>

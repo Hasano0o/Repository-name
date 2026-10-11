@@ -8,6 +8,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchTechs, sameCity, waNumber, BOT_TECH_SIGNUP, Tech, requestTech } from '../src/services/techs';
 import { getCity } from '../src/services/stats';
+import { listRouters } from '../src/store/routers';
+import { router as nav, Href } from 'expo-router';
 import { P, shadow } from '../src/ui/Pro';
 import { C, tBd, tBg, tFg } from '../src/ui/theme';
 
@@ -20,7 +22,7 @@ function Stars({ r, n }: { r: number | null; n: number }) {
   return <Text style={s.stars}>★ {r.toFixed(1)} <Text style={s.starsN}>({n})</Text></Text>;
 }
 
-function TechCard({ t, i }: { t: Tech; i: number }) {
+function TechCard({ t, i, rid }: { t: Tech; i: number; rid: string | null }) {
   const wa = waNumber(t.phone);
   const msg = encodeURIComponent('السلام عليكم، تواصلت معك من تطبيق Bandly بخصوص تركيب/توجيه أنتينا');
   return (
@@ -51,6 +53,13 @@ function TechCard({ t, i }: { t: Tech; i: number }) {
           </Pressable>
         )}
       </View>
+      {wa && rid && (
+        <Pressable style={({ pressed }) => [s.remoteBtn, pressed && { opacity: 0.85 }]}
+          onPress={() => nav.push({ pathname: '/aim/[id]', params: { id: rid, share: '1', wa, tname: t.name } } as unknown as Href)}>
+          <Text style={s.remoteTxt}>📹 ساعدني عن بُعد</Text>
+          <Text style={s.remoteSub}>يشوف إشارتك مباشرة ويوجّهك</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -62,6 +71,7 @@ export default function Techs() {
   const [filter, setFilter] = useState<string>('');
   const [err, setErr] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [rid, setRid] = useState<string | null>(null);
   const [form, setForm] = useState<{ city: string; phone: string; name: string; needs: string[]; note: string } | null>(null);
   const [sending, setSending] = useState(false);
 
@@ -91,6 +101,7 @@ export default function Techs() {
 
   useEffect(() => {
     getCity().then(c => { const v = c && c !== '-' ? c : ''; setCityState(v); setFilter(v); });
+    listRouters().then(rs => setRid((rs.find(r => r.driverId !== 'demo') ?? rs[0])?.id ?? null)).catch(() => {});
     load();
   }, [load]);
 
@@ -124,6 +135,11 @@ export default function Techs() {
           </View>
         </Pressable>
 
+        <View style={s.remoteInfo}>
+          <Text style={s.remoteInfoTitle}>📹 كل فني هنا يقدر يساعدك عن بُعد</Text>
+          <Text style={s.remoteInfoTxt}>اضغط «ساعدني عن بُعد» تحت الفني: يوصله رابط في واتساب، ويشوف قراءات إشارتك لحظة بلحظة ويوجّهك وأنت تحرّك الأنتينا — ويقدر يكلّمك صوت. بدون ما يجيك البيت.</Text>
+        </View>
+
         {cities.length > 1 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={s.filters}>
             <Pressable style={[s.fchip, !filter && s.fchipOn]} onPress={() => setFilter('')}>
@@ -147,7 +163,7 @@ export default function Techs() {
         ) : (
           <>
             {!!filter && <Text style={s.group}>في {filter} ({shown.length})</Text>}
-            {shown.length ? shown.map((t, i) => <TechCard key={t.name + t.phone} t={t} i={i} />) : (
+            {shown.length ? shown.map((t, i) => <TechCard key={t.name + t.phone} t={t} i={i} rid={rid} />) : (
               <View style={s.empty}>
                 <Text style={s.emptyTitle}>{filter ? `ما فيه فنيين في ${filter} للحين` : 'ما فيه فنيين للحين'}</Text>
                 <Text style={s.emptySub}>تعرف فني شاطر؟ خلّه يسجّل من الزر تحت.</Text>
@@ -156,7 +172,7 @@ export default function Techs() {
             {others.length > 0 && (
               <>
                 <Text style={s.group}>مدن ثانية</Text>
-                {others.map((t, i) => <TechCard key={t.name + t.phone} t={t} i={i + shown.length} />)}
+                {others.map((t, i) => <TechCard key={t.name + t.phone} t={t} i={i + shown.length} rid={rid} />)}
               </>
             )}
           </>
@@ -253,6 +269,12 @@ const s = StyleSheet.create({
   joinTitle: { color: tFg('#9a3412'), fontSize: 15.5, fontWeight: '900', textAlign: 'right' },
   joinSub: { color: tFg('#c2410c'), fontSize: 12.5, lineHeight: 19, textAlign: 'right', marginTop: 2 },
   hint: { color: P.faint, fontSize: 12, textAlign: 'center' },
+  remoteBtn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11, paddingHorizontal: 14, borderRadius: 14, backgroundColor: tBg('#f5f3ff'), borderWidth: 1.5, borderColor: tBd('#ddd6fe') },
+  remoteTxt: { color: tFg('#5b21b6'), fontSize: 14.5, fontWeight: '900' },
+  remoteSub: { color: tFg('#7c3aed'), fontSize: 11.5, fontWeight: '700' },
+  remoteInfo: { backgroundColor: tBg('#f5f3ff'), borderRadius: 18, padding: 14, gap: 4, borderWidth: 1, borderColor: tBd('#ddd6fe') },
+  remoteInfoTitle: { color: tFg('#5b21b6'), fontSize: 14, fontWeight: '900', textAlign: 'right' },
+  remoteInfoTxt: { color: tFg('#6d28d9'), fontSize: 12.5, lineHeight: 20, textAlign: 'right' },
   reqCard: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, backgroundColor: C.card, borderRadius: 20, padding: 14, borderWidth: 1.5, borderColor: tBd('#a7f3d0') },
   reqIcon: { width: 46, height: 46, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   reqTitle: { color: C.text, fontSize: 15.5, fontWeight: '900', textAlign: 'right' },
