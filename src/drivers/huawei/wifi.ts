@@ -124,9 +124,40 @@ async function locate(io: Io): Promise<Loc[]> {
   return (await locateAll(io)).filter(l => (seen.has(l.band) ? false : (seen.add(l.band), true)));
 }
 
+/** القنوات المسموحة لـ٥ جيجا من جدول الدول في الراوتر نفسه (config/wifi/countryChannel.xml)
+ *  مثلاً السعودية mode_27 = 36–64 و100–140. ولو قنوات الرادار مقفلة (wifi_dfs_enable=0) نشيل 52–144.
+ *  إرسال قناة مو مسموحة يخلّي الراوتر يرد 9003. */
+let allowed5: string[] | null | undefined;
+async function allowed5g(io: Io, code: string): Promise<string[] | null> {
+  if (allowed5 !== undefined) return allowed5;
+  allowed5 = null;
+  try {
+    if (!io.page) return null;
+    const x = await io.page('config/wifi/countryChannel.xml');
+    const cc = code.toLowerCase();
+    const mode = x.match(new RegExp(`<${cc}_mode>(\\d+)</${cc}_mode>`))?.[1];
+    const list = mode && x.match(new RegExp(`<mode_${mode}>([^<]+)</mode_${mode}>`))?.[1];
+    if (!list) return null;
+    let ch = list.split(',').map(v => v.trim()).filter(Boolean);
+    const fs = await io.get('wlan/wifi-feature-switch').catch(() => '');
+    if (/<wifi_dfs_enable>0</.test(fs)) ch = ch.filter(c => Number(c) < 52 || Number(c) > 144);
+    allowed5 = ch.length ? ['0', ...ch] : null;
+  } catch {}
+  return allowed5;
+}
+
 export async function getWifiRadios(io: Io): Promise<WifiRadio[]> {
   const locs = await locate(io);
-  return locs.map(l => ({ band: l.band, channel: l.value, writable: true }));
+  const out: WifiRadio[] = locs.map(l => ({ band: l.band, channel: l.value, writable: true }));
+  const five = out.find(r => r.band === '5');
+  if (five) {
+    const loc = locs.find(l => l.band === '5')!;
+    const body = inner(await io.get(loc.src).catch(() => ''));
+    const code = body.match(/<WifiCode>([A-Za-z]{2})</)?.[1] ?? '';
+    const a = code ? await allowed5g(io, code) : null;
+    if (a) five.allowed = a;
+  }
+  return out;
 }
 
 /** آخر محاولات الكتابة — تطلع في تقرير الدعم */

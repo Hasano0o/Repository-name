@@ -28,14 +28,20 @@ const chLabel = (c: string) => (c === '0' ? 'تلقائي' : c);
 /** القنوات اللي نجربها: 1/6/11 ما تتداخل مع بعض. في الـ5 نتجنب قنوات الرادار (52–144) */
 function candidates(r: WifiRadio): string[] {
   if (r.band === '2.4') return ['1', '6', '11'];
-  const high = Number(r.channel) >= 100 || r.allowed?.includes('149');
-  return high ? ['36', '44', '149', '157'] : ['36', '40', '44', '48'];
+  // من القنوات اللي الراوتر يسمح فيها بس (غيرها يرفضه الراوتر)
+  if (r.allowed?.length) {
+    const ok = r.allowed.filter(c => c !== '0');
+    const pref = ['36', '44', '149', '157'].filter(c => ok.includes(c));
+    const pick = pref.length >= 3 ? pref : ok.filter(c => Number(c) < 52 || Number(c) > 144).slice(0, 4);
+    return pick.length ? pick : ok.slice(0, 4);
+  }
+  return ['36', '40', '44', '48'];
 }
 function manualList(r: WifiRadio): string[] {
   if (r.allowed?.length) return r.allowed;
   return r.band === '2.4'
     ? ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13']
-    : ['0', '36', '40', '44', '48', '149', '153', '157', '161'];
+    : ['0', '36', '40', '44', '48'];
 }
 
 /** بنق واحد من الجوال للراوتر (عبر الواي فاي) */
