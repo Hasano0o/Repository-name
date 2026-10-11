@@ -235,7 +235,7 @@ export class DemoDriver implements RouterDriver {
     guest: { on: false, name: 'Bandly_Guest', open: true, offHours: 4 },
     bands: [{ band: '2.4', on: true }, { band: '5', on: true }],
     uptime: '76:12:09',
-    timeRules: [{ id: 'r1', mac: '3C:22:FB:7E:10:42', on: true, days: '1111100', start: '16:00', end: '21:00' }],
+    timeRules: [{ id: 'r1', mac: '3C:22:FB:7E:10:42', on: true, days: '1111001', start: '16:00', end: '21:00' }],
     timeRuleMax: 16,
     urlBlocks: [{ url: 'tiktok.com', macs: [] }],
   };

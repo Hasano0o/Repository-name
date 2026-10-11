@@ -25,7 +25,11 @@ function uptimeText(u: string): string {
   const m = u.match(/^(\d+):(\d{2}):(\d{2})$/);
   if (!m) return u;
   const h = Number(m[1]), min = Number(m[2]);
-  if (h >= 24) { const d = Math.floor(h / 24), r = h % 24; return `${d} يوم${r ? ` و ${r} ساعة` : ''}`; }
+  if (h >= 24) {
+    const d = Math.floor(h / 24), r = h % 24;
+    const dd = d === 1 ? 'يوم' : d === 2 ? 'يومين' : d <= 10 ? `${d} أيام` : `${d} يوم`;
+    return `${dd}${r ? ` و ${r} ساعة` : ''}`;
+  }
   if (h === 0) return `${min} دقيقة`;
   return `${h} ساعة${min ? ` و ${min} دقيقة` : ''}`;
 }
@@ -107,7 +111,7 @@ function Toggle({ value, busy, onChange, color }: { value: boolean; busy: boolea
   if (busy) return <ActivityIndicator color={color} style={{ width: 51 }} />;
   return (
     <Switch value={value} onValueChange={onChange}
-      trackColor={{ true: color, false: '#cbd5e1' }} thumbColor="#ffffff" ios_backgroundColor="#cbd5e1" />
+      trackColor={{ true: color, false: '#cbd5e1' }} thumbColor="#ffffff" ios_backgroundColor="#cbd5e1" {...({ activeThumbColor: '#ffffff' } as object)} />
   );
 }
 
@@ -360,7 +364,7 @@ export default function ControlCenter() {
                         </View>
                         <Switch value={r.on} disabled={!!busy}
                           onValueChange={v => apply('rule', d => d.updateTimeRule(r, 'update', v), x => !!x.timeRules?.some(y => y.id === r.id && y.on === v))}
-                          trackColor={{ true: '#be123c', false: '#cbd5e1' }} thumbColor="#ffffff" ios_backgroundColor="#cbd5e1" />
+                          trackColor={{ true: '#be123c', false: '#cbd5e1' }} thumbColor="#ffffff" ios_backgroundColor="#cbd5e1" {...({ activeThumbColor: '#ffffff' } as object)} />
                         <Pressable onPress={() => removeRule(r)} disabled={!!busy} hitSlop={8} style={s.ruleDel}>
                           <Icon name="trash" size={16} color={tFg('#be123c')} />
                         </Pressable>
@@ -479,7 +483,7 @@ export default function ControlCenter() {
             <Text style={s.sheetSub}>النت يشتغل على الجهاز بس داخل هالوقت.</Text>
 
             <Text style={s.label}>الجهاز</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, flexDirection: 'row-reverse' }}>
+            <View style={s.chips}>
               {ruleSheet.devs.length ? ruleSheet.devs.map(d => {
                 const on = ruleSheet.mac === d.mac;
                 return (
@@ -488,7 +492,7 @@ export default function ControlCenter() {
                   </Pressable>
                 );
               }) : <Text style={s.rowSub}>ما لقينا أجهزة متصلة</Text>}
-            </ScrollView>
+            </View>
 
             <Text style={s.label}>الأيام</Text>
             <View style={s.chips}>
