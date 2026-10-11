@@ -28,9 +28,19 @@ interface Tried { ch: string; q: Quality | null }
 
 const chLabel = (c: string) => (c === '0' ? 'تلقائي' : c);
 
-/** القنوات اللي نجربها: 1/6/11 ما تتداخل مع بعض. في الـ5 نتجنب قنوات الرادار (52–144) */
+/**
+ * القنوات اللي نجربها.
+ * 2.4: 1/6/11 ما تتداخل مع بعض، و13 مسموحة بالسعودية وغالباً فاضية (أغلب الأجهزة على 1/6/11).
+ *      نأخذ بس اللي يسمح فيه الراوتر (هواوي بالسعودية يمنع 1–4 → نكمّل بـ 5 و 9).
+ * 5: نتجنب قنوات الرادار (52–144).
+ */
 function candidates(r: WifiRadio): string[] {
-  if (r.band === '2.4') return ['1', '6', '11'];
+  if (r.band === '2.4') {
+    const ok = r.allowed?.length ? r.allowed.filter(c => c !== '0') : ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13'];
+    const pick = ['1', '6', '11', '13'].filter(c => ok.includes(c));
+    for (const c of ['5', '9']) if (pick.length < 3 && ok.includes(c)) pick.push(c);
+    return pick.sort((a, b) => Number(a) - Number(b));
+  }
   // من القنوات اللي الراوتر يسمح فيها بس (غيرها يرفضه الراوتر)
   if (r.allowed?.length) {
     const ok = r.allowed.filter(c => c !== '0');
