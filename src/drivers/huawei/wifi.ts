@@ -6,7 +6,7 @@
  * ولو رفض نجرب الطلب المختصر. والشاشة تتأكد بالقراءة بعدها.
  */
 import { WifiRadio } from '../types';
-import type { Io } from './apn-dns';
+import { ensureSession, type Io } from './apn-dns';
 
 const SOURCES = [
   'wlan/basic-settings',
@@ -104,6 +104,7 @@ async function discover(io: Io): Promise<string[]> {
 
 /** كل الأماكن اللي فيها قناة، بالأولوية: المكتشفة (‎-ex أول) ثم المعروفة */
 async function locateAll(io: Io): Promise<Loc[]> {
+  await ensureSession(io);
   const found: Loc[] = [];
   const extra = (await discover(io).catch(() => [] as string[]))
     .filter(p => !/host|statistic|macfilter|wps|pin|guide|sync|dbho|intelligent|turbo/i.test(p))
@@ -221,6 +222,7 @@ export async function setWifiChannel(io: Io, band: '2.4' | '5', channel: string)
 }
 
 export async function wifiDebug(io: Io): Promise<string> {
+  await ensureSession(io);
   const parts: string[] = [];
   for (const src of SOURCES) {
     try {

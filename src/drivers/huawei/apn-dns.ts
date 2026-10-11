@@ -9,6 +9,16 @@ export interface Io {
   page?(path: string): Promise<string>;
 }
 
+/** الراوتر طلّعنا؟ (دخل أحد من المتصفح، أو انتهت المهلة) — نرمي الخطأ عشان withSession يدخل من جديد.
+ * device/information تحتاج دخول في كل موديلات هواوي. */
+export async function ensureSession(io: Io): Promise<void> {
+  try {
+    await io.get('device/information');
+  } catch (e: any) {
+    if (String(e?.code ?? e?.message ?? e).includes('100003') || /صلاحية/.test(String(e?.message))) throw e;
+  }
+}
+
 const tag = (xml: string, t: string) =>
   xml.match(new RegExp(`<${t}>([\\s\\S]*?)</${t}>`))?.[1];
 const esc = (s: string) =>

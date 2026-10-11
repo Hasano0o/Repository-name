@@ -8,7 +8,7 @@
  * أي مسار يرجع خطأ = الراوتر ما يدعم الميزة، فما نعرضها.
  */
 import { RouterExtras } from '../types';
-import type { Io } from './apn-dns';
+import { ensureSession, type Io } from './apn-dns';
 
 const tag = (xml: string, t: string) => xml.match(new RegExp(`<${t}>([^<]*)</${t}>`))?.[1];
 const inner = (xml: string) => xml.match(/<response>([\s\S]*)<\/response>/)?.[1] ?? '';
@@ -18,6 +18,7 @@ const xml = (o: Record<string, string>) => Object.entries(o).map(([k, v]) => `<$
 const ok = async (io: Io, p: string) => { try { const x = await io.get(p); return x.includes('<error>') ? null : x; } catch { return null; } };
 
 export async function getExtras(io: Io): Promise<RouterExtras> {
+  await ensureSession(io);
   const out: RouterExtras = {};
   const nat = await ok(io, 'security/nat');
   if (nat && tag(nat, 'NATType') !== undefined && tag(nat, 'NATEnable') !== '0') out.nat = tag(nat, 'NATType') === '1' ? 'cone' : 'symmetric';
