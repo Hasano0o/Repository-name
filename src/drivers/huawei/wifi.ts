@@ -20,6 +20,9 @@ const SECRET = /psk|key|pass|wep/i;
 
 interface Loc { src: string; block: number | null; tag: string; band: '2.4' | '5'; value: string; radio?: string }
 
+const decode = (v: string) => v
+  .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+  .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d)));
 const inner = (xml: string) => xml.match(/<response>([\s\S]*)<\/response>/)?.[1] ?? '';
 const fieldsOf = (block: string): [string, string][] =>
   [...block.matchAll(/<(\w+)>([^<]*)<\/\1>/g)].map(m => [m[1], m[2]] as [string, string]);
@@ -34,8 +37,14 @@ function bandOf(tagName: string, value: string, block: string): '2.4' | '5' {
   const n = Number(value);
   if (n >= 36) return '5';
   if (/5g|5ghz|_a$|wlan1/i.test(tagName)) return '5';
-  const freq = fieldsOf(block).find(([k]) => /frequency|radio(type|band)?$|wifiband/i.test(k))?.[1] ?? '';
+  const f = fieldsOf(block);
+  const freq = f.find(([k]) => /frequency|radio(type|band)?$|wifiband/i.test(k))?.[1] ?? '';
   if (/^5|5g/i.test(freq.trim())) return '5';
+  // القناة «تلقائي» ما تفرّق — نستدل بوضع الشبكة (a/n/ac/ax = 5 جيجا) أو رقم الراديو
+  const mode = decode(f.find(([k]) => /^wifimode$/i.test(k))?.[1] ?? '');
+  if (/^a\/|\bac\b|^a$/i.test(mode)) return '5';
+  if (/^b\/|\bg\b/i.test(mode)) return '2.4';
+  if (radioOf(block) === '2') return '5';
   return '2.4';
 }
 
@@ -124,9 +133,6 @@ let attempts: string[] = [];
 const winner: Record<string, string> = {};
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-const decode = (v: string) => v
-  .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
-  .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d)));
 /** حقول الراديو اللي صفحة الإعدادات المتقدمة ترسلها مع القناة */
 const RADIO = /^(wifichannel|wifimode|wifibandwidth|wificode|wificountry|wifiautocountryswitch|wifirate|wifitxpwrpcnt|wifi5g\w*channel)$/i;
 
