@@ -23,6 +23,8 @@ interface Item {
   sub: string;
   tag?: string;
   path: string;
+  /** باراميتر إضافي للشاشة (مثل ?t=lte) */
+  query?: string;
 }
 interface Section {
   key: string;
@@ -86,8 +88,17 @@ const SECTIONS: Section[] = [
         color: tFg('#7a51e0'),
         title: 'دمج 5G المزدوج',
         sub: 'n77+n77 أو n78+n78 — ضعف سرعة 5G لو برجك يدعمه',
+        path: 'nrdual',
+      },
+      {
+        key: 'ltedual',
+        icon: 'layers',
+        color: tFg('#0f9d6b'),
+        title: 'دمج 4G المزدوج',
+        sub: 'B3+B3 أو B1+B1 — قناتين من نفس التردد لو برجك يدعمه',
         tag: 'جديد',
         path: 'nrdual',
+        query: '?t=lte',
       },
     ],
   },
@@ -126,7 +137,7 @@ export default function Finder() {
                     { borderColor: it.color + '40' },
                     pressed && { opacity: 0.75, transform: [{ scale: 0.99 }] },
                   ]}
-                  onPress={() => router.push(`/${it.path}/${id}` as Href)}
+                  onPress={() => router.push(`/${it.path}/${id}${it.query ?? ''}` as Href)}
                 >
                   <View style={[s.iconWrap, { backgroundColor: it.color + '18' }]}>
                     <Icon name={it.icon} size={20} color={it.color} />

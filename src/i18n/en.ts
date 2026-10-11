@@ -121,6 +121,9 @@ export const EN: Record<string, string> = {
   'الواي فاي شغّال دايماً.': 'Wi-Fi is always on.',
   'دايماً شغّال': 'Always on', '٣٠ دقيقة': '30 min', 'ساعة': '1 hour', '١٠ دقائق': '10 min',
 
+  'دمج 4G المزدوج': 'Dual 4G CA',
+  'B3+B3 أو B1+B1 — قناتين من نفس التردد لو برجك يدعمه': 'B3+B3 or B1+B1 — two channels on the same band if your tower supports it',
+
   // ═══ حالات ═══
   'ما وصلنا للراوتر': "Couldn't reach the router",
   'صار خطأ': 'Something went wrong',

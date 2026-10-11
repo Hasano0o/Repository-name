@@ -1,5 +1,7 @@
 /**
- * دمج 5G المزدوج (n77+n77 / n78+n78)
+ * الدمج المزدوج — نفس التردد مرتين:
+ *   5G: n77+n77 / n78+n78 (الافتراضي)
+ *   4G: B3+B3 / B1+B1 / B40+B40 … (?t=lte) — شفناه شغّال حي على ZTE MU5001 (B3 ‎15+20 ميقا)
  * نقفل الـ 5G على باند واحد، ونحمّل شوي عشان البرج يشغّل الدمج، ونعدّ قنوات 5G الشغالة.
  * قناتين من نفس الباند = برجك يدعم الدمج المزدوج (تقريباً ضعف عرض نطاق 5G).
  * بالآخر نرجّع إعدادك مثل ما كان، والتثبيت يصير بأمان (قياس قبل وبعد + رجوع لو أسوأ).
@@ -9,7 +11,7 @@ import { ActivityIndicator, Alert, } from 'react-native';
 import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { reportError } from '../../src/services/errors';
 import { withSession } from '../../src/store/sessions';
@@ -19,11 +21,13 @@ import { trafficBurst } from '../../src/utils/nrprobe';
 import { saveProfile } from '../../src/store/profiles';
 import { C, R, S, tBg, tBd, tFg } from '../../src/ui/theme';
 
-import { sheet } from '../../src/i18n';
+import { sheet, tr } from '../../src/i18n';
 const ACCENT = '#7a51e0';
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 /** الباندات اللي يصير فيها الدمج المزدوج غالباً (عرض نطاق كبير) */
 const CANDIDATES = [77, 78, 41];
+/** 4G: الترددات اللي المشغّلين بالسعودية عندهم فيها أكثر من قناة غالباً */
+const LTE_CANDIDATES = [3, 1, 40, 41, 7, 38, 8, 20, 28];
 
 interface Row {
   band: number;
@@ -36,15 +40,16 @@ interface Row {
 }
 
 const MHZ: Record<number, string> = { 77: '3.7 جيجا', 78: '3.5 جيجا', 41: '2.5 جيجا' };
+const LTE_MHZ: Record<number, string> = { 3: '1800', 1: '2100', 40: '2300', 41: '2500', 7: '2600', 38: '2600', 8: '900', 20: '800', 28: '700' };
 
 /** نحمّل ونقرأ النواقل كم مرة — الدمج ما يطلع إلا وقت التحميل */
-async function readNr(r: SavedRouter, isCancelled: () => boolean): Promise<Carrier[]> {
+async function readNr(r: SavedRouter, isCancelled: () => boolean, tech: 'NR' | 'LTE' = 'NR'): Promise<Carrier[]> {
   const burst = trafficBurst(10000, 25_000_000, isCancelled).catch(() => 0);
   let best: Carrier[] = [];
   for (let i = 0; i < 3 && !isCancelled(); i++) {
     await sleep(2600);
     const list = await withSession(r, async d => (d.getCarriers ? d.getCarriers() : [])).catch(() => [] as Carrier[]);
-    const nr = list.filter(c => c.tech === 'NR');
+    const nr = list.filter(c => c.tech === tech);
     if (nr.length > best.length) best = nr;
   }
   await burst;
@@ -52,7 +57,15 @@ async function readNr(r: SavedRouter, isCancelled: () => boolean): Promise<Carri
 }
 
 export default function NrDual() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, t } = useLocalSearchParams<{ id: string; t?: string }>();
+  const LTE = t === 'lte';
+  const TECH: 'NR' | 'LTE' = LTE ? 'LTE' : 'NR';
+  const P = LTE ? 'B' : 'n';
+  const NAME = LTE ? 'دمج 4G المزدوج' : 'دمج 5G المزدوج';
+  const G = LTE ? '4G' : '5G';
+  const freq = (b: number) => (LTE ? (LTE_MHZ[b] ? `${LTE_MHZ[b]} ميقا` : '') : MHZ[b] ?? '');
+  /** نقفل على تردد واحد للتقنية المختارة، ونخلي الثانية مثل ما هي */
+  const lockTo = (c: BandConfig, b: number) => (d: any) => (LTE ? d.setBand!([b], c.nrLocked) : d.setBand!(c.locked, [b]));
   const insets = useSafeAreaInsets();
   const [info, setInfo] = useState<SavedRouter | null>(null);
   const [cfg, setCfg] = useState<BandConfig | null>(null);
@@ -85,10 +98,10 @@ export default function NrDual() {
         if (!mounted.current) return;
         setCfg(c);
         setHasCarriers(canCar);
-        setNowNr(car.filter(x => x.tech === 'NR'));
+        setNowNr(car.filter(x => x.tech === TECH));
         // الباند اللي شغال الحين أول، وبعدها الباقي
-        const live = car.filter(x => x.tech === 'NR').map(x => x.band);
-        const list = CANDIDATES.filter(b => c.nrSupported.includes(b))
+        const live = car.filter(x => x.tech === TECH).map(x => x.band);
+        const list = (LTE ? LTE_CANDIDATES.filter(b => c.supported.includes(b)).slice(0, 4) : CANDIDATES.filter(b => c.nrSupported.includes(b)))
           .sort((a, b) => (live.includes(b) ? 1 : 0) - (live.includes(a) ? 1 : 0));
         setRows(list.map(band => ({ band, status: 'pending' })));
       } catch (e: any) {
@@ -104,8 +117,8 @@ export default function NrDual() {
   const start = () => {
     if (!info || !cfg || !rows.length) return;
     Alert.alert(
-      'دمج 5G المزدوج',
-      `بنجرب ${rows.map(r => 'n' + r.band).join(' و ')}: نقفل الـ 5G على كل واحد ونشوف هل برجك يشغّل قناتين منه.\n\n` +
+      NAME,
+      `بنجرب ${rows.map(r => P + r.band).join(' و ')}: نقفل الـ ${G} على كل واحد ونشوف هل برجك يشغّل قناتين منه.\n\n` +
       `⏱ ~${rows.length} دقيقة · 📶 ينقطع الاتصال لحظات · 📊 ~30 ميقا لكل تجربة\n\nبالآخر نرجّع إعدادك مثل ما كان.`,
       [{ text: 'إلغاء', style: 'cancel' }, { text: 'ابدأ', onPress: run }],
     );
@@ -125,13 +138,13 @@ export default function NrDual() {
       for (let i = 0; i < list.length; i++) {
         if (cancel.current) break;
         const b = list[i].band;
-        upd(i, { status: 'testing', note: `نقفل الـ 5G على n${b}...` });
+        upd(i, { status: 'testing', note: `نقفل الـ ${G} على ${P}${b}...` });
         try {
-          await withSession(info, d => d.setBand!(cfg.locked, [b]), false);
+          await withSession(info, lockTo(cfg, b), false);
           // بعض الراوترات تقبل الطلب وما تقفل الـ 5G فعلاً — نتأكد
           const after = await withSession(info, d => (d.getBandConfig ? d.getBandConfig() : Promise.resolve(null)), false).catch(() => null);
-          if (after && !after.nrLocked.includes(b)) {
-            upd(i, { status: 'failed', note: 'راوترك ما يسمح بقفل 5G على تردد معيّن' });
+          if (after && !(LTE ? after.locked : after.nrLocked).includes(b)) {
+            upd(i, { status: 'failed', note: `راوترك ما يسمح بقفل ${G} على تردد معيّن` });
             break;
           }
           upd(i, { note: 'ننتظر الاتصال...' });
@@ -139,13 +152,13 @@ export default function NrDual() {
           if (cancel.current) { upd(i, { status: 'pending', note: undefined }); break; }
           if (!ok) { upd(i, { status: 'failed', note: 'ما اتصل على هالتردد' }); continue; }
           upd(i, { note: 'نحمّل شوي عشان البرج يشغّل الدمج...' });
-          const nr = await readNr(info, () => cancel.current);
+          const nr = await readNr(info, () => cancel.current, TECH);
           const same = nr.filter(c => c.band === b);
           const bw = same.reduce((a, c) => a + (c.bandwidth ?? 0), 0);
-          const snap = await snapshot(info, true, 2);
+          const snap = await snapshot(info, !LTE, 2);
           upd(i, {
             status: 'done', nrCount: same.length, bw: bw || undefined, snap,
-            note: same.length >= 2 ? undefined : same.length === 1 ? 'قناة وحدة بس' : 'ما مسك 5G على هالتردد',
+            note: same.length >= 2 ? undefined : same.length === 1 ? 'قناة وحدة بس' : `ما مسك ${G} على هالتردد`,
           });
         } catch (e: any) {
           upd(i, { status: 'failed', note: e?.message ?? 'خطأ' });
@@ -164,11 +177,13 @@ export default function NrDual() {
   const dual = rows.filter(r => r.status === 'done' && (r.nrCount ?? 0) >= 2)
     .sort((a, b) => (b.bw ?? 0) - (a.bw ?? 0) || (b.snap?.cap ?? 0) - (a.snap?.cap ?? 0));
   const best = dual[0];
-  const nowDual = (nowNr ?? []).length >= 2;
+  // مزدوج = نفس التردد مرتين (B3+B3) — مو أي ناقلين مختلفين
+  const dupBand = (nowNr ?? []).map(c => c.band).find((b, i, arr) => arr.indexOf(b) !== i);
+  const nowDual = dupBand !== undefined;
 
   const apply = () => {
     if (!info || !cfg || !best) return;
-    const label = `دمج 5G مزدوج n${best.band}+n${best.band}`;
+    const label = `دمج ${G} مزدوج ${P}${best.band}+${P}${best.band}`;
     Alert.alert('ثبّت ' + label, 'نثبّته بأمان: نقيس قبل وبعد، ولو ما صار أفضل نرجّع إعدادك.', [
       { text: 'إلغاء', style: 'cancel' },
       {
@@ -177,15 +192,15 @@ export default function NrDual() {
           try {
             const res = await safeApply({
               r: info,
-              key: `nrdual:${best.band}`,
+              key: `${LTE ? 'ltedual' : 'nrdual'}:${best.band}`,
               label,
-              withNr: true,
-              apply: d => d.setBand!(cfg.locked, [best.band]),
+              withNr: !LTE,
+              apply: lockTo(cfg, best.band),
               revert: d => d.setBand!(cfg.locked, cfg.nrLocked),
               onStatus: st => { if (mounted.current) setStatus(st); },
             });
             if (res.kept) {
-              await saveProfile({ routerId: info.id, name: label, bands: cfg.locked, nrBands: [best.band], mode: cfg.mode }).catch(() => {});
+              await saveProfile({ routerId: info.id, name: label, bands: LTE ? [best.band] : cfg.locked, nrBands: LTE ? cfg.nrLocked : [best.band], mode: cfg.mode }).catch(() => {});
             }
             const m = trialMessage(res, label);
             Alert.alert(m.title, m.body);
@@ -205,8 +220,8 @@ export default function NrDual() {
     if (!info || !cfg || pick === null) return;
     const b = pick;
     Alert.alert(
-      `قفل الـ 5G على n${b}`,
-      'نقفل الـ 5G على هالتردد ونخليه مثبّت — ينقطع الاتصال لحظات.\nتقدر ترجع لإعدادك القديم بزر «رجّع إعدادي».',
+      `قفل الـ ${G} على ${P}${b}`,
+      `نقفل الـ ${G} على هالتردد ونخليه مثبّت — ينقطع الاتصال لحظات.\nتقدر ترجع لإعدادك القديم بزر «رجّع إعدادي».`,
       [
         { text: 'إلغاء', style: 'cancel' },
         {
@@ -214,18 +229,18 @@ export default function NrDual() {
             cancel.current = false;
             setRunning(true); setError(''); setManual(null);
             try {
-              setStatus(`نقفل الـ 5G على n${b}...`);
-              await withSession(info, d => d.setBand!(cfg.locked, [b]), false);
+              setStatus(`نقفل الـ ${G} على ${P}${b}...`);
+              await withSession(info, lockTo(cfg, b), false);
               const after = await withSession(info, d => (d.getBandConfig ? d.getBandConfig() : Promise.resolve(null)), false).catch(() => null);
-              if (after && !after.nrLocked.includes(b)) throw new Error('راوترك ما يسمح بقفل 5G على تردد معيّن');
+              if (after && !(LTE ? after.locked : after.nrLocked).includes(b)) throw new Error(`راوترك ما يسمح بقفل ${G} على تردد معيّن`);
               setStatus('ننتظر الاتصال...');
               const ok = await waitOnline(info, 40000, () => cancel.current);
               if (!ok) throw new Error('ما اتصل على هالتردد — اضغط «رجّع إعدادي»');
               setStatus('نحمّل شوي ونشوف هل البرج شغّل الدمج...');
-              const nr = (await readNr(info, () => cancel.current)).filter(c => c.band === b);
+              const nr = (await readNr(info, () => cancel.current, TECH)).filter(c => c.band === b);
               const bw = nr.reduce((a, c) => a + (c.bandwidth ?? 0), 0);
               if (mounted.current) setManual({ band: b, count: nr.length, bw: bw || undefined });
-              await saveProfile({ routerId: info.id, name: `5G مقفل n${b}`, bands: cfg.locked, nrBands: [b], mode: cfg.mode }).catch(() => {});
+              await saveProfile({ routerId: info.id, name: `${G} مقفل ${P}${b}`, bands: LTE ? [b] : cfg.locked, nrBands: LTE ? cfg.nrLocked : [b], mode: cfg.mode }).catch(() => {});
             } catch (e: any) {
               if (mounted.current) setError(e?.message ?? String(e));
               reportError('nrdual', e, info);
@@ -257,12 +272,14 @@ export default function NrDual() {
 
   return (
     <LinearGradient colors={[C.bgTop, C.bgBottom]} style={{ flex: 1 }}>
+      <Stack.Screen options={{ title: tr(NAME) }} />
       <ScrollView contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 40 }]}>
         <View style={s.card}>
-          <Text style={s.title}>⚡ دمج 5G المزدوج</Text>
+          <Text style={s.title}>⚡ {NAME}</Text>
           <Text style={s.body}>
-            بعض الأبراج عندها قناتين 5G على نفس التردد (مثل n78+n78). لو الراوتر مسكهم مع بعض،
-            يتضاعف عرض نطاق الـ 5G وتقريباً تتضاعف سرعته. هنا نجرب ونقول لك هل برجك يدعمه.
+            {LTE
+              ? 'بعض الأبراج عندها قناتين 4G على نفس التردد (مثل B3+B3). لو الراوتر مسكهم مع بعض، يزيد عرض النطاق وتزيد السرعة. هنا نجرب كل تردد لحاله ونقول لك وين برجك يشغّل الدمج.'
+              : 'بعض الأبراج عندها قناتين 5G على نفس التردد (مثل n78+n78). لو الراوتر مسكهم مع بعض، يتضاعف عرض نطاق الـ 5G وتقريباً تتضاعف سرعته. هنا نجرب ونقول لك هل برجك يدعمه.'}
           </Text>
 
           {loading ? <ActivityIndicator color={ACCENT} /> : (
@@ -271,10 +288,12 @@ export default function NrDual() {
                 <View style={[s.nowBox, nowDual ? s.nowOk : null]}>
                   <Text style={[s.nowTxt, nowDual && { color: tFg('#0f7a52') }]}>
                     {nowDual
-                      ? `✓ شغال الحين: ${nowNr.map(c => 'n' + c.band).join(' + ')}`
-                      : nowNr.length === 1
-                        ? `الحين: قناة 5G وحدة (n${nowNr[0].band})`
-                        : 'الحين ما فيه 5G شغال — التجربة تصحّيه بتحميل قصير'}
+                      ? `✓ شغال الحين: ${P}${dupBand}+${P}${dupBand}`
+                      : nowNr.length > 1
+                        ? `الحين: ${nowNr.map(c => P + c.band).join(' + ')} — دمج عادي، مو مزدوج`
+                        : nowNr.length === 1
+                        ? `الحين: قناة ${G} وحدة (${P}${nowNr[0].band})`
+                        : `الحين ما فيه ${G} شغال — التجربة تصحّيه بتحميل قصير`}
                   </Text>
                 </View>
               )}
@@ -282,7 +301,7 @@ export default function NrDual() {
                 <Text style={s.warn}>راوترك ما يكشف تفاصيل القنوات، فما نقدر نتأكد من الدمج المزدوج.</Text>
               )}
               {!rows.length && hasCarriers && (
-                <Text style={s.warn}>راوترك ما يدعم n77 ولا n78 ولا n41 — الدمج المزدوج يحتاج واحد منها.</Text>
+                <Text style={s.warn}>{LTE ? 'راوترك ما يدعم ترددات 4G اللي يصير فيها الدمج المزدوج عادةً.' : 'راوترك ما يدعم n77 ولا n78 ولا n41 — الدمج المزدوج يحتاج واحد منها.'}</Text>
               )}
               {rows.length > 0 && <Text style={s.warn}>⏱ ~دقيقة لكل تردد · 📶 ينقطع الاتصال لحظات · 📊 ~30 ميقا لكل تجربة</Text>}
             </>
@@ -303,30 +322,30 @@ export default function NrDual() {
         {!loading && rows.length > 0 && hasCarriers && (
           <View style={s.card}>
             <Text style={s.title}>✋ يدوي — اختر بنفسك</Text>
-            <Text style={s.body}>تعرف تردد برجك؟ اختره ونقفل الـ 5G عليه ونخليه مثبّت، ونقول لك هل شغّل الدمج.</Text>
+            <Text style={s.body}>{`تعرف تردد برجك؟ اختره ونقفل الـ ${G} عليه ونخليه مثبّت، ونقول لك هل شغّل الدمج.`}</Text>
             <View style={s.chips}>
               {rows.map(r => {
                 const on = pick === r.band;
                 return (
                   <Pressable key={r.band} disabled={running} onPress={() => setPick(r.band)}
                     style={[s.chip, on && { backgroundColor: ACCENT, borderColor: ACCENT }]}>
-                    <Text style={[s.chipTxt, on && { color: '#fff' }]}>n{r.band}</Text>
-                    <Text style={[s.chipSub, on && { color: '#e9e2ff' }]}>{MHZ[r.band] ?? ''}</Text>
+                    <Text style={[s.chipTxt, on && { color: '#fff' }]}>{P}{r.band}</Text>
+                    <Text style={[s.chipSub, on && { color: '#e9e2ff' }]}>{freq(r.band)}</Text>
                   </Pressable>
                 );
               })}
             </View>
             <Pressable style={[s.btn, (pick === null || running) && { opacity: 0.5 }]} disabled={pick === null || running} onPress={manualLock}>
-              <Text style={s.btnText}>{pick === null ? 'اختر التردد أول' : `🔒 ثبّت على n${pick}`}</Text>
+              <Text style={s.btnText}>{pick === null ? 'اختر التردد أول' : `🔒 ثبّت على ${P}${pick}`}</Text>
             </Pressable>
             {manual && (
               <View style={[s.nowBox, manual.count >= 2 && s.nowOk]}>
                 <Text style={[s.nowTxt, manual.count >= 2 && { color: tFg('#0f7a52') }]}>
                   {manual.count >= 2
-                    ? `✓ الدمج شغال: n${manual.band}+n${manual.band}${manual.bw ? ` (${Math.round(manual.bw)} MHz)` : ''}`
+                    ? `✓ الدمج شغال: ${P}${manual.band}+${P}${manual.band}${manual.bw ? ` (${Math.round(manual.bw)} MHz)` : ''}`
                     : manual.count === 1
-                      ? `مقفل على n${manual.band} — قناة وحدة بس حالياً`
-                      : `مقفل على n${manual.band} — ما مسك 5G عليه`}
+                      ? `مقفل على ${P}${manual.band} — قناة وحدة بس حالياً`
+                      : `مقفل على ${P}${manual.band} — ما مسك ${G} عليه`}
                 </Text>
                 <Text style={s.note}>انحفظ في «الملفات». لو ما عجبك:</Text>
               </View>
@@ -345,8 +364,8 @@ export default function NrDual() {
             <View key={r.band} style={[s.row, ok && { borderColor: tBd('#7fd4b8'), backgroundColor: tBg('#ecfaf4') }]}>
               <View style={s.rowHead}>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={s.rowName}>n{r.band} + n{r.band}</Text>
-                  <Text style={s.rowSub}>{MHZ[r.band] ?? ''}</Text>
+                  <Text style={s.rowName}>{P}{r.band} + {P}{r.band}</Text>
+                  <Text style={s.rowSub}>{freq(r.band)}</Text>
                 </View>
                 {r.status === 'testing'
                   ? <ActivityIndicator size="small" color={ACCENT} />
@@ -358,7 +377,7 @@ export default function NrDual() {
               </View>
               {r.status === 'done' && (
                 <Text style={s.rowLine}>
-                  {(r.nrCount ?? 0)} {(r.nrCount ?? 0) === 1 ? 'قناة' : 'قنوات'} 5G
+                  {(r.nrCount ?? 0)} {(r.nrCount ?? 0) === 1 ? 'قناة' : 'قنوات'} {G}
                   {r.bw ? ` · ${Math.round(r.bw)} MHz` : ''}
                   {r.snap?.sinr !== undefined ? ` · SINR ${Math.round(r.snap.sinr)}` : ''}
                 </Text>
@@ -373,7 +392,7 @@ export default function NrDual() {
             {best ? (
               <>
                 <Text style={[s.verdict, { color: tFg('#0f7a52') }]}>
-                  🎉 برجك يدعم n{best.band}+n{best.band}{best.bw ? ` (${Math.round(best.bw)} MHz)` : ''}
+                  🎉 برجك يدعم {P}{best.band}+{P}{best.band}{best.bw ? ` (${Math.round(best.bw)} MHz)` : ''}
                 </Text>
                 <Pressable style={[s.btn, { backgroundColor: tFg('#12a07a') }]} onPress={apply} disabled={running}>
                   <Text style={s.btnText}>ثبّته بأمان</Text>
@@ -384,7 +403,7 @@ export default function NrDual() {
               <>
                 <Text style={s.verdict}>برجك ما شغّل الدمج المزدوج حالياً.</Text>
                 <Text style={s.note}>
-                  هذا يعتمد على البرج نفسه وكم قناة 5G مشغّلة فيه — مو على راوترك. جرّب في وقت ثاني، أو بعد ما توجّه الراوتر لبرج ثاني.
+                  هذا يعتمد على البرج نفسه وكم قناة {G} مشغّلة فيه — مو على راوترك. جرّب في وقت ثاني، أو بعد ما توجّه الراوتر لبرج ثاني.
                 </Text>
               </>
             )}
