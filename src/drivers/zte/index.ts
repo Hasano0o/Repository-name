@@ -7,7 +7,7 @@ import {
   SignalSnapshot, CellLockState, CellLockTarget, WifiRadio,
 } from '../types';
 import { http } from '../http';
-import { ZteIo, zteExtras, zteSetUpnp, zteSetDmz, zteSetLedNight, zteSetBandOn, zteSetGuest, zteSetUrlBlocks } from './extras';
+import { ZteIo, zteExtras, zteSetUpnp, zteSetDmz, zteSetLedNight, zteSetBandOn, zteSetGuest, zteSetUrlBlocks, zteRadios, zteSetChannel } from './extras';
 import {
   parsePci, decodeBandMask, encodeBandMask, parseZteCa, bandLabel,
 } from '../../utils/normalize';
@@ -980,6 +980,9 @@ export class ZteDriver implements RouterDriver {
 
   async getWifiRadios(): Promise<WifiRadio[]> {
     await this.ensure();
+    // الموديلات الجديدة (MU5001…): القنوات في queryAccessPointInfo لكل شريحة
+    const fresh = await zteRadios(this.io()).catch(() => []);
+    if (fresh.length) return fresh;
     const r = await this.get(ZteDriver.WIFI_FIELDS).catch(() => ({} as Record<string, string>));
     const out: WifiRadio[] = [];
     const ch = (r.Channel ?? '').trim();
@@ -996,6 +999,7 @@ export class ZteDriver implements RouterDriver {
 
   async setWifiChannel(band: '2.4' | '5', channel: string): Promise<void> {
     await this.ensure();
+    if ((await zteRadios(this.io()).catch(() => [])).length) return zteSetChannel(this.io(), band, channel);
     const r = await this.get(ZteDriver.WIFI_FIELDS);
     const five = /^a$|5/i.test(r.wifi_band ?? '') || Number(r.Channel) >= 36;
     if ((band === '5') !== five) throw new Error('هذا الراوتر ما يسمح نغيّر قناة هذا النطاق من التطبيق');

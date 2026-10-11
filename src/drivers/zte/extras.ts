@@ -24,9 +24,9 @@ const hhmm = (v?: string, def = '00:00') => {
   return m ? `${m[1].padStart(2, '0')}:${m[2].padStart(2, '0')}` : def;
 };
 
-interface Ap { ChipIndex: string; AccessPointIndex: string; AccessPointSwitchStatus: string; SSID?: string; AuthMode?: string; QrImageShow?: string; GuestSSIDActiveTime?: string }
+export interface Ap { ChipIndex: string; AccessPointIndex: string; AccessPointSwitchStatus: string; SSID?: string; AuthMode?: string; QrImageShow?: string; GuestSSIDActiveTime?: string }
 
-async function accessPoints(io: ZteIo): Promise<Ap[]> {
+export async function accessPoints(io: ZteIo): Promise<Ap[]> {
   const r = await io.getRaw('queryAccessPointInfo').catch(() => null);
   const list = (r?.ResponseList ?? []) as any[];
   return Array.isArray(list) ? list.map(x => ({ ...x, ChipIndex: String(x.ChipIndex), AccessPointIndex: String(x.AccessPointIndex), AccessPointSwitchStatus: String(x.AccessPointSwitchStatus ?? '0') })) : [];
@@ -37,7 +37,7 @@ export async function zteExtras(io: ZteIo): Promise<RouterExtras> {
   const f = await io.get([
     'upnpEnabled', 'DMZEnable', 'DMZIPAddress',
     'night_mode_switch', 'night_mode_start_time', 'night_mode_end_time',
-    'websURLFilters', 'realtime_time',
+    'websURLFilters',
   ]).catch(() => ({} as Record<string, string>));
 
   if (f.upnpEnabled === '0' || f.upnpEnabled === '1') ex.upnp = f.upnpEnabled === '1';
@@ -48,12 +48,6 @@ export async function zteExtras(io: ZteIo): Promise<RouterExtras> {
   if (f.websURLFilters !== undefined) {
     ex.urlBlocks = f.websURLFilters.split(';').map(s => s.trim()).filter(Boolean).map(url => ({ url, macs: [] }));
   }
-  const secs = Number(f.realtime_time);
-  if (secs > 0) {
-    const d = Math.floor(secs / 86400), h = Math.floor((secs % 86400) / 3600), m = Math.floor((secs % 3600) / 60);
-    ex.uptime = d ? `${d}:${h}:${m}` : `${h}:${m}:00`;
-  }
-
   const aps = await accessPoints(io);
   const main = aps.filter(a => a.AccessPointIndex === '0');
   if (main.length) {
@@ -63,8 +57,11 @@ export async function zteExtras(io: ZteIo): Promise<RouterExtras> {
   if (g) {
     const left = await io.getRaw('queryWiFiGuestLeftTime').catch(() => null);
     const remain = Number(left?.WiFiGuestLeftTime ?? 0);
-    const t = Number(g.GuestSSIDActiveTime ?? 0);
+    // MU5001: الشبكة الثانية بدون مؤقت (GuestSSIDActiveTime فاضي)
+    const noTimer = (g.GuestSSIDActiveTime ?? '') === '';
+    const t = Number(g.GuestSSIDActiveTime || 0);
     ex.guest = {
+      noTimer,
       on: g.AccessPointSwitchStatus === '1',
       name: g.SSID ?? '',
       open: /OPEN|NONE/i.test(g.AuthMode ?? ''),
@@ -94,25 +91,39 @@ export async function zteSetLedNight(io: ZteIo, on: boolean, start: string, end:
   if (!ok(out)) throw fail('وضع الليل', out);
 }
 
-/** تشغيل/إطفاء شبكة واي فاي (نفس طلب صفحة الراوتر لما تغيّر المفتاح بس) */
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+/**
+ * تشغيل/إطفاء شبكة واي فاي (نفس طلب صفحة الراوتر لما تغيّر المفتاح بس).
+ * MU5001 يرد «failure» مع إنه يطبّق التغيير — فنتأكد بإعادة القراءة بدل الرد.
+ */
 async function switchAp(io: ZteIo, chip: string, idx: string, on: boolean, extra: Record<string, string> = {}) {
   const aps = await accessPoints(io);
-  const ap = aps.find(a => a.ChipIndex === chip && a.AccessPointIndex === idx);
+  const ap = aps.find(a => a.ChipIndex === chip && a.AccessPointIndex === idx && a.SSID);
   if (!ap) throw new Error('الشبكة هذي مو موجودة في راوترك');
+  const want = on ? '1' : '0';
+  if (ap.AccessPointSwitchStatus === want) return;
   const body: Record<string, string> = {
     goformId: 'setAccessPointInfo', ChipIndex: chip, AccessPointIndex: idx,
-    QrImageShow: ap.QrImageShow ?? '0', lan_sec_ssid_control: '', wifi_syncparas_flag: '',
-    AccessPointSwitchStatus: on ? '1' : '0',
+    QrImageShow: ap.QrImageShow || '0', lan_sec_ssid_control: '', wifi_syncparas_flag: '',
+    AccessPointSwitchStatus: want,
     ...extra,
   };
-  if (chip === '0' && idx === '1' && body.GuestSSIDActiveTime === undefined) body.GuestSSIDActiveTime = ap.GuestSSIDActiveTime ?? '0';
   const out = await io.act(body);
-  if (!ok(out)) throw fail('تغيير الواي فاي', out);
+  for (let i = 0; i < 8; i++) {
+    await sleep(1500);
+    const now = (await accessPoints(io).catch(() => [] as Ap[])).find(a => a.ChipIndex === chip && a.AccessPointIndex === idx);
+    if (now?.AccessPointSwitchStatus === want) return;
+  }
+  throw fail('تغيير الواي فاي', out);
 }
 
 export const zteSetBandOn = (io: ZteIo, band: '2.4' | '5', on: boolean) => switchAp(io, band === '5' ? '1' : '0', '0', on);
-export const zteSetGuest = (io: ZteIo, on: boolean, offHours: number) =>
-  switchAp(io, '0', '1', on, { GuestSSIDActiveTime: String(offHours) });
+export async function zteSetGuest(io: ZteIo, on: boolean, offHours: number) {
+  const g = (await accessPoints(io)).find(a => a.ChipIndex === '0' && a.AccessPointIndex === '1');
+  const timer = (g?.GuestSSIDActiveTime ?? '') !== '';
+  return switchAp(io, '0', '1', on, timer ? { GuestSSIDActiveTime: String(offHours) } : {});
+}
 
 export async function zteSetUrlBlocks(io: ZteIo, list: { url: string; macs: string[] }[]) {
   const cur = ((await io.get(['websURLFilters'])).websURLFilters ?? '').split(';').map(s => s.trim()).filter(Boolean);
@@ -126,4 +137,43 @@ export async function zteSetUrlBlocks(io: ZteIo, list: { url: string; macs: stri
     const out = await io.act({ goformId: 'URL_FILTER_ADD', addURLFilter: u });
     if (!ok(out)) throw fail('حجب الموقع', out);
   }
+}
+
+// ───── قنوات الواي فاي (MU5001: شريحة 0 = 2.4، شريحة 1 = 5) ─────
+/** قنوات 5 جيجا المسموحة حسب الدولة (من config.js في صفحة الراوتر) */
+const CH5: [string[], string[]][] = [
+  [['US', 'CA', 'AU', 'BH', 'EG', 'IN', 'MY', 'SG', 'BR', 'NZ', 'TH', 'VN', 'PH', 'HK'], ['36', '40', '44', '48', '149', '153', '157', '161', '165']],
+  [['LB', 'QA', 'MO', 'MW'], ['149', '153', '157', '161']],
+  [['CN', 'PK', 'BD', 'AR', 'TW', 'NG'], ['149', '153', '157', '161', '165']],
+];
+const ch5For = (cc: string) => CH5.find(([codes]) => codes.includes(cc))?.[1] ?? ['36', '40', '44', '48'];
+const CH24 = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13'];
+
+export async function zteRadios(io: ZteIo) {
+  const aps = (await accessPoints(io)).filter(a => a.AccessPointIndex === '0' && (a as any).Band);
+  return aps.map(a => {
+    const five = (a as any).Band === 'a' || a.ChipIndex === '1';
+    return {
+      band: five ? '5' as const : '2.4' as const,
+      channel: String((a as any).Channel ?? '0'),
+      allowed: ['0', ...(five ? ch5For((a as any).CountryCode ?? 'SA') : CH24)],
+      writable: true,
+    };
+  });
+}
+
+export async function zteSetChannel(io: ZteIo, band: '2.4' | '5', channel: string) {
+  const ap: any = (await accessPoints(io)).find(a => a.AccessPointIndex === '0' && (((a as any).Band === 'a') === (band === '5')));
+  if (!ap) throw new Error('ما لقينا شبكة هذا النطاق في راوترك');
+  const out = await io.act({
+    goformId: 'setWiFiChipAdvancedInfo', ChipIndex: ap.ChipIndex,
+    WirelessMode: ap.WirelessMode || (band === '5' ? '8' : '7'), CountryCode: ap.CountryCode || 'SA',
+    Channel: channel, BandWidth: ap.BandWidth || (band === '5' ? '4' : '2'), abg_rate: '0',
+  });
+  for (let i = 0; i < 10; i++) {
+    await sleep(1500);
+    const now: any = (await accessPoints(io).catch(() => [] as Ap[])).find(a => a.ChipIndex === ap.ChipIndex && a.AccessPointIndex === '0');
+    if (String(now?.Channel) === channel) return;
+  }
+  throw fail('تغيير القناة', out);
 }

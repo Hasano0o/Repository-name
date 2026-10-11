@@ -52,7 +52,7 @@ export interface RouterExtras {
   /** منافذ فتحتها الألعاب/الأجهزة عبر UPnP */
   upnpMaps?: { app: string; ip: string; port: string; proto: string }[];
   /** شبكة الضيوف — offHours: 0 = بدون إطفاء، 4 ساعات، 24 = يوم */
-  guest?: { on: boolean; name: string; open: boolean; offHours: number; remainSecs?: number };
+  guest?: { on: boolean; name: string; open: boolean; offHours: number; remainSecs?: number; noTimer?: boolean };
   /** تشغيل/إطفاء كل شبكة واي فاي */
   bands?: { band: '2.4' | '5'; on: boolean }[];
   /** مدة تشغيل الراوتر كما يرجعها (مثل 3:12:05 أو 2 يوم) */

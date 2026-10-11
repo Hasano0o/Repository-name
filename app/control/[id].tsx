@@ -200,7 +200,7 @@ export default function ControlCenter() {
 
   const guestOn = (hours: number) => {
     const go = () => apply('guest', d => d.setGuest(true, hours), x => !!x.guest?.on);
-    if (ex?.guest?.open) {
+    if (ex?.guest?.open && !ex.guest.noTimer) {
       Alert.alert('شبكة الضيوف مفتوحة', 'شبكة الضيوف في راوترك بدون كلمة سر — أي أحد قريب يقدر يتصل. ننصح تخليها تنطفي بعد ٤ ساعات.', [
         { text: 'إلغاء', style: 'cancel' }, { text: 'شغّلها', onPress: go },
       ]);
@@ -335,9 +335,9 @@ export default function ControlCenter() {
                     ? (ex.guest.remainSecs ? `شغّالة — تنطفي بعد ${remainText(ex.guest.remainSecs)}` : 'شغّالة بدون وقت إطفاء')
                     : 'طافية'}
                   right={<Toggle value={ex.guest.on} busy={busy === 'guest'} color="#d97706"
-                    onChange={v => (v ? guestOn(ex.guest!.offHours || 4) : apply('guest', d => d.setGuest(false, ex.guest!.offHours), x => !x.guest?.on))} />}>
+                    onChange={v => (v ? guestOn(ex.guest!.noTimer ? 0 : ex.guest!.offHours || 4) : apply('guest', d => d.setGuest(false, ex.guest!.offHours), x => !x.guest?.on))} />}>
                   {ex.guest.open && <Badge text="⚠️ بدون كلمة سر — أي أحد قريب يقدر يتصل" tone="warn" />}
-                  {ex.guest.on && (
+                  {ex.guest.on && !ex.guest.noTimer && (
                     <View style={s.chips}>
                       {GUEST_TIMES.map(t => {
                         const on = ex.guest!.offHours === t.h;
