@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams, Href } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
+import { reportError } from '../../src/services/errors';
 import { withSession } from '../../src/store/sessions';
 import { ConnectedDevice, RouterExtras, TimeRule } from '../../src/drivers/types';
 import { Icon, IconName } from '../../src/ui/Icon';
@@ -157,6 +158,7 @@ export default function ControlCenter() {
         if (mounted.current) setDevNames(Object.fromEntries(devs.flatMap(x => [[x.mac.toUpperCase(), x.name || x.mac], ...(x.ip ? [[x.ip, x.name || x.mac]] : [])])));
       } catch (e: any) {
         if (mounted.current) setError(e?.message ?? String(e));
+      reportError('control', e, info);
       } finally {
         if (mounted.current) setLoading(false);
       }
@@ -172,9 +174,11 @@ export default function ControlCenter() {
       await withSession(info, fn, false);
       await new Promise(r => setTimeout(r, 1200));
       const v = await read(info);
+      if (!check(v)) reportError('control', `ما انحفظ: ${key}`, info);
       if (!check(v)) Alert.alert('ما انحفظ', 'الراوتر رد بموافقة بس الإعداد ما تغيّر. ممكن موديلك ما يسمح بهالتعديل من خارج صفحته.');
     } catch (e: any) {
       if (mounted.current) setError(e?.message ?? String(e));
+      reportError('control', e, info);
     } finally {
       if (mounted.current) setBusy(null);
     }

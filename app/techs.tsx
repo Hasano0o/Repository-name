@@ -3,13 +3,15 @@
  * مدينة المستخدم أول، وبعدها باقي المدن. تواصل واتساب أو اتصال مباشر.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, View, Text, Pressable, ActivityIndicator, StyleSheet, Linking, RefreshControl } from 'react-native';
+import { ScrollView, View, Text, Pressable, ActivityIndicator, StyleSheet, Linking, RefreshControl, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fetchTechs, sameCity, waNumber, BOT_TECH_SIGNUP, Tech } from '../src/services/techs';
+import { fetchTechs, sameCity, waNumber, BOT_TECH_SIGNUP, Tech, requestTech } from '../src/services/techs';
 import { getCity } from '../src/services/stats';
 import { P, shadow } from '../src/ui/Pro';
 import { C, tBd, tBg, tFg } from '../src/ui/theme';
+
+const NEEDS = ['تركيب أنتينا', 'توجيه الأنتينا', 'تمديد كيبل', 'فحص الإشارة'];
 
 const AV = [['#38bdf8', '#2563eb'], ['#a78bfa', '#6d28d9'], ['#34d399', '#047857'], ['#fb923c', '#c2410c'], ['#f472b6', '#be185d']] as const;
 
@@ -60,6 +62,27 @@ export default function Techs() {
   const [filter, setFilter] = useState<string>('');
   const [err, setErr] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [form, setForm] = useState<{ city: string; phone: string; name: string; needs: string[]; note: string } | null>(null);
+  const [sending, setSending] = useState(false);
+
+  const send = async () => {
+    if (!form) return;
+    const phone = form.phone.replace(/[٠-٩]/g, c => String('٠١٢٣٤٥٦٧٨٩'.indexOf(c))).replace(/[^\d+]/g, '');
+    if (!form.city.trim()) { Alert.alert('المدينة', 'اكتب مدينتك عشان يوصل الطلب لفنيينها.'); return; }
+    if (!/^(\+?966|0)?5\d{8}$/.test(phone)) { Alert.alert('رقم الجوال', 'اكتب رقم جوال صحيح عشان الفني يتواصل معك.'); return; }
+    setSending(true);
+    try {
+      const n = await requestTech({ city: form.city.trim(), phone, name: form.name.trim(), note: [...form.needs, form.note.trim()].filter(Boolean).join(' · ') });
+      setForm(null);
+      Alert.alert('✓ وصل طلبك', n
+        ? `انرسل لـ ${n} ${n === 1 ? 'فني' : 'فنيين'} في ${form.city.trim()} — بيتواصلون معك على جوالك.`
+        : `ما فيه فنيين مسجلين في ${form.city.trim()} للحين، بس وصل طلبك لفريق Bandly وبنحاول نوفّر لك فني.`);
+    } catch (e: any) {
+      Alert.alert('ما انرسل', e?.message ?? 'جرّب بعد شوي');
+    } finally {
+      setSending(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setErr(false);
@@ -89,6 +112,17 @@ export default function Techs() {
           <Text style={s.heroTitle}>فنيين قريبين منك</Text>
           <Text style={s.heroSub}>فنيين أنتينا معتمدين من Bandly — تركيب، توجيه، وتقوية الإشارة. تواصل معهم مباشرة.</Text>
         </LinearGradient>
+
+        <Pressable onPress={() => setForm({ city: filter || city, phone: '', name: '', needs: [], note: '' })}
+          style={({ pressed }) => [s.reqCard, pressed && { opacity: 0.9 }]}>
+          <LinearGradient colors={['#12b76a', '#047857']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={s.reqIcon}>
+            <Text style={{ fontSize: 22 }}>📨</Text>
+          </LinearGradient>
+          <View style={{ flex: 1 }}>
+            <Text style={s.reqTitle}>ما تبي تدوّر؟ أرسل طلب</Text>
+            <Text style={s.reqSub}>يوصل لكل فنيين {filter || city || 'مدينتك'} ويتواصلون معك</Text>
+          </View>
+        </Pressable>
 
         {cities.length > 1 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={s.filters}>
@@ -137,6 +171,47 @@ export default function Techs() {
         </Pressable>
         {!city && <Text style={s.hint}>💡 اختر مدينتك من الإعدادات عشان نرتّب لك الفنيين الأقرب.</Text>}
       </ScrollView>
+
+      <Modal visible={!!form} transparent animationType="slide" onRequestClose={() => setForm(null)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+          <Pressable style={s.backdrop} onPress={() => setForm(null)} />
+          {form && (
+            <View style={[s.sheet, { paddingBottom: insets.bottom + 16 }]}>
+              <View style={s.grip} />
+              <Text style={s.sheetTitle}>طلب فني</Text>
+              <Text style={s.sheetSub}>يوصل للفنيين المعتمدين في مدينتك ويتواصلون معك مباشرة.</Text>
+
+              <Text style={s.label}>وش تحتاج؟</Text>
+              <View style={s.needs}>
+                {NEEDS.map(n => {
+                  const on = form.needs.includes(n);
+                  return (
+                    <Pressable key={n} style={[s.need, on && s.needOn]}
+                      onPress={() => setForm({ ...form, needs: on ? form.needs.filter(x => x !== n) : [...form.needs, n] })}>
+                      <Text style={[s.needTxt, on && s.needTxtOn]}>{n}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Text style={s.label}>المدينة</Text>
+              <TextInput value={form.city} onChangeText={v => setForm({ ...form, city: v })} placeholder="مثال: شرورة" placeholderTextColor={P.faint} style={s.input} />
+              <Text style={s.label}>رقم جوالك (واتساب)</Text>
+              <TextInput value={form.phone} onChangeText={v => setForm({ ...form, phone: v })} placeholder="05xxxxxxxx" placeholderTextColor={P.faint}
+                keyboardType="phone-pad" style={[s.input, { textAlign: 'left', writingDirection: 'ltr' }]} />
+              <Text style={s.label}>اسمك وملاحظة <Text style={{ color: P.faint, fontWeight: '600' }}>(اختياري)</Text></Text>
+              <TextInput value={form.name} onChangeText={v => setForm({ ...form, name: v })} placeholder="الاسم" placeholderTextColor={P.faint} style={s.input} />
+              <TextInput value={form.note} onChangeText={v => setForm({ ...form, note: v })} placeholder="مثلاً: الحي، نوع الراوتر، أفضل وقت للتواصل" placeholderTextColor={P.faint}
+                style={[s.input, { marginTop: 8, minHeight: 64, textAlignVertical: 'top', paddingTop: 10 }]} multiline />
+
+              <Pressable onPress={send} disabled={sending} style={({ pressed }) => [s.sendBtn, (pressed || sending) && { opacity: 0.85 }]}>
+                {sending ? <ActivityIndicator color="#fff" /> : <Text style={s.sendTxt}>أرسل الطلب</Text>}
+              </Pressable>
+              <Text style={s.privacy}>🔒 رقمك يوصل لفنيين مدينتك بس، عشان يتواصلون معك.</Text>
+            </View>
+          )}
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -178,4 +253,23 @@ const s = StyleSheet.create({
   joinTitle: { color: tFg('#9a3412'), fontSize: 15.5, fontWeight: '900', textAlign: 'right' },
   joinSub: { color: tFg('#c2410c'), fontSize: 12.5, lineHeight: 19, textAlign: 'right', marginTop: 2 },
   hint: { color: P.faint, fontSize: 12, textAlign: 'center' },
+  reqCard: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, backgroundColor: C.card, borderRadius: 20, padding: 14, borderWidth: 1.5, borderColor: tBd('#a7f3d0') },
+  reqIcon: { width: 46, height: 46, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  reqTitle: { color: C.text, fontSize: 15.5, fontWeight: '900', textAlign: 'right' },
+  reqSub: { color: P.sub, fontSize: 12.5, textAlign: 'right', marginTop: 2 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(8,12,30,0.45)' },
+  sheet: { backgroundColor: C.card, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 18, gap: 4 },
+  grip: { alignSelf: 'center', width: 44, height: 5, borderRadius: 3, backgroundColor: C.cardBorder, marginBottom: 6 },
+  sheetTitle: { color: C.text, fontSize: 19, fontWeight: '900', textAlign: 'right' },
+  sheetSub: { color: P.sub, fontSize: 13, textAlign: 'right' },
+  label: { color: C.text, fontSize: 13.5, fontWeight: '900', textAlign: 'right', marginTop: 12, marginBottom: 6 },
+  needs: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
+  need: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, backgroundColor: C.rowBg, borderWidth: 1.5, borderColor: C.cardBorder },
+  needOn: { backgroundColor: tBg('#047857'), borderColor: tBd('#047857') },
+  needTxt: { color: C.text, fontSize: 13, fontWeight: '800' },
+  needTxtOn: { color: tFg('#ffffff') },
+  input: { backgroundColor: C.rowBg, borderRadius: 14, paddingHorizontal: 12, minHeight: 46, color: C.text, fontSize: 15, textAlign: 'right' },
+  sendBtn: { marginTop: 16, backgroundColor: tBg('#047857'), borderRadius: 16, paddingVertical: 14, alignItems: 'center' },
+  sendTxt: { color: tFg('#ffffff'), fontSize: 16, fontWeight: '900' },
+  privacy: { color: P.faint, fontSize: 12, textAlign: 'center', marginTop: 8 },
 });

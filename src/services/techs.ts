@@ -32,3 +32,19 @@ export function waNumber(phone: string): string | null {
 /** «الرياض» يطابق «الرياض - حي النرجس» ويتجاهل «ال» والهمزات */
 const norm = (s: string) => (s || '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/^ال/, '').trim();
 export const sameCity = (a: string, b: string) => !!a && !!b && (norm(a).includes(norm(b)) || norm(b).includes(norm(a)));
+
+/** طلب فني: يوصل لفنيين المدينة في البوت. يرجّع كم فني وصله */
+export async function requestTech(r: { city: string; phone: string; note: string; name?: string }): Promise<number> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const res = await fetch(`${LIVE_BASE}/live-api/techreq`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal, body: JSON.stringify(r),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j?.detail || 'ما قدرنا نرسل الطلب');
+    return Number(j?.sent) || 0;
+  } finally {
+    clearTimeout(t);
+  }
+}

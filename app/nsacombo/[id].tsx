@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
+import { reportError } from '../../src/services/errors';
 import { withSession } from '../../src/store/sessions';
 import { BandConfig, Carrier, CellTower } from '../../src/drivers/types';
 import { snapshot, waitOnline, trialMessage, Snapshot, safeApply } from '../../src/utils/safeLock';
@@ -107,6 +108,7 @@ export default function NsaCombo() {
         setRows(buildCombos(lteList, nrList).map(x => ({ ...x, status: 'pending' })));
       } catch (e: any) {
         if (mounted.current) setError(e?.message ?? String(e));
+      reportError('nsacombo', e, info);
       } finally {
         if (mounted.current) setLoading(false);
       }
@@ -201,6 +203,7 @@ export default function NsaCombo() {
             Alert.alert(m.title, m.body);
           } catch (e: any) {
             setError(e?.message ?? String(e));
+            reportError('nsacombo', e, info);
           } finally {
             if (mounted.current) { setRunning(false); setStatus(''); }
           }

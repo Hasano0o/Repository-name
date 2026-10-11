@@ -10,6 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
+import { reportError } from '../../src/services/errors';
 import { withSession } from '../../src/store/sessions';
 import { progress } from '../../src/ui/Progress';
 import { WifiRadio } from '../../src/drivers/types';
@@ -203,6 +204,7 @@ export default function WifiChannel() {
       }
     } catch (e: any) {
       if (mounted.current) setError(e?.message ?? String(e));
+      reportError('wifich', e, info);
       if (current !== orig) await withSession(r, d => d.setWifiChannel!(b, orig), false).catch(() => {});
     } finally {
       t.end();
@@ -226,6 +228,7 @@ export default function WifiChannel() {
             await load(info);
           } catch (e: any) {
             if (mounted.current) setError(e?.message ?? String(e));
+      reportError('wifich', e, info);
           } finally {
             t.end();
             if (mounted.current) setBusy(false);

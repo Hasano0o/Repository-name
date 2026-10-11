@@ -9,6 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
+import { reportError } from '../../src/services/errors';
 import { withSession } from '../../src/store/sessions';
 import { waitOnline } from '../../src/utils/safeLock';
 import { C, R, S, tBg, tBd, tFg } from '../../src/ui/theme';
@@ -119,6 +120,7 @@ export default function NewIp() {
             if (mounted.current) setAfter(fresh);
           } catch (e: any) {
             if (mounted.current) setError(e?.message ?? String(e));
+      reportError('newip', e, info);
           } finally {
             if (mounted.current) { setBusy(false); setStatus(''); }
           }

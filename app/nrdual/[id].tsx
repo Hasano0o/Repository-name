@@ -10,6 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
+import { reportError } from '../../src/services/errors';
 import { withSession } from '../../src/store/sessions';
 import { BandConfig, Carrier } from '../../src/drivers/types';
 import { snapshot, waitOnline, trialMessage, Snapshot, safeApply, freeRelease } from '../../src/utils/safeLock';
@@ -88,6 +89,7 @@ export default function NrDual() {
         setRows(list.map(band => ({ band, status: 'pending' })));
       } catch (e: any) {
         if (mounted.current) setError(e?.message ?? String(e));
+      reportError('nrdual', e, info);
       } finally {
         if (mounted.current) setLoading(false);
       }
@@ -185,6 +187,7 @@ export default function NrDual() {
             Alert.alert(m.title, m.body);
           } catch (e: any) {
             setError(e?.message ?? String(e));
+            reportError('nrdual', e, info);
           } finally {
             if (mounted.current) { setRunning(false); setStatus(''); }
           }

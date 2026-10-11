@@ -252,10 +252,43 @@ DEEP = {
 }
 
 
+REFS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "refs.json")
+_rlock = threading.Lock()
+
+
+def _refs() -> dict:
+    try:
+        with open(REFS_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def note_ref(code: str, user) -> None:
+    """«ادعُ صديق»: الرابط t.me/NetGuide1_bot?start=r_CODE — نعدّ كل شخص مرة وحدة لكل كود."""
+    code = re.sub(r"[^A-Za-z0-9]", "", code)[:16]
+    if not code or not user:
+        return
+    with _rlock:
+        d = _refs()
+        r = d.setdefault(code, {"users": [], "first": int(time.time())})
+        if user.id not in r["users"]:
+            r["users"].append(user.id)
+            r["last"] = int(time.time())
+            tmp = REFS_FILE + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(d, f, ensure_ascii=False)
+            os.replace(tmp, REFS_FILE)
+
+
 def public_start(bot, msg):
     remember(msg.from_user)
     parts = (msg.text or "").split(maxsplit=1)
-    deep = DEEP.get(parts[1].strip().lower()) if len(parts) > 1 else None
+    arg = parts[1].strip() if len(parts) > 1 else ""
+    if arg.lower().startswith("r_"):
+        note_ref(arg[2:], msg.from_user)
+        arg = ""
+    deep = DEEP.get(arg.lower()) if arg else None
     if deep:
         text, btn, page = deep
         kb = types.InlineKeyboardMarkup()
@@ -329,6 +362,21 @@ def register(bot, is_owner, api_post=None, owner_id: int = 0):
         except Exception as e:
             text = f"✗ ما قدرت أجيب التقرير: {e}"
         bot.send_message(msg.chat.id, text, parse_mode="HTML")
+
+    @bot.message_handler(commands=["refs"])
+    def _refs_cmd(msg):
+        """/refs ← أكثر المستخدمين اللي جابوا ناس للبوت من «ادعُ صديق»"""
+        if not is_owner(msg):
+            return
+        d = _refs()
+        if not d:
+            bot.reply_to(msg, "ما فيه دعوات للحين.")
+            return
+        top = sorted(d.items(), key=lambda kv: -len(kv[1].get("users", [])))[:15]
+        total = sum(len(v.get("users", [])) for v in d.values())
+        lines = [f"🤝 <b>دعوات الأصدقاء</b> — {total} شخص من {len(d)} مستخدم\n"]
+        lines += [f"{i}. <code>{k}</code> ← {len(v.get('users', []))}" for i, (k, v) in enumerate(top, 1)]
+        bot.send_message(msg.chat.id, "\n".join(lines), parse_mode="HTML")
 
     @bot.message_handler(commands=["promo"])
     def _promo_preview(msg):

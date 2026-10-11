@@ -18,6 +18,7 @@ Bandly Live — وضع الفني
 import asyncio
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -1086,6 +1087,126 @@ async def hub_stats(req: Request):
 
 # ═══ صفحة الفني (الويب) ═══
 VIEWER = (BASE / "viewer.html").read_text("utf-8")
+
+
+# ═══════════════ تقارير الأخطاء من التطبيق ═══════════════
+# التطبيق يرسل سطر لما ميزة تفشل (بدون أي بيانات شخصية) — يوصل للمالك في البوت.
+# نفس الخطأ (ميزة + راوتر + نص) ينرسل مرة كل ٦ ساعات، والتكرار ينعد ويطلع مع الرسالة الجاية.
+ERRORS_LOG = DATA / "errors.jsonl"
+ERR_SEEN: dict[str, list] = {}       # key → [آخر إرسال, عدد التكرار من بعده]
+ERR_HITS: dict[str, list[float]] = {}
+FEATURE_AR = {
+    "wifich": "قناة الواي فاي", "control": "مركز التحكم", "newip": "آي بي جديد",
+    "lock": "تثبيت برج/تردد", "nrdual": "دمج 5G المزدوج", "nsacombo": "دمج 4G+5G", "login": "تسجيل الدخول",
+}
+
+
+def _limit(store: dict, key: str, n: int, per: float) -> bool:
+    now = time.time()
+    lst = [t for t in store.get(key, []) if now - t < per]
+    if len(lst) >= n:
+        store[key] = lst
+        return False
+    lst.append(now)
+    store[key] = lst
+    return True
+
+
+def _cl(v, n: int) -> str:
+    return re.sub(r"[\x00-\x1f]", " ", str(v or "")).strip()[:n]
+
+
+@app.post("/live-api/app/error")
+async def app_error(req: Request):
+    ip = req.headers.get("x-real-ip") or (req.client.host if req.client else "?")
+    if not _limit(ERR_HITS, ip, 20, 3600):
+        return {"ok": True}
+    try:
+        b = await req.json()
+    except Exception:
+        raise HTTPException(400, "bad json")
+    feat, msg, rtr = _cl(b.get("feature"), 30), _cl(b.get("msg"), 300), _cl(b.get("router"), 60)
+    if not feat or not msg:
+        raise HTTPException(400, "missing")
+    rec = {"at": int(time.time()), "feature": feat, "msg": msg, "router": rtr,
+           "model": _cl(b.get("model"), 60), "os": _cl(b.get("os"), 12), "ver": _cl(b.get("ver"), 20)}
+    with ERRORS_LOG.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    key = f"{feat}|{rtr}|{msg[:80]}"
+    seen = ERR_SEEN.get(key)
+    if seen and time.time() - seen[0] < 6 * 3600:
+        seen[1] += 1
+        return {"ok": True}
+    again = seen[1] if seen else 0
+    ERR_SEEN[key] = [time.time(), 0]
+    owner = _owner()
+    if owner:
+        _tg("sendMessage", {"chat_id": owner, "parse_mode": "HTML", "text":
+            "⚠️ <b>خطأ عند مستخدم</b>\n"
+            f"• الميزة: {_esc(FEATURE_AR.get(feat, feat))}\n"
+            f"• الراوتر: {_esc(rtr or '—')}{(' · ' + _esc(rec['model'])) if rec['model'] else ''}\n"
+            f"• الخطأ: <code>{_esc(msg)}</code>\n"
+            f"• {_esc(rec['os'] or '?')} · نسخة {_esc(rec['ver'] or '?')}"
+            + (f"\n🔁 تكرر {again} مرة من آخر تنبيه" if again else "")})
+    return {"ok": True}
+
+
+# ═══════════════ طلب فني من التطبيق ═══════════════
+# العميل يرسل مدينته ورقمه وش يحتاج → يوصل لكل الفنيين المعتمدين في مدينته (في البوت) وللمالك.
+REQ_HITS: dict[str, list[float]] = {}
+REQ_LOG = DATA / "tech_requests.jsonl"
+
+
+def _norm_city(s: str) -> str:
+    s = re.sub(r"[أإآ]", "ا", str(s or "")).replace("ة", "ه").replace("ى", "ي").strip()
+    return re.sub(r"^ال", "", s)
+
+
+def _same_city(a: str, b: str) -> bool:
+    a, b = _norm_city(a), _norm_city(b)
+    return bool(a and b) and (a in b or b in a)
+
+
+@app.post("/live-api/techreq")
+async def tech_request(req: Request):
+    ip = req.headers.get("x-real-ip") or (req.client.host if req.client else "?")
+    if not _limit(REQ_HITS, ip, 3, 3600):
+        raise HTTPException(429, "أرسلت طلبات كثيرة — جرّب بعد ساعة")
+    try:
+        b = await req.json()
+    except Exception:
+        raise HTTPException(400, "bad json")
+    city, phone, note, name = _cl(b.get("city"), 30), _cl(b.get("phone"), 20), _cl(b.get("note"), 300), _cl(b.get("name"), 40)
+    sig = _cl(b.get("signal"), 120)
+    if not city or not re.fullmatch(r"[+0-9 ]{8,20}", phone):
+        raise HTTPException(400, "المدينة والجوال مطلوبة")
+    rec = {"at": int(time.time()), "city": city, "phone": phone, "note": note, "name": name, "signal": sig}
+    with REQ_LOG.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    digits = re.sub(r"\D", "", phone)
+    wa = ("966" + digits[1:]) if digits.startswith("05") else digits
+    text = ("🛰️ <b>طلب فني جديد من تطبيق Bandly</b>\n"
+            f"📍 المدينة: {_esc(city)}\n"
+            + (f"👤 الاسم: {_esc(name)}\n" if name else "")
+            + f"📞 الجوال: <code>{_esc(phone)}</code>\n"
+            + (f"📝 الطلب: {_esc(note)}\n" if note else "")
+            + (f"📶 الإشارة الحين: {_esc(sig)}\n" if sig else "")
+            + f"\n💬 واتساب: https://wa.me/{wa}")
+    sent = 0
+    now = time.time()
+    for t in techs().values():
+        if not t.get("active", True) or not t.get("listed", True) or (t.get("expires") and t["expires"] < now):
+            continue
+        if not t.get("tg") or not _same_city(t.get("city", ""), city):
+            continue
+        r = _tg("sendMessage", {"chat_id": t["tg"], "parse_mode": "HTML", "text": text, "disable_web_page_preview": True})
+        if r.get("ok"):
+            sent += 1
+    owner = _owner()
+    if owner:
+        _tg("sendMessage", {"chat_id": owner, "parse_mode": "HTML", "disable_web_page_preview": True,
+                            "text": text + f"\n\n↪️ وصل لـ {sent} فني في {_esc(city)}"})
+    return {"ok": True, "sent": sent}
 
 
 @app.get("/live/", response_class=HTMLResponse)

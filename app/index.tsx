@@ -21,6 +21,8 @@ import { UpdateStatus } from '../src/ui/UpdateStatus';
 import { desktop } from '../src/desktop/bridge';
 import { DevContact } from '../src/ui/DevContact';
 import { CityAsk } from '../src/ui/CityAsk';
+import { WhatsNew } from '../src/ui/WhatsNew';
+import { InviteCard } from '../src/ui/InviteCard';
 import { HomeHeader, HeaderChip, HeaderTone } from '../src/ui/HomeHeader';
 import { hostLabel } from '../src/drivers/device';
 import { addDemoRouter } from '../src/drivers/demo';
@@ -199,6 +201,7 @@ export default function RoutersList() {
 
   return (
     <View style={{ flex: 1, backgroundColor: P.bg }}>
+      <WhatsNew />
       <FlatList
         data={items}
         keyExtractor={i => i.id}
@@ -233,6 +236,7 @@ export default function RoutersList() {
               <Icon name="compass" size={20} color={P.violet} />
             </View>
           </Pressable>
+          <InviteCard />
           <ThemePicker />
           <DevContact />
           <UpdateStatus />
