@@ -15,14 +15,12 @@ import {
   lvlColor, lvlSoft,
 } from '../src/ui/Pro';
 
-import { tBd, tBg, tFg, THEME_PREF, ThemePref, setThemePref } from '../src/ui/theme';
-import { UpdateStatus } from '../src/ui/UpdateStatus';
+import { tBd, tBg, tFg } from '../src/ui/theme';
 import { desktop } from '../src/desktop/bridge';
-import { DevContact } from '../src/ui/DevContact';
 import { CityAsk } from '../src/ui/CityAsk';
 import { WhatsNew } from '../src/ui/WhatsNew';
-import { LangPicker, LangAsk, LangLink } from '../src/ui/LangPicker';
-import { InviteCard } from '../src/ui/InviteCard';
+import { LangAsk, LangLink } from '../src/ui/LangPicker';
+import { HomeFooter } from '../src/ui/HomeFooter';
 import { HomeHeader, HeaderChip, HeaderTone } from '../src/ui/HomeHeader';
 import { hostLabel } from '../src/drivers/device';
 import { addDemoRouter } from '../src/drivers/demo';
@@ -220,33 +218,7 @@ export default function RoutersList() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.blue} colors={[P.blue]} />
         }
-        ListFooterComponent={
-          <View style={{ gap: 12 }}>
-          <Pressable style={({ pressed }) => [s.tech, pressed && { opacity: 0.85 }]} onPress={() => (desktop?.openTech ? desktop.openTech() : router.push('/tech' as Href))}>
-            <View style={s.flip}><Icon name="chevron" size={16} color={tFg('#fff')} /></View>
-            <View style={{ flex: 1, alignItems: 'flex-end' }}>
-              <Text style={s.techTitle}>وضع الفني</Text>
-              <Text style={s.techSub}>تابع إشارة عميل حيّة ووجّهه عن بُعد</Text>
-            </View>
-            <View style={s.techIcon}><Icon name="aim" size={20} color={tFg('#fff')} /></View>
-          </Pressable>
-          <Pressable style={({ pressed }) => [s.explore, pressed && { opacity: 0.8 }]} onPress={explore}>
-            <View style={s.flip}><Icon name="chevron" size={16} color={P.violet} /></View>
-            <View style={{ flex: 1, alignItems: 'flex-end' }}>
-              <Text style={s.exploreTitle}>استكشاف جهاز غير مدعوم</Text>
-              <Text style={s.exploreSub}>راوترك ما ظهر؟ خلّ التطبيق يتعرّف عليه</Text>
-            </View>
-            <View style={s.exploreIcon}>
-              <Icon name="compass" size={20} color={P.violet} />
-            </View>
-          </Pressable>
-          <InviteCard />
-          <ThemePicker />
-          <LangPicker />
-          <DevContact />
-          <UpdateStatus />
-          </View>
-        }
+        ListFooterComponent={<HomeFooter onExplore={explore} />}
         renderItem={({ item }) => {
           const st = status[item.id];
           const sig = st?.signal;
@@ -422,43 +394,6 @@ function ReadTile({ label, v, unit, level = 'unknown', text }: {
       <Text style={s.tileLbl}>{label}</Text>
       <Text style={[s.tileVal, { color: col }]} numberOfLines={1} adjustsFontSizeToFit>{val}</Text>
       <Text style={s.tileUnit}>{v === undefined || !unit ? ' ' : unit}</Text>
-    </View>
-  );
-}
-
-const THEMES: { id: ThemePref; label: string; icon: IconName }[] = [
-  { id: 'light', label: 'فاتح', icon: 'sun' },
-  { id: 'dark', label: 'داكن', icon: 'moon' },
-  { id: 'system', label: 'حسب الجوال', icon: 'phone' },
-];
-
-/** المظهر: سطر واحد — العنوان يمين وثلاث أيقونات يسار، والمختار يتلوّن */
-function ThemePicker() {
-  const pick = (t: ThemePref) => {
-    if (t === THEME_PREF) return;
-    Alert.alert('المظهر', 'التطبيق بيعيد التشغيل عشان يطبّق الألوان الجديدة.', [
-      { text: 'إلغاء', style: 'cancel' },
-      { text: 'طبّق', onPress: () => { setThemePref(t); } },
-    ]);
-  };
-  const cur = THEMES.find(t => t.id === THEME_PREF);
-  return (
-    <View style={s.theme}>
-      <View style={{ flex: 1, alignItems: 'flex-end' }}>
-        <Text style={s.themeTitle}>المظهر</Text>
-        <Text style={s.themeSub}>{cur?.label ?? ''}</Text>
-      </View>
-      <View style={s.themeRow}>
-        {THEMES.map(t => {
-          const on = t.id === THEME_PREF;
-          return (
-            <Pressable key={t.id} onPress={() => pick(t.id)} accessibilityLabel={t.label} hitSlop={4}
-              style={({ pressed }) => [s.themeOpt, on && s.themeOn, pressed && { opacity: 0.75, transform: [{ scale: 0.94 }] }]}>
-              <Icon name={t.icon} size={19} color={on ? P.blue : P.sub} stroke={2.1} />
-            </Pressable>
-          );
-        })}
-      </View>
     </View>
   );
 }

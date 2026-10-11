@@ -101,6 +101,15 @@ export const EN: Record<string, string> = {
   'آخر تحديث:': 'Updated:',
   'كلمة المرور محفوظة على جهازك': 'Password saved on your device',
 
+  'عميل عن بُعد': 'Remote help',
+  'جهاز جديد': 'New device',
+  'غير مدعوم؟': 'Unsupported?',
+  'ادعُ ربعك': 'Invite',
+  'شارك الرابط': 'Share link',
+  'تحقق': 'Check',
+  'اللغة': 'Language',
+  'النسخة الأصلية': 'Original version',
+
   // ═══ حالات ═══
   'ما وصلنا للراوتر': "Couldn't reach the router",
   'صار خطأ': 'Something went wrong',

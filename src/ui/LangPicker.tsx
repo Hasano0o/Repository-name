@@ -7,35 +7,6 @@ import { sheet, LANG, LANG_PICKED, Lang, setLang, deviceIsArabic, EN_MODE } from
 import { Icon } from './Icon';
 import { P } from './Pro';
 
-const OPTS: { id: Lang; label: string }[] = [
-  { id: 'ar', label: 'عربي' },
-  { id: 'en', label: 'English' },
-];
-
-export function LangPicker() {
-  // نبدّل مباشرة (التطبيق يعيد التشغيل باللغة الجديدة)
-  const pick = (l: Lang) => { if (l !== LANG) setLang(l); };
-  return (
-    <View style={s.box}>
-      <View style={s.icon}><Icon name="globe" size={19} color={P.blue} stroke={2.1} /></View>
-      <View style={{ flex: 1, alignItems: 'flex-end' }}>
-        <Text style={s.title}>{EN_MODE ? 'Language' : 'اللغة'}</Text>
-        <Text style={s.sub}>{EN_MODE ? 'English' : 'العربية'}</Text>
-      </View>
-      <View style={s.row}>
-        {OPTS.map(o => {
-          const on = o.id === LANG;
-          return (
-            <Pressable key={o.id} onPress={() => pick(o.id)} hitSlop={4}
-              style={({ pressed }) => [s.opt, on && s.on, pressed && { opacity: 0.75 }]}>
-              <Text style={[s.optTxt, on && { color: P.blue }]}>{o.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
 
 /** رابط صغير يبدّل للغة الثانية (للشاشة الفاضية) */
 export function LangLink() {
