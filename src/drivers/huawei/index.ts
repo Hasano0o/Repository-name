@@ -12,6 +12,7 @@ import { http } from '../http';
 import { trafficBurst } from '../../utils/nrprobe';
 import { getApnProfiles, setApn, selectApn, getDns, setDns } from './apn-dns';
 import { carriersFrom } from './carriers';
+import { getWifiRadios, setWifiChannel, wifiDebug } from './wifi';
 import { parseTxPower, parseDlMcs, parseUlMcs } from '../../utils/linkHealth';
 import { buildSnapshot } from '../../utils/snapshot';
 
@@ -762,6 +763,9 @@ export class HuaweiDriver implements RouterDriver {
   }
   selectApn(index: string) { return selectApn(this.io(), index); }
   getDns() { return getDns(this.io()); }
+  getWifiRadios() { return getWifiRadios(this.io()); }
+  setWifiChannel(band: '2.4' | '5', channel: string) { return setWifiChannel(this.io(), band, channel); }
+  wifiDebug() { return wifiDebug(this.io()); }
   setDns(cfg: DnsConfig) { return setDns(this.io(), cfg); }
   async getDeviceDetails(): Promise<DeviceDetails> {
     const out: DeviceDetails = {};

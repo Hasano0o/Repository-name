@@ -29,6 +29,16 @@ export interface NetworkInfo {
   supports5g?: boolean;
 }
 export interface Traffic { downBytesPerSec: number; upBytesPerSec: number; connectedSecs: number; }
+/** راديو واي فاي واحد (2.4 أو 5) وقناته الحالية — '0' = تلقائي */
+export interface WifiRadio {
+  band: '2.4' | '5';
+  channel: string;
+  /** القنوات المسموحة لو الراوتر يعطينا قائمة */
+  allowed?: string[];
+  /** نقدر نغيّرها من التطبيق؟ */
+  writable: boolean;
+}
+
 export interface ConnectedDevice { mac: string; ip?: string; name?: string; blocked?: boolean; }
 export interface Usage { downloadBytes: number; uploadBytes: number; }
 export interface NetworkModeOption { value: string; label: string; }
@@ -229,4 +239,9 @@ export interface RouterDriver {
   getDns?(): Promise<DnsConfig>;
   setDns?(cfg: DnsConfig): Promise<void>;
   getCarriers?(): Promise<Carrier[]>;
+  /** قنوات الواي فاي */
+  getWifiRadios?(): Promise<WifiRadio[]>;
+  setWifiChannel?(band: '2.4' | '5', channel: string): Promise<void>;
+  /** نص خام للدعم لو الراوتر ما قبل التغيير */
+  wifiDebug?(): Promise<string>;
 }

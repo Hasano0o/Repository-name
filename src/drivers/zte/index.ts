@@ -4,7 +4,7 @@ import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import {
   RouterDriver, Capability, Signal, NetworkInfo, Traffic, ConnectedDevice,
   Usage, DeviceDetails, CellTower, BandConfig, ActiveLock, Carrier,
-  SignalSnapshot, CellLockState, CellLockTarget,
+  SignalSnapshot, CellLockState, CellLockTarget, WifiRadio,
 } from '../types';
 import { http } from '../http';
 import {
@@ -971,5 +971,48 @@ export class ZteDriver implements RouterDriver {
     await sleep((opts?.holdSecs ?? 10) * 1000);
     const on = await this.act({ goformId: 'CONNECT_NETWORK' });
     if (!/success/i.test(on)) throw this.rejected('إرجاع الاتصال', on);
+  }
+
+  // ───── قنوات الواي فاي ─────
+  private static readonly WIFI_FIELDS = ['Channel', 'wifi_band', 'WirelessMode', 'CountryCode', 'HT_MCS', 'wifi_11n_cap'];
+  private static readonly WIFI5_FIELDS = ['m_Channel', 'Channel_5G', 'channel_5g', 'wifi_5g_channel'];
+
+  async getWifiRadios(): Promise<WifiRadio[]> {
+    await this.ensure();
+    const r = await this.get(ZteDriver.WIFI_FIELDS).catch(() => ({} as Record<string, string>));
+    const out: WifiRadio[] = [];
+    const ch = (r.Channel ?? '').trim();
+    if (/^\d{1,3}$/.test(ch)) {
+      const five = /^a$|5/i.test(r.wifi_band ?? '') || Number(ch) >= 36;
+      out.push({ band: five ? '5' : '2.4', channel: ch, writable: true });
+    }
+    // بعض الموديلات ثنائية النطاق تحط قناة الـ5 في حقل ثاني — نعرضها بس (الكتابة غير مؤكدة)
+    const r5 = await this.get(ZteDriver.WIFI5_FIELDS).catch(() => ({} as Record<string, string>));
+    const v5 = ZteDriver.WIFI5_FIELDS.map(k => (r5[k] ?? '').trim()).find(v => /^\d{1,3}$/.test(v));
+    if (v5 && !out.some(o => o.band === '5')) out.push({ band: '5', channel: v5, writable: false });
+    return out;
+  }
+
+  async setWifiChannel(band: '2.4' | '5', channel: string): Promise<void> {
+    await this.ensure();
+    const r = await this.get(ZteDriver.WIFI_FIELDS);
+    const five = /^a$|5/i.test(r.wifi_band ?? '') || Number(r.Channel) >= 36;
+    if ((band === '5') !== five) throw new Error('هذا الراوتر ما يسمح نغيّر قناة هذا النطاق من التطبيق');
+    const out = await this.act({
+      goformId: 'SET_WIFI_INFO',
+      wifiMode: r.WirelessMode || '4',
+      countryCode: r.CountryCode || 'SA',
+      selectedChannel: channel,
+      abg_rate: r.HT_MCS || '0',
+      wifi_band: r.wifi_band || 'b',
+      wifi_11n_cap: r.wifi_11n_cap || '1',
+    });
+    if (!/success/i.test(out)) throw this.rejected('تغيير القناة', out);
+  }
+
+  async wifiDebug(): Promise<string> {
+    await this.ensure();
+    const a = await this.get([...ZteDriver.WIFI_FIELDS, ...ZteDriver.WIFI5_FIELDS, 'SSID1', 'wifi_chip1_ssid1_wifi_coverage']).catch(e => ({ err: String(e?.message ?? e) }));
+    return JSON.stringify(a, null, 1);
   }
 }

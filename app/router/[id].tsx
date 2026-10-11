@@ -820,6 +820,14 @@ export default function RouterDashboard() {
                   <Text style={s.moreLbl}>شارك الواي فاي</Text>
                 </Pressable>
               )}
+              {['huawei-lte', 'zte', 'demo'].includes(info.driverId) && (
+                <Pressable style={[s.moreTile, { backgroundColor: tBg('#0ea5e912'), borderColor: tBd('#0ea5e930') }]} onPress={() => router.push(`/wifich/${info.id}` as Href)}>
+                  <View style={[s.moreIcon, { backgroundColor: tBg('#0ea5e9') }]}>
+                    <Icon name="wifi" size={18} color={tFg('#fff')} />
+                  </View>
+                  <Text style={s.moreLbl}>قناة الواي فاي</Text>
+                </Pressable>
+              )}
               {feat.sms && (
                 <Pressable style={[s.moreTile, { backgroundColor: tBg('#16a34a12'), borderColor: tBd('#16a34a30') }]} onPress={() => router.push(`/sms/${info.id}` as Href)}>
                   <View style={[s.moreIcon, { backgroundColor: tBg('#16a34a') }]}>

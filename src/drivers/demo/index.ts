@@ -1,7 +1,7 @@
 import {
   RouterDriver, Capability, Signal, SignalSnapshot, CellTower, Carrier, NetworkInfo,
   DeviceDetails, Traffic, ConnectedDevice, Usage, BandConfig, CellLockTarget, CellLockState,
-  ActiveLock, DataPlan, SmsMessage, ApnProfile, DnsConfig,
+  ActiveLock, DataPlan, SmsMessage, ApnProfile, DnsConfig, WifiRadio,
 } from '../types';
 import { buildSnapshot } from '../../utils/snapshot';
 import { listRouters, saveRouter } from '../../store/routers';
@@ -209,6 +209,29 @@ export class DemoDriver implements RouterDriver {
     this.demoIp = 10 + Math.floor(Math.random() * 200);
   }
   demoIp = 17;
+
+  // ───── قنوات الواي فاي (محاكاة: قناة 6 و 40 زحمة عند الجيران) ─────
+  private wifiCh: Record<'2.4' | '5', string> = { '2.4': '6', '5': '40' };
+  async getWifiRadios(): Promise<WifiRadio[]> {
+    await this.alive();
+    return [
+      { band: '2.4', channel: this.wifiCh['2.4'], writable: true },
+      { band: '5', channel: this.wifiCh['5'], writable: true },
+    ];
+  }
+  async setWifiChannel(band: '2.4' | '5', channel: string) {
+    await this.alive();
+    await new Promise(r => setTimeout(r, 1500));
+    this.wifiCh[band] = channel;
+  }
+  async wifiDebug() { return JSON.stringify(this.wifiCh); }
+  /** بنق محاكى بين الجوال والراوتر حسب زحمة القناة */
+  demoLanPing(band: '2.4' | '5'): number | null {
+    const busy: Record<string, number> = { '6': 3.2, '1': 1.6, '11': 1.1, '40': 2.4, '36': 1.3, '44': 1, '48': 1.4, '149': 0.9, '157': 1.2, '0': 1.8 };
+    const k = busy[this.wifiCh[band]] ?? 1.5;
+    if (Math.random() < 0.02 * k) return null;
+    return Math.round((band === '5' ? 3 : 5) * k + Math.random() * 6 * k);
+  }
 
   async reboot() {
     await this.alive();
