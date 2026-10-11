@@ -125,12 +125,16 @@ async function switchAp(io: ZteIo, chip: string, idx: string, on: boolean, extra
     ...extra,
   };
   const out = await io.act(body);
+  let readOk = false;
   for (let i = 0; i < 8; i++) {
     await sleep(1500);
-    const now = (await accessPoints(io).catch(() => [] as Ap[])).find(a => a.ChipIndex === chip && a.AccessPointIndex === idx);
+    const list = await accessPoints(io).catch(() => null);
+    if (!list?.length) continue; // الجوال انفصل لأنه على نفس الشبكة — نحكم بالقراءة الجاية
+    readOk = true;
+    const now = list.find(a => a.ChipIndex === chip && a.AccessPointIndex === idx);
     if (now?.AccessPointSwitchStatus === want) return;
   }
-  throw fail('تغيير الواي فاي', out);
+  if (readOk) throw fail('تغيير الواي فاي', out);
 }
 
 export const zteSetBandOn = (io: ZteIo, band: '2.4' | '5', on: boolean) => switchAp(io, band === '5' ? '1' : '0', '0', on);
@@ -185,12 +189,9 @@ export async function zteSetChannel(io: ZteIo, band: '2.4' | '5', channel: strin
     WirelessMode: ap.WirelessMode || (band === '5' ? '8' : '7'), CountryCode: ap.CountryCode || 'SA',
     Channel: channel, BandWidth: ap.BandWidth || (band === '5' ? '4' : '2'), abg_rate: '0',
   });
-  for (let i = 0; i < 10; i++) {
-    await sleep(1500);
-    const now: any = (await accessPoints(io).catch(() => [] as Ap[])).find(a => a.ChipIndex === ap.ChipIndex && a.AccessPointIndex === '0');
-    if (String(now?.Channel) === channel) return;
-  }
-  throw fail('تغيير القناة', out);
+  // الواي فاي يعيد التشغيل بعد التغيير — الجوال ينفصل ثواني لو كان على نفس الشبكة،
+  // فشاشة القنوات هي اللي تنتظر رجوعه وتتأكد من القناة (مجرّب حي: 6 و 13 و 1 على MU5001)
+  if (!ok(out)) throw fail('تغيير القناة', out);
 }
 
 /** يرجّع الاتصال لحاله لو انقطعت الخدمة (مجرّب على MU5001) */
