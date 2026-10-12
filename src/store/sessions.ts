@@ -121,13 +121,31 @@ export async function withSession<T>(
       const trail: string[] = [short(msg)];
       for (const wait of [1500, 4000, 8000]) {
         await new Promise(res => setTimeout(res, wait));
+        let fresh: RouterDriver;
         try {
-          const fresh = await connect(r, true);
+          fresh = await connect(r, true);
           return await fn(fresh);
         } catch (e2) {
           const m2 = String((e2 as any)?.message ?? e2);
           trail.push(short(m2));
           if (!SESSION_GONE.test(m2)) throw e2;
+        }
+        // فيرموير هواوي الجديدة (H155/H158…) ترد 100003 على أي رابط مو موجود — مو طرد!
+        // دخلنا للتو: لو قراءة الإشارة شغالة، فالمشكلة إن راوترك ما يدعم هالأمر بالذات
+        try {
+          if (fresh!.getSignal) {
+            await fresh!.getSignal();
+            diag(`[session] 100003 بس الجلسة شغالة → أمر غير مدعوم trail=${trail.join('>')}`);
+            const err = new Error('راوترك ما يدعم هالخاصية (الراوتر رفض الأمر وهو داخل) — جرّب خاصية ثانية أو أرسل تشخيص للمطوّر');
+            (err as any).unsupported = true;
+            throw err;
+          }
+        } catch (e3) {
+          if ((e3 as any)?.unsupported) {
+            import('../services/errors').then(m => m.reportError('unsupported', `${String((e as any)?.message ?? e).slice(0, 60)} [${trail.join(' → ')}]`, r)).catch(() => {});
+            throw e3;
+          }
+          trail.push('sig:' + short(String((e3 as any)?.message ?? e3)));
         }
       }
       kickedAt.set(keyOf(r), Date.now());

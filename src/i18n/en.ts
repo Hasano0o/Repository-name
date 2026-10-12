@@ -596,6 +596,7 @@ export const EN: Record<string, string> = {
   '٢/٢ — الشركة رجّعت نفس الآي بي، نعيد تشغيل الراوتر (دقيقتين تقريباً)...': '2/2 — Same IP returned, restarting the router (about two minutes)...',
   'الراوتر على «3G فقط» — نرجّعه على 4G و 5G...': 'Router is on 3G only — switching back to 4G + 5G...',
   'الراوتر ما رجع يمسك برج — نفك التثبيتات ونرجّع وضع الشبكة...': "Router didn't pick up a tower — releasing locks and restoring network mode...",
+  'راوترك ما يدعم هالخاصية (الراوتر رفض الأمر وهو داخل) — جرّب خاصية ثانية أو أرسل تشخيص للمطوّر': "Your router doesn't support this feature (it rejected the command while logged in) — try another feature or send diagnostics to the developer",
 };
 
 export const EN_PATTERNS: Record<string, string> = {

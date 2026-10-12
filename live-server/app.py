@@ -1098,7 +1098,7 @@ ERR_HITS: dict[str, list[float]] = {}
 FEATURE_AR = {
     "wifich": "قناة الواي فاي", "control": "مركز التحكم", "newip": "آي بي جديد",
     "lock": "تثبيت برج/تردد", "nrdual": "دمج 5G المزدوج", "nsacombo": "دمج 4G+5G", "login": "تسجيل الدخول",
-    "session": "طرد من الراوتر", "nrprim": "5G الأساسي", "nrprimary": "5G الأساسي", "diag": "🩺 تشخيص يدوي من المستخدم",
+    "session": "طرد من الراوتر", "nrprim": "5G الأساسي", "nrprimary": "5G الأساسي", "diag": "🩺 تشخيص يدوي من المستخدم", "unsupported": "أمر غير مدعوم في الراوتر (100003)",
 }
 
 
