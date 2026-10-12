@@ -590,6 +590,10 @@ export const EN: Record<string, string> = {
   'ما وصل — تأكد من النت': "Didn't send — check your internet",
   'عندك مشكلة؟ أرسلها بضغطة': 'Having an issue? Send it in one tap',
   'أرسل': 'Send',
+  'ضغطة وحدة: نقطع البيانات ثواني، ولو الشركة رجّعت نفس الآي بي نعيد تشغيل الراوتر من التطبيق ونعرض لك الآي بي الجديد — بدون ما تقوم للراوتر.': "One tap: we drop data for a few seconds; if the carrier returns the same IP, we restart the router from the app and show your new IP — no need to get up.",
+  'نعيد تشغيل الراوتر من التطبيق — هذي الطريقة اللي تغيّر الآي بي عند شركتك. النت بينقطع حوالي دقيقتين، ونعرض لك الآي بي الجديد لما يرجع.': "We'll restart the router from the app — this is what changes the IP with your carrier. Internet drops for about two minutes; we'll show the new IP when it's back.",
+  'نجرّب أول قطع سريع للبيانات (ثواني). لو الشركة رجّعت نفس الآي بي، نعيد تشغيل الراوتر من التطبيق تلقائي (دقيقتين تقريباً).': 'First a quick data drop (seconds). If the carrier returns the same IP, we restart the router from the app automatically (about two minutes).',
+  '٢/٢ — الشركة رجّعت نفس الآي بي، نعيد تشغيل الراوتر (دقيقتين تقريباً)...': '2/2 — Same IP returned, restarting the router (about two minutes)...',
 };
 
 export const EN_PATTERNS: Record<string, string> = {

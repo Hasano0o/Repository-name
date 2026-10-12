@@ -9,6 +9,7 @@ import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { reportError } from '../../src/services/errors';
 import { withSession, withSessionPatient } from '../../src/store/sessions';
@@ -72,7 +73,9 @@ export default function NewIp() {
         if (!mounted.current) return;
         setSupported(can || det);
         setCanQuick(can);
-        setCanDetach(det);
+        // الفصل عن البرج (reattach) موقوف لين نتأكد منه على راوتر حقيقي — على ZTE خلّى الراوتر بدون أبراج
+        setCanDetach(false && det);
+        try { setSkipQuick((await AsyncStorage.getItem(`newip.reboot.${r.id}`)) === '1'); } catch {}
         setCanReboot(reb && r.driverId !== 'device');
         setBefore(await readIps(r));
       } finally {
@@ -85,6 +88,8 @@ export default function NewIp() {
   const [canReboot, setCanReboot] = useState(false);
   const [canQuick, setCanQuick] = useState(false);
   const [canDetach, setCanDetach] = useState(false);
+  /** القطع السريع ما نفع مع هالراوتر قبل؟ نروح لإعادة التشغيل على طول (أسرع دقيقة) */
+  const [skipQuick, setSkipQuick] = useState(false);
   const [mode, setMode] = useState<'normal' | 'reboot'>('normal');
 
   const [step, setStep] = useState<'' | 'quick' | 'detach' | 'reboot'>('');
@@ -110,10 +115,11 @@ export default function NewIp() {
 
   const run = (m: 'auto' | 'reboot' = 'auto') => {
     if (!info) return;
-    const msg = m === 'reboot'
-      ? 'بنعيد تشغيل الراوتر — النت بينقطع حوالي دقيقتين.'
-      : 'نجرّب أول قطع سريع للبيانات. لو الشركة رجّعت نفس الآي بي، نفصل الراوتر عن البرج كامل ونرجّعه (مثل الطفي والتشغيل بس أسرع).\n\nالنت بينقطع من ثواني إلى دقيقة تقريباً.';
-    setMode(m === 'reboot' ? 'reboot' : 'normal');
+    const direct = m === 'reboot' || (skipQuick && canReboot);
+    const msg = direct
+      ? 'نعيد تشغيل الراوتر من التطبيق — هذي الطريقة اللي تغيّر الآي بي عند شركتك. النت بينقطع حوالي دقيقتين، ونعرض لك الآي بي الجديد لما يرجع.'
+      : 'نجرّب أول قطع سريع للبيانات (ثواني). لو الشركة رجّعت نفس الآي بي، نعيد تشغيل الراوتر من التطبيق تلقائي (دقيقتين تقريباً).';
+    setMode(direct ? 'reboot' : 'normal');
     Alert.alert('آي بي جديد', msg, [
       { text: 'إلغاء', style: 'cancel' },
       {
@@ -124,7 +130,14 @@ export default function NewIp() {
             if (mounted.current) setBefore(old);
             let fresh: Ips = {};
 
-            if (m === 'reboot') {
+            const doReboot = async (label: string) => {
+              setStep('reboot');
+              setStatus(label);
+              await withSession(info, d => d.reboot!(), false);
+              await sleep(30000);
+              return settle(150000);
+            };
+            if (direct) {
               setStep('reboot');
               setStatus('نعيد تشغيل الراوتر...');
               await withSession(info, d => d.reboot!(), false);
@@ -139,7 +152,14 @@ export default function NewIp() {
                 await sleep(3000);
                 fresh = await settle(60000);
               }
-              // ٢) الشركة رجّعت نفس الآي بي → فصل كامل عن البرج (هذا اللي يسويه الطفي)
+              // ٢) الشركة رجّعت نفس الآي بي → إعادة تشغيل من التطبيق (الطريقة المؤكدة عند أغلب الشركات)
+              if (mounted.current && canReboot && !canDetach && !differs(old, fresh)) {
+                setMode('reboot');
+                fresh = await doReboot('٢/٢ — الشركة رجّعت نفس الآي بي، نعيد تشغيل الراوتر (دقيقتين تقريباً)...');
+                // نتذكّر: المرة الجاية نروح لإعادة التشغيل على طول
+                if (differs(old, fresh)) AsyncStorage.setItem(`newip.reboot.${info.id}`, '1').catch(() => {});
+              }
+              // (موقوف) فصل كامل عن البرج
               if (mounted.current && canDetach && !differs(old, fresh)) {
                 setStep('detach');
                 setStatus('٢/٢ — الشركة رجّعت نفس الآي بي، نفصل الراوتر عن البرج ونرجّعه...');
@@ -202,7 +222,7 @@ export default function NewIp() {
         <View style={s.card}>
           <Text style={s.title}>🔄 آي بي جديد</Text>
           <Text style={s.body}>
-            نقطع البيانات ثواني ونرجّعها، ولو الشركة رجّعت نفس الآي بي نفصل الراوتر عن البرج كامل ونرجّعه — نفس مفعول الطفي والتشغيل بس أسرع.
+            ضغطة وحدة: نقطع البيانات ثواني، ولو الشركة رجّعت نفس الآي بي نعيد تشغيل الراوتر من التطبيق ونعرض لك الآي بي الجديد — بدون ما تقوم للراوتر.
             يفيد لو لعبة أو موقع حاط عليك حظر مؤقت، أو النت علق على مسار بطيء.
           </Text>
 
