@@ -122,6 +122,8 @@ export async function withSession<T>(
         }
       }
       kickedAt.set(keyOf(r), Date.now());
+      // نسجّله عند المطوّر (من أي شاشة) — مرة باليوم لكل جهاز
+      import('../services/errors').then(m => m.reportError('session', KICKED_MSG, r)).catch(() => {});
       throw new Error(KICKED_MSG);
     }
     if (!retry) throw e;

@@ -6,6 +6,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import * as Updates from 'expo-updates';
 import { LIVE_BASE } from './live';
 
 const SENT_KEY = 'bandly.errSent';
@@ -32,12 +33,29 @@ export async function reportError(feature: string, err: unknown, router?: { driv
       headers: { 'Content-Type': 'application/json' },
       signal: ctrl.signal,
       body: JSON.stringify({
-        feature, msg, router: router?.driverName ?? '', model: model ?? '',
-        os: Platform.OS, ver: Constants.expoConfig?.version ?? '',
+        feature, msg, router: router?.driverName ?? '', model: model ?? phoneModel(),
+        os: Platform.OS, ver: verText(),
       }),
     }).catch(() => {});
     clearTimeout(t);
   } catch {}
+}
+
+/** موديل الجوال (بدون أي معرّف شخصي) — يساعدنا نفرّق بين العملاء */
+function phoneModel(): string {
+  try {
+    const pc: any = (Platform as any).constants ?? {};
+    return Platform.OS === 'ios' ? 'iPhone' : `${pc.Brand ?? pc.Manufacturer ?? ''} ${pc.Model ?? ''}`.trim();
+  } catch { return ''; }
+}
+
+/** النسخة + تاريخ التحديث (عشان نعرف هل العميل على آخر تحديث) */
+function verText(): string {
+  const v = Constants.expoConfig?.version ?? '';
+  try {
+    const u = Updates.isEmbeddedLaunch ? 'apk' : (Updates.createdAt?.toISOString().slice(5, 16).replace('T', ' ') ?? '');
+    return u ? `${v} · ${u}` : v;
+  } catch { return v; }
 }
 
 export const DEV_TELEGRAM = 'https://t.me/hasa_n20';

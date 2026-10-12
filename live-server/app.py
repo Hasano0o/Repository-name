@@ -1098,6 +1098,7 @@ ERR_HITS: dict[str, list[float]] = {}
 FEATURE_AR = {
     "wifich": "قناة الواي فاي", "control": "مركز التحكم", "newip": "آي بي جديد",
     "lock": "تثبيت برج/تردد", "nrdual": "دمج 5G المزدوج", "nsacombo": "دمج 4G+5G", "login": "تسجيل الدخول",
+    "session": "طرد من الراوتر",
 }
 
 
@@ -1129,7 +1130,7 @@ async def app_error(req: Request):
     if not feat or not msg:
         raise HTTPException(400, "missing")
     rec = {"at": int(time.time()), "feature": feat, "msg": msg, "router": rtr,
-           "model": _cl(b.get("model"), 60), "os": _cl(b.get("os"), 12), "ver": _cl(b.get("ver"), 20)}
+           "model": _cl(b.get("model"), 60), "os": _cl(b.get("os"), 12), "ver": _cl(b.get("ver"), 32)}
     with ERRORS_LOG.open("a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     key = f"{feat}|{rtr}|{msg[:80]}"
