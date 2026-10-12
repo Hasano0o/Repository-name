@@ -104,6 +104,9 @@ def main():
         if cur is None:
             continue
         old = st.get("ratings", {}).get(cc)
+        # كاش أبل أحياناً يرجّع عدد أقدم (4 ← 1 ← 4) — نحفظ الأعلى بس، عشان ما يتكرر نفس التنبيه
+        if old and cur["count"] < old.get("count", 0):
+            continue
         st.setdefault("ratings", {})[cc] = cur
         if first or not old or cur["count"] <= old.get("count", 0):
             continue
