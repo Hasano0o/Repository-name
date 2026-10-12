@@ -9,7 +9,7 @@ import { isLanHost } from '../src/utils/host';
 import { detectDriver } from '../src/drivers/registry';
 import { addDemoRouter } from '../src/drivers/demo';
 import { DesktopNetCard, explainDetectFailure, useDesktopNet } from '../src/ui/DesktopNet';
-import { getRouter, saveRouter, updateRouter, deleteRouter, SavedRouter, setWifi, SavedWifi } from '../src/store/routers';
+import { getRouter, saveRouter, updateRouter, deleteRouter, listRouters, SavedRouter, setWifi, SavedWifi } from '../src/store/routers';
 import { LabelScannerHost, ensureScanner } from '../src/ui/scanner';
 import type { LabelData } from '../src/utils/routerLabel';
 import { dropSession } from '../src/store/sessions';
@@ -216,7 +216,16 @@ export default function AddRouterScreen() {
           return;
         }
       } else {
-        saved = await saveRouter(payload, password);
+        // نفس الراوتر مضاف من قبل؟ نحدّثه بدل ما نسوي نسخة ثانية —
+        // النسختين كانوا يسجّلون دخول بنفس الوقت ويطردون بعض
+        const norm = (x: string) => x.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+        const dup = (await listRouters().catch(() => [] as SavedRouter[])).find(x => x.driverId === dId && norm(x.host) === norm(h));
+        if (dup) {
+          dropSession(dup.id);
+          saved = (await updateRouter(dup.id, payload, password)) ?? (await saveRouter(payload, password));
+        } else {
+          saved = await saveRouter(payload, password);
+        }
       }
       if (wifi?.ssid) { try { await setWifi(saved.id, wifi); } catch {} }
       nav.replace({ pathname: '/router/[id]', params: { id: saved.id } });

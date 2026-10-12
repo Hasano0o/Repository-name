@@ -14,17 +14,29 @@ const MAX_AGE = 5 * 60 * 1000;
 
 const connecting = new Map<string, Promise<RouterDriver>>();
 
+/**
+ * مفتاح الجلسة = نوع الراوتر + عنوانه (مو رقم الراوتر في التطبيق).
+ * لو المستخدم أضاف نفس الراوتر مرتين، كانت كل نسخة تسجّل دخول لحالها وتطرد الثانية
+ * (الراوتر يقبل جلسة وحدة) — فيطلع «الراوتر يطلّع التطبيق كل ما يدخل» بدون أي جهاز ثاني.
+ */
+const keyOf = (r: SavedRouter) =>
+  `${r.driverId}@${r.host.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '')}`;
+const idKey = new Map<string, string>();
+
 /** اتصال واحد لكل راوتر في نفس الوقت — الشاشات والمهام الخلفية تنتظر نفس تسجيل الدخول بدل ما كل وحدة تسجّل لحالها */
 export function connect(r: SavedRouter, force = false): Promise<RouterDriver> {
-  const busy = connecting.get(r.id);
+  const k = keyOf(r);
+  idKey.set(r.id, k);
+  const busy = connecting.get(k);
   if (busy) return busy;
-  const p = doConnect(r, force).finally(() => connecting.delete(r.id));
-  connecting.set(r.id, p);
+  const p = doConnect(r, force).finally(() => connecting.delete(k));
+  connecting.set(k, p);
   return p;
 }
 
 async function doConnect(r: SavedRouter, force = false): Promise<RouterDriver> {
-  const cur = sessions.get(r.id);
+  const k = keyOf(r);
+  const cur = sessions.get(k);
   if (cur && !force && Date.now() - cur.authAt < MAX_AGE) return cur.d;
   const d = cur?.d ?? driverById(r.driverId);
   if (!d) throw new Error('نوع الراوتر غير مدعوم');
@@ -43,7 +55,7 @@ async function doConnect(r: SavedRouter, force = false): Promise<RouterDriver> {
     // لا نحتفظ بكلمة المرور في متغير أطول من اللازم (نتساعد مع GC)
     // لا نقدر "نمسح" متغير نصي في JS، لكن تضييق النطاق يخفف.
   }
-  sessions.set(r.id, { d, authAt: Date.now() });
+  sessions.set(k, { d, authAt: Date.now() });
   if (!cur) await attachBaseline(r, d);
   return d;
 }
@@ -98,7 +110,7 @@ export async function withSession<T>(
     // ندخل من جديد ونكمّل مرة وحدة، حتى لو retry=false: الأوامر نفسها تتكرر بأمان (نفس القيم)
     if (SESSION_GONE.test(msg)) {
       // لو طُردنا قبل شوي وما زبط الدخول: نوقف بسرعة بدل ما نعيد مع كل تركيبة
-      if (Date.now() - (kickedAt.get(r.id) ?? 0) < 30_000) throw new Error(KICKED_MSG);
+      if (Date.now() - (kickedAt.get(keyOf(r)) ?? 0) < 30_000) throw new Error(KICKED_MSG);
       // ندخل من جديد ونعيد — مرتين بمهلة بسيطة (أحياناً جهاز ثاني ماسك الجلسة لحظات)
       for (const wait of [1200, 3000]) {
         await new Promise(res => setTimeout(res, wait));
@@ -109,7 +121,7 @@ export async function withSession<T>(
           if (!SESSION_GONE.test(String((e2 as any)?.message ?? e2))) throw e2;
         }
       }
-      kickedAt.set(r.id, Date.now());
+      kickedAt.set(keyOf(r), Date.now());
       throw new Error(KICKED_MSG);
     }
     if (!retry) throw e;
@@ -122,8 +134,9 @@ export async function withSession<T>(
 }
 
 export function dropSession(id: string) {
-  sessions.get(id)?.d.logout().catch(() => {});
-  sessions.delete(id);
+  const k = idKey.get(id) ?? id;
+  sessions.get(k)?.d.logout().catch(() => {});
+  sessions.delete(k);
 }
 
 /** أي رد من الراوتر (حتى 404) يعني إنه موجود. نجرب http و https مع بعض، بمهلة قصيرة */
