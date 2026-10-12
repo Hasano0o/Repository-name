@@ -4,6 +4,7 @@ import { SavedRouter, getPassword } from './routers';
 import { assertLanHost } from '../utils/host';
 import { getBaseline, saveBaseline } from './baseline';
 import { http } from '../drivers/http';
+import { diag } from '../services/diag';
 
 interface Sess { d: RouterDriver; authAt: number; }
 const sessions = new Map<string, Sess>();
@@ -49,6 +50,7 @@ async function doConnect(r: SavedRouter, force = false): Promise<RouterDriver> {
     throw new Error('الراوتر ما رد — تأكد إنك متصل بشبكته');
   }
   const pw = (await getPassword(r.id)) ?? '';
+  diag(`[login] ${r.driverId}${force ? ' (force)' : ''}`);
   try {
     await d.login(r.host, r.username, pw);
   } finally {
@@ -108,6 +110,7 @@ export async function withSession<T>(
     return await fn(d);
   } catch (e) {
     const msg = String((e as any)?.message ?? e);
+    diag(`[session] error: ${short(msg)}`);
     // الراوتر طلّعنا (انتهت الجلسة / دخل أحد من المتصفح / بعد تغيير الإعدادات) —
     // ندخل من جديد ونكمّل مرة وحدة، حتى لو retry=false: الأوامر نفسها تتكرر بأمان (نفس القيم)
     if (SESSION_GONE.test(msg)) {
@@ -128,6 +131,7 @@ export async function withSession<T>(
         }
       }
       kickedAt.set(keyOf(r), Date.now());
+      diag(`[session] KICKED trail=${trail.join('>')}`);
       // نسجّله عند المطوّر (من أي شاشة) مع تسلسل الردود — مرة باليوم لكل جهاز
       import('../services/errors').then(m => m.reportError('session', `${KICKED_MSG} [${trail.join(' → ')}]`, r)).catch(() => {});
       throw new Error(KICKED_MSG);

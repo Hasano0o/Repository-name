@@ -8,6 +8,7 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import * as Updates from 'expo-updates';
 import { LIVE_BASE } from './live';
+import { diag, diagDump } from './diag';
 
 const SENT_KEY = 'bandly.errSent';
 
@@ -15,6 +16,38 @@ const SENT_KEY = 'bandly.errSent';
 const IGNORE = /(إلغاء|ألغي|cancel|Network request failed|انتهت المهلة|aborted|AbortError|مو متصل|ما قدرنا نوصل للراوتر من جوالك)/i;
 
 const QUEUE_KEY = 'bandly.errQueue';
+const DIAG_PENDING = 'bandly.diagPending';
+const DIAG_SENT = 'bandly.diagSent';
+
+/** نص التشخيص كامل مع معلومات الجهاز والنسخة */
+export function diagText(title: string, router?: { driverName?: string } | null): string {
+  return diagDump([
+    `Bandly — ${title}`,
+    `الوقت: ${new Date().toISOString()}`,
+    `الجهاز: ${Platform.OS} · ${phoneModel()}`,
+    `النسخة: ${verText()}`,
+    `الراوتر: ${router?.driverName ?? '—'}`,
+  ].join('\n'));
+}
+
+/** مع الأخطاء: نرسل سجل التشخيص للمطوّر تلقائي — مرة باليوم لكل ميزة */
+async function sendDiagAuto(feature: string, msg: string, router?: { driverName?: string } | null) {
+  try {
+    const day = new Date().toISOString().slice(0, 10);
+    const base = feature.split(':')[0];
+    let sent: Record<string, string> = {};
+    try { sent = JSON.parse((await AsyncStorage.getItem(DIAG_SENT)) || '{}'); } catch {}
+    if (sent[base] === day) return;
+    sent[base] = day;
+    await AsyncStorage.setItem(DIAG_SENT, JSON.stringify(sent));
+    // ننتظر شوي عشان يدخل في السجل اللي صار بعد الخطأ (الإرجاع مثلاً)
+    await new Promise(r => setTimeout(r, 4000));
+    const text = diagText(`${feature}: ${msg}`, router);
+    if (!(await sendSupportReport(base, text, router))) {
+      await AsyncStorage.setItem(DIAG_PENDING, JSON.stringify({ feature: base, text, router: router?.driverName ?? '' }));
+    }
+  } catch {}
+}
 
 async function post(body: object): Promise<boolean> {
   const ctrl = new AbortController();
@@ -43,6 +76,14 @@ export async function flushErrors() {
   try {
     let q: any[] = [];
     try { q = JSON.parse((await AsyncStorage.getItem(QUEUE_KEY)) || '[]'); } catch {}
+    // سجل تشخيص ما وصل (النت كان طايح)
+    try {
+      const pend = await AsyncStorage.getItem(DIAG_PENDING);
+      if (pend) {
+        const d = JSON.parse(pend);
+        if (await sendSupportReport(d.feature, d.text, { driverName: d.router })) await AsyncStorage.removeItem(DIAG_PENDING);
+      }
+    } catch {}
     if (!q.length) return;
     const left: any[] = [];
     for (const it of q) if (!(await post(it))) left.push(it);
@@ -69,6 +110,8 @@ export async function reportError(feature: string, err: unknown, router?: { driv
       feature, msg, router: router?.driverName ?? '', model: model ?? phoneModel(),
       os: Platform.OS, ver: verText(), at: new Date().toISOString(),
     };
+    diag(`[error] ${feature}: ${msg.slice(0, 120)}`);
+    sendDiagAuto(feature, msg, router);
     if (await post(body)) { flushErrors(); return; }
     let q: any[] = [];
     try { q = JSON.parse((await AsyncStorage.getItem(QUEUE_KEY)) || '[]'); } catch {}

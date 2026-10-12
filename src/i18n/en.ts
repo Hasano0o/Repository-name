@@ -585,6 +585,11 @@ export const EN: Record<string, string> = {
   'الراوتر طرد التطبيق وما قدرنا نرجّع إعدادك.\n١) سكّر تطبيق «HUAWEI AI Life» وأي صفحة للراوتر\n٢) ارجع لصفحة الراوتر واضغط «رجّع الإشارة»': "The router kicked the app and we couldn't restore your settings.\n1) Close HUAWEI AI Life and any router page\n2) Go back to the router page and press “Restore signal”",
   'الراوتر ما رجع يمسك برج — نرجّعه...': "The router didn't pick up a tower — restoring it...",
   'نرجّع وضع الشبكة...': 'Restoring network mode...',
+  'أرسل تشخيص للمطوّر': 'Send diagnostics to developer',
+  '✓ وصل للمطوّر': '✓ Sent to developer',
+  'ما وصل — تأكد من النت': "Didn't send — check your internet",
+  'عندك مشكلة؟ أرسلها بضغطة': 'Having an issue? Send it in one tap',
+  'أرسل': 'Send',
 };
 
 export const EN_PATTERNS: Record<string, string> = {

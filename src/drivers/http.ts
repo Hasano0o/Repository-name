@@ -1,4 +1,5 @@
 import { isLanHost } from '../utils/host';
+import { diag, describeReq, describeRes } from '../services/diag';
 
 /**
  * طبقة HTTP الموحدة لكل درايفرات الراوترات.
@@ -42,6 +43,8 @@ export async function http(
   }
 
   // ── 2. تنفيذ الطلب
+  const what = describeReq(url, init);
+  const t0 = Date.now();
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -63,8 +66,18 @@ export async function http(
       if (e?.message === 'رفض: redirect خارجي') throw e;
     }
 
+    // التشخيص: نسجّل كود الرد لما ينقرى النص (بدون المحتوى)
+    const st = res.status;
+    try {
+      const origText = res.text.bind(res);
+      (res as any).text = () => origText().then((tx: string) => {
+        diag(`${what} → ${st} ${Date.now() - t0}ms ${describeRes(url, tx)}`);
+        return tx;
+      });
+    } catch {}
     return guardBody(res, timeoutMs);
   } catch (e: any) {
+    diag(`${what} ✗ ${Date.now() - t0}ms ${e?.name === 'AbortError' ? 'timeout' : String(e?.message ?? e).slice(0, 40)}`);
     if (e?.name === 'AbortError') {
       throw new Error('الراوتر ما رد — تأكد إنك متصل بشبكته');
     }

@@ -17,6 +17,7 @@ import { THEME_PREF, ThemePref, setThemePref, tBg, tBd } from './theme';
 import { desktop } from '../desktop/bridge';
 import { invite } from './InviteCard';
 import { sheet, LANG, Lang, setLang, EN_MODE } from '../i18n';
+import { diagText, sendSupportReport } from '../services/errors';
 
 // ═══ ١) المربعات ═══
 function PeopleIcon() {
@@ -107,6 +108,24 @@ const when = (d: Date | null) => {
   return d.toLocaleString(EN_MODE ? 'en-GB' : 'ar-SA', { day: 'numeric', month: 'numeric', hour: 'numeric', minute: '2-digit' });
 };
 
+/** زر التشخيص: يرسل آخر ما صار بين التطبيق والراوتر للمطوّر (بدون كلمات سر ولا بيانات شخصية) */
+function DiagRow() {
+  const [st, setSt] = useState<'' | 'busy' | 'ok' | 'fail'>('');
+  const send = async () => {
+    setSt('busy');
+    const ok = await sendSupportReport('diag', diagText('تشخيص يدوي من المستخدم'));
+    setSt(ok ? 'ok' : 'fail');
+  };
+  return (
+    <Row icon="report" tint="#8b5cf6" label="أرسل تشخيص للمطوّر"
+      value={st === 'ok' ? '✓ وصل للمطوّر' : st === 'fail' ? 'ما وصل — تأكد من النت' : 'عندك مشكلة؟ أرسلها بضغطة'}>
+      <Pressable style={[s.mini, st === 'busy' && { opacity: 0.5 }]} onPress={send} disabled={st === 'busy' || st === 'ok'}>
+        {st === 'busy' ? <ActivityIndicator size="small" color={P.blue} /> : <Text style={s.miniTxt}>{st === 'ok' ? '✓' : 'أرسل'}</Text>}
+      </Pressable>
+    </Row>
+  );
+}
+
 function VersionRow() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
@@ -196,6 +215,8 @@ export function HomeFooter({ onExplore }: { onExplore: () => void }) {
         <Row icon="globe" tint="#2f6bff" label="اللغة" value={LANG === 'en' ? 'English' : 'العربية'}>
           <Seg items={LANGS} value={LANG} onPick={l => { setLang(l); }} />
         </Row>
+        <View style={s.sep} />
+        <DiagRow />
         {(desktop || Updates.isEnabled) && <View style={s.sep} />}
         <VersionRow />
       </View>

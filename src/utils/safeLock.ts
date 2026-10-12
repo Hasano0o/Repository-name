@@ -4,6 +4,7 @@ import { Carrier, RouterDriver, Signal } from '../drivers/types';
 import { SavedRouter } from '../store/routers';
 import { withSession, withSessionPatient, withRouterLock, dropSession } from '../store/sessions';
 import { reportError } from '../services/errors';
+import { diag } from '../services/diag';
 import { getBaseline } from '../store/baseline';
 import { driverById } from '../drivers/registry';
 import { trafficBurst } from './nrprobe';
@@ -342,7 +343,9 @@ export function safeApply(o: SafeApplyOpts): Promise<TrialResult> {
 }
 
 async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
-  const say = o.onStatus ?? (() => {});
+  const say0 = o.onStatus ?? (() => {});
+  const say = (t: string) => { diag(`[${o.key}] ${t}`); say0(t); };
+  diag(`[${o.key}] start: ${o.label}`);
   const cancelled = o.isCancelled ?? (() => false);
   const measure = async () => {
     if (!o.withNr) return snapshot(o.r, false);
