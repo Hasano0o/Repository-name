@@ -120,6 +120,7 @@ async def ping(req: Request):
     if not re.fullmatch(r"[a-z0-9]{12,32}", did):
         raise HTTPException(400)
     routers = [_clean(x, 24) for x in (b.get("routers") or [])[:6] if isinstance(x, str)]
+    logins = [_clean(x, 24) for x in (b.get("logins") or [])[:6] if isinstance(x, str)]
     country = await asyncio.to_thread(_country, ip)
     rec = {
         "country": country,
@@ -131,6 +132,9 @@ async def ping(req: Request):
         "app": _clean(b.get("app"), 16),
         "update": _clean(b.get("update"), 24),
         "routers": routers,
+        "logins": logins,
+        "login_ever": bool(b.get("loginEver")),
+        "new_app": "logins" in b,
         "at": int(now),
     }
     day = _today()
@@ -187,7 +191,27 @@ def build_summary(day: str | None = None) -> dict:
         "android": top("android", 6, andr),
         "app": top("update", 4),
         "routers": Counter(x for r in recs for x in (r.get("routers") or [])).most_common(6),
+        "funnel": _funnel(recs),
         "history": _history(day, devs),
+    }
+
+
+DEMO_NAMES = {"راوتر تجريبي", "Demo", "demo"}
+
+
+def _funnel(recs: list[dict]) -> dict:
+    """الدخول الحقيقي للراوتر — بس من الأجهزة اللي عندها النسخة الجديدة (ترسل logins)."""
+    rs = [r for r in recs if r.get("new_app")]
+    real = lambda r: [x for x in (r.get("routers") or []) if x not in DEMO_NAMES]
+    logged_today = [r for r in rs if r.get("logins")]
+    return {
+        "tracked": len(rs),
+        "logged_today": len(logged_today),
+        "logged_ever": sum(1 for r in rs if r.get("login_ever")),
+        "by_router": Counter(x for r in logged_today for x in r["logins"]).most_common(6),
+        "added_no_login": sum(1 for r in rs if real(r) and not r.get("login_ever")),
+        "demo_only": sum(1 for r in rs if (r.get("routers") or []) and not real(r)),
+        "none": sum(1 for r in rs if not (r.get("routers") or [])),
     }
 
 
@@ -244,6 +268,18 @@ def _fmt(s: dict) -> str:
         rows = "\n".join(f"  {h['wd']} {h['day'][5:]}: {bar(h['active'])} {h['active']} نشط · {h['new']} جديد" for h in hist)
         avg = round(sum(h["active"] for h in hist) / len(hist))
         past = f"\n\n📈 <b>الأيام السابقة</b> (متوسط {avg} نشط باليوم):\n{rows}"
+    fu = s.get("funnel") or {}
+    fun = ""
+    if fu.get("tracked"):
+        fun = (
+            f"🔐 <b>الدخول الحقيقي للراوتر</b> (من {fu['tracked']} جهاز على النسخة الجديدة):\n"
+            f"  • دخلوا راوترهم اليوم: <b>{fu['logged_today']}</b>\n"
+            + "".join(f"     – {k}: {v}\n" for k, v in fu.get("by_router") or [])
+            + f"  • دخلوا ولو مرة: {fu['logged_ever']}\n"
+            f"  • أضافوا راوتر حقيقي وما قدروا يدخلون: {fu['added_no_login']}\n"
+            f"  • التجريبي بس: {fu['demo_only']}\n"
+            f"  • ما أضافوا شي: {fu['none']}\n\n"
+        )
     return (
         f"📊 <b>إحصائيات Bandly — {s['day']}</b>\n\n"
         f"👥 نشطين اليوم: <b>{s['active_today']}</b>{diff(s['active_today'], y['active'] if y else None)}\n"
@@ -253,6 +289,7 @@ def _fmt(s: dict) -> str:
         f"🌍 الدول:\n{lines(s.get('countries') or [])}\n\n"
         f"🏙️ المدن:\n{lines(s['cities'])}\n\n"
         f"📶 الراوترات:\n{lines(s['routers'])}\n\n"
+        f"{fun}"
         f"📲 الأنظمة:\n  • 🍎 آيفون: {s['os']['ios']}\n  • 🤖 أندرويد: {s['os']['android']}\n\n"
         f"🏷️ الجوالات:\n{lines(s['brands'])}\n\n"
         f"🍎 نسخ iOS:\n{lines(s['ios_ver'])}\n\n"

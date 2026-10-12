@@ -58,6 +58,10 @@ async function doConnect(r: SavedRouter, force = false): Promise<RouterDriver> {
     // لا نقدر "نمسح" متغير نصي في JS، لكن تضييق النطاق يخفف.
   }
   sessions.set(k, { d, authAt: Date.now() });
+  // الإحصائيات: دخول حقيقي لراوتر (مو التجريبي ولا الجوال نفسه)
+  if (r.host !== 'demo' && r.host !== 'device' && d.name !== 'راوتر تجريبي') {
+    import('../services/stats').then(m => m.markLogin(d.name || r.driverId)).catch(() => {});
+  }
   if (!cur) await attachBaseline(r, d);
   return d;
 }

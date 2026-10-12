@@ -12,6 +12,19 @@ import { listRouters } from '../store/routers';
 
 const CITY_KEY = 'bandly.city';
 const LAST_KEY = 'bandly.stats.lastDay';
+const LOGIN_KEY = 'bandly.stats.logins';
+
+/** دخول حقيقي ناجح لراوتر (مو التجريبي) — نسجّل النوع واليوم، وأول دخول باليوم يحدّث الإحصائية */
+export async function markLogin(driverName: string) {
+  try {
+    const day = today();
+    const m: Record<string, string> = JSON.parse((await AsyncStorage.getItem(LOGIN_KEY)) || '{}');
+    if (m[driverName] === day) return;
+    m[driverName] = day;
+    await AsyncStorage.setItem(LOGIN_KEY, JSON.stringify(m));
+    pingDaily(true);
+  } catch {}
+}
 
 /** المدن الأكثر — والباقي يكتبه المستخدم */
 export const CITIES = [
@@ -46,6 +59,13 @@ export async function pingDaily(force = false): Promise<void> {
     const pc = (Platform.constants ?? {}) as Record<string, unknown>;
     const city = await getCity();
     const routers = (await listRouters().catch(() => [])).map(r => r.driverName).filter(Boolean);
+    let logins: string[] = [];
+    let loginEver = false;
+    try {
+      const m: Record<string, string> = JSON.parse((await AsyncStorage.getItem(LOGIN_KEY)) || '{}');
+      logins = Object.keys(m).filter(k => m[k] === day);
+      loginEver = Object.keys(m).length > 0;
+    } catch {}
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 8000);
     const r = await fetch(`${LIVE_BASE}/live-api/stats/ping`, {
@@ -62,6 +82,8 @@ export async function pingDaily(force = false): Promise<void> {
         app: Constants.expoConfig?.version ?? '',
         update: Updates.isEmbeddedLaunch ? 'apk' : (Updates.createdAt?.toISOString().slice(0, 16) ?? ''),
         routers: [...new Set(routers)],
+        logins,
+        loginEver,
       }),
     }).finally(() => clearTimeout(t));
     if (r.ok) await AsyncStorage.setItem(LAST_KEY, day);
