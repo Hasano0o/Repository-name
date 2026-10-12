@@ -1016,20 +1016,61 @@ export class ZteDriver implements RouterDriver {
   }
 
   /** فصل كامل عن البرج (وضع الطيران LOW_POWER ثم ONLINE) — الشركة تفك الآي بي مثل إعادة التشغيل */
+  /**
+   * فصل كامل عن البرج ورجوع (مثل الطفي) عشان الشركة تفك الآي بي.
+   * ١) وضع الطيران — بعض الأجهزة ترد «failure» وهي طبّقته، فنتأكد بالقراءة مو بالرد.
+   * ٢) ما اشتغل؟ نحوّل وضع الشبكة مؤقتاً لوضع ما فيه خدمة عندنا (3G فقط / 5G SA فقط) ونرجّعه.
+   */
   async reattach(holdSecs = 12) {
     await this.ensure();
-    const off = await this.act({ goformId: 'WAN_OPERATE_MODE_SET', operate_mode: 'LOW_POWER' });
-    if (!/success/i.test(off)) throw this.rejected('وضع الطيران', off);
+    const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
+    const read = (f: string[]) => this.get(f).catch(() => ({} as Record<string, string>));
+
+    // ١) وضع الطيران
+    const off = await this.act({ goformId: 'WAN_OPERATE_MODE_SET', operate_mode: 'LOW_POWER' }).catch(() => '');
+    let flight = /success/i.test(off);
+    for (let i = 0; i < 4 && !flight; i++) {
+      await wait(1500);
+      const r = await read(['operate_mode', 'network_type', 'ppp_status']);
+      flight = /LOW_POWER|OFFLINE/i.test(r.operate_mode || '') || /^(no ?service|limited|airplane)/i.test(r.network_type || '');
+    }
+    if (flight) {
+      try {
+        await wait(holdSecs * 1000);
+      } finally {
+        let ok = false;
+        for (let i = 0; i < 5 && !ok; i++) {
+          await this.act({ goformId: 'WAN_OPERATE_MODE_SET', operate_mode: 'ONLINE' }).catch(() => '');
+          await wait(2000);
+          const r = await read(['operate_mode']);
+          ok = !r.operate_mode || /ONLINE/i.test(r.operate_mode);
+        }
+        if (!ok) throw new Error('ما قدرنا نطلّع الراوتر من وضع الطيران — أعد تشغيله');
+      }
+      return;
+    }
+
+    // ٢) تبديل وضع الشبكة مؤقتاً
+    const orig = ((await read(['net_select'])).net_select || '').trim();
+    if (!orig) throw this.rejected('الفصل عن البرج', off);
+    let switched = '';
+    for (const temp of ['Only_WCDMA', 'Only_5G']) {
+      if (temp === orig) continue;
+      await this.act({ goformId: 'SET_BEARER_PREFERENCE', BearerPreference: temp }).catch(() => '');
+      await wait(1500);
+      if (((await read(['net_select'])).net_select || '').trim() === temp) { switched = temp; break; }
+    }
+    if (!switched) throw this.rejected('الفصل عن البرج', off);
     try {
-      await new Promise(r => setTimeout(r, holdSecs * 1000));
+      await wait(holdSecs * 1000);
     } finally {
       let ok = false;
-      for (let i = 0; i < 4 && !ok; i++) {
-        const on = await this.act({ goformId: 'WAN_OPERATE_MODE_SET', operate_mode: 'ONLINE' }).catch(() => '');
-        ok = /success/i.test(on) || (await this.get(['operate_mode']).catch(() => ({} as Record<string, string>))).operate_mode === 'ONLINE';
-        if (!ok) await new Promise(r => setTimeout(r, 3000));
+      for (let i = 0; i < 5 && !ok; i++) {
+        await this.act({ goformId: 'SET_BEARER_PREFERENCE', BearerPreference: orig }).catch(() => '');
+        await wait(2000);
+        ok = ((await read(['net_select'])).net_select || '').trim() === orig;
       }
-      if (!ok) throw new Error('ما قدرنا نطلّع الراوتر من وضع الطيران — أعد تشغيله');
+      if (!ok) throw new Error('ما قدرنا نرجّع وضع الشبكة — اضغط «رجّع الإشارة» من صفحة الراوتر');
     }
   }
 

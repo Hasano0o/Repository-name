@@ -143,9 +143,17 @@ export default function NewIp() {
               if (mounted.current && canDetach && !differs(old, fresh)) {
                 setStep('detach');
                 setStatus('٢/٢ — الشركة رجّعت نفس الآي بي، نفصل الراوتر عن البرج ونرجّعه...');
-                await withSession(info, d => d.reattach!(15), false);
-                await sleep(5000);
-                fresh = await settle(120000);
+                try {
+                  await withSession(info, d => d.reattach!(15), false);
+                  await sleep(5000);
+                  fresh = await settle(120000);
+                } catch (e2: any) {
+                  // الفصل ما زبط على هالموديل — نعرض نتيجة القطع السريع وزر إعادة التشغيل بدل خطأ بس
+                  reportError('newip-detach', e2, info);
+                  setStep('quick');
+                  if (!canQuick) throw e2;
+                  fresh = await readIps(info).catch(() => fresh);
+                }
               }
             }
             if (mounted.current) setAfter(fresh);
