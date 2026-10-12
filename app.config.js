@@ -6,6 +6,8 @@ module.exports = ({ config }) => {
     config.web = { ...(config.web || {}), output: 'single' };
     return config;
   }
+  // تحديث صامت (BANDLY_SILENT=1): ما تطلع نافذة «تحديث جديد» — يتطبّق لحاله لما المستخدم يقفل التطبيق ويفتحه
+  if (process.env.BANDLY_SILENT === '1') config.extra = { ...(config.extra || {}), silentUpdate: true };
   // الجوال بس — بدونها «eas update --platform all» يحاول يصدّر نسخة ويب ويفشل
   config.platforms = ['ios', 'android'];
   if (process.env.BANDLY_ARM64 !== '1') return config;

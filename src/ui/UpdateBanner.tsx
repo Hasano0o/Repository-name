@@ -15,7 +15,7 @@ import { sheet } from '../i18n';
  * لو اختار «لاحقاً»: يبقى زر صغير فوق يذكّره.
  */
 export function UpdateBanner() {
-  const { isUpdatePending, isUpdateAvailable, isDownloading } = Updates.useUpdates();
+  const { isUpdatePending, isUpdateAvailable, isDownloading, downloadedUpdate, availableUpdate } = Updates.useUpdates();
   const [later, setLater] = useState(false);
   const [busy, setBusy] = useState(progress.active());
   const insets = useSafeAreaInsets();
@@ -34,7 +34,10 @@ export function UpdateBanner() {
     return () => clearInterval(t);
   }, [isUpdatePending]);
 
-  if (!Updates.isEnabled || !isUpdatePending || busy) return null;
+  // تحديث صامت: ينزل ويتطبّق لحاله أول ما يفتح التطبيق من جديد — بدون نافذة
+  const m: any = (downloadedUpdate ?? availableUpdate)?.manifest;
+  const silent = !!(m?.extra?.expoClient?.extra?.silentUpdate);
+  if (!Updates.isEnabled || !isUpdatePending || busy || silent) return null;
   const reload = () => Updates.reloadAsync().catch(() => {});
 
   if (later) {
