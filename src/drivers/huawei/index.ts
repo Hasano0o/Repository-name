@@ -527,6 +527,29 @@ export class HuaweiDriver implements RouterDriver {
     if (via === 'dial') await this.post('dialup/dial', '<Action>1</Action>');
     else await this.post('dialup/mobile-dataswitch', '<dataswitch>1</dataswitch>');
   }
+  /**
+   * فصل كامل عن البرج: نحوّل وضع الشبكة مؤقتاً لـ 2G/3G (ما لها تغطية غالباً عندنا) → المودم ينفصل عن الشبكة
+   * ويفك الشركة جلسته والآي بي — بعدها نرجّع الوضع الأصلي ويتسجّل من جديد. أسرع من إعادة التشغيل.
+   */
+  async reattach(holdSecs = 12) {
+    const cur = await this.get('net/net-mode');
+    const orig = tag(cur, 'NetworkMode') ?? '00';
+    let modes: string[] = [];
+    try { modes = tagsAll(tag(await this.get('net/net-mode-list'), 'AccessList') ?? '', 'Access'); } catch {}
+    const temp = ['01', '02'].find(m => modes.includes(m) && m !== orig);
+    if (!temp) throw new Error('راوترك ما يسمح بالفصل عن البرج من التطبيق');
+    await this.writeNetMode({ mode: temp }).catch(() => {});
+    try {
+      await new Promise(r => setTimeout(r, holdSecs * 1000));
+    } finally {
+      // لازم نرجّع الوضع الأصلي مهما صار
+      let ok = false;
+      for (let i = 0; i < 3 && !ok; i++) {
+        try { await this.writeNetMode({ mode: orig }); ok = true; } catch { await new Promise(r => setTimeout(r, 3000)); }
+      }
+      if (!ok) throw new Error('ما قدرنا نرجّع وضع الشبكة — اضغط «رجّع الإعدادات الأصلية»');
+    }
+  }
   async getBandConfig(): Promise<BandConfig> {
     const cur = await this.get('net/net-mode');
     let supported: number[] = [];

@@ -1015,6 +1015,24 @@ export class ZteDriver implements RouterDriver {
     if (!/success/i.test(out)) throw this.rejected('تغيير القناة', out);
   }
 
+  /** فصل كامل عن البرج (وضع الطيران LOW_POWER ثم ONLINE) — الشركة تفك الآي بي مثل إعادة التشغيل */
+  async reattach(holdSecs = 12) {
+    await this.ensure();
+    const off = await this.act({ goformId: 'WAN_OPERATE_MODE_SET', operate_mode: 'LOW_POWER' });
+    if (!/success/i.test(off)) throw this.rejected('وضع الطيران', off);
+    try {
+      await new Promise(r => setTimeout(r, holdSecs * 1000));
+    } finally {
+      let ok = false;
+      for (let i = 0; i < 4 && !ok; i++) {
+        const on = await this.act({ goformId: 'WAN_OPERATE_MODE_SET', operate_mode: 'ONLINE' }).catch(() => '');
+        ok = /success/i.test(on) || (await this.get(['operate_mode']).catch(() => ({} as Record<string, string>))).operate_mode === 'ONLINE';
+        if (!ok) await new Promise(r => setTimeout(r, 3000));
+      }
+      if (!ok) throw new Error('ما قدرنا نطلّع الراوتر من وضع الطيران — أعد تشغيله');
+    }
+  }
+
   // ───── مركز التحكم ─────
   private io(): ZteIo {
     return { get: f => this.get(f), getRaw: f => this.getRaw(f), act: b => this.act(b) };

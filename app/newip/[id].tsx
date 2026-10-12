@@ -1,6 +1,6 @@
 /**
- * آي بي جديد — يقطع اتصال البيانات في الراوتر ثواني ويرجّعه، فالشركة تعطي جلسة وآي بي جديد.
- * أسرع من إعادة تشغيل الراوتر (١٠–٢٠ ثانية بدل دقيقتين).
+ * آي بي جديد — تصعيد تلقائي: ١) قطع بيانات سريع  ٢) لو نفس الآي بي: فصل كامل عن البرج (reattach)
+ * — هذا اللي يخلي الشركة تفك الآي بي مثل الطفي — ٣) إعادة تشغيل كخيار أخير.
  * نعرض الآي بي العام (اللي تشوفه المواقع والألعاب) وآي بي الراوتر الداخلي عند الشركة، قبل وبعد.
  */
 import { useEffect, useRef, useState } from 'react';
@@ -68,9 +68,11 @@ export default function NewIp() {
       if (!r) { setError('الراوتر غير موجود'); setLoading(false); return; }
       setInfo(r);
       try {
-        const [can, reb] = await withSession(r, async d => [!!d.reconnectData, !!d.reboot] as const, false).catch(() => [false, false] as const);
+        const [can, det, reb] = await withSession(r, async d => [!!d.reconnectData, !!d.reattach, !!d.reboot] as const, false).catch(() => [false, false, false] as const);
         if (!mounted.current) return;
-        setSupported(can);
+        setSupported(can || det);
+        setCanQuick(can);
+        setCanDetach(det);
         setCanReboot(reb && r.driverId !== 'device');
         setBefore(await readIps(r));
       } finally {
@@ -81,48 +83,75 @@ export default function NewIp() {
   }, [id]);
 
   const [canReboot, setCanReboot] = useState(false);
-  const [mode, setMode] = useState<'normal' | 'long' | 'reboot'>('normal');
+  const [canQuick, setCanQuick] = useState(false);
+  const [canDetach, setCanDetach] = useState(false);
+  const [mode, setMode] = useState<'normal' | 'reboot'>('normal');
 
-  const run = (m: 'normal' | 'long' | 'reboot' = 'normal') => {
+  const [step, setStep] = useState<'' | 'quick' | 'detach' | 'reboot'>('');
+
+  /** هل تغيّر شي عن القديم؟ (العام أو آي بي الراوتر عند الشركة) */
+  const differs = (o: Ips, n: Ips) =>
+    (!!o.pub && !!n.pub && o.pub !== n.pub) || (!!o.wan && !!n.wan && o.wan !== n.wan);
+
+  /** ننتظر الراوتر يرجع ونقرأ الآي بي — كم محاولة لأن أول ثواني ممكن ما فيه نت */
+  const settle = async (ms: number): Promise<Ips> => {
+    setStatus('ننتظر الراوتر يتصل...');
+    const ok = await waitOnline(info!, ms, () => !mounted.current);
+    if (!ok) throw new Error('الراوتر ما رجع يتصل — انتظر دقيقة أو أعد تشغيله');
+    setStatus('نقرأ الآي بي الجديد...');
+    let fresh: Ips = {};
+    for (let i = 0; i < 4 && mounted.current; i++) {
+      await sleep(2500);
+      fresh = await readIps(info!);
+      if (fresh.pub) break;
+    }
+    return fresh;
+  };
+
+  const run = (m: 'auto' | 'reboot' = 'auto') => {
     if (!info) return;
     const msg = m === 'reboot'
-      ? 'بنعيد تشغيل الراوتر — هذي أقوى طريقة لآي بي جديد. النت بينقطع حوالي دقيقتين.'
-      : m === 'long'
-        ? 'بنقطع النت ٤٠ ثانية تقريباً — الشركة تحتاج وقت أطول عشان تفك الآي بي القديم.'
-        : 'بنقطع النت ثواني ونرجّعه عشان الشركة تعطيك آي بي جديد.\n\nأي تحميل أو لعبة شغالة بتنقطع لحظات.';
-    setMode(m);
+      ? 'بنعيد تشغيل الراوتر — النت بينقطع حوالي دقيقتين.'
+      : 'نجرّب أول قطع سريع للبيانات. لو الشركة رجّعت نفس الآي بي، نفصل الراوتر عن البرج كامل ونرجّعه (مثل الطفي والتشغيل بس أسرع).\n\nالنت بينقطع من ثواني إلى دقيقة تقريباً.';
+    setMode(m === 'reboot' ? 'reboot' : 'normal');
     Alert.alert('آي بي جديد', msg, [
       { text: 'إلغاء', style: 'cancel' },
       {
         text: 'يلا', onPress: async () => {
-          setBusy(true); setError(''); setAfter(null);
+          setBusy(true); setError(''); setAfter(null); setStep('');
           try {
             const old = before ?? await readIps(info);
             if (mounted.current) setBefore(old);
+            let fresh: Ips = {};
+
             if (m === 'reboot') {
+              setStep('reboot');
               setStatus('نعيد تشغيل الراوتر...');
               await withSession(info, d => d.reboot!(), false);
               await sleep(30000);
+              fresh = await settle(150000);
             } else {
-              setStatus(m === 'long' ? 'نقطع الاتصال ~٤٠ ثانية...' : 'نقطع الاتصال ونرجّعه...');
-              await withSession(info, d => d.reconnectData!({ holdSecs: m === 'long' ? 35 : 10 }), false);
-              await sleep(3000);
-            }
-            setStatus('ننتظر الراوتر يتصل...');
-            const ok = await waitOnline(info, m === 'reboot' ? 150000 : 60000, () => !mounted.current);
-            if (!ok) throw new Error('الراوتر ما رجع يتصل خلال دقيقة — انتظر شوي أو أعد تشغيله');
-            setStatus('نقرأ الآي بي الجديد...');
-            // أول ثواني بعد الاتصال ممكن ما يكون فيه نت — نحاول كم مرة
-            let fresh: Ips = {};
-            for (let i = 0; i < 4 && mounted.current; i++) {
-              await sleep(2500);
-              fresh = await readIps(info);
-              if (fresh.pub) break;
+              // ١) قطع سريع للبيانات
+              if (canQuick) {
+                setStep('quick');
+                setStatus('١/٢ — نقطع البيانات ونرجّعها...');
+                await withSession(info, d => d.reconnectData!({ holdSecs: 10 }), false);
+                await sleep(3000);
+                fresh = await settle(60000);
+              }
+              // ٢) الشركة رجّعت نفس الآي بي → فصل كامل عن البرج (هذا اللي يسويه الطفي)
+              if (mounted.current && canDetach && !differs(old, fresh)) {
+                setStep('detach');
+                setStatus('٢/٢ — الشركة رجّعت نفس الآي بي، نفصل الراوتر عن البرج ونرجّعه...');
+                await withSession(info, d => d.reattach!(15), false);
+                await sleep(5000);
+                fresh = await settle(120000);
+              }
             }
             if (mounted.current) setAfter(fresh);
           } catch (e: any) {
             if (mounted.current) setError(e?.message ?? String(e));
-      reportError('newip', e, info);
+            reportError('newip', e, info);
           } finally {
             if (mounted.current) { setBusy(false); setStatus(''); }
           }
@@ -155,7 +184,7 @@ export default function NewIp() {
         <View style={s.card}>
           <Text style={s.title}>🔄 آي بي جديد</Text>
           <Text style={s.body}>
-            نقطع اتصال البيانات في الراوتر ثواني ونرجّعه، فتعطيك الشركة آي بي جديد — أسرع من إعادة تشغيل الراوتر.
+            نقطع البيانات ثواني ونرجّعها، ولو الشركة رجّعت نفس الآي بي نفصل الراوتر عن البرج كامل ونرجّعه — نفس مفعول الطفي والتشغيل بس أسرع.
             يفيد لو لعبة أو موقع حاط عليك حظر مؤقت، أو النت علق على مسار بطيء.
           </Text>
 
@@ -171,7 +200,7 @@ export default function NewIp() {
           )}
 
           {!loading && supported && (
-            <Pressable style={[s.btn, busy && { opacity: 0.6 }]} onPress={() => run('normal')} disabled={busy}>
+            <Pressable style={[s.btn, busy && { opacity: 0.6 }]} onPress={() => run('auto')} disabled={busy}>
               {busy ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>{after ? '🔄 جرّب مرة ثانية' : '🔄 خذ آي بي جديد'}</Text>}
             </Pressable>
           )}
@@ -182,7 +211,10 @@ export default function NewIp() {
         {after && (
           <View style={[s.card, { borderColor: pubChanged || wanChanged ? tBd('#7fd4b8') : tBd('#f5cf8a') }]}>
             {pubChanged ? (
-              <Text style={[s.verdict, { color: tFg('#0f7a52') }]}>✓ صار عندك آي بي جديد</Text>
+              <>
+                <Text style={[s.verdict, { color: tFg('#0f7a52') }]}>✓ صار عندك آي بي جديد</Text>
+                {step === 'detach' && <Text style={s.note}>القطع السريع ما كفى، فصلنا الراوتر عن البرج ورجّعناه — وأخذ آي بي جديد بدون إعادة تشغيل.</Text>}
+              </>
             ) : wanChanged ? (
               <>
                 <Text style={[s.verdict, { color: tFg('#0f7a52') }]}>✓ الراوتر أخذ جلسة جديدة</Text>
@@ -196,21 +228,14 @@ export default function NewIp() {
                 <Text style={s.note}>
                   {mode === 'reboot'
                     ? 'حتى بعد إعادة التشغيل — الشركة مثبّتة نفس الآي بي لشريحتك حالياً. جرّب بعد ساعة.'
-                    : 'الشركة تحفظ آي بي الشريحة فترة قصيرة بعد الانقطاع. جرّب انقطاع أطول، ولو ما نفع أعد تشغيل الراوتر.'}
+                    : step === 'detach'
+                      ? 'فصلنا الراوتر عن البرج ورجع بنفس الآي بي — الشركة حاجزته لشريحتك فترة. جرّب إعادة التشغيل، أو انتظر ٥–١٠ دقايق وجرّب.'
+                      : 'الشركة تحفظ آي بي الشريحة فترة قصيرة بعد الانقطاع. جرّب إعادة تشغيل الراوتر.'}
                 </Text>
-                {mode !== 'reboot' && (
-                  <View style={{ gap: 8, marginTop: 4 }}>
-                    {mode === 'normal' && (
-                      <Pressable style={[s.btn2, busy && { opacity: 0.6 }]} onPress={() => run('long')} disabled={busy}>
-                        <Text style={s.btn2Text}>⏱ جرّب بانقطاع أطول (٤٠ ثانية)</Text>
-                      </Pressable>
-                    )}
-                    {canReboot && (
-                      <Pressable style={[s.btn2, busy && { opacity: 0.6 }]} onPress={() => run('reboot')} disabled={busy}>
-                        <Text style={s.btn2Text}>⏻ أعد تشغيل الراوتر (أقوى طريقة)</Text>
-                      </Pressable>
-                    )}
-                  </View>
+                {mode !== 'reboot' && canReboot && (
+                  <Pressable style={[s.btn2, busy && { opacity: 0.6 }, { marginTop: 4 }]} onPress={() => run('reboot')} disabled={busy}>
+                    <Text style={s.btn2Text}>⏻ أعد تشغيل الراوتر (أقوى طريقة)</Text>
+                  </Pressable>
                 )}
               </>
             )}
