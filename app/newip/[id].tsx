@@ -157,6 +157,9 @@ export default function NewIp() {
                 } catch (e2: any) {
                   // الفصل ما زبط على هالموديل — نعرض نتيجة القطع السريع وزر إعادة التشغيل بدل خطأ بس
                   reportError('newip-detach', e2, info);
+                  // لو علق في الوضع المؤقت نرجّعه قبل أي شي
+                  setStatus('نرجّع وضع الشبكة...');
+                  await withSessionPatient(info, d => (d.wakeRadio ? d.wakeRadio() : Promise.resolve()), 60_000).catch(() => {});
                   setStep('quick');
                   if (!canQuick) throw e2;
                   fresh = await readIps(info).catch(() => fresh);

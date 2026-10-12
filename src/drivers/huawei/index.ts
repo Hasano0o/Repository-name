@@ -134,6 +134,9 @@ export class HuaweiDriver implements RouterDriver {
   private lockFreq: boolean | null = null;
   private cellLockMode: string | null = null;
   private nr5g: boolean | undefined | null = null; // null = ما فحصنا بعد
+  /** الراوتر رد «ما عندك صلاحية» — ما نصدّق state-login (يقول داخل وهو طاردنا) */
+  private stale = false;
+  private reattachOrig = '';
 
   private log(...a: unknown[]) {
     if (__DEV__) console.log('[huawei]', ...a);
@@ -170,6 +173,7 @@ export class HuaweiDriver implements RouterDriver {
     if (xml.includes('<error>')) {
       const code = tag(xml, 'code') ?? '0';
       this.log('GET', p, 'error', code);
+      if (code === '100003') this.stale = true;
       throw new HuaweiError(code);
     }
     return xml;
@@ -193,6 +197,7 @@ export class HuaweiDriver implements RouterDriver {
         this.queue = [];
         return this.post(p, body, undefined, false);
       }
+      if (code === '100003') this.stale = true;
       throw new HuaweiError(code);
     }
     return xml;
@@ -208,7 +213,16 @@ export class HuaweiDriver implements RouterDriver {
     const state = await this.get('user/state-login');
     const type = tag(state, 'password_type');
     this.log('state', tag(state, 'State'), 'password_type', type);
-    if (tag(state, 'State') === '0') return;
+    if (tag(state, 'State') === '0') {
+      // بعض الموديلات (H155) بعد تغيير الإعدادات: state-login يقول «داخل» والأوامر ترد 100003 —
+      // كنا نصدّقه ونعلق بحلقة طرد. الحين: لو انطردنا، نطلع ونفتح جلسة جديدة فعلاً
+      if (!this.stale) return;
+      this.log('stale session — forcing fresh login');
+      try { await this.post('user/logout', '<Logout>1</Logout>'); } catch {}
+      this.queue = [];
+      try { await http(`http://${host}/html/home.html`, { headers: this.headers() }); } catch {}
+    }
+    this.stale = false;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         if (type === '4') await this.loginSha256(username, password);
@@ -217,6 +231,12 @@ export class HuaweiDriver implements RouterDriver {
         return;
       } catch (e) {
         if (isTokenError(e) && attempt === 0) continue;
+        // «فيه مستخدم داخل» وهو غالباً جلستنا القديمة: نطلع ونعيد مرة
+        if (e instanceof HuaweiError && e.code === '108003' && attempt === 0) {
+          try { await this.post('user/logout', '<Logout>1</Logout>'); } catch {}
+          this.queue = [];
+          continue;
+        }
         if (e instanceof HuaweiError && e.code === '100002') break;
         throw e;
       }
@@ -536,8 +556,10 @@ export class HuaweiDriver implements RouterDriver {
     const orig = tag(cur, 'NetworkMode') ?? '00';
     let modes: string[] = [];
     try { modes = tagsAll(tag(await this.get('net/net-mode-list'), 'AccessList') ?? '', 'Access'); } catch {}
-    const temp = ['01', '02'].find(m => modes.includes(m) && m !== orig);
+    // وضع مؤقت ما فيه خدمة عندنا: 3G/2G، ولو الراوتر ما يدعمها (H155) فـ 5G SA فقط
+    const temp = ['01', '02', '08'].find(m => modes.includes(m) && m !== orig);
     if (!temp) throw new Error('راوترك ما يسمح بالفصل عن البرج من التطبيق');
+    this.reattachOrig = orig;
     await this.writeNetMode({ mode: temp }).catch(() => {});
     try {
       await new Promise(r => setTimeout(r, holdSecs * 1000));
@@ -547,8 +569,16 @@ export class HuaweiDriver implements RouterDriver {
       for (let i = 0; i < 3 && !ok; i++) {
         try { await this.writeNetMode({ mode: orig }); ok = true; } catch { await new Promise(r => setTimeout(r, 3000)); }
       }
-      if (!ok) throw new Error('ما قدرنا نرجّع وضع الشبكة — اضغط «رجّع الإعدادات الأصلية»');
+      if (!ok) throw new Error('ما قدرنا نرجّع وضع الشبكة — اضغط «رجّع الإشارة»');
+      this.reattachOrig = '';
     }
+  }
+  /** لو الفصل علق في النص: نرجّع وضع الشبكة الأصلي */
+  async wakeRadio() {
+    if (!this.reattachOrig) return;
+    const cur = tag(await this.get('net/net-mode'), 'NetworkMode');
+    if (cur !== this.reattachOrig) await this.writeNetMode({ mode: this.reattachOrig });
+    this.reattachOrig = '';
   }
   async getBandConfig(): Promise<BandConfig> {
     const cur = await this.get('net/net-mode');
