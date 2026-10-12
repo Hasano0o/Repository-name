@@ -24,6 +24,7 @@ import { ProgressHost } from '../src/ui/Progress';
 
 initNotificationHandler();
 patchAlert(); // بالإنجليزي: نوافذ التنبيه تنترجم
+import('../src/services/errors').then(m => setTimeout(m.flushErrors, 8000)).catch(() => {}); // تقارير ما وصلت وقت انقطاع النت
 
 const SCREENS: [string, string][] = [
   ['index', 'راوتراتي'],

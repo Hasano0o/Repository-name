@@ -577,6 +577,12 @@ export const EN: Record<string, string> = {
   '⏻ أعد تشغيل الراوتر (أقوى طريقة)': '⏻ Restart the router (strongest method)',
   'راوترك ما يسمح بقطع البيانات من التطبيق — أعد تشغيله يدوي عشان تاخذ آي بي جديد.': "Your router doesn't allow dropping data from the app — restart it manually to get a new IP.",
   'الآي بي العام نقرأه من جوالك — لو جوالك مو متصل بواي فاي الراوتر، بيطلع آي بي شريحة الجوال بداله.': "The public IP is read from your phone — if it isn't on the router's Wi-Fi, you'll see your phone's SIM IP instead.",
+  'الراوتر مشغول — نحاول ندخل ونرجّع إعدادك...': 'Router busy — trying to log in and restore your settings...',
+  'نفك التثبيتات عشان يلقط أقوى برج...': 'Releasing locks so it picks the strongest tower...',
+  '✓ رجّعنا إعدادك السابق.': '✓ Your previous settings were restored.',
+  '⚠️ ما قدرنا نرجّع إعدادك — سكّر أي تطبيق أو صفحة للراوتر واضغط «رجّع الإشارة» من صفحة الراوتر.': "⚠️ Couldn't restore your settings — close any router app or page and press “Restore signal” on the router page.",
+  'راوترك (بعض موديلات هواوي مثل H155) يطرد التطبيق لما يتحوّل لـ 5G SA، فما قدرنا نكمّل. رجّعنا إعدادك ✓\n\nلو تطبيق «HUAWEI AI Life» مفتوح سكّره من الخلفية وجرّب مرة ثانية.': "Your router (some Huawei models like H155) kicks the app when switching to 5G SA, so we couldn't continue. Your settings were restored ✓\n\nIf the HUAWEI AI Life app is open, close it and try again.",
+  'الراوتر طرد التطبيق وما قدرنا نرجّع إعدادك.\n١) سكّر تطبيق «HUAWEI AI Life» وأي صفحة للراوتر\n٢) ارجع لصفحة الراوتر واضغط «رجّع الإشارة»': "The router kicked the app and we couldn't restore your settings.\n1) Close HUAWEI AI Life and any router page\n2) Go back to the router page and press “Restore signal”",
 };
 
 export const EN_PATTERNS: Record<string, string> = {

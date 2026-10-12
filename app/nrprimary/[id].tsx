@@ -176,9 +176,15 @@ export default function NrPrimary() {
       await saveProfile({ routerId: info.id, name: label, bands: orig.locked, nrBands: [P, ...S], mode: SA }).catch(() => {});
     } catch (e: any) {
       const m = String(e?.message ?? e);
-      if (mounted.current) setError(/ما طبّق القفل|رفض/.test(m)
-        ? `راوترك ما قبل يقفل على ${bandLabel('NR', P)} — غالباً هالتردد ما له برج عند مشغّلك أو الراوتر ما يدعمه في SA. اختر تردد من ترددات مشغّلك (مثل n78 أو n41 أو n77). ما تغيّر شي في إعدادك.`
-        : m);
+      const kicked = /يطلّع التطبيق/.test(m);
+      const back = e?.reverted;
+      if (mounted.current) setError(kicked
+        ? (back
+          ? `راوترك (بعض موديلات هواوي مثل H155) يطرد التطبيق لما يتحوّل لـ 5G SA، فما قدرنا نكمّل. رجّعنا إعدادك ✓\n\nلو تطبيق «HUAWEI AI Life» مفتوح سكّره من الخلفية وجرّب مرة ثانية.`
+          : `الراوتر طرد التطبيق وما قدرنا نرجّع إعدادك.\n١) سكّر تطبيق «HUAWEI AI Life» وأي صفحة للراوتر\n٢) ارجع لصفحة الراوتر واضغط «رجّع الإشارة»`)
+        : /ما طبّق القفل|رفض/.test(m)
+          ? `راوترك ما قبل يقفل على ${bandLabel('NR', P)} — غالباً هالتردد ما له برج عند مشغّلك أو الراوتر ما يدعمه في SA. اختر تردد من ترددات مشغّلك (مثل n78 أو n41 أو n77). ${back === false ? '' : 'ما تغيّر شي في إعدادك.'}`
+          : m);
       reportError('nrprimary', e, info);
     } finally {
       if (mounted.current) { setBusy(false); setStatus(''); try { await load(info); } catch {} }

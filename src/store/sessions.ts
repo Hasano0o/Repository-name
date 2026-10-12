@@ -141,6 +141,39 @@ export async function withSession<T>(
   }
 }
 
+/**
+ * للخطوات اللي لازم تنجح (إرجاع الإعداد بعد فشل): نتجاهل «طُردنا قبل شوي» ونعيد الدخول
+ * بصبر لين maxMs — بعض الموديلات (H155) تطرد الجلسات وترفض الدخول دقيقة بعد تغيير وضع الشبكة،
+ * ولو استسلمنا بسرعة يبقى الراوتر على إعداد بلا خدمة.
+ */
+export async function withSessionPatient<T>(
+  r: SavedRouter,
+  fn: (d: RouterDriver) => Promise<T>,
+  maxMs = 90_000,
+  onTry?: (n: number) => void,
+): Promise<T> {
+  const deadline = Date.now() + maxMs;
+  const waits = [0, 3000, 6000, 10000, 15000, 20000];
+  let last: unknown;
+  for (let i = 0; ; i++) {
+    const w = waits[Math.min(i, waits.length - 1)];
+    if (i && Date.now() + w > deadline) break;
+    if (w) await new Promise(res => setTimeout(res, w));
+    kickedAt.delete(keyOf(r));
+    onTry?.(i);
+    try {
+      const d = await connect(r, i > 0);
+      return await fn(d);
+    } catch (e) {
+      last = e;
+      const m = String((e as any)?.message ?? e);
+      // قفل دخول بسبب محاولات كثيرة: ما نزيده
+      if (/قفل تسجيل الدخول|محاولات كثيرة|108007/.test(m)) break;
+    }
+  }
+  throw last ?? new Error('ما قدرنا ندخل الراوتر');
+}
+
 export function dropSession(id: string) {
   const k = idKey.get(id) ?? id;
   sessions.get(k)?.d.logout().catch(() => {});

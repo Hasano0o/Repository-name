@@ -1098,7 +1098,7 @@ ERR_HITS: dict[str, list[float]] = {}
 FEATURE_AR = {
     "wifich": "قناة الواي فاي", "control": "مركز التحكم", "newip": "آي بي جديد",
     "lock": "تثبيت برج/تردد", "nrdual": "دمج 5G المزدوج", "nsacombo": "دمج 4G+5G", "login": "تسجيل الدخول",
-    "session": "طرد من الراوتر",
+    "session": "طرد من الراوتر", "nrprim": "5G الأساسي", "nrprimary": "5G الأساسي",
 }
 
 
@@ -1133,22 +1133,37 @@ async def app_error(req: Request):
            "model": _cl(b.get("model"), 60), "os": _cl(b.get("os"), 12), "ver": _cl(b.get("ver"), 32)}
     with ERRORS_LOG.open("a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-    key = f"{feat}|{rtr}|{msg[:80]}"
+    # الرسالة كاملة: نفس الخطأ بتسلسل أكواد مختلف (أو من عميل ثاني) لازم يوصل
+    key = f"{feat}|{rtr}|{rec['model']}|{msg}"
     seen = ERR_SEEN.get(key)
     if seen and time.time() - seen[0] < 6 * 3600:
         seen[1] += 1
         return {"ok": True}
     again = seen[1] if seen else 0
     ERR_SEEN[key] = [time.time(), 0]
+    # تقرير متأخر (انحفظ بالجوال لأن النت كان طايح) — نوضح متى صار
+    late = ""
+    try:
+        from datetime import datetime as _dt
+        t0 = _dt.fromisoformat(str(b.get("at", "")).replace("Z", "+00:00")).timestamp()
+        mins = int((time.time() - t0) // 60)
+        if mins >= 2:
+            late = f"\n⏱ وصل متأخر — صار قبل {mins} دقيقة (غالباً النت كان طايح عنده)"
+    except Exception:
+        pass
+    base = feat.split(":")[0].removesuffix("-revert")
+    feat_ar = FEATURE_AR.get(feat) or FEATURE_AR.get(base, feat)
+    if feat.endswith("-revert"):
+        feat_ar = f"⚠️ فشل إرجاع الإعداد — {feat_ar} ({feat})"
     owner = _owner()
     if owner:
         _tg("sendMessage", {"chat_id": owner, "parse_mode": "HTML", "text":
             "⚠️ <b>خطأ عند مستخدم</b>\n"
-            f"• الميزة: {_esc(FEATURE_AR.get(feat, feat))}\n"
+            f"• الميزة: {_esc(feat_ar)}\n"
             f"• الراوتر: {_esc(rtr or '—')}{(' · ' + _esc(rec['model'])) if rec['model'] else ''}\n"
             f"• الخطأ: <code>{_esc(msg)}</code>\n"
             f"• {_esc(rec['os'] or '?')} · نسخة {_esc(rec['ver'] or '?')}"
-            + (f"\n🔁 تكرر {again} مرة من آخر تنبيه" if again else "")})
+            + (f"\n🔁 تكرر {again} مرة من آخر تنبيه" if again else "") + late})
     return {"ok": True}
 
 

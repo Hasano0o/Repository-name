@@ -2,7 +2,8 @@ import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Carrier, RouterDriver, Signal } from '../drivers/types';
 import { SavedRouter } from '../store/routers';
-import { withSession, withRouterLock, dropSession } from '../store/sessions';
+import { withSession, withSessionPatient, withRouterLock, dropSession } from '../store/sessions';
+import { reportError } from '../services/errors';
 import { getBaseline } from '../store/baseline';
 import { driverById } from '../drivers/registry';
 import { trafficBurst } from './nrprobe';
@@ -191,7 +192,7 @@ async function freeReleaseImpl(r: SavedRouter, say: (s: string) => void): Promis
     if (i) await sleep(8000);
     try {
       if (i) dropSession(r.id);
-      await withSession(r, async d => {
+      await withSessionPatient(r, async d => {
         if (d.unlockCell) { try { await d.unlockCell(); } catch {} }
         if (d.setBand) { try { await d.setBand([], []); } catch {} }
         // عالق على 3G/2G (مثل LIMITED_SERVICE_WCDMA): الـ 3G شبه متوقفة عندنا —
@@ -209,7 +210,7 @@ async function freeReleaseImpl(r: SavedRouter, say: (s: string) => void): Promis
             if (pick) { say('الراوتر عالق على 3G — نحوّله على 4G و 5G...'); await d.setNetworkMode(pick); }
           }
         } catch {}
-      }, false);
+      }, 60_000);
       released = true;
     } catch (e) {
       if (await waitIfLocked(e, say)) i--;
@@ -368,8 +369,24 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
     // الأمر نفسه انرفض في النص (مثلاً غيّرنا وضع الشبكة وبعدها رفض قفل التردد):
     // نرجّع اللي تغيّر قبل ما نطلّع الخطأ — عشان ما يبقى الراوتر نص مطبّق وبلا خدمة
     say('الراوتر رفض — نرجّع إعدادك...');
-    try { await withSession(o.r, o.revert, false); } catch {}
-    throw e;
+    const msg = String((e as any)?.message ?? e);
+    let back = false;
+    try {
+      await withSessionPatient(o.r, o.revert, 90_000, n => n && say('الراوتر مشغول — نحاول ندخل ونرجّع إعدادك...'));
+      back = true;
+    } catch (re) {
+      reportError(`${o.key}-revert`, `apply: ${msg.slice(0, 120)} | revert: ${String((re as any)?.message ?? re).slice(0, 120)}`, o.r);
+    }
+    if (!back) {
+      // ما قدرنا نرجّع الإعداد بالضبط — نفك كل شي ويلقط أقوى برج (ولا نخليه بلا نت)
+      say('نفك التثبيتات عشان يلقط أقوى برج...');
+      back = await freeRelease(o.r, say).catch(() => false);
+    }
+    const err = new Error(back
+      ? `${msg}\n\n✓ رجّعنا إعدادك السابق.`
+      : `${msg}\n\n⚠️ ما قدرنا نرجّع إعدادك — سكّر أي تطبيق أو صفحة للراوتر واضغط «رجّع الإشارة» من صفحة الراوتر.`);
+    (err as any).reverted = back;
+    throw err;
   }
 
   say('ننتظر الراوتر يتصل...');
@@ -380,7 +397,7 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
     say('ما اتصل — نرجّع إعدادك السابق...');
     let back = false;
     try {
-      await withSession(o.r, o.revert, false);
+      await withSessionPatient(o.r, o.revert, 60_000);
       back = await waitOnline(o.r, 40000, () => false);
     } catch {}
     if (!back) {
