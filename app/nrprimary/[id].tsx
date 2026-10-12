@@ -22,6 +22,7 @@ import { trafficBurst } from '../../src/utils/nrprobe';
 import { bandLabel, freqLabel } from '../../src/utils/bands';
 import { saveProfile } from '../../src/store/profiles';
 import { reportError } from '../../src/services/errors';
+import { useOperatorBands } from '../../src/store/operator';
 import { C, tBg, tBd, tFg } from '../../src/ui/theme';
 import { sheet } from '../../src/i18n';
 
@@ -56,6 +57,8 @@ export default function NrPrimary() {
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [verdict, setVerdict] = useState<{ ok: boolean; text: string } | null>(null);
+  const [allBands, setAllBands] = useState(false);
+  const op = useOperatorBands(id);
   const mounted = useRef(true);
 
   const load = async (r: SavedRouter) => {
@@ -83,7 +86,11 @@ export default function NrPrimary() {
   }, [id]);
 
   const hasSa = !!cfg?.modes.some(m => m.value === SA);
-  const nrList = cfg?.nrSupported ?? [];
+  const nrAll = cfg?.nrSupported ?? [];
+  // نعرض ترددات مشغّلك (واللي شفناها شغالة) بس — باقي ترددات الراوتر غالباً ما لها برج عندك
+  const seenNr = new Set((now ?? []).filter(c => c.tech === 'NR').map(c => c.band));
+  const nrList = !op || allBands ? nrAll : nrAll.filter(b => op.bands.nr.includes(b) || seenNr.has(b));
+  const hidden = nrAll.length - nrList.length;
   const pcc = now?.find(c => c.role === 'PCC');
   const nrNow = (now ?? []).filter(c => c.tech === 'NR');
 
@@ -168,7 +175,10 @@ export default function NrPrimary() {
       }
       await saveProfile({ routerId: info.id, name: label, bands: orig.locked, nrBands: [P, ...S], mode: SA }).catch(() => {});
     } catch (e: any) {
-      if (mounted.current) setError(e?.message ?? String(e));
+      const m = String(e?.message ?? e);
+      if (mounted.current) setError(/ما طبّق القفل|رفض/.test(m)
+        ? `راوترك ما قبل يقفل على ${bandLabel('NR', P)} — غالباً هالتردد ما له برج عند مشغّلك أو الراوتر ما يدعمه في SA. اختر تردد من ترددات مشغّلك (مثل n78 أو n41 أو n77). ما تغيّر شي في إعدادك.`
+        : m);
       reportError('nrprimary', e, info);
     } finally {
       if (mounted.current) { setBusy(false); setStatus(''); try { await load(info); } catch {} }
@@ -221,6 +231,11 @@ export default function NrPrimary() {
                 {nrList.filter(b => b !== primary).map(b => <Chip key={b} b={b} on={extra.includes(b)} color="#7a51e0" onPress={() => canCell && toggleExtra(b)} />)}
               </View>
             </View>
+            {!!op && (hidden > 0 || allBands) && (
+              <Pressable onPress={() => setAllBands(v => !v)} hitSlop={6}>
+                <Text style={s.more}>{allBands ? `اعرض ترددات ${op.name} بس` : `معروض ترددات ${op.name} بس · اعرض كل ترددات الراوتر (+${hidden})`}</Text>
+              </Pressable>
+            )}
             <Pressable style={[s.btn, (busy || primary === null) && { opacity: 0.5 }]} onPress={run} disabled={busy || primary === null}>
               {busy ? <ActivityIndicator color="#fff" /> : (
                 <Text style={s.btnTxt}>{primary === null ? 'اختر الأساسي أول' : `خلّ ${bandLabel('NR', primary)} أساسي`}</Text>
@@ -260,5 +275,6 @@ const s = sheet({
   status: { color: ACCENT, fontSize: 12.5, fontWeight: '700', textAlign: 'right' },
   err: { color: C.red, fontSize: 12.5, textAlign: 'right' },
   verdict: { color: C.text, fontWeight: '800', fontSize: 14.5, lineHeight: 23, textAlign: 'right' },
+  more: { color: tFg('#2563eb'), fontSize: 12.5, fontWeight: '700', textAlign: 'center' },
   note: { color: C.muted, fontSize: 11.5, lineHeight: 18, textAlign: 'right' },
 });
