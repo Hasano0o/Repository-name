@@ -194,14 +194,29 @@ export async function zteSetChannel(io: ZteIo, band: '2.4' | '5', channel: strin
   if (!ok(out)) throw fail('تغيير القناة', out);
 }
 
+/**
+ * بعض أوامر ZTE ترد «failure» مع إنها تنحفظ (شفناها في setAccessPointInfo، وجتنا من عميل في نوم الواي فاي)
+ * — فنحكم بإعادة القراءة: لو القيمة صارت مثل ما طلبنا = نجحت.
+ */
+async function setAndVerify(io: ZteIo, body: Record<string, string>, field: string, want: string, what: string) {
+  const out = await io.act(body);
+  if (ok(out)) return;
+  for (let i = 0; i < 4; i++) {
+    await sleep(1200);
+    const now = (await io.get([field]).catch(() => ({} as Record<string, string>)))[field];
+    if (now === want) return;
+  }
+  throw fail(what, out);
+}
+
 /** يرجّع الاتصال لحاله لو انقطعت الخدمة (مجرّب على MU5001) */
 export async function zteSetAutoRecover(io: ZteIo, on: boolean) {
-  const out = await io.act({ goformId: 'PS_NO_SERVICE_RESTART_SET', ps_no_service_restart_flag: on ? '1' : '0' });
-  if (!ok(out)) throw fail('الإرجاع التلقائي', out);
+  const v = on ? '1' : '0';
+  await setAndVerify(io, { goformId: 'PS_NO_SERVICE_RESTART_SET', ps_no_service_restart_flag: v }, 'ps_no_service_restart_flag', v, 'الإرجاع التلقائي');
 }
 
 /** نوم الواي فاي: -1 دايماً شغّال، أو دقائق (5/10/20/30/60/120) — مجرّب على MU5001 */
 export async function zteSetWifiSleep(io: ZteIo, mins: number) {
-  const out = await io.act({ goformId: 'SET_WIFI_SLEEP_INFO', sysIdleTimeToSleep: String(mins) });
-  if (!ok(out)) throw fail('نوم الواي فاي', out);
+  const v = String(mins);
+  await setAndVerify(io, { goformId: 'SET_WIFI_SLEEP_INFO', sysIdleTimeToSleep: v }, 'sysIdleTimeToSleep', v, 'نوم الواي فاي');
 }
