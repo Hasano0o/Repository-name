@@ -1189,7 +1189,16 @@ async def app_report(req: Request):
         raise HTTPException(503, "no owner")
     cap = (f"📎 تقرير دعم من مستخدم\n• الميزة: {FEATURE_AR.get(feat, feat) or '—'}\n• الراوتر: {rtr or '—'}"
            f"\n• {_cl(b.get('os'), 12) or '?'} · نسخة {_cl(b.get('ver'), 20) or '?'}")
-    name = f"bandly-{feat or 'report'}-{time.strftime('%m%d-%H%M')}.txt"
+    name = f"bandly-{feat or 'report'}-{time.strftime('%m%d-%H%M%S')}.txt"
+    # نحفظ نسخة في السيرفر (data/reports) عشان نراجعها من الطرفية بعدين
+    try:
+        rd = DATA / "reports"
+        rd.mkdir(exist_ok=True)
+        (rd / name).write_text(f"{cap}\n\n{text}", encoding="utf-8")
+        for old in sorted(rd.glob("*.txt"))[:-300]:
+            old.unlink()
+    except Exception:
+        pass
     r = _tg("sendDocument", {"chat_id": owner, "caption": cap}, files={"document": (name, text.encode("utf-8"))})
     if not r.get("ok"):
         raise HTTPException(502, "ما وصل للبوت")
