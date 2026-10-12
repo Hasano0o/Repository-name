@@ -11,8 +11,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { reportError } from '../../src/services/errors';
-import { withSession } from '../../src/store/sessions';
-import { waitOnline } from '../../src/utils/safeLock';
+import { withSession, withSessionPatient } from '../../src/store/sessions';
+import { waitOnline, freeRelease } from '../../src/utils/safeLock';
 import { C, R, S, tBg, tBd, tFg } from '../../src/ui/theme';
 
 import { sheet } from '../../src/i18n';
@@ -146,7 +146,14 @@ export default function NewIp() {
                 try {
                   await withSession(info, d => d.reattach!(15), false);
                   await sleep(5000);
-                  fresh = await settle(120000);
+                  fresh = await settle(90000).catch(async e3 => {
+                    // ما رجع يمسك برج: نطلّعه من الوضع المؤقت ونفك التثبيتات — ما نخليه بلا نت
+                    setStatus('الراوتر ما رجع يمسك برج — نرجّعه...');
+                    await withSessionPatient(info, d => (d.wakeRadio ? d.wakeRadio() : Promise.resolve()), 60_000).catch(() => {});
+                    if (await waitOnline(info, 60000, () => !mounted.current)) return readIps(info);
+                    if (!(await freeRelease(info, t => mounted.current && setStatus(t)).catch(() => false))) throw e3;
+                    return readIps(info);
+                  });
                 } catch (e2: any) {
                   // الفصل ما زبط على هالموديل — نعرض نتيجة القطع السريع وزر إعادة التشغيل بدل خطأ بس
                   reportError('newip-detach', e2, info);

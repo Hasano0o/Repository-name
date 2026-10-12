@@ -235,6 +235,8 @@ export interface RouterDriver {
   reconnectData?(opts?: { holdSecs?: number }): Promise<void>;
   /** فصل كامل عن البرج ورجوع (مثل وضع الطيران) — الشركة تعطي آي بي جديد مثل إعادة التشغيل بس أسرع */
   reattach?(holdSecs?: number): Promise<void>;
+  /** يطلّع الراوتر من وضع الطيران / وضع شبكة مؤقت لو علق بعد reattach — آمن ينادى في أي وقت */
+  wakeRadio?(): Promise<void>;
   getBandConfig?(): Promise<BandConfig>;
   setBand?(bands: number[], nrBands?: number[]): Promise<void>;
   lockCell?(target: CellLockTarget): Promise<void>;

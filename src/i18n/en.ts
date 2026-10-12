@@ -583,6 +583,7 @@ export const EN: Record<string, string> = {
   '⚠️ ما قدرنا نرجّع إعدادك — سكّر أي تطبيق أو صفحة للراوتر واضغط «رجّع الإشارة» من صفحة الراوتر.': "⚠️ Couldn't restore your settings — close any router app or page and press “Restore signal” on the router page.",
   'راوترك (بعض موديلات هواوي مثل H155) يطرد التطبيق لما يتحوّل لـ 5G SA، فما قدرنا نكمّل. رجّعنا إعدادك ✓\n\nلو تطبيق «HUAWEI AI Life» مفتوح سكّره من الخلفية وجرّب مرة ثانية.': "Your router (some Huawei models like H155) kicks the app when switching to 5G SA, so we couldn't continue. Your settings were restored ✓\n\nIf the HUAWEI AI Life app is open, close it and try again.",
   'الراوتر طرد التطبيق وما قدرنا نرجّع إعدادك.\n١) سكّر تطبيق «HUAWEI AI Life» وأي صفحة للراوتر\n٢) ارجع لصفحة الراوتر واضغط «رجّع الإشارة»': "The router kicked the app and we couldn't restore your settings.\n1) Close HUAWEI AI Life and any router page\n2) Go back to the router page and press “Restore signal”",
+  'الراوتر ما رجع يمسك برج — نرجّعه...': "The router didn't pick up a tower — restoring it...",
 };
 
 export const EN_PATTERNS: Record<string, string> = {

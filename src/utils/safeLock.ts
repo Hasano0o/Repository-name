@@ -193,6 +193,7 @@ async function freeReleaseImpl(r: SavedRouter, say: (s: string) => void): Promis
     try {
       if (i) dropSession(r.id);
       await withSessionPatient(r, async d => {
+        if (d.wakeRadio) { try { await d.wakeRadio(); } catch {} }
         if (d.unlockCell) { try { await d.unlockCell(); } catch {} }
         if (d.setBand) { try { await d.setBand([], []); } catch {} }
         // عالق على 3G/2G (مثل LIMITED_SERVICE_WCDMA): الـ 3G شبه متوقفة عندنا —

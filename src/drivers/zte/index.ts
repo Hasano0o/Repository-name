@@ -1042,8 +1042,9 @@ export class ZteDriver implements RouterDriver {
         for (let i = 0; i < 5 && !ok; i++) {
           await this.act({ goformId: 'WAN_OPERATE_MODE_SET', operate_mode: 'ONLINE' }).catch(() => '');
           await wait(2000);
-          const r = await read(['operate_mode']);
-          ok = !r.operate_mode || /ONLINE/i.test(r.operate_mode);
+          const r = await read(['operate_mode', 'network_type']);
+          // لو الراوتر ما يعطي operate_mode: نحكم من نوع الشبكة (مو «بلا خدمة»)
+          ok = r.operate_mode ? /ONLINE/i.test(r.operate_mode) : !!r.network_type && !/no ?service|limited|airplane/i.test(r.network_type);
         }
         if (!ok) throw new Error('ما قدرنا نطلّع الراوتر من وضع الطيران — أعد تشغيله');
       }
@@ -1053,6 +1054,7 @@ export class ZteDriver implements RouterDriver {
     // ٢) تبديل وضع الشبكة مؤقتاً
     const orig = ((await read(['net_select'])).net_select || '').trim();
     if (!orig) throw this.rejected('الفصل عن البرج', off);
+    this.reattachOrig = orig;
     let switched = '';
     for (const temp of ['Only_WCDMA', 'Only_5G']) {
       if (temp === orig) continue;
@@ -1071,7 +1073,21 @@ export class ZteDriver implements RouterDriver {
         ok = ((await read(['net_select'])).net_select || '').trim() === orig;
       }
       if (!ok) throw new Error('ما قدرنا نرجّع وضع الشبكة — اضغط «رجّع الإشارة» من صفحة الراوتر');
+      this.reattachOrig = '';
     }
+  }
+
+  private reattachOrig = '';
+
+  /** إنقاذ بعد الفصل: نطلّعه من وضع الطيران ونرجّع وضع الشبكة لو بقى على وضع مؤقت (3G فقط / 5G فقط) */
+  async wakeRadio() {
+    await this.ensure();
+    await this.act({ goformId: 'WAN_OPERATE_MODE_SET', operate_mode: 'ONLINE' }).catch(() => '');
+    const cur = ((await this.get(['net_select']).catch(() => ({} as Record<string, string>))).net_select || '').trim();
+    const want = this.reattachOrig && this.reattachOrig !== cur ? this.reattachOrig
+      : /WCDMA|GSM/i.test(cur) && !/LTE|5G/i.test(cur) ? CODE_TO_ZTE['0803'] : '';
+    if (want) await this.act({ goformId: 'SET_BEARER_PREFERENCE', BearerPreference: want }).catch(() => '');
+    this.reattachOrig = '';
   }
 
   // ───── مركز التحكم ─────
