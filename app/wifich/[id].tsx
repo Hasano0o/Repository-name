@@ -93,7 +93,7 @@ async function measure(r: SavedRouter, band: Band, demo: DemoDriver | null, n = 
 
 /** ننتظر الواي فاي يرجع بعد تغيير القناة (الجوال يفصل ويرجع يتصل) */
 async function waitWifi(r: SavedRouter, band: Band, demo: DemoDriver | null, cancelled: () => boolean) {
-  const deadline = Date.now() + 75000;
+  const deadline = Date.now() + 120000; // بعض الجوالات (أندرويد خصوصاً) تتأخر ترجع للواي فاي بعد تغيير القناة
   let ok = 0;
   await sleep(demo ? 1500 : 6000);
   while (Date.now() < deadline && !cancelled()) {
@@ -161,7 +161,7 @@ export default function WifiChannel() {
       if (!/network|abort|timeout|مهلة|ما رد/i.test(String(e?.message ?? e))) throw e;
     });
     const back = await waitWifi(r, b, demoRef.current, cancelled);
-    if (!back) throw new Error('الواي فاي ما رجع خلال دقيقة. تأكد إن جوالك رجع اتصل بشبكة الراوتر، وإذا ما ظهرت أعد تشغيل الراوتر.');
+    if (!back) throw new Error('الواي فاي ما رجع خلال دقيقتين. افتح إعدادات الواي فاي في جوالك واتصل بشبكة الراوتر يدوي — القناة تغيّرت والجوال أحياناً ما يرجع لحاله.');
     const now = await readChannel(r, b);
     if (now !== null && now !== ch) throw new Error(`الراوتر ما قبل تغيير القناة (باقي على ${chLabel(now)}).`);
   };
