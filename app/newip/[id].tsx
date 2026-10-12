@@ -135,14 +135,16 @@ export default function NewIp() {
               setStatus(label);
               await withSession(info, d => d.reboot!(), false);
               await sleep(30000);
-              return settle(150000);
+              return settle(150000).catch(async e3 => {
+                // رجع من إعادة التشغيل بدون أبراج: غالباً وضع شبكة/ترددات عالقة — نفكها
+                setStatus('الراوتر ما رجع يمسك برج — نفك التثبيتات ونرجّع وضع الشبكة...');
+                if (!(await freeRelease(info, t => mounted.current && setStatus(t)).catch(() => false))) throw e3;
+                return readIps(info);
+              });
             };
             if (direct) {
               setStep('reboot');
-              setStatus('نعيد تشغيل الراوتر...');
-              await withSession(info, d => d.reboot!(), false);
-              await sleep(30000);
-              fresh = await settle(150000);
+              fresh = await doReboot('نعيد تشغيل الراوتر...');
             } else {
               // ١) قطع سريع للبيانات
               if (canQuick) {

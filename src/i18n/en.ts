@@ -594,6 +594,8 @@ export const EN: Record<string, string> = {
   'نعيد تشغيل الراوتر من التطبيق — هذي الطريقة اللي تغيّر الآي بي عند شركتك. النت بينقطع حوالي دقيقتين، ونعرض لك الآي بي الجديد لما يرجع.': "We'll restart the router from the app — this is what changes the IP with your carrier. Internet drops for about two minutes; we'll show the new IP when it's back.",
   'نجرّب أول قطع سريع للبيانات (ثواني). لو الشركة رجّعت نفس الآي بي، نعيد تشغيل الراوتر من التطبيق تلقائي (دقيقتين تقريباً).': 'First a quick data drop (seconds). If the carrier returns the same IP, we restart the router from the app automatically (about two minutes).',
   '٢/٢ — الشركة رجّعت نفس الآي بي، نعيد تشغيل الراوتر (دقيقتين تقريباً)...': '2/2 — Same IP returned, restarting the router (about two minutes)...',
+  'الراوتر على «3G فقط» — نرجّعه على 4G و 5G...': 'Router is on 3G only — switching back to 4G + 5G...',
+  'الراوتر ما رجع يمسك برج — نفك التثبيتات ونرجّع وضع الشبكة...': "Router didn't pick up a tower — releasing locks and restoring network mode...",
 };
 
 export const EN_PATTERNS: Record<string, string> = {

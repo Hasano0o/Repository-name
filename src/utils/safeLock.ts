@@ -207,6 +207,10 @@ async function freeReleaseImpl(r: SavedRouter, say: (s: string) => void): Promis
             // «5G فقط (SA)» وبرجك ما يدعمه = بلا خدمة حتى لو فكّينا الترددات — نرجّعه تلقائي
             const pick = ['00', '0803'].find(m => modes.some(x => x.value === m));
             if (pick) { say('الراوتر على «5G فقط» — نرجّعه تلقائي...'); await d.setNetworkMode(pick); }
+          } else if (d.setNetworkMode && cfg?.mode && !['00', '0803', '03', '08'].includes(cfg.mode) && /WCDMA|GSM|UMTS/i.test(cfg.mode)) {
+            // وضع شبكة 3G/2G فقط (مثلاً علق من تجربة سابقة) = بلا خدمة عندنا — حتى إعادة التشغيل ما تصلحه
+            const pick = ['0803', '00', '03'].find(m => modes.some(x => x.value === m));
+            if (pick) { say('الراوتر على «3G فقط» — نرجّعه على 4G و 5G...'); await d.setNetworkMode(pick); }
           } else if (d.setNetworkMode && /WCDMA|UMTS|GSM|HSPA|\b[23]G\b/i.test(sig?.network ?? '')) {
             const pick = ['0803', '03'].find(m => modes.some(x => x.value === m));
             if (pick) { say('الراوتر عالق على 3G — نحوّله على 4G و 5G...'); await d.setNetworkMode(pick); }
