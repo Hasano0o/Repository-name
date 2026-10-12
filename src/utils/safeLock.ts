@@ -98,7 +98,7 @@ export async function snapshot(r: SavedRouter, withNr = false, samples = 3): Pro
       if (sig.sinr !== undefined) ss.push(sig.sinr);
       bw = Math.max(bw, res.bw);
       n = Math.max(n, res.n);
-      nr = nr || sig.nrRsrp !== undefined;
+      nr = nr || sig.nrRsrp !== undefined || carriers.some(c => c.tech === 'NR');
       bands = res.bands || bands;
       pci = sig.pci ?? pci;
     } catch {}

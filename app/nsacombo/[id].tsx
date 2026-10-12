@@ -157,11 +157,12 @@ export default function NsaCombo() {
           if (cancel.current) { u({ status: 'pending', note: undefined, startedAt: undefined }); return 'stop'; }
           if (!ok) { u({ status: 'failed', note: 'ما اتصل' }); return; }
           u({ note: 'نصحّي 5G...' });
-          const burst = trafficBurst(8000, 20_000_000, () => cancel.current || gone);
-          await sleep(2500);
+          // الـ5G في NSA ما ينضاف إلا مع تحميل مستمر — نحمّل ١٥ ثانية ونقيس وسطه
+          const burst = trafficBurst(15000, 35_000_000, () => cancel.current || gone);
+          await sleep(4000);
           if (gone) return;
           u({ note: 'نقيس...' });
-          const snap = await snapshot(info, true, 3);
+          const snap = await snapshot(info, true, 4);
           await burst.catch(() => 0);
           u({ status: snap ? 'done' : 'failed', snap, note: snap ? undefined : 'فشل القياس' });
         };
@@ -196,7 +197,7 @@ export default function NsaCombo() {
               r: info,
               key: `nsa:${best.lte.join('+')}:${best.nr.join('+')}`,
               label,
-              withNr: best.nr.length > 0,
+              withNr: !!best.snap?.nr,
               apply: d => d.setBand!(best.lte, best.nr),
               revert: d => d.setBand!(cfg.locked, cfg.nrLocked),
               onStatus: st => { if (mounted.current) setStatus(st); },
@@ -284,8 +285,13 @@ export default function NsaCombo() {
             {best ? (
               <>
                 <Text style={[s.verdict, { color: C.green }]}>
-                  أفضل تركيبة: {comboName(best)} — {best.nr.length ? '5G نشط ✓' : 'بدون 5G'} ({best.snap?.bands || '—'})
+                  أفضل تركيبة: {comboName(best)} — {best.snap?.nr ? '5G اشتغل ✓' : '5G ما اشتغل'} ({best.snap?.bands || '—'})
                 </Text>
+                {!rows.some(r => r.snap?.nr) && (
+                  <Text style={s.note}>
+                    ولا تركيبة شغّلت الـ5G. يعني البرج ما يضيف 5G مع هالترددات الحين (غالباً زحمة أو تغطية 5G ضعيفة عندك) — مو عطل في راوترك. التلقائي يبقى أفضل لك، أو جرّب بوقت ثاني.
+                  </Text>
+                )}
                 <Pressable style={[s.btn, { backgroundColor: C.green }]} onPress={apply} disabled={running}>
                   <Text style={s.btnText}>ثبّت {comboName(best)} بأمان</Text>
                 </Pressable>
