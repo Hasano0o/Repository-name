@@ -597,6 +597,8 @@ export const EN: Record<string, string> = {
   'الراوتر على «3G فقط» — نرجّعه على 4G و 5G...': 'Router is on 3G only — switching back to 4G + 5G...',
   'الراوتر ما رجع يمسك برج — نفك التثبيتات ونرجّع وضع الشبكة...': "Router didn't pick up a tower — releasing locks and restoring network mode...",
   'راوترك ما يدعم هالخاصية (الراوتر رفض الأمر وهو داخل) — جرّب خاصية ثانية أو أرسل تشخيص للمطوّر': "Your router doesn't support this feature (it rejected the command while logged in) — try another feature or send diagnostics to the developer",
+  '٢/٣ — الشركة رجّعت نفس الآي بي، نفصل الراوتر عن البرج ثواني ونرجّعه...': '2/3 — Same IP returned, detaching the router from the tower for a few seconds...',
+  'الشركة رجّعت نفس الآي بي — نعيد تشغيل الراوتر (دقيقتين تقريباً)...': 'Same IP returned — restarting the router (about two minutes)...',
 };
 
 export const EN_PATTERNS: Record<string, string> = {
@@ -668,4 +670,5 @@ export const EN_PATTERNS: Record<string, string> = {
   '✓ الدمج شغال: n{0}': '✓ CA active: n{0}',
   'مقفل على n{0} — قناة وحدة بس حالياً': 'Locked to n{0} — only one channel right now',
   'مقفل على n{0} — ما مسك 5G عليه': 'Locked to n{0} — no 5G on it',
+  '١/٣ — نقطع البيانات ونرجّعها...': '1/3 — Dropping and restoring data...',
 };

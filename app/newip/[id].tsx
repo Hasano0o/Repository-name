@@ -74,7 +74,9 @@ export default function NewIp() {
         setSupported(can || det);
         setCanQuick(can);
         // الفصل عن البرج (reattach) موقوف لين نتأكد منه على راوتر حقيقي — على ZTE خلّى الراوتر بدون أبراج
-        setCanDetach(false && det);
+        // الفصل عن البرج: هواوي بس (يحوّل وضع الشبكة لـ 3G ثواني ويرجّعه — نفس مدة ١٠–١٥ ثانية اللي تغيّر الآي بي).
+        // ZTE موقوف — خلّى الراوتر بدون أبراج في التجربة
+        setCanDetach(det && /huawei/i.test(r.driverId));
         try { setSkipQuick((await AsyncStorage.getItem(`newip.reboot.${r.id}`)) === '1'); } catch {}
         setCanReboot(reb && r.driverId !== 'device');
         setBefore(await readIps(r));
@@ -115,7 +117,7 @@ export default function NewIp() {
 
   const run = (m: 'auto' | 'reboot' = 'auto') => {
     if (!info) return;
-    const direct = m === 'reboot' || (skipQuick && canReboot);
+    const direct = m === 'reboot' || (skipQuick && canReboot && !canDetach);
     const msg = direct
       ? 'نعيد تشغيل الراوتر من التطبيق — هذي الطريقة اللي تغيّر الآي بي عند شركتك. النت بينقطع حوالي دقيقتين، ونعرض لك الآي بي الجديد لما يرجع.'
       : 'نجرّب أول قطع سريع للبيانات (ثواني). لو الشركة رجّعت نفس الآي بي، نعيد تشغيل الراوتر من التطبيق تلقائي (دقيقتين تقريباً).';
@@ -149,7 +151,7 @@ export default function NewIp() {
               // ١) قطع سريع للبيانات
               if (canQuick) {
                 setStep('quick');
-                setStatus('١/٢ — نقطع البيانات ونرجّعها...');
+                setStatus(canDetach ? '١/٣ — نقطع البيانات ونرجّعها...' : '١/٢ — نقطع البيانات ونرجّعها...');
                 await withSession(info, d => d.reconnectData!({ holdSecs: 10 }), false);
                 await sleep(3000);
                 fresh = await settle(60000);
@@ -164,9 +166,9 @@ export default function NewIp() {
               // (موقوف) فصل كامل عن البرج
               if (mounted.current && canDetach && !differs(old, fresh)) {
                 setStep('detach');
-                setStatus('٢/٢ — الشركة رجّعت نفس الآي بي، نفصل الراوتر عن البرج ونرجّعه...');
+                setStatus('٢/٣ — الشركة رجّعت نفس الآي بي، نفصل الراوتر عن البرج ثواني ونرجّعه...');
                 try {
-                  await withSession(info, d => d.reattach!(15), false);
+                  await withSession(info, d => d.reattach!(10), false);
                   await sleep(5000);
                   fresh = await settle(90000).catch(async e3 => {
                     // ما رجع يمسك برج: نطلّعه من الوضع المؤقت ونفك التثبيتات — ما نخليه بلا نت
@@ -185,6 +187,11 @@ export default function NewIp() {
                   setStep('quick');
                   if (!canQuick) throw e2;
                   fresh = await readIps(info).catch(() => fresh);
+                }
+                // الفصل ما غيّر الآي بي → إعادة تشغيل (الطريقة المؤكدة)
+                if (mounted.current && canReboot && !differs(old, fresh)) {
+                  setMode('reboot');
+                  fresh = await doReboot('الشركة رجّعت نفس الآي بي — نعيد تشغيل الراوتر (دقيقتين تقريباً)...');
                 }
               }
             }
