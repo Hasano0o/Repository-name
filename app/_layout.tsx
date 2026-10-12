@@ -45,6 +45,7 @@ const SCREENS: [string, string][] = [
   ['wifi/[id]', 'مشاركة الواي فاي'],
   ['nsacombo/[id]', 'دمج 4G + 5G'],
   ['nrdual/[id]', 'دمج 5G المزدوج'],
+  ['nrprimary/[id]', '5G الأساسي'],
   ['newip/[id]', 'آي بي جديد'],
   ['wifich/[id]', 'قناة الواي فاي'],
   ['control/[id]', 'مركز التحكم'],

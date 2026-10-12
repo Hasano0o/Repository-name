@@ -130,6 +130,9 @@ export const EN: Record<string, string> = {
   'حدّث الحين': 'Update now',
   '⬆️ تحديث جاهز — اضغط للتحديث': '⬆️ Update ready — tap to update',
 
+  '5G الأساسي': '5G primary',
+  'خلّ n77 (أو أي تردد) أساسي — الرفع يمشي عليه': 'Make n77 (or any band) primary — upload runs on it',
+
   // ═══ حالات ═══
   'ما وصلنا للراوتر': "Couldn't reach the router",
   'صار خطأ': 'Something went wrong',

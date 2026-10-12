@@ -91,6 +91,15 @@ const SECTIONS: Section[] = [
         path: 'nrdual',
       },
       {
+        key: 'nrprimary',
+        icon: 'layers',
+        color: tFg('#0ea5a4'),
+        title: '5G الأساسي',
+        sub: 'خلّ n77 (أو أي تردد) أساسي — الرفع يمشي عليه',
+        tag: 'جديد',
+        path: 'nrprimary',
+      },
+      {
         key: 'ltedual',
         icon: 'layers',
         color: tFg('#0f9d6b'),
