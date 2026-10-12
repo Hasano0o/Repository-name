@@ -124,6 +124,12 @@ export const EN: Record<string, string> = {
   'دمج 4G المزدوج': 'Dual 4G CA',
   'B3+B3 أو B1+B1 — قناتين من نفس التردد لو برجك يدعمه': 'B3+B3 or B1+B1 — two channels on the same band if your tower supports it',
 
+  'تحديث جديد جاهز': 'New update ready',
+  'فيه إصلاحات ومزايا جديدة لـ Bandly': 'Fixes and new features for Bandly',
+  'التحديث نزل خلاص — ياخذ ثانيتين والتطبيق يرجع مثل ما هو. راوتراتك وإعداداتك ما تتغير.': "It's already downloaded — takes two seconds and the app comes right back. Your routers and settings stay the same.",
+  'حدّث الحين': 'Update now',
+  '⬆️ تحديث جاهز — اضغط للتحديث': '⬆️ Update ready — tap to update',
+
   // ═══ حالات ═══
   'ما وصلنا للراوتر': "Couldn't reach the router",
   'صار خطأ': 'Something went wrong',
