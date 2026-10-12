@@ -198,8 +198,13 @@ async function freeReleaseImpl(r: SavedRouter, say: (s: string) => void): Promis
         // نخلي الراوتر على 4G + 5G (أو 4G بس) عشان ما يرجع يعلق عليها
         try {
           const sig = d.getSignal ? await d.getSignal().catch(() => null) : null;
-          if (d.setNetworkMode && /WCDMA|UMTS|GSM|HSPA|\b[23]G\b/i.test(sig?.network ?? '')) {
-            const modes = d.getBandConfig ? (await d.getBandConfig().catch(() => null))?.modes ?? [] : [];
+          const cfg = d.getBandConfig ? await d.getBandConfig().catch(() => null) : null;
+          const modes = cfg?.modes ?? [];
+          if (d.setNetworkMode && cfg?.mode === '08') {
+            // «5G فقط (SA)» وبرجك ما يدعمه = بلا خدمة حتى لو فكّينا الترددات — نرجّعه تلقائي
+            const pick = ['00', '0803'].find(m => modes.some(x => x.value === m));
+            if (pick) { say('الراوتر على «5G فقط» — نرجّعه تلقائي...'); await d.setNetworkMode(pick); }
+          } else if (d.setNetworkMode && /WCDMA|UMTS|GSM|HSPA|\b[23]G\b/i.test(sig?.network ?? '')) {
             const pick = ['0803', '03'].find(m => modes.some(x => x.value === m));
             if (pick) { say('الراوتر عالق على 3G — نحوّله على 4G و 5G...'); await d.setNetworkMode(pick); }
           }
@@ -357,7 +362,15 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
   say('نطبّق التغيير...');
   // لو الأمر نفسه علق، نكمّل: الخطوة الجاية تتأكد من الاتصال وترجّع الإعداد لو لزم.
   // (لو الراوتر رفض برسالة خطأ، الخطأ يطلع للمستخدم مثل قبل)
-  await withTimeout(withSession(o.r, o.apply, false), 60_000);
+  try {
+    await withTimeout(withSession(o.r, o.apply, false), 60_000);
+  } catch (e) {
+    // الأمر نفسه انرفض في النص (مثلاً غيّرنا وضع الشبكة وبعدها رفض قفل التردد):
+    // نرجّع اللي تغيّر قبل ما نطلّع الخطأ — عشان ما يبقى الراوتر نص مطبّق وبلا خدمة
+    say('الراوتر رفض — نرجّع إعدادك...');
+    try { await withSession(o.r, o.revert, false); } catch {}
+    throw e;
+  }
 
   say('ننتظر الراوتر يتصل...');
   const online = await waitOnline(o.r, 45000, cancelled);
