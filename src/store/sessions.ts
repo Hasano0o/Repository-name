@@ -95,6 +95,8 @@ const NET_FAIL = /(تعذر الاتصال بالراوتر|Network request fail
 /** الراوتر يطلّعنا كل ما دخلنا — غالباً جهاز ثاني ماسك الجلسة (الراوتر يقبل جلسة وحدة) */
 const KICKED_MSG = 'الراوتر يطلّع التطبيق كل ما يدخل — غالباً تطبيق «HUAWEI AI Life» أو صفحة الراوتر مفتوحة في جوال أو كمبيوتر ثاني. سكّرها وجرّب مرة ثانية.';
 const kickedAt = new Map<string, number>();
+/** رد مختصر للتشخيص: كود الخطأ أو أول الكلام */
+const short = (m: string) => (m.match(/\b(1\d{5})\b/)?.[1] ?? m.replace(/\s+/g, ' ').slice(0, 28));
 
 export async function withSession<T>(
   r: SavedRouter,
@@ -109,21 +111,25 @@ export async function withSession<T>(
     // الراوتر طلّعنا (انتهت الجلسة / دخل أحد من المتصفح / بعد تغيير الإعدادات) —
     // ندخل من جديد ونكمّل مرة وحدة، حتى لو retry=false: الأوامر نفسها تتكرر بأمان (نفس القيم)
     if (SESSION_GONE.test(msg)) {
-      // لو طُردنا قبل شوي وما زبط الدخول: نوقف بسرعة بدل ما نعيد مع كل تركيبة
-      if (Date.now() - (kickedAt.get(keyOf(r)) ?? 0) < 30_000) throw new Error(KICKED_MSG);
-      // ندخل من جديد ونعيد — مرتين بمهلة بسيطة (أحياناً جهاز ثاني ماسك الجلسة لحظات)
-      for (const wait of [1200, 3000]) {
+      // لو طُردنا قبل شوي وما زبط الدخول: نوقف بسرعة بدل ما نعيد مع كل خطوة
+      if (Date.now() - (kickedAt.get(keyOf(r)) ?? 0) < 12_000) throw new Error(KICKED_MSG);
+      // ندخل من جديد ونعيد — بعض الموديلات (H155 مثلاً) تطرد كل الجلسات بعد تغيير الترددات
+      // وتاخذ ثواني لين تقبل دخول جديد، فننتظر أطول شوي كل مرة
+      const trail: string[] = [short(msg)];
+      for (const wait of [1500, 4000, 8000]) {
         await new Promise(res => setTimeout(res, wait));
         try {
           const fresh = await connect(r, true);
           return await fn(fresh);
         } catch (e2) {
-          if (!SESSION_GONE.test(String((e2 as any)?.message ?? e2))) throw e2;
+          const m2 = String((e2 as any)?.message ?? e2);
+          trail.push(short(m2));
+          if (!SESSION_GONE.test(m2)) throw e2;
         }
       }
       kickedAt.set(keyOf(r), Date.now());
-      // نسجّله عند المطوّر (من أي شاشة) — مرة باليوم لكل جهاز
-      import('../services/errors').then(m => m.reportError('session', KICKED_MSG, r)).catch(() => {});
+      // نسجّله عند المطوّر (من أي شاشة) مع تسلسل الردود — مرة باليوم لكل جهاز
+      import('../services/errors').then(m => m.reportError('session', `${KICKED_MSG} [${trail.join(' → ')}]`, r)).catch(() => {});
       throw new Error(KICKED_MSG);
     }
     if (!retry) throw e;

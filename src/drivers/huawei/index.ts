@@ -117,7 +117,7 @@ const ERRORS: Record<string, string> = {
 
 export class HuaweiError extends Error {
   constructor(public code: string) {
-    super(ERRORS[code] ?? `خطأ من الراوتر (${code})`);
+    super(ERRORS[code] ? `${ERRORS[code]} (${code})` : `خطأ من الراوتر (${code})`);
   }
 }
 const isTokenError = (e: unknown) =>
