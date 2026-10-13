@@ -136,6 +136,15 @@ export class HuaweiDriver implements RouterDriver {
   private queue: string[] = [];
   private allLte = ALL_LTE;
   private lockFreq: boolean | null = null;
+  /** net/lock-freq يرد 100003 والجلسة شغالة = الموديل ما يدعمه (H158 مثلاً) — نتوقف عن استدعائه */
+  private lockFreqDead = false;
+  private async lockFreqUnsupported(e: unknown): Promise<boolean> {
+    if (!(e instanceof HuaweiError) || e.code !== '100003') return false;
+    try { await this.get('net/net-mode'); } catch { return false; }
+    this.lockFreqDead = true;
+    this.lockFreq = false;
+    return true;
+  }
   private cellLockMode: string | null = null;
   private nr5g: boolean | undefined | null = null; // null = ما فحصنا بعد
   /** الراوتر رد «ما عندك صلاحية» — ما نصدّق state-login (يقول داخل وهو طاردنا) */
@@ -232,7 +241,7 @@ export class HuaweiDriver implements RouterDriver {
         this.queue = [];
         return this.post(p, body, undefined, false);
       }
-      if (code === '100003') this.stale = true;
+      // POST: ما نعلّم الجلسة خربانة هنا — 100003 على أمر حفظ غالباً «غير مدعوم» (مثل net/lock-freq في H158)
       throw new HuaweiError(code);
     }
     return xml;
@@ -773,9 +782,14 @@ export class HuaweiDriver implements RouterDriver {
         this.lockFreq = false;
       }
     }
-    if (this.lockFreq) {
-      const nr = nrBands ?? (await this.readLockFreq()).nr;
-      return this.lockFreqBands(bands, nr);
+    if (this.lockFreq && !this.lockFreqDead) {
+      try {
+        const nr = nrBands ?? (await this.readLockFreq()).nr;
+        return await this.lockFreqBands(bands, nr);
+      } catch (e) {
+        if (!(await this.lockFreqUnsupported(e))) throw e;
+        // ما يدعم lock-freq → نثبّت ترددات 4G من وضع الشبكة
+      }
     }
     await this.writeNetMode({ bands });
   }
@@ -823,6 +837,7 @@ export class HuaweiDriver implements RouterDriver {
     const entry = '<freq_info>' +
       (band ? '<band>' + band + '</band>' : '<band></band>') +
       '<freq>' + arfcn + '</freq><pci>' + pci + '</pci></freq_info>';
+    if (this.lockFreqDead) throw new Error('راوترك ما يدعم تثبيت البرج (قفل الخلية) — هالخاصية مو موجودة في هالموديل');
     const candidates = this.cellLockMode ? [this.cellLockMode] : ['2', '4', '1', '5'];
     let lastErr: unknown;
     for (const mode of candidates) {
@@ -832,6 +847,7 @@ export class HuaweiDriver implements RouterDriver {
       try {
         await this.post('net/lock-freq', body);
       } catch (e) {
+        if (await this.lockFreqUnsupported(e)) throw new Error('راوترك ما يدعم تثبيت البرج (قفل الخلية) — هالخاصية مو موجودة في هالموديل');
         lastErr = e;
         continue;
       }
@@ -848,9 +864,15 @@ export class HuaweiDriver implements RouterDriver {
     throw new Error('الراوتر ما قبل قفل الخلية على هذا البرج');
   }
   async unlockCell() {
+    if (this.lockFreqDead) return; // الموديل ما يدعم قفل الخلية — ما فيه شي نفكه
     const body = this.sectionXml('lte_info', '0', [], '') + this.sectionXml('nr_info', '0', [], '');
     this.log('cell-lock clearing');
-    await this.post('net/lock-freq', body);
+    try {
+      await this.post('net/lock-freq', body);
+    } catch (e) {
+      if (await this.lockFreqUnsupported(e)) return;
+      throw e;
+    }
     await new Promise(r => setTimeout(r, 2000));
   }
   async setNetworkMode(mode: string) {

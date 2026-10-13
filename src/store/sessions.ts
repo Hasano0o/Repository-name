@@ -195,8 +195,8 @@ export async function withSessionPatient<T>(
     } catch (e) {
       last = e;
       const m = String((e as any)?.message ?? e);
-      // قفل دخول بسبب محاولات كثيرة: ما نزيده
-      if (/قفل تسجيل الدخول|محاولات كثيرة|108007/.test(m)) break;
+      // قفل دخول بسبب محاولات كثيرة: ما نزيده. وأمر غير مدعوم: إعادة الدخول ما تفيد
+      if (/قفل تسجيل الدخول|محاولات كثيرة|108007|ما يدعم/.test(m) || (e as any)?.unsupported) break;
     }
   }
   throw last ?? new Error('ما قدرنا ندخل الراوتر');
