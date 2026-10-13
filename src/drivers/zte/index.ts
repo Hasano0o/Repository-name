@@ -285,7 +285,21 @@ export class ZteDriver implements RouterDriver {
   }
 
   /** ZTE ما يستخدم اسم مستخدم — كلمة المرور فقط */
-  async login(host: string, _username: string, password: string): Promise<void> {
+  /**
+   * دخول واحد بنفس الوقت: كانت كل شاشة/قراءة شغالة تشوف «الجلسة راحت» وتسجّل دخول لحالها —
+   * ٩ محاولات (وكل وحدة LOGOUT) خلال ثانية → الراوتر يقفل الدخول ٥ دقايق.
+   */
+  private loginP: Promise<void> | null = null;
+  login(host: string, username: string, password: string): Promise<void> {
+    if (this.loginP) return this.loginP;
+    this.loginP = this.loginOnce(host, username, password).finally(() => {
+      // نخلي النتيجة صالحة ثانيتين — الطلبات اللي وصلت متأخرة ما تفتح دخول جديد
+      setTimeout(() => { this.loginP = null; }, 2000);
+    });
+    return this.loginP;
+  }
+
+  private async loginOnce(host: string, _username: string, password: string): Promise<void> {
     this.host = host;
     this.password = password;
 
@@ -451,6 +465,7 @@ export class ZteDriver implements RouterDriver {
   }
 
   private async ensure(): Promise<void> {
+    if (this.loginP) { await this.loginP.catch(() => {}); }
     if (await this.verifyLogin()) return;
     if (this.password) await this.login(this.host, '', this.password);
   }
