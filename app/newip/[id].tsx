@@ -12,11 +12,15 @@ import { useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { reportError } from '../../src/services/errors';
+import { diag } from '../../src/services/diag';
 import { withSession, withSessionPatient } from '../../src/store/sessions';
 import { waitOnline, freeRelease } from '../../src/utils/safeLock';
 import { C, R, S, tBg, tBd, tFg } from '../../src/ui/theme';
 
 import { sheet } from '../../src/i18n';
+
+/** وضع التجربة: ضغطة ٣ ثواني على العنوان — يفعّل الفصل عن البرج على ZTE لهالجهاز بس */
+const LAB_KEY = 'bandly.lab.detach';
 const ACCENT = '#0e7d93';
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -76,9 +80,14 @@ export default function NewIp() {
         // الفصل عن البرج (reattach) موقوف لين نتأكد منه على راوتر حقيقي — على ZTE خلّى الراوتر بدون أبراج
         // الفصل عن البرج: هواوي بس (يحوّل وضع الشبكة لـ 3G ثواني ويرجّعه — نفس مدة ١٠–١٥ ثانية اللي تغيّر الآي بي).
         // ZTE موقوف — خلّى الراوتر بدون أبراج في التجربة
-        setCanDetach(det && /huawei/i.test(r.driverId));
+        // وضع التجربة (ضغطة طويلة على العنوان): يفعّل الفصل على ZTE لجهاز المطوّر بس
+        let labOn = false;
+        try { labOn = (await AsyncStorage.getItem(LAB_KEY)) === '1'; } catch {}
+        if (!mounted.current) return;
+        setLab(labOn);
+        setCanDetach(det && (/huawei/i.test(r.driverId) || (labOn && /zte/i.test(r.driverId))));
         try { setSkipQuick((await AsyncStorage.getItem(`newip.reboot.${r.id}`)) === '1'); } catch {}
-        try { setDetachFirst((await AsyncStorage.getItem(`newip.detach.${r.id}`)) === '1'); } catch {}
+        try { setDetachFirst(labOn || (await AsyncStorage.getItem(`newip.detach.${r.id}`)) === '1'); } catch {}
         setCanReboot(reb && r.driverId !== 'device');
         setBefore(await readIps(r));
       } finally {
@@ -91,6 +100,17 @@ export default function NewIp() {
   const [canReboot, setCanReboot] = useState(false);
   const [canQuick, setCanQuick] = useState(false);
   const [canDetach, setCanDetach] = useState(false);
+  const [lab, setLab] = useState(false);
+  /** مدة الفصل والرجوع بالثواني (تظهر في وضع التجربة) */
+  const [detachSecs, setDetachSecs] = useState<number | null>(null);
+  const toggleLab = async () => {
+    const next = !lab;
+    try { await AsyncStorage.setItem(LAB_KEY, next ? '1' : '0'); } catch {}
+    setLab(next);
+    Alert.alert('وضع التجربة', next
+      ? 'تفعّل: الفصل عن البرج شغّال على ZTE في هالجهاز بس. اطلع من الشاشة وارجع لها.'
+      : 'انطفى وضع التجربة. اطلع من الشاشة وارجع لها.');
+  };
   /** القطع السريع ما نفع مع هالراوتر قبل؟ نروح لإعادة التشغيل على طول (أسرع دقيقة) */
   const [skipQuick, setSkipQuick] = useState(false);
   /** الفصل عن البرج نجح قبل مع هالراوتر؟ نبدأ فيه على طول (القطع السريع ما ينفع عند شركته) */
@@ -172,7 +192,10 @@ export default function NewIp() {
                 setStatus(detachFirst
                   ? 'نفصل الراوتر عن البرج ثواني ونرجّعه (الطريقة اللي تنفع مع شركتك)...'
                   : '٢/٣ — الشركة رجّعت نفس الآي بي، نفصل الراوتر عن البرج ثواني ونرجّعه...');
+                const t0 = Date.now();
+                setDetachSecs(null);
                 try {
+                  diag(`newip detach start driver=${info.driverId} lab=${lab ? 1 : 0}`);
                   await withSession(info, d => d.reattach!(10), false);
                   await sleep(5000);
                   fresh = await settle(90000).catch(async e3 => {
@@ -183,6 +206,10 @@ export default function NewIp() {
                     if (!(await freeRelease(info, t => mounted.current && setStatus(t)).catch(() => false))) throw e3;
                     return readIps(info);
                   });
+                  const secs = Math.round((Date.now() - t0) / 1000);
+                  setDetachSecs(secs);
+                  diag(`newip detach done secs=${secs} changed=${differs(old, fresh) ? 1 : 0}`);
+                  if (lab) reportError('newip-lab', new Error(`detach ${info.driverId} ${secs}s changed=${differs(old, fresh) ? 1 : 0}`), info);
                   if (differs(old, fresh)) {
                     AsyncStorage.setItem(`newip.detach.${info.id}`, '1').catch(() => {});
                     setDetachFirst(true);
@@ -238,7 +265,9 @@ export default function NewIp() {
     <LinearGradient colors={[C.bgTop, C.bgBottom]} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 40 }]}>
         <View style={s.card}>
-          <Text style={s.title}>🔄 آي بي جديد</Text>
+          <Pressable onLongPress={toggleLab} delayLongPress={3000}>
+            <Text style={s.title}>🔄 آي بي جديد{lab ? ' 🧪' : ''}</Text>
+          </Pressable>
           <Text style={s.body}>
             ضغطة وحدة: نقطع البيانات ثواني، ولو الشركة رجّعت نفس الآي بي نعيد تشغيل الراوتر من التطبيق ونعرض لك الآي بي الجديد — بدون ما تقوم للراوتر.
             يفيد لو لعبة أو موقع حاط عليك حظر مؤقت، أو النت علق على مسار بطيء.
@@ -270,6 +299,7 @@ export default function NewIp() {
               <>
                 <Text style={[s.verdict, { color: tFg('#0f7a52') }]}>✓ صار عندك آي بي جديد</Text>
                 {step === 'detach' && <Text style={s.note}>القطع السريع ما كفى، فصلنا الراوتر عن البرج ورجّعناه — وأخذ آي بي جديد بدون إعادة تشغيل.</Text>}
+                {lab && detachSecs !== null && <Text style={s.note}>🧪 الفصل والرجوع أخذ {detachSecs} ثانية</Text>}
               </>
             ) : wanChanged ? (
               <>
