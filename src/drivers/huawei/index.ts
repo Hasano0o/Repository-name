@@ -158,8 +158,8 @@ export class HuaweiDriver implements RouterDriver {
     if (one) this.queue = two ? [one, two] : [one];
     else if (single) this.queue = single.split('#').filter(Boolean);
   }
-  private async freshToken(): Promise<string> {
-    try {
+  private async freshToken(viaSes = false): Promise<string> {
+    if (!viaSes) try {
       const r = await http(this.url('webserver/token'), { headers: this.headers() });
       const t = tag(await r.text(), 'token');
       if (t) return t.length > 32 ? t.slice(32) : t;
@@ -223,14 +223,21 @@ export class HuaweiDriver implements RouterDriver {
       try { await http(`http://${host}/html/home.html`, { headers: this.headers() }); } catch {}
     }
     this.stale = false;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        if (type === '4') await this.loginSha256(username, password);
+        // بعد إعادة تشغيل/فصل الراوتر أحياناً الكوكي القديم يخلي التوكن يرفض (125003):
+        // نجدد الجلسة من الصفحة ونجيب التوكن من SesTokInfo بدل webserver/token
+        if (attempt > 0) {
+          this.queue = [];
+          await new Promise(r => setTimeout(r, 1500 * attempt));
+          try { await http(`http://${host}/html/home.html`, { headers: this.headers() }).then(r => r.text()); } catch {}
+        }
+        if (type === '4') await this.loginSha256(username, password, attempt === 2);
         else await this.loginBase64(username, password);
         this.log('login ok');
         return;
       } catch (e) {
-        if (isTokenError(e) && attempt === 0) continue;
+        if (isTokenError(e) && attempt < 2) continue;
         // «فيه مستخدم داخل» وهو غالباً جلستنا القديمة: نطلع ونعيد مرة
         if (e instanceof HuaweiError && e.code === '108003' && attempt === 0) {
           try { await this.post('user/logout', '<Logout>1</Logout>'); } catch {}
@@ -248,8 +255,8 @@ export class HuaweiDriver implements RouterDriver {
     await this.post('user/login',
       `<Username>${esc(username)}</Username><Password>${btoa(password)}</Password><password_type>0</password_type>`);
   }
-  private async loginSha256(username: string, password: string) {
-    const token = await this.freshToken();
+  private async loginSha256(username: string, password: string, viaSes = false) {
+    const token = await this.freshToken(viaSes);
     const hashed = btoa(sha256Hex(username + btoa(sha256Hex(password)) + token));
     await this.post('user/login',
       `<Username>${esc(username)}</Username><Password>${hashed}</Password><password_type>4</password_type>`,
