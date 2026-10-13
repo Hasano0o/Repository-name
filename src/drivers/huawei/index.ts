@@ -779,7 +779,7 @@ export class HuaweiDriver implements RouterDriver {
         list.map(b => '<freq_info><band>' + b + '</band></freq_info>').join('') +
         '</freq_infos><all_bands>' + list.join(',') + '</all_bands></' + name + '>';
     };
-    const body = section('lte_info', bands) + section('nr_info', nrBands);
+    const body = await this.trimByMode(section('lte_info', bands), section('nr_info', nrBands));
     this.log('lock-freq sending', body);
     await this.post('net/lock-freq', body);
     await new Promise(r => setTimeout(r, 2500));
@@ -811,6 +811,14 @@ export class HuaweiDriver implements RouterDriver {
       }
     }
     await this.writeNetMode({ bands });
+  }
+  /** مثل صفحة الراوتر نفسها: وضع 4G فقط (03) ما يرسل قسم 5G، ووضع 5G فقط (08) ما يرسل قسم 4G */
+  private async trimByMode(lte: string, nr: string): Promise<string> {
+    let mode = '';
+    try { mode = tag(await this.get('net/net-mode'), 'NetworkMode') ?? ''; } catch {}
+    if (mode === '03') return lte;
+    if (mode === '08') return nr;
+    return lte + nr;
   }
   private sectionXml(name: string, mode: string, entries: string[], allBands: string) {
     return '<' + name + '><lock_mode>' + mode + '</lock_mode><freq_infos>' +
@@ -860,8 +868,9 @@ export class HuaweiDriver implements RouterDriver {
     const candidates = this.cellLockMode ? [this.cellLockMode] : ['2', '4', '1', '5'];
     let lastErr: unknown;
     for (const mode of candidates) {
-      const body = this.sectionXml(name, mode, [entry], band ? String(band) : '') +
-        this.sectionXml(other, '0', [], '');
+      const mine = this.sectionXml(name, mode, [entry], band ? String(band) : '');
+      const rest = this.sectionXml(other, '0', [], '');
+      const body = await this.trimByMode(isNr ? rest : mine, isNr ? mine : rest);
       this.log('cell-lock try mode', mode, body);
       try {
         await this.post('net/lock-freq', body);
