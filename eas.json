@@ -35,7 +35,15 @@
     }
   },
   "submit": {
-    "production": {},
-    "ios-store": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6819877993"
+      }
+    },
+    "ios-store": {
+      "ios": {
+        "ascAppId": "6819877993"
+      }
+    }
   }
 }
