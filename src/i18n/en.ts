@@ -671,4 +671,5 @@ export const EN_PATTERNS: Record<string, string> = {
   'مقفل على n{0} — قناة وحدة بس حالياً': 'Locked to n{0} — only one channel right now',
   'مقفل على n{0} — ما مسك 5G عليه': 'Locked to n{0} — no 5G on it',
   '١/٣ — نقطع البيانات ونرجّعها...': '1/3 — Dropping and restoring data...',
+  'نفصل الراوتر عن البرج ثواني ونرجّعه (الطريقة اللي تنفع مع شركتك)...': 'Detaching the router from the tower for a few seconds (the method that works with your carrier)...',
 };

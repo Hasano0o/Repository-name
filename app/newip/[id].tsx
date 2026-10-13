@@ -78,6 +78,7 @@ export default function NewIp() {
         // ZTE موقوف — خلّى الراوتر بدون أبراج في التجربة
         setCanDetach(det && /huawei/i.test(r.driverId));
         try { setSkipQuick((await AsyncStorage.getItem(`newip.reboot.${r.id}`)) === '1'); } catch {}
+        try { setDetachFirst((await AsyncStorage.getItem(`newip.detach.${r.id}`)) === '1'); } catch {}
         setCanReboot(reb && r.driverId !== 'device');
         setBefore(await readIps(r));
       } finally {
@@ -92,6 +93,8 @@ export default function NewIp() {
   const [canDetach, setCanDetach] = useState(false);
   /** القطع السريع ما نفع مع هالراوتر قبل؟ نروح لإعادة التشغيل على طول (أسرع دقيقة) */
   const [skipQuick, setSkipQuick] = useState(false);
+  /** الفصل عن البرج نجح قبل مع هالراوتر؟ نبدأ فيه على طول (القطع السريع ما ينفع عند شركته) */
+  const [detachFirst, setDetachFirst] = useState(false);
   const [mode, setMode] = useState<'normal' | 'reboot'>('normal');
 
   const [step, setStep] = useState<'' | 'quick' | 'detach' | 'reboot'>('');
@@ -149,7 +152,7 @@ export default function NewIp() {
               fresh = await doReboot('نعيد تشغيل الراوتر...');
             } else {
               // ١) قطع سريع للبيانات
-              if (canQuick) {
+              if (canQuick && !(detachFirst && canDetach)) {
                 setStep('quick');
                 setStatus(canDetach ? '١/٣ — نقطع البيانات ونرجّعها...' : '١/٢ — نقطع البيانات ونرجّعها...');
                 await withSession(info, d => d.reconnectData!({ holdSecs: 10 }), false);
@@ -166,7 +169,9 @@ export default function NewIp() {
               // (موقوف) فصل كامل عن البرج
               if (mounted.current && canDetach && !differs(old, fresh)) {
                 setStep('detach');
-                setStatus('٢/٣ — الشركة رجّعت نفس الآي بي، نفصل الراوتر عن البرج ثواني ونرجّعه...');
+                setStatus(detachFirst
+                  ? 'نفصل الراوتر عن البرج ثواني ونرجّعه (الطريقة اللي تنفع مع شركتك)...'
+                  : '٢/٣ — الشركة رجّعت نفس الآي بي، نفصل الراوتر عن البرج ثواني ونرجّعه...');
                 try {
                   await withSession(info, d => d.reattach!(10), false);
                   await sleep(5000);
@@ -178,6 +183,10 @@ export default function NewIp() {
                     if (!(await freeRelease(info, t => mounted.current && setStatus(t)).catch(() => false))) throw e3;
                     return readIps(info);
                   });
+                  if (differs(old, fresh)) {
+                    AsyncStorage.setItem(`newip.detach.${info.id}`, '1').catch(() => {});
+                    setDetachFirst(true);
+                  }
                 } catch (e2: any) {
                   // الفصل ما زبط على هالموديل — نعرض نتيجة القطع السريع وزر إعادة التشغيل بدل خطأ بس
                   reportError('newip-detach', e2, info);
