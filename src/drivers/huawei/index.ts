@@ -150,6 +150,8 @@ export class HuaweiDriver implements RouterDriver {
   /** الراوتر رد «ما عندك صلاحية» — ما نصدّق state-login (يقول داخل وهو طاردنا) */
   private stale = false;
   private reattachOrig = '';
+  /** null = ما جرّبنا · true = الراوتر يدعم SCRAM · false = ما يدعمه */
+  private scram: boolean | null = null;
   /**
    * الكوكي يدوي على الآيفون: جرة كوكيز iOS مع طلبات متوازية بعد انتهاء الجلسة كانت تخلط SessionID
    * فيرفض الراوتر الرمز (125003) والدخول — والنتيجة «الراوتر يطلّع التطبيق». هنا نمسك SessionID بأنفسنا.
@@ -268,6 +270,23 @@ export class HuaweiDriver implements RouterDriver {
     }
     this.stale = false;
     if (this.manualCookie) { try { await this.sesTok(); } catch { this.manualCookie = false; } }
+    // صفحة الراوتر الجديدة (H158/H155…) تسجّل دخول بـ SCRAM (challenge_login) — والدخول القديم (user/login)
+    // يعطي جلسة ناقصة الصلاحيات: net/lock-freq وغيره يرد 100003 مع إنها شغالة من المتصفح. فنبدأ بـ SCRAM.
+    if (this.scram !== false) {
+      try {
+        await this.loginScram(username, password);
+        this.scram = true;
+        this.log('login ok (SCRAM first)');
+        return;
+      } catch (e) {
+        const code = e instanceof HuaweiError ? e.code : '';
+        // كلمة مرور غلط / قفل: لا نجرّب طريقة ثانية (ما نزيد المحاولات الفاشلة)
+        if (/^1080(0[1-7])$/.test(code)) throw e;
+        this.scram = false;
+        this.queue = [];
+        this.log('SCRAM not available, falling back:', code || (e as any)?.message);
+      }
+    }
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         // بعد إعادة تشغيل/فصل الراوتر أحياناً الكوكي القديم يخلي التوكن يرفض (125003):
