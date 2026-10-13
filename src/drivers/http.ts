@@ -50,7 +50,8 @@ export async function http(
   try {
     const res = await fetch(url, {
       ...init,
-      credentials: 'include',
+      // الافتراضي: جرة الكوكيز حق النظام. هواوي على الآيفون يدير الكوكي بنفسه (omit) — انظر huawei/index.ts
+      credentials: (init as any).credentials ?? 'include',
       signal: ctrl.signal,
     });
 

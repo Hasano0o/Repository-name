@@ -7,7 +7,8 @@ import {
   RouterDriver, Capability, Signal, ConnectedDevice, Usage, NetworkInfo, Traffic,
   BandConfig, SmsMessage, DeviceDetails, CellTower, CellLockTarget, CellLockState, DataPlan, ActiveLock,
   ApnProfile, DnsConfig, Carrier, SignalSnapshot, TimeRule } from '../types';
-import { http } from '../http';
+import { http as rawHttp } from '../http';
+import { Platform } from 'react-native';
 import { trafficBurst } from '../../utils/nrprobe';
 import { getApnProfiles, setApn, selectApn, getDns, setDns } from './apn-dns';
 import { carriersFrom } from './carriers';
@@ -140,6 +141,36 @@ export class HuaweiDriver implements RouterDriver {
   /** الراوتر رد «ما عندك صلاحية» — ما نصدّق state-login (يقول داخل وهو طاردنا) */
   private stale = false;
   private reattachOrig = '';
+  /**
+   * الكوكي يدوي على الآيفون: جرة كوكيز iOS مع طلبات متوازية بعد انتهاء الجلسة كانت تخلط SessionID
+   * فيرفض الراوتر الرمز (125003) والدخول — والنتيجة «الراوتر يطلّع التطبيق». هنا نمسك SessionID بأنفسنا.
+   * لو ما قدرنا (الراوتر ما يرسل SesInfo) نرجع لجرة النظام.
+   */
+  private manualCookie = Platform.OS === 'ios';
+  private cookie = '';
+  private takeCookie(r: Response) {
+    const sc = r.headers.get('set-cookie') || '';
+    const m = sc.match(/SessionID=([^;,\s]+)/);
+    if (m) this.cookie = `SessionID=${m[1]}`;
+  }
+  private async http(url: string, init: RequestInit = {}, timeoutMs?: number): Promise<Response> {
+    if (!this.manualCookie) return rawHttp(url, init, timeoutMs);
+    const headers = { ...(init.headers as Record<string, string> | undefined), ...(this.cookie ? { Cookie: this.cookie } : {}) };
+    const r = await rawHttp(url, { ...init, headers, credentials: 'omit' } as RequestInit, timeoutMs);
+    this.takeCookie(r);
+    return r;
+  }
+  /** جلسة جديدة من الراوتر: SesInfo = الكوكي، TokInfo = الرمز */
+  private async sesTok(): Promise<string> {
+    this.cookie = '';
+    const r = await this.http(this.url('webserver/SesTokInfo'), { headers: this.headers() });
+    const x = await r.text();
+    const ses = tag(x, 'SesInfo') ?? '';
+    const m = ses.match(/SessionID=([^;,\s]+)/);
+    if (m) this.cookie = `SessionID=${m[1]}`;
+    else if (!this.cookie) this.manualCookie = false;
+    return tag(x, 'TokInfo') ?? '';
+  }
 
   private log(...a: unknown[]) {
     if (__DEV__) console.log('[huawei]', ...a);
@@ -163,15 +194,15 @@ export class HuaweiDriver implements RouterDriver {
   }
   private async freshToken(viaSes = false): Promise<string> {
     if (!viaSes) try {
-      const r = await http(this.url('webserver/token'), { headers: this.headers() });
+      const r = await this.http(this.url('webserver/token'), { headers: this.headers() });
       const t = tag(await r.text(), 'token');
       if (t) return t.length > 32 ? t.slice(32) : t;
     } catch {}
-    const r = await http(this.url('webserver/SesTokInfo'), { headers: this.headers() });
+    const r = await this.http(this.url('webserver/SesTokInfo'), { headers: this.headers() });
     return tag(await r.text(), 'TokInfo') ?? '';
   }
   private async get(p: string) {
-    const r = await http(this.url(p), { headers: this.headers() });
+    const r = await this.http(this.url(p), { headers: this.headers() });
     const xml = await r.text();
     if (xml.includes('<error>')) {
       const code = tag(xml, 'code') ?? '0';
@@ -184,7 +215,7 @@ export class HuaweiDriver implements RouterDriver {
   }
   private async post(p: string, body: string, token?: string, retry = true): Promise<string> {
     const tok = token ?? (this.queue.shift() || await this.freshToken());
-    const r = await http(this.url(p), {
+    const r = await this.http(this.url(p), {
       method: 'POST',
       headers: this.headers({
         'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
@@ -207,13 +238,13 @@ export class HuaweiDriver implements RouterDriver {
     return xml;
   }
   async detect(host: string) {
-    const r = await http(`http://${host}/api/webserver/SesTokInfo`, {}, 3000);
+    const r = await rawHttp(`http://${host}/api/webserver/SesTokInfo`, {}, 3000);
     return (await r.text()).includes('<TokInfo>');
   }
-  async login(host: string, username: string, password: string) {
+  async login(host: string, username: string, password: string): Promise<void> {
     this.host = host;
     this.queue = [];
-    try { await http(`http://${host}/html/home.html`, { headers: this.headers() }); } catch {}
+    try { await this.http(`http://${host}/html/home.html`, { headers: this.headers() }); } catch {}
     const state = await this.get('user/state-login');
     const type = tag(state, 'password_type');
     this.log('state', tag(state, 'State'), 'password_type', type);
@@ -224,9 +255,10 @@ export class HuaweiDriver implements RouterDriver {
       this.log('stale session — forcing fresh login');
       try { await this.post('user/logout', '<Logout>1</Logout>'); } catch {}
       this.queue = [];
-      try { await http(`http://${host}/html/home.html`, { headers: this.headers() }); } catch {}
+      try { await this.http(`http://${host}/html/home.html`, { headers: this.headers() }); } catch {}
     }
     this.stale = false;
+    if (this.manualCookie) { try { await this.sesTok(); } catch { this.manualCookie = false; } }
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         // بعد إعادة تشغيل/فصل الراوتر أحياناً الكوكي القديم يخلي التوكن يرفض (125003):
@@ -234,11 +266,22 @@ export class HuaweiDriver implements RouterDriver {
         if (attempt > 0) {
           this.queue = [];
           await new Promise(r => setTimeout(r, 1500 * attempt));
-          try { await http(`http://${host}/html/home.html`, { headers: this.headers() }).then(r => r.text()); } catch {}
+          try { await this.http(`http://${host}/html/home.html`, { headers: this.headers() }).then(r => r.text()); } catch {}
         }
         if (type === '4') await this.loginSha256(username, password, attempt === 2);
         else await this.loginBase64(username, password);
         this.log('login ok');
+        // الكوكي اليدوي: نتأكد إن الجلسة الجديدة انمسكت فعلاً — لو لا، نرجع لجرة النظام وندخل من جديد
+        if (this.manualCookie) {
+          try { await this.get('net/net-mode'); } catch (e) {
+            if (e instanceof HuaweiError && /^(100003|125002|125003)$/.test(e.code)) {
+              this.manualCookie = false;
+              this.stale = false;
+              this.queue = [];
+              return this.login(host, username, password);
+            }
+          }
+        }
         return;
       } catch (e) {
         if (isTokenError(e) && attempt < 2) continue;
@@ -819,7 +862,7 @@ export class HuaweiDriver implements RouterDriver {
       get: (p: string) => this.get(p),
       post: (p: string, b: string) => this.post(p, b),
       log: (...a: unknown[]) => this.log(...a),
-      page: async (p: string) => (await http(`http://${this.host}/${p.replace(/^\//, '')}`, { headers: this.headers() }, 10000)).text(),
+      page: async (p: string) => (await this.http(`http://${this.host}/${p.replace(/^\//, '')}`, { headers: this.headers() }, 10000)).text(),
     };
   }
   getApnProfiles() { return getApnProfiles(this.io()); }
