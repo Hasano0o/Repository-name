@@ -105,7 +105,9 @@ export default function HuntScreen() {
   useEffect(() => {
     if (!info) return;
     placeAlive.current = true;
-    withSession(info, async d => !!d.placeCheckStart).then(v => setPlaceSup(!!v)).catch(() => {});
+    // ZTE: فحص الراوتر نفسه — غيره (هواوي…): نقيس من التطبيق بنفس الأحكام الأربعة
+    withSession(info, async d => [!!d.placeCheckStart, !!d.getSignal] as const)
+      .then(([own, sig]) => { placeOwn.current = own; setPlaceSup(own || sig); }).catch(() => {});
     return () => {
       placeAlive.current = false;
       // لو طلع وهو يفحص نلغي الفحص في الراوتر
@@ -113,12 +115,45 @@ export default function HuntScreen() {
     };
   }, [info]);
   const placeRunning = useRef(false);
+  const placeOwn = useRef(false);
+
+  /** فحص من التطبيق: ٤ مراحل × ٥ ثواني، نجمع القوة والصفاء ونحكم بالمتوسط */
+  const appPlaceCheck = async (): Promise<number | null> => {
+    const rs: number[] = [], ss: number[] = [];
+    for (let stage = 0; stage < 4; stage++) {
+      setPlaceStep(stage);
+      for (let k = 0; k < 4 && placeAlive.current; k++) {
+        const sig = await withSession(info!, d => d.getSignal!()).catch(() => null);
+        const r = readOf(sig, techRef.current);
+        if (r?.rsrp !== undefined) rs.push(r.rsrp);
+        if (r?.sinr !== undefined) ss.push(r.sinr);
+        await new Promise(res => setTimeout(res, 1250));
+      }
+      if (!placeAlive.current) return null;
+    }
+    if (!rs.length) throw new Error('ما قدرنا نقرأ الإشارة من الراوتر');
+    const avg = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
+    const rsrp = avg(rs);
+    const sinr = ss.length ? avg(ss) : 10;
+    if (rsrp >= -85 && sinr >= 15) return 4;
+    if (rsrp >= -95 && sinr >= 8) return 3;
+    if (rsrp >= -105 && sinr >= 0) return 2;
+    return 1;
+  };
 
   const runPlaceCheck = async () => {
     if (!info || placeRunning.current) return;
     placeRunning.current = true;
     setPlaceErr(''); setPlaceQ(null); setPlaceStep(0);
     try {
+      if (!placeOwn.current) {
+        const q = await appPlaceCheck();
+        if (q && placeAlive.current) {
+          setPlaceStep(4); setPlaceQ(q);
+          Vibration.vibrate(Platform.OS === 'android' ? 60 : 300);
+        }
+        return;
+      }
       await withSession(info, d => d.placeCheckStart!(), false);
       const t0 = Date.now();
       let sawRunning = false;
@@ -461,8 +496,10 @@ export default function HuntScreen() {
             )}
             {placeSup && (
               <View style={s.card}>
-                <Text style={s.h2}>خلّ الراوتر يفحص المكان</Text>
-                <Text style={s.cellSub}>الراوتر نفسه يقيس الإشارة في مكانه الحالي ويعطيك حكمه. حطه في المكان اللي تبيه واتركه ثابت لين يخلص.</Text>
+                <Text style={s.h2}>افحص مكان الراوتر</Text>
+                <Text style={s.cellSub}>{placeOwn.current
+                  ? 'الراوتر نفسه يقيس الإشارة في مكانه الحالي ويعطيك حكمه. حطه في المكان اللي تبيه واتركه ثابت لين يخلص.'
+                  : 'نقيس إشارة الراوتر ٢٠ ثانية في مكانه الحالي ونعطيك حكم. حطه في المكان اللي تبيه واتركه ثابت لين يخلص.'}</Text>
                 {placeStep !== null && placeStep < 4 && (
                   <Text style={[s.cellTitle, { textAlign: 'center' }]}>{`جاري الفحص... ${placeStep * 25}%`}</Text>
                 )}
