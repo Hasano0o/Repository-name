@@ -2,7 +2,7 @@
   "expo": {
     "name": "Bandly",
     "slug": "mobile",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "bandly",
@@ -128,9 +128,7 @@
       }
     },
     "owner": "hassan14161",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "updates": {
       "url": "https://u.expo.dev/94d7f449-28a0-4938-a3fc-d3572e1bd58e",
       "enabled": true,
