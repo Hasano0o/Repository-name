@@ -237,6 +237,11 @@ export interface RouterDriver {
   reattach?(holdSecs?: number): Promise<void>;
   /** يطلّع الراوتر من وضع الطيران / وضع شبكة مؤقت لو علق بعد reattach — آمن ينادى في أي وقت */
   wakeRadio?(): Promise<void>;
+  /** فحص المكان من الراوتر نفسه (ZTE «الموقع المقترح»): يبدأ القياس */
+  placeCheckStart?(): Promise<void>;
+  /** حالة الفحص: step من ٠ لـ ٤ (٤ = خلص) — quality من ١ (ضعيفة) لـ ٤ (مثالية) لما يخلص */
+  placeCheckStatus?(): Promise<{ step: number; quality?: number }>;
+  placeCheckCancel?(): Promise<void>;
   getBandConfig?(): Promise<BandConfig>;
   setBand?(bands: number[], nrBands?: number[]): Promise<void>;
   lockCell?(target: CellLockTarget): Promise<void>;

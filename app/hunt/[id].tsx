@@ -40,6 +40,13 @@ const UNSCANNED = 'rgba(170,205,255,0.38)';
 const DIRS = ['شمال', 'شمال شرق', 'شرق', 'جنوب شرق', 'جنوب', 'جنوب غرب', 'غرب', 'شمال غرب'];
 const HERO: [string, string] = isDark ? [P.heroA, P.heroB] : ['#4a95ff', '#1f47c9'];
 const KEY = (id: string) => `bandly.hunt.${id}`;
+/** حكم الراوتر على المكان (١–٤) — من صفحة «الموقع المقترح» في ZTE */
+const PLACE_Q: Record<number, { t: string; bg: string; fg: string }> = {
+  4: { t: 'مثالي — حط الراوتر هنا', bg: P.greenSoft, fg: tFg('#1d8f58') },
+  3: { t: 'ممتاز — مكان مناسب للراوتر', bg: P.greenSoft, fg: tFg('#1d8f58') },
+  2: { t: 'جيد، بس ممكن يتأثر بالجو أو اللي حوله — جرّب مكان ثاني', bg: P.amberSoft, fg: tFg('#8a5a00') },
+  1: { t: 'ضعيف — غيّر مكان الراوتر', bg: P.redSoft, fg: tFg('#b3261e') },
+};
 
 const norm = (d: number) => ((d % 360) + 360) % 360;
 /** الفرق من -180 لـ 180 (موجب = يمين / مع عقارب الساعة) */
@@ -71,6 +78,12 @@ export default function HuntScreen() {
   const [showCells, setShowCells] = useState(true);
   const [saved, setSaved] = useState<Saved | null>(null);
   const [justSaved, setJustSaved] = useState(false);
+  // فحص المكان من الراوتر نفسه (ZTE) — null = غير مدعوم
+  const [placeSup, setPlaceSup] = useState(false);
+  const [placeStep, setPlaceStep] = useState<number | null>(null);
+  const [placeQ, setPlaceQ] = useState<number | null>(null);
+  const [placeErr, setPlaceErr] = useState('');
+  const placeAlive = useRef(true);
 
   const headRef = useRef(0);
   const vec = useRef({ x: 0, y: 1, init: false });
@@ -88,6 +101,47 @@ export default function HuntScreen() {
       } catch {}
     })();
   }, [id]);
+
+  useEffect(() => {
+    if (!info) return;
+    placeAlive.current = true;
+    withSession(info, async d => !!d.placeCheckStart).then(v => setPlaceSup(!!v)).catch(() => {});
+    return () => {
+      placeAlive.current = false;
+      // لو طلع وهو يفحص نلغي الفحص في الراوتر
+      if (placeRunning.current) withSession(info, d => (d.placeCheckCancel ? d.placeCheckCancel() : Promise.resolve())).catch(() => {});
+    };
+  }, [info]);
+  const placeRunning = useRef(false);
+
+  const runPlaceCheck = async () => {
+    if (!info || placeRunning.current) return;
+    placeRunning.current = true;
+    setPlaceErr(''); setPlaceQ(null); setPlaceStep(0);
+    try {
+      await withSession(info, d => d.placeCheckStart!(), false);
+      const t0 = Date.now();
+      let sawRunning = false;
+      while (placeAlive.current && Date.now() - t0 < 150_000) {
+        await new Promise(r => setTimeout(r, 1500));
+        const st = await withSession(info, d => d.placeCheckStatus!()).catch(() => null);
+        if (!st || !placeAlive.current) continue;
+        if (st.step < 4) { sawRunning = true; setPlaceStep(st.step); continue; }
+        // «٤» من فحص قديم: ما نصدّقها إلا بعد ما شفناه يشتغل أو مرّت ٨ ثواني
+        if ((sawRunning || Date.now() - t0 > 8000) && st.quality) {
+          setPlaceStep(4); setPlaceQ(st.quality);
+          Vibration.vibrate(Platform.OS === 'android' ? 60 : 300);
+          return;
+        }
+      }
+      if (placeAlive.current) setPlaceErr('الراوتر ما رجّع نتيجة — جرّب مرة ثانية');
+    } catch (e: any) {
+      if (placeAlive.current) setPlaceErr(e?.message ?? 'ما قدرنا نبدأ الفحص');
+    } finally {
+      placeRunning.current = false;
+      if (placeAlive.current) setPlaceStep(st => (st === 4 ? 4 : null));
+    }
+  };
 
   // ═══ البوصلة ═══
   useFocusEffect(useCallback(() => {
@@ -190,6 +244,18 @@ export default function HuntScreen() {
     if (calc.warm >= 0.85) Vibration.vibrate(Platform.OS === 'android' ? 45 : 10);
     else if (calc.warm >= 0.65) Vibration.vibrate(Platform.OS === 'android' ? 20 : 10);
   }, [cur]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ═══ برج مجاور أقوى من البرج الحالي؟ (في الاتجاه الحالي) ═══
+  const betterCell = useMemo(() => {
+    const serving = cells.find(c => c.kind === 'serving' && c.tech === tech);
+    if (!serving || serving.rsrp === undefined) return null;
+    const nb = cells
+      .filter(c => c.kind === 'neighbor' && c.tech === tech && c.rsrp !== undefined && c.pci !== serving.pci)
+      .sort((a, b) => (b.rsrp as number) - (a.rsrp as number))[0];
+    if (!nb) return null;
+    const gain = Math.round((nb.rsrp as number) - serving.rsrp);
+    return gain >= 4 ? { cell: nb, gain } : null;
+  }, [cells, tech]);
 
   const reset = () => {
     setBins(Array(BINS).fill(null));
@@ -381,6 +447,42 @@ export default function HuntScreen() {
           </View>
         ) : (
           <>
+            {betterCell && (
+              <View style={[s.card, { borderWidth: 1.5, borderColor: P.green }]}>
+                <Text style={s.h2}>فيه برج أقوى من برجك</Text>
+                <Text style={s.cellSub}>
+                  {`في هالاتجاه، برج رقم ${betterCell.cell.pci} أقوى من البرج اللي متصل عليه بـ ${betterCell.gain} — تقدر تثبّت الراوتر عليه.`}
+                </Text>
+                <Pressable onPress={() => nav.push(`/towers/${id}` as any)} style={s.ghostBtn}>
+                  <Icon name="tower" size={18} color={P.blue} stroke={2.2} />
+                  <Text style={s.ghostTxt}>افتح الأبراج وثبّت عليه</Text>
+                </Pressable>
+              </View>
+            )}
+            {placeSup && (
+              <View style={s.card}>
+                <Text style={s.h2}>خلّ الراوتر يفحص المكان</Text>
+                <Text style={s.cellSub}>الراوتر نفسه يقيس الإشارة في مكانه الحالي ويعطيك حكمه. حطه في المكان اللي تبيه واتركه ثابت لين يخلص.</Text>
+                {placeStep !== null && placeStep < 4 && (
+                  <Text style={[s.cellTitle, { textAlign: 'center' }]}>{`جاري الفحص... ${placeStep * 25}%`}</Text>
+                )}
+                {placeQ !== null && (() => {
+                  const r = PLACE_Q[placeQ];
+                  return (
+                    <View style={[s.chip, { alignSelf: 'stretch', backgroundColor: r.bg, paddingVertical: 10, paddingHorizontal: 14 }]}>
+                      <Text style={[s.chipTxt, { color: r.fg, textAlign: 'center' }]}>{r.t}</Text>
+                    </View>
+                  );
+                })()}
+                {!!placeErr && <Text style={[s.cellSub, { color: tFg('#b3261e') }]}>{placeErr}</Text>}
+                {(placeStep === null || placeStep === 4) && (
+                  <Pressable onPress={runPlaceCheck} style={s.ghostBtn}>
+                    <Icon name="pin" size={18} color={P.blue} stroke={2.2} />
+                    <Text style={s.ghostTxt}>{placeQ !== null ? 'افحص مكان ثاني' : 'افحص هالمكان'}</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
             {cells.length > 0 && (
               <View style={s.card}>
                 <Pressable onPress={() => setShowCells(v => !v)} style={s.cardHead}>

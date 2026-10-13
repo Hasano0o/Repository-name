@@ -1094,6 +1094,27 @@ export class ZteDriver implements RouterDriver {
 
   private reattachOrig = '';
 
+  // ───── فحص المكان (الموقع المقترح) — نفس أوامر صفحة الراوتر ─────
+  async placeCheckStart() {
+    await this.ensure();
+    const out = await this.act({ goformId: 'SIGNAL_QUALITY_DETECT_START' });
+    if (!/success/i.test(out)) throw this.rejected('فحص المكان', out);
+  }
+  async placeCheckStatus() {
+    await this.ensure();
+    const r = await this.get(['signal_detect_progress', 'signal_detect_quality']);
+    const step = parseInt(r.signal_detect_progress ?? '', 10);
+    const q = parseInt(r.signal_detect_quality ?? '', 10);
+    return {
+      step: Number.isFinite(step) ? step : 0,
+      quality: step === 4 && q >= 1 && q <= 4 ? q : undefined,
+    };
+  }
+  async placeCheckCancel() {
+    await this.ensure();
+    await this.act({ goformId: 'SIGNAL_QUALITY_DETECT_CANCEL' }).catch(() => '');
+  }
+
   /** إنقاذ بعد الفصل: نطلّعه من وضع الطيران ونرجّع وضع الشبكة لو بقى على وضع مؤقت (3G فقط / 5G فقط) */
   async wakeRadio() {
     await this.ensure();
