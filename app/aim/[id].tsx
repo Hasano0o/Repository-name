@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Share, Vibration, Platform, Linking } from 'react-native';
 import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect, useRouter, Href } from 'expo-router';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { LinearGradient } from 'expo-linear-gradient';
 import { NetPanel } from '../../src/ui/NetPanel';
 import { PushToTalk, playVoice, VoiceNote } from '../../src/ui/Voice';
 import { CallController, CallInfo } from '../../src/services/call';
@@ -50,7 +51,7 @@ import { Level, LEVEL_COLOR, overallLevel, signalScore, parseBands, parseNrBands
 import { trafficBurst } from '../../src/utils/nrprobe';
 import { AimBeeper } from '../../src/utils/aimSound';
 
-import { tBd, tBg, tFg } from '../../src/ui/theme';
+import { tBd, tBg, tFg, isDark } from '../../src/ui/theme';
 import { sheet } from '../../src/i18n';
 // ═══ Design tokens ═══
 const BLUE = P.blue;
@@ -182,6 +183,7 @@ function DirStat({ icon, label, value, color, bg }: { icon: IconName; label: str
 // ═══ الشاشة ═══
 export default function AimScreen() {
   const { id, share: autoShare, wa: shareTo, tname } = useLocalSearchParams<{ id: string; share?: string; wa?: string; tname?: string }>();
+  const nav = useRouter();
   const insets = useSafeAreaInsets();
   const [info, setInfo] = useState<SavedRouter | null>(null);
   const [signal, setSignal] = useState<Signal | null>(null);
@@ -805,6 +807,22 @@ export default function AimScreen() {
                 </Text>
               </View>
             </View>
+
+            {/* ═══ صيد الإشارة: بوصلة للأنتنا الخارجية ═══ */}
+            <Pressable onPress={() => nav.push(`/hunt/${id}` as Href)}
+              style={({ pressed }) => [{ borderRadius: 22, overflow: 'hidden' }, pressed && { opacity: 0.9 }]}>
+              <LinearGradient colors={isDark ? [P.heroA, P.heroB] : ['#4a95ff', '#1f47c9']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }}
+                style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 12, padding: 14 }}>
+                <View style={{ width: 44, height: 44, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="compass" size={22} color="#ffffff" stroke={2.2} />
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ color: '#ffffff', fontSize: 15.5, fontWeight: '800', textAlign: 'right' }}>صيد الإشارة</Text>
+                  <Text style={{ color: 'rgba(255,255,255,0.88)', fontSize: 12.5, textAlign: 'right' }}>عندك أنتنا خارجية؟ البوصلة تدلّك على أقوى اتجاه</Text>
+                </View>
+                <Icon name="chevron" size={18} color="#ffffff" stroke={2.4} />
+              </LinearGradient>
+            </Pressable>
 
             {/* ═══ لوحة الشبكة 4G / 5G ═══ */}
             <NetPanel signal={signal} ping={ping} pingTo={pingTo} />

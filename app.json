@@ -110,7 +110,13 @@
           "recordAudioAndroid": false
         }
       ],
-      "./plugins/withMlkitDeps"
+      "./plugins/withMlkitDeps",
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Bandly يستخدم بوصلة الجوال في «صيد الإشارة» عشان يعرف اتجاه الأنتنا ويدلّك على أقوى اتجاه."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

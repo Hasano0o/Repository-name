@@ -35,6 +35,7 @@ const SCREENS: [string, string][] = [
   ['history/[id]', 'السجل'],
   ['sms/[id]', 'الرسائل'],
   ['aim/[id]', 'مساعد التوجيه'],
+  ['hunt/[id]', 'صيد الإشارة'],
   ['ping/[id]', 'مُحسّن الألعاب'],
   ['lag/[id]', 'كاشف اللاق'],
   ['auto/[id]', 'الوضع الذكي'],
@@ -67,6 +68,8 @@ const SCREENS: [string, string][] = [
 
 // شاشات فيها عنوان كبير داخل الصفحة — ما نكرره في الشريط العلوي
 const OWN_TITLE = new Set(['aim/[id]', 'antenna/[id]']);
+// شاشات لها ترويسة كاملة خاصة (فيها زر الرجوع) — نخفي الشريط العلوي
+const NO_HEADER = new Set(['hunt/[id]']);
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -109,7 +112,7 @@ export default function RootLayout() {
             key={name}
             name={name}
             options={
-              name === 'index'
+              name === 'index' || NO_HEADER.has(name)
                 ? { title, headerShown: false } // الرئيسية لها عنوانها الخاص داخل الصفحة
                 : OWN_TITLE.has(name)
                   ? { title, headerTitle: '' } // الصفحة تعرض عنوانها بنفسها — نخلي زر الرجوع بس
