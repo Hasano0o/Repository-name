@@ -125,7 +125,7 @@ export async function withSession<T>(
       const trail: string[] = [short(msg)];
       for (const wait of [1500, 4000, 8000]) {
         await new Promise(res => setTimeout(res, wait));
-        let fresh: RouterDriver;
+        let fresh: RouterDriver | undefined;
         try {
           fresh = await connect(r, true);
           return await fn(fresh);
@@ -136,9 +136,11 @@ export async function withSession<T>(
         }
         // فيرموير هواوي الجديدة (H155/H158…) ترد 100003 على أي رابط مو موجود — مو طرد!
         // دخلنا للتو: لو قراءة الإشارة شغالة، فالمشكلة إن راوترك ما يدعم هالأمر بالذات
+        // الدخول نفسه فشل (مثل 125003) — ما فيه جلسة نفحصها، نكمّل المحاولات
+        if (!fresh) continue;
         try {
-          if (fresh!.getSignal) {
-            await fresh!.getSignal();
+          if (fresh.getSignal) {
+            await fresh.getSignal();
             diag(`[session] 100003 بس الجلسة شغالة → أمر غير مدعوم trail=${trail.join('>')}`);
             const err = new Error('راوترك ما يدعم هالخاصية (الراوتر رفض الأمر وهو داخل) — جرّب خاصية ثانية أو أرسل تشخيص للمطوّر');
             (err as any).unsupported = true;

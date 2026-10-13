@@ -123,6 +123,9 @@ export class HuaweiError extends Error {
 const isTokenError = (e: unknown) =>
   e instanceof HuaweiError && (e.code === '125002' || e.code === '125003');
 
+/** روابط موجودة في كل راوترات هواوي — لو ردّت 100003 فالجلسة فعلاً راحت */
+const CORE_GET = /^(device\/signal|monitoring\/status|device\/information|net\/net-mode)$/;
+
 export class HuaweiDriver implements RouterDriver {
   id = 'huawei-lte';
   // بعض الموديلات (H138/H155/H165) 5G-capable — نكشفها ديناميكياً
@@ -173,7 +176,8 @@ export class HuaweiDriver implements RouterDriver {
     if (xml.includes('<error>')) {
       const code = tag(xml, 'code') ?? '0';
       this.log('GET', p, 'error', code);
-      if (code === '100003') this.stale = true;
+      // 100003 على رابط أساسي = انطردنا. على رابط اختياري (مثل net/lock-freq في H158) = غير مدعوم — مو طرد
+      if (code === '100003' && CORE_GET.test(p)) this.stale = true;
       throw new HuaweiError(code);
     }
     return xml;
