@@ -1,3 +1,5 @@
+import type { NetStandard } from './huawei/netStandard';
+export type { NetStandard } from './huawei/netStandard';
 export type Capability =
   'signal' | 'devices' | 'reboot' | 'bandLock' | 'sms' | 'usage'
   | 'block' | 'traffic' | 'cells';
@@ -277,6 +279,12 @@ export interface RouterDriver {
    * (هواوي lock-freq: lock_mode 1)
    */
   lockChannel?(target: { tech: 'LTE' | 'NR'; band?: number; arfcn: string }): Promise<void>;
+  /**
+   * «وضع الشبكة» الدقيق (هواوي WebUI 4.0): SA / NSA / SA+NSA / 4G / 4G FDD / 4G TDD.
+   * يرجع null لو الراوتر ما يدعمه.
+   */
+  getNetStandard?(): Promise<NetStandard | null>;
+  setNetStandard?(s: NetStandard): Promise<void>;
   /** بدون tech = يفك كل التثبيتات. مع tech = يفك تثبيت 4G أو 5G بس */
   unlockCell?(tech?: 'LTE' | 'NR'): Promise<void>;
   getCellLock?(): Promise<CellLockState | null>;

@@ -17,6 +17,7 @@ import * as extras from './extras';
 import { parseTxPower, parseDlMcs, parseUlMcs } from '../../utils/linkHealth';
 import { buildSnapshot } from '../../utils/snapshot';
 import { noChange } from '../noChange';
+import { NetStandard, standardOf, standardBody } from './netStandard';
 import { buildCellLockBody, buildUnlockBody, lockMatches, parseCellLocks, parseLockRaw, LockRaw, Tech as CellTech, bandLockSection, buildChannelLockBody, channelMatches, lockKindOf } from './cellLock';
 
 const tag = (xml: string, t: string) =>
@@ -1020,6 +1021,25 @@ export class HuaweiDriver implements RouterDriver {
       throw e;
     }
     await new Promise(r => setTimeout(r, 2000));
+  }
+  async getNetStandard(): Promise<NetStandard | null> {
+    try { return standardOf(await this.get('net/net-mode')); } catch { return null; }
+  }
+  /** نفس طلب صفحة المطورين بالضبط (حقلين)، وبعدها نتأكد من القراءة */
+  async setNetStandard(s: NetStandard) {
+    let cur: NetStandard | null;
+    try {
+      cur = standardOf(await this.get('net/net-mode'));
+    } catch {
+      throw noChange('تعذر قراءة وضع الشبكة — ما غيّرنا شي. جرّب مرة ثانية.');
+    }
+    if (cur === null) throw noChange('راوترك ما يدعم هالخيارات في وضع الشبكة');
+    if (cur === s) return;
+    await this.post('net/net-mode', standardBody(s));
+    await new Promise(r => setTimeout(r, 2000));
+    let after: NetStandard | null = null;
+    try { after = standardOf(await this.get('net/net-mode')); } catch {}
+    if (after !== s) throw new Error('الراوتر قبل الطلب لكن ما غيّر وضع الشبكة');
   }
   async setNetworkMode(mode: string) {
     await this.writeNetMode({ mode });

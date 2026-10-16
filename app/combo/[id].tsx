@@ -8,6 +8,7 @@ import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { BandConfig, Carrier, CellTower } from '../../src/drivers/types';
 import { safeApply, trialMessage, lastTrial, Trial } from '../../src/utils/safeLock';
+import { NetStandard, NET_STANDARDS, STANDARD_LABEL } from '../../src/drivers/huawei/netStandard';
 import { trafficBurst } from '../../src/utils/nrprobe';
 import { bandLabel, freqLabel } from '../../src/utils/bands';
 import { saveProfile } from '../../src/store/profiles';
@@ -48,6 +49,8 @@ export default function ComboScreen() {
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [verdict, setVerdict] = useState<{ ok: boolean; text: string } | null>(null);
+  /** «وضع الشبكة» الدقيق (هواوي WebUI 4.0) — null = الراوتر ما يدعمه، نعرض الخيارين القدام */
+  const [std, setStd] = useState<NetStandard | null>(null);
   /** آخر تجربة SA — لو ما اتصل نقول للمستخدم إنه غالباً مو متاح عنده بدل ما يجربه كل مرة */
   const [saTrial, setSaTrial] = useState<Trial | undefined>();
   useEffect(() => {
@@ -59,11 +62,13 @@ export default function ComboScreen() {
 
   const load = useCallback(async (r: SavedRouter) => {
     try {
-      const [c, list] = await withSession(r, async d => [
+      const [c, list, st] = await withSession(r, async d => [
         d.getBandConfig ? await d.getBandConfig() : null,
         d.getCells ? await d.getCells().catch(() => [] as CellTower[]) : ([] as CellTower[]),
+        d.getNetStandard ? await d.getNetStandard().catch(() => null) : null,
       ] as const);
       if (!mounted.current) return;
+      setStd(st);
       setCfg(c);
       setCells(list);
       // نبدأ من الإعداد الحالي
@@ -255,6 +260,45 @@ export default function ComboScreen() {
   );
 
   const SA_COLOR = '#0ea5a4';
+
+  /** الخيارات الستة من صفحة المطورين — بالقفل الآمن وترجع لو ما اتصل */
+  const applyStd = (target: NetStandard) => {
+    if (!info || !std || target === std) return;
+    const prev = std;
+    const L = STANDARD_LABEL[target];
+    const label = `${L.title} (${L.sub.split(' — ')[0]})`;
+    const risky = target === 'sa' || target === 'lte_tdd' || target === 'lte_fdd';
+    Alert.alert(label, (risky
+      ? 'إذا برجك أو شريحتك ما تدعم هالوضع بينقطع النت، ونرجّعك لوضعك خلال دقيقة تقريباً.'
+      : 'نقيس قبل وبعد، ولو صار أسوأ نرجّعك لوضعك.') + '\n\nالنت بينقطع لحظات.', [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'جرّب', onPress: async () => {
+          setBusy(true);
+          setError('');
+          setVerdict(null);
+          try {
+            const res = await safeApply({
+              r: info,
+              key: `std:${target}`,
+              label,
+              withNr: target !== 'lte' && target !== 'lte_fdd' && target !== 'lte_tdd',
+              onStatus: t => mounted.current && setStatus(t),
+              apply: d => d.setNetStandard!(target),
+              revert: d => d.setNetStandard!(prev),
+            });
+            const m = trialMessage(res, label);
+            Alert.alert(m.title, m.body);
+            await load(info);
+          } catch (e: any) {
+            if (mounted.current) setError(e?.message ?? String(e));
+          } finally {
+            if (mounted.current) { setBusy(false); setStatus(''); }
+          }
+        },
+      },
+    ]);
+  };
   const hasSa = !!cfg?.modes.some(m => m.value === '08');
   const onSa = cfg?.mode === '08';
 
@@ -325,19 +369,31 @@ export default function ComboScreen() {
 
         {!loading && cfg && (
           <>
-            {hasSa && (
+            {(hasSa || !!std) && (
               <View style={[s.saCard, onSa && { borderColor: SA_COLOR }]}>
                 <View style={s.saHead}>
                   <View style={[s.saBadge, { backgroundColor: SA_COLOR }]}><Text style={s.saBadgeTxt}>جديد</Text></View>
                   <Text style={s.saTitle}>وضع الشبكة</Text>
                 </View>
                 <Text style={s.hint}>
-                  {onSa ? 'أنت الحين على 5G لحاله — الـ 5G هو الأساسي' : 'أنت على 4G + 5G: الأساسي 4G والـ 5G ثانوي. جرّب SA عشان يصير الـ 5G هو الأساسي'}
+                  {std
+                    ? `أنت الحين على: ${STANDARD_LABEL[std].title} (${STANDARD_LABEL[std].sub}). نفس خيارات صفحة المطورين في راوترك.`
+                    : onSa ? 'أنت الحين على 5G لحاله — الـ 5G هو الأساسي' : 'أنت على 4G + 5G: الأساسي 4G والـ 5G ثانوي. جرّب SA عشان يصير الـ 5G هو الأساسي'}
                 </Text>
+                {std ? (
+                  <View style={s.grid}>
+                    {NET_STANDARDS.map(x => (
+                      <Tile key={x} label={STANDARD_LABEL[x].title} sub={STANDARD_LABEL[x].sub} on={std === x}
+                        color={x === 'sa' || x === 'sa_nsa' ? SA_COLOR : x === 'nsa' ? C.blue : C.sub}
+                        onPress={() => !busy && applyStd(x)} />
+                    ))}
+                  </View>
+                ) : (
                 <View style={s.grid}>
                   <Tile label="4G + 5G" sub="NSA — الحالي عند أغلب الناس" on={!onSa} color={C.blue} onPress={() => onSa && applySa(false)} />
                   <Tile label="5G فقط" sub="SA — الـ 5G أساسي" on={onSa} color={SA_COLOR} onPress={() => !onSa && applySa(true)} />
                 </View>
+                )}
                 {!onSa && saTrial?.verdict === 'noconn' && Date.now() - saTrial.at < 14 * 86400000 && (
                   <Text style={[s.hint, { color: C.red }]}>
                     جرّبنا SA {Date.now() - saTrial.at < 86400000 ? 'اليوم' : 'قبل أيام'} وما اتصل — غالباً البرج عندك يدعم 5G بنظام NSA بس (فوق 4G)، أو شريحتك ما فيها SA.
