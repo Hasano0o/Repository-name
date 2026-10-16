@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { noChange, markNoChange, isNoChange, safeToSkipRevert } from '../src/drivers/noChange';
 import { runApply, trackWrites } from '../src/utils/applyGuard';
 import {
-  buildCellLockBody, buildUnlockBody, parseCellLocks, parseLockRaw, lockMatches, isSectionLocked,
+  buildCellLockBody, buildUnlockBody, parseCellLocks, parseLockRaw, lockMatches, isSectionLocked, bandLockSection,
 } from '../src/drivers/huawei/cellLock';
 
 // ─── علامة noChange ───
@@ -202,4 +202,23 @@ test('قراءات قبل الرفض ما تنحسب تغيير: نتخطى ال
     firstMs: 1000, extraMs: 1000,
   });
   assert.ok(out.kind === 'failed' && out.skipRevert);
+});
+
+// ─── هواوي: قفل الترددات بالأدوار (مثل صفحة «تحديد النطاق») ───
+
+test('قفل ترددات: الأساسي في freq_infos والثانوي بس في all_bands فقط', () => {
+  const x = bandLockSection('lte_info', [1, 3, 20], [3, 20]);
+  assert.equal(x, '<lte_info><lock_mode>3</lock_mode><freq_infos><freq_info><band>1</band></freq_info></freq_infos><all_bands>1,3,20</all_bands></lte_info>');
+});
+
+test('بدون أدوار = كلها أساسي + ثانوي (نفس طلب صفحة الراوتر حرفياً)', () => {
+  assert.equal(
+    bandLockSection('lte_info', [1, 3, 20]) + bandLockSection('nr_info', []),
+    '<lte_info><lock_mode>3</lock_mode><freq_infos><freq_info><band>1</band></freq_info><freq_info><band>3</band></freq_info><freq_info><band>20</band></freq_info></freq_infos><all_bands>1,3,20</all_bands></lte_info><nr_info><lock_mode>0</lock_mode><freq_infos></freq_infos><all_bands></all_bands></nr_info>',
+  );
+});
+
+test('لازم يبقى تردد واحد أساسي على الأقل (شرط الراوتر)', () => {
+  const x = bandLockSection('nr_info', [78], [78]);
+  assert.ok(x.includes('<freq_info><band>78</band></freq_info>'));
 });

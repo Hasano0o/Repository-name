@@ -68,7 +68,12 @@ export default function ComboScreen() {
       setCells(list);
       // نبدأ من الإعداد الحالي
       if (c) {
-        if (c.locked.length) { setPrimary(c.locked[0]); setExtra(c.locked.slice(1)); }
+        if (c.locked.length) {
+          // الأساسي = أول تردد مو «ثانوي بس»
+          const p0 = c.locked.find(b => !(c.lteScell ?? []).includes(b)) ?? c.locked[0];
+          setPrimary(p0);
+          setExtra(c.locked.filter(b => b !== p0));
+        }
         if (c.mode === LTE_ONLY) setNr('none');
         else if (c.nrLocked.length === 1) setNr(c.nrLocked[0]);
       }
@@ -122,6 +127,9 @@ export default function ComboScreen() {
     if (!info || !cfg || primary === null) return;
     const lte = [primary, ...extra.filter(b => b !== primary)];
     const nrBands = typeof nr === 'number' ? [nr] : [];
+    // الراوترات اللي تدعم الأدوار (هواوي lock-freq): الإضافية «ثانوي بس» — ما يختارها أساسي بدل اللي اخترته
+    const roles = cfg.bandRoles ? { lteScell: lte.filter(b => b !== primary) } : undefined;
+    const origRoles = cfg.bandRoles ? { lteScell: cfg.lteScell ?? [], nrScell: cfg.nrScell ?? [] } : undefined;
     const label = `${lte.map(b => bandLabel('LTE', b)).join(' + ')}${nr === 'none' ? ' · بدون 5G' : typeof nr === 'number' ? ` + ${bandLabel('NR', nr)}` : ' + أي 5G'}`;
     const orig = cfg;
     Alert.alert('طبّق الأساسي والثانوي', `${label}\n\nنقيس قبل وبعد، ولو صار أسوأ أو انقطع النت نرجّع إعدادك لحاله.`, [
@@ -141,17 +149,17 @@ export default function ComboScreen() {
               apply: async d => {
                 if (nr === 'none') {
                   if (orig.mode !== LTE_ONLY && d.setNetworkMode) await d.setNetworkMode(LTE_ONLY);
-                  await d.setBand!(lte, orig.nrLocked);
+                  await d.setBand!(lte, orig.nrLocked, roles && { ...roles, nrScell: origRoles?.nrScell });
                 } else {
                   if ((orig.mode === LTE_ONLY || orig.mode === '08') && d.setNetworkMode) await d.setNetworkMode('00');
-                  await d.setBand!(lte, nrBands);
+                  await d.setBand!(lte, nrBands, roles);
                 }
               },
               revert: async d => {
                 if (d.setNetworkMode && orig.mode) {
                   try { await d.setNetworkMode(orig.mode); } catch {}
                 }
-                await d.setBand!(orig.locked, orig.nrLocked);
+                await d.setBand!(orig.locked, orig.nrLocked, origRoles);
               },
             });
             const m = trialMessage(res, label);
@@ -371,7 +379,11 @@ export default function ComboScreen() {
             </GlassCard>
 
             <GlassCard title="٢. دمج 4G إضافي (اختياري)" icon="➕" tint={C.goldSoft} defaultOpen={extra.length > 0}>
-              <Text style={s.hint}>ترددات 4G ثانية يُسمح للبرج يدمجها مع الأساسي. ⚠️ لما تسمح بأكثر من تردد، ممكن الراوتر يختار واحد منها كأساسي بدل اللي اخترته</Text>
+              <Text style={s.hint}>
+                {cfg?.bandRoles
+                  ? 'ترددات 4G ثانية يُسمح للبرج يدمجها مع الأساسي — تنضاف «ثانوي بس»، فالراوتر ما يختار واحد منها أساسي بدل اللي اخترته'
+                  : 'ترددات 4G ثانية يُسمح للبرج يدمجها مع الأساسي. ⚠️ لما تسمح بأكثر من تردد، ممكن الراوتر يختار واحد منها كأساسي بدل اللي اخترته'}
+              </Text>
               <View style={s.grid}>
                 {lteList.filter(b => b !== primary).map(b => (
                   <Tile key={b} label={bandLabel('LTE', b)} sub={freqLabel('LTE', b) || undefined} sig={lteSeen.get(b)} faint={!lteSeen.has(b)}

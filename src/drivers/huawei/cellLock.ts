@@ -82,3 +82,16 @@ export function lockMatches(locks: CellLockState[], tech: Tech, pci: string, arf
   if (!l || l.pci !== pci) return false;
   return !l.arfcn || !arfcn || l.arfcn === arfcn;
 }
+
+/**
+ * قسم قفل ترددات (lock_mode 3) مثل صفحة «تحديد النطاق» بالراوتر:
+ * freq_infos = اللي تقدر تكون أساسي، all_bands = كل المسموح. فاضي = بدون قفل (0).
+ * لازم يبقى تردد واحد على الأقل «أساسي + ثانوي» (شرط الراوتر).
+ */
+export function bandLockSection(name: string, bands: number[], scellOnly: number[] = []): string {
+  const all = [...new Set(bands)];
+  if (!all.length) return sectionXml(name, '0', [], '');
+  let prim = all.filter(b => !scellOnly.includes(b));
+  if (!prim.length) prim = all;
+  return sectionXml(name, '3', prim.map(b => '<freq_info><band>' + b + '</band></freq_info>'), all.join(','));
+}

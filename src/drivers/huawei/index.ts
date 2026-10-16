@@ -6,7 +6,7 @@ import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils';
 import {
   RouterDriver, Capability, Signal, ConnectedDevice, Usage, NetworkInfo, Traffic,
   BandConfig, SmsMessage, DeviceDetails, CellTower, CellLockTarget, CellLockState, DataPlan, ActiveLock,
-  ApnProfile, DnsConfig, Carrier, SignalSnapshot, TimeRule } from '../types';
+  ApnProfile, DnsConfig, Carrier, SignalSnapshot, TimeRule, BandRoles } from '../types';
 import { http as rawHttp } from '../http';
 import { Platform } from 'react-native';
 import { trafficBurst } from '../../utils/nrprobe';
@@ -17,7 +17,7 @@ import * as extras from './extras';
 import { parseTxPower, parseDlMcs, parseUlMcs } from '../../utils/linkHealth';
 import { buildSnapshot } from '../../utils/snapshot';
 import { noChange } from '../noChange';
-import { buildCellLockBody, buildUnlockBody, lockMatches, parseCellLocks, parseLockRaw, LockRaw, Tech as CellTech } from './cellLock';
+import { buildCellLockBody, buildUnlockBody, lockMatches, parseCellLocks, parseLockRaw, LockRaw, Tech as CellTech, bandLockSection } from './cellLock';
 
 const tag = (xml: string, t: string) =>
   xml.match(new RegExp(`<${t}>([\\s\\S]*?)</${t}>`))?.[1];
@@ -194,6 +194,10 @@ export class HuaweiDriver implements RouterDriver {
   private headers(extra: Record<string, string> = {}) {
     return {
       'X-Requested-With': 'XMLHttpRequest',
+      // صفحة الراوتر نفسها (WebUI 4.0 في H158 وغيره) ترسل هالترويسة مع كل طلب — بالإملاء هذا («Broswer»).
+      // بدونها الجلسة ما تشوف قفل الترددات (net/lock-freq يرد فاضي) والكتابة ترفض.
+      // تأكدنا منها من طلب الحفظ الفعلي لصفحة «تحديد النطاق» على H158-381 (أكتوبر 2026).
+      _ResponseSource: 'Broswer',
       Referer: `http://${this.host}/html/home.html`,
       ...extra,
     };
@@ -695,10 +699,14 @@ export class HuaweiDriver implements RouterDriver {
     }
     let locked: number[] = [];
     let nrLocked: number[] = [];
+    let lteScell: number[] = [];
+    let nrScell: number[] = [];
     if (this.lockFreq) {
       const lf = await this.readLockFreq();
       locked = lf.lte;
       nrLocked = lf.nr;
+      lteScell = lf.lteScell;
+      nrScell = lf.nrScell;
     } else {
       const opt = tag(cur, 'LTEBandOption');
       const active = bandsFromMask(big(tag(cur, 'LTEBand') ?? ALL_LTE)).filter(b => supported.includes(b));
@@ -717,6 +725,8 @@ export class HuaweiDriver implements RouterDriver {
       nrSupported,
       nrLocked,
       ...(has5g && !nrLockable ? { nrLockable: false } : {}),
+      // lock-freq يدعم «ثانوي بس» (Scell) لكل تردد
+      ...(this.lockFreq && !this.lockFreqDead ? { bandRoles: true, lteScell, nrScell } : {}),
       mode: tag(cur, 'NetworkMode') ?? '00',
       modes: modes.map(v => ({ value: v, label: modeLabel(v) })),
     };
@@ -760,46 +770,62 @@ export class HuaweiDriver implements RouterDriver {
         : 'الراوتر قبل الطلب لكن ما غيّر التردد');
     }
   }
-  private async readLockFreq(): Promise<{ lte: number[]; nr: number[] }> {
+  /**
+   * قفل الترددات كما في صفحة «تحديد النطاق» بالراوتر:
+   * all_bands = كل الترددات المسموحة، freq_infos = اللي تقدر تكون أساسي (Pcell+Scell).
+   * اللي في all_bands وما هو في freq_infos = ثانوي بس (Scell).
+   */
+  private async readLockFreq(): Promise<{ lte: number[]; nr: number[]; lteScell: number[]; nrScell: number[] }> {
     const parse = (section: string) => {
-      if (!section || (tag(section, 'lock_mode') ?? '0') === '0') return [];
-      const list = [...section.matchAll(/<band>(\d+)<\/band>/g)].map(m => parseInt(m[1], 10));
-      const all = (tag(section, 'all_bands') ?? '').split(/[,;\s]+/).map(x => parseInt(x, 10));
-      return [...new Set((list.length ? list : all).filter(n => Number.isFinite(n) && n > 0))];
+      if (!section || (tag(section, 'lock_mode') ?? '0') !== '3') return { all: [] as number[], scell: [] as number[] };
+      const num_ = (xs: string[]) => [...new Set(xs.map(x => parseInt(x, 10)).filter(n => Number.isFinite(n) && n > 0))];
+      const prim = num_([...section.matchAll(/<band>(\d+)<\/band>/g)].map(m => m[1]));
+      const allB = num_((tag(section, 'all_bands') ?? '').split(/[,;\s]+/));
+      const all = allB.length ? [...new Set([...allB, ...prim])] : prim;
+      return { all, scell: allB.length ? all.filter(b => !prim.includes(b)) : [] };
     };
     try {
       const xml = await this.get('net/lock-freq');
       this.log('lock-freq raw:', xml.replace(/\s+/g, ' ').slice(0, 300));
-      return { lte: parse(tag(xml, 'lte_info') ?? ''), nr: parse(tag(xml, 'nr_info') ?? '') };
+      const l = parse(tag(xml, 'lte_info') ?? '');
+      const n = parse(tag(xml, 'nr_info') ?? '');
+      return { lte: l.all, nr: n.all, lteScell: l.scell, nrScell: n.scell };
     } catch (e) {
       this.log('lock-freq read failed:', (e as any)?.message ?? String(e));
-      return { lte: [], nr: [] };
+      return { lte: [], nr: [], lteScell: [], nrScell: [] };
     }
   }
   private async readLockedBands(): Promise<number[]> {
     return (await this.readLockFreq()).lte;
   }
-  private async lockFreqBands(bands: number[], nrBands: number[]) {
-    const section = (name: string, list: number[]) => {
-      const lock = list.length > 0;
-      return '<' + name + '><lock_mode>' + (lock ? '3' : '0') + '</lock_mode><freq_infos>' +
-        list.map(b => '<freq_info><band>' + b + '</band></freq_info>').join('') +
-        '</freq_infos><all_bands>' + list.join(',') + '</all_bands></' + name + '>';
-    };
-    const body = await this.trimByMode(section('lte_info', bands), section('nr_info', nrBands));
+  /** nrBands = 'keep': نرسل قسم 5G كما قرأناه (قفل خلية أو ترددات بأدوارها) — ما نلمسه */
+  private async lockFreqBands(bands: number[], nrBands: number[] | 'keep', roles?: BandRoles) {
+    let nrSection: string;
+    if (nrBands === 'keep') {
+      const raw = parseLockRaw(await this.get('net/lock-freq'));
+      nrSection = raw.nr ? '<nr_info>' + raw.nr + '</nr_info>' : bandLockSection('nr_info', []);
+    } else {
+      nrSection = bandLockSection('nr_info', nrBands, roles?.nrScell);
+    }
+    const body = await this.trimByMode(bandLockSection('lte_info', bands, roles?.lteScell), nrSection);
     this.log('lock-freq sending', body);
     await this.post('net/lock-freq', body);
     await new Promise(r => setTimeout(r, 2500));
     const after = await this.readLockFreq();
     this.log('lock-freq readback lte', after.lte.join(',') || 'auto', 'nr', after.nr.join(',') || 'auto');
     const ok = (want: number[], got: number[]) => !want.length || want.every(b => got.includes(b));
-    if (!ok(bands, after.lte) || !ok(nrBands, after.nr)) {
+    if (!ok(bands, after.lte) || (nrBands !== 'keep' && !ok(nrBands, after.nr))) {
       throw new Error('الراوتر قبل الطلب لكن ما طبّق القفل');
     }
     if (!bands.length && after.lte.length) throw new Error('ما قدرنا نرجع الوضع التلقائي');
-    if (!nrBands.length && after.nr.length) throw new Error('ما قدرنا نرجع وضع 5G للتلقائي');
+    if (nrBands !== 'keep' && !nrBands.length && after.nr.length) throw new Error('ما قدرنا نرجع وضع 5G للتلقائي');
+    // دور «ثانوي بس»: نتأكد إن الراوتر حفظه (لو ما يدعمه يخليها أساسي+ثانوي — مو خطر بس نبلّغ)
+    const sc = (want: number[] | undefined, got: number[]) => !want?.length || want.every(b => got.includes(b));
+    if (!sc(roles?.lteScell, after.lteScell) || !sc(roles?.nrScell, after.nrScell)) {
+      throw new Error('الراوتر قفل الترددات بس ما حفظ «ثانوي بس» — كلها صارت تقدر تكون أساسي');
+    }
   }
-  async setBand(bands: number[], nrBands?: number[]) {
+  async setBand(bands: number[], nrBands?: number[], roles?: BandRoles) {
     if (this.lockFreq === null) {
       try {
         const fsw = await this.get('net/net-feature-switch');
@@ -810,8 +836,8 @@ export class HuaweiDriver implements RouterDriver {
     }
     if (this.lockFreq && !this.lockFreqDead) {
       try {
-        const nr = nrBands ?? (await this.readLockFreq()).nr;
-        return await this.lockFreqBands(bands, nr);
+        // 5G ما انطلب يتغير: نرسل قسمه مثل ما هو بالضبط (حتى لو قفل خلية)
+        return await this.lockFreqBands(bands, nrBands ?? 'keep', roles);
       } catch (e) {
         if (!(await this.lockFreqUnsupported(e))) throw e;
         // ما يدعم lock-freq → نثبّت ترددات 4G من وضع الشبكة

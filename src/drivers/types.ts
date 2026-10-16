@@ -128,6 +128,19 @@ export interface BandConfig {
    * undefined = يقبل (أو الراوتر 4G بس).
    */
   nrLockable?: boolean;
+  /**
+   * الراوتر يدعم دور لكل تردد: «أساسي + ثانوي» أو «ثانوي بس» (هواوي lock-freq).
+   * locked/nrLocked = كل الترددات المسموحة، و lteScell/nrScell = اللي منها ثانوي بس.
+   */
+  bandRoles?: boolean;
+  lteScell?: number[];
+  nrScell?: number[];
+}
+
+/** ترددات «ثانوي بس» (لازم تكون ضمن الترددات المسموحة) — للراوترات اللي bandRoles عندها true */
+export interface BandRoles {
+  lteScell?: number[];
+  nrScell?: number[];
 }
 export interface SmsMessage { index: string; phone: string; content: string; date: string; unread: boolean; }
 
@@ -249,7 +262,8 @@ export interface RouterDriver {
   placeCheckStatus?(): Promise<{ step: number; quality?: number }>;
   placeCheckCancel?(): Promise<void>;
   getBandConfig?(): Promise<BandConfig>;
-  setBand?(bands: number[], nrBands?: number[]): Promise<void>;
+  /** roles: اختياري — أي تردد فيه يصير «ثانوي بس» (الراوترات اللي ما تدعمه تتجاهله) */
+  setBand?(bands: number[], nrBands?: number[], roles?: BandRoles): Promise<void>;
   lockCell?(target: CellLockTarget): Promise<void>;
   /**
    * لو موجود: التثبيت على برج خطر على هذا النوع (مثلاً ZTE يطيح بدون خدمة/واي فاي لين ضبط المصنع)
