@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { noChange, markNoChange, isNoChange, safeToSkipRevert } from '../src/drivers/noChange';
 import { runApply, trackWrites } from '../src/utils/applyGuard';
 import {
-  buildCellLockBody, buildUnlockBody, parseCellLocks, parseLockRaw, lockMatches, isSectionLocked, bandLockSection,
+  buildCellLockBody, buildUnlockBody, parseCellLocks, parseLockRaw, lockMatches, isSectionLocked, bandLockSection, buildChannelLockBody, channelMatches, lockKindOf,
 } from '../src/drivers/huawei/cellLock';
 
 // ─── علامة noChange ───
@@ -221,4 +221,22 @@ test('بدون أدوار = كلها أساسي + ثانوي (نفس طلب صف
 test('لازم يبقى تردد واحد أساسي على الأقل (شرط الراوتر)', () => {
   const x = bandLockSection('nr_info', [78], [78]);
   assert.ok(x.includes('<freq_info><band>78</band></freq_info>'));
+});
+
+// ─── قفل القناة ونوع القفل ───
+
+test('قفل قناة: lock_mode 1 + رقم القناة بدون خلية، وقفل 4G الحالي محفوظ', () => {
+  const body = buildChannelLockBody({ tech: 'NR', band: 78, arfcn: '636666', current: { lte: lteLocked, nr: free }, netMode: '00' });
+  assert.ok(body.includes('<lte_info>' + lteLocked + '</lte_info>'));
+  assert.ok(body.includes('<nr_info><lock_mode>1</lock_mode><freq_infos><freq_info><band>78</band><freq>636666</freq><pci></pci></freq_info></freq_infos><all_bands>78</all_bands></nr_info>'));
+});
+
+test('نوع القفل من رد الراوتر + التحقق من قفل القناة', () => {
+  assert.equal(lockKindOf(free), 'none');
+  assert.equal(lockKindOf(lteLocked), 'cell');
+  assert.equal(lockKindOf('<lock_mode>3</lock_mode>'), 'band');
+  const ch = '<lock_mode>1</lock_mode><freq_infos><freq_info><band>3</band><freq>1650</freq><pci></pci></freq_info></freq_infos><all_bands>3</all_bands>';
+  assert.equal(channelMatches({ lte: ch, nr: free }, 'LTE', '1650'), true);
+  assert.equal(channelMatches({ lte: ch, nr: free }, 'LTE', '124'), false);
+  assert.equal(channelMatches({ lte: lteLocked, nr: free }, 'LTE', '1300'), false);
 });

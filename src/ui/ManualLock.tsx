@@ -18,7 +18,7 @@ function ago(t: number): string {
 }
 
 /** القفل اليدوي: تكتب رقم القناة والخلية، أو تختار من خلايا شفناها قبل */
-export function ManualLock({ seen, visible, busy, onLock, initial }: {
+export function ManualLock({ seen, visible, busy, onLock, initial, onLockChannel }: {
   /** أرقام منسوخة من برج في القائمة */
   initial?: { tech: 'LTE' | 'NR'; arfcn: string; pci: string };
   seen: SeenCell[];
@@ -26,6 +26,8 @@ export function ManualLock({ seen, visible, busy, onLock, initial }: {
   visible: Set<string>;
   busy: boolean;
   onLock: (t: ManualTarget) => void;
+  /** قفل القناة بس (بدون رقم خلية) — للراوترات اللي تدعمه */
+  onLockChannel?: (t: { tech: 'LTE' | 'NR'; band: number; arfcn: string }) => void;
 }) {
   const [tech, setTech] = useState<'LTE' | 'NR'>(initial?.tech ?? 'LTE');
   const [arfcn, setArfcn] = useState(initial?.arfcn ?? '');
@@ -86,6 +88,18 @@ export function ManualLock({ seen, visible, busy, onLock, initial }: {
       >
         <Text style={s.btnTxt}>ثبّت على هذي الخلية</Text>
       </Pressable>
+      {!!onLockChannel && (
+        <>
+          <Pressable
+            style={[s.btnAlt, (chk.band === undefined || !arfcn.trim() || busy) && s.dim]}
+            disabled={chk.band === undefined || !arfcn.trim() || busy}
+            onPress={() => chk.band !== undefined && onLockChannel({ tech, band: chk.band, arfcn: arfcn.trim() })}
+          >
+            <Text style={s.btnAltTxt}>ثبّت على القناة بس (بدون رقم خلية)</Text>
+          </Pressable>
+          <Text style={s.hint}>قفل القناة: الراوتر يبقى على هالقناة، ويختار بنفسه أفضل برج عليها — أخف من قفل الخلية لو البرج تغيّر.</Text>
+        </>
+      )}
       <Text style={s.hint}>التثبيت آمن: نقيس قبل وبعد، ولو الخلية ما اتصلت أو صارت أسوأ نرجّع إعدادك لحاله.</Text>
 
       {past.length > 0 && (
@@ -125,6 +139,8 @@ const s = sheet({
   err: { color: C.red, fontWeight: '700', fontSize: 12, textAlign: 'right' },
   btn: { backgroundColor: C.blue, borderRadius: 14, padding: 13, alignItems: 'center' },
   btnTxt: { color: C.onAccent, fontWeight: '800', fontSize: 14 },
+  btnAlt: { borderRadius: 14, paddingVertical: 12, alignItems: 'center', borderWidth: 1.5, borderColor: C.violet },
+  btnAltTxt: { color: C.violet, fontWeight: '900', fontSize: 13.5 },
   dim: { opacity: 0.45 },
   sec: { color: C.text, fontWeight: '800', fontSize: 14, textAlign: 'right' },
   past: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.rowBg, borderRadius: 14, borderWidth: 1.5, borderColor: C.cardBorder, padding: 10 },

@@ -17,7 +17,7 @@ import * as extras from './extras';
 import { parseTxPower, parseDlMcs, parseUlMcs } from '../../utils/linkHealth';
 import { buildSnapshot } from '../../utils/snapshot';
 import { noChange } from '../noChange';
-import { buildCellLockBody, buildUnlockBody, lockMatches, parseCellLocks, parseLockRaw, LockRaw, Tech as CellTech, bandLockSection } from './cellLock';
+import { buildCellLockBody, buildUnlockBody, lockMatches, parseCellLocks, parseLockRaw, LockRaw, Tech as CellTech, bandLockSection, buildChannelLockBody, channelMatches, lockKindOf } from './cellLock';
 
 const tag = (xml: string, t: string) =>
   xml.match(new RegExp(`<${t}>([\\s\\S]*?)</${t}>`))?.[1];
@@ -701,12 +701,15 @@ export class HuaweiDriver implements RouterDriver {
     let nrLocked: number[] = [];
     let lteScell: number[] = [];
     let nrScell: number[] = [];
+    let lockKinds: BandConfig['lockKinds'];
     if (this.lockFreq) {
       const lf = await this.readLockFreq();
       locked = lf.lte;
       nrLocked = lf.nr;
       lteScell = lf.lteScell;
       nrScell = lf.nrScell;
+      const raw = await this.readCellLockRaw();
+      lockKinds = { lte: lockKindOf(raw.lte), nr: lockKindOf(raw.nr) };
     } else {
       const opt = tag(cur, 'LTEBandOption');
       const active = bandsFromMask(big(tag(cur, 'LTEBand') ?? ALL_LTE)).filter(b => supported.includes(b));
@@ -726,7 +729,7 @@ export class HuaweiDriver implements RouterDriver {
       nrLocked,
       ...(has5g && !nrLockable ? { nrLockable: false } : {}),
       // lock-freq يدعم «ثانوي بس» (Scell) لكل تردد
-      ...(this.lockFreq && !this.lockFreqDead ? { bandRoles: true, lteScell, nrScell } : {}),
+      ...(this.lockFreq && !this.lockFreqDead ? { bandRoles: true, lteScell, nrScell, lockKinds } : {}),
       mode: tag(cur, 'NetworkMode') ?? '00',
       modes: modes.map(v => ({ value: v, label: modeLabel(v) })),
     };
@@ -967,6 +970,44 @@ export class HuaweiDriver implements RouterDriver {
     // لا تمسح الأقفال السابقة عند فشل محاولة تثبيت خلية جديدة.
     if (lastErr) throw lastErr;
     throw new Error('الراوتر ما قبل قفل الخلية على هذا البرج؛ أبقينا الأقفال السابقة دون مسحها.');
+  }
+  async lockChannel(target: { tech: 'LTE' | 'NR'; band?: number; arfcn: string }) {
+    const UNSUPPORTED = 'راوترك ما يدعم قفل القناة';
+    const arfcn = arfcnOf(target.arfcn);
+    if (!arfcn) throw noChange('اكتب رقم القناة (EARFCN / NR-ARFCN)');
+    const tech: CellTech = target.tech === 'NR' ? 'NR' : 'LTE';
+    if (this.lockFreqDead) throw noChange(UNSUPPORTED);
+    let netMode = '';
+    try {
+      netMode = tag(await this.get('net/net-mode'), 'NetworkMode') ?? '';
+    } catch {
+      throw noChange('تعذر قراءة وضع الشبكة. لم ننفذ قفل القناة؛ تحقق من اتصال الراوتر وحاول مجددًا.');
+    }
+    if (tech === 'NR' && netMode === '03') throw noChange('الراوتر على 4G فقط — حوّله لـ 4G + 5G قبل قفل قناة 5G. لم ننفذ شي.');
+    if (tech === 'LTE' && netMode === '08') throw noChange('الراوتر على 5G فقط — حوّله لـ 4G + 5G قبل قفل قناة 4G. لم ننفذ شي.');
+    let current: LockRaw;
+    try {
+      current = await this.readCellLockStrict();
+    } catch (e) {
+      if (await this.lockFreqUnsupported(e)) throw noChange(UNSUPPORTED);
+      throw noChange('ما قدرنا نقرأ القفل الحالي من الراوتر، فما غيّرنا شي. جرّب مرة ثانية.');
+    }
+    const body = buildChannelLockBody({ tech, band: target.band, arfcn, current, netMode });
+    this.log('channel-lock', body);
+    try {
+      await this.post('net/lock-freq', body);
+    } catch (e) {
+      if (await this.lockFreqUnsupported(e)) throw noChange(UNSUPPORTED);
+      throw e;
+    }
+    await new Promise(r => setTimeout(r, 2500));
+    let after: LockRaw;
+    try {
+      after = await this.readCellLockStrict();
+    } catch {
+      throw new Error('الراوتر قبل أمر قفل القناة لكن ما قدرنا نتأكد من النتيجة.');
+    }
+    if (!channelMatches(after, tech, arfcn)) throw new Error('الراوتر ما ثبّت القناة المطلوبة');
   }
   async unlockCell(tech?: 'LTE' | 'NR') {
     if (this.lockFreqDead) return; // الموديل ما يدعم قفل الخلية

@@ -9,7 +9,7 @@ import { ActivityIndicator } from 'react-native';
 import { View, Text, Pressable } from '../i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BandConfig, Carrier } from '../drivers/types';
+import { BandConfig, BandRoles, Carrier } from '../drivers/types';
 import { BandKind, BAND_KIND_LABEL, bandMhz, bandKindOf } from '../utils/bands';
 import { C, isDark } from './theme';
 import { Icon } from './Icon';
@@ -59,6 +59,7 @@ const SW_OFF = isDark
   ? { backgroundColor: '#4d2c33', borderColor: '#7a3a44' }
   : { backgroundColor: '#F7D4D4', borderColor: '#E9A3A3' };
 const LAYOUT_KEY = 'bandly.bandsLayout';
+const LOCK_KIND_TEXT = { none: 'تلقائي', band: 'ترددات', channel: 'قناة', cell: 'برج' } as const;
 const SIG_TEXT = ['ما ظهر برج', 'ضعيفة', 'متوسطة', 'قوية', 'قوية جداً'];
 
 const mhzOf = bandMhz;
@@ -88,7 +89,8 @@ export interface BandPickerProps {
   activeLte: number[];
   activeNr: number[];
   busy: boolean;
-  onTry: (lte: number[], nr: number[] | undefined, label: string) => void;
+  /** roles: «ثانوي بس» لكل تردد — بس للراوترات اللي cfg.bandRoles عندها */
+  onTry: (lte: number[], nr: number[] | undefined, label: string, roles?: BandRoles) => void;
   onAuto: () => void;
   /** ترددات فحصناها (ثبّتنا عليها) وما مسك برج — المفتاح "LTE:7" */
   none?: string[];
@@ -115,7 +117,14 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
   // فاضي = تلقائي (كل الترددات مسموحة)
   const [lte, setLte] = useState<number[]>(cfg.locked);
   const [nr, setNr] = useState<number[]>(cfg.nrLocked);
-  useEffect(() => { setLte(cfg.locked); setNr(cfg.nrLocked); }, [cfg]);
+  // «ثانوي بس» (Scell): يندمج مع الأساسي بس ما يصير هو الأساسي — هواوي lock-freq
+  const [lteSc, setLteSc] = useState<number[]>(cfg.lteScell ?? []);
+  const [nrSc, setNrSc] = useState<number[]>(cfg.nrScell ?? []);
+  useEffect(() => {
+    setLte(cfg.locked); setNr(cfg.nrLocked);
+    setLteSc(cfg.lteScell ?? []); setNrSc(cfg.nrScell ?? []);
+  }, [cfg]);
+  const roles = !!cfg.bandRoles;
 
   const hasNr = cfg.nrSupported.length > 0;
   const supported = (t: Tech) => (t === 'LTE' ? cfg.supported : cfg.nrSupported);
@@ -139,6 +148,17 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
     // الأقوى فوق، وبعدها حسب التردد
     return [...base].sort((a, b) =>
       (seen[t + ':' + b]?.score ?? -1) - (seen[t + ':' + a]?.score ?? -1) || mhzOf(t, a) - mhzOf(t, b));
+  };
+
+  const scOf = (t: Tech) => (t === 'LTE' ? lteSc : nrSc).filter(b => sel(t).includes(b));
+  const isSc = (t: Tech, b: number) => roles && sel(t).length > 0 && scOf(t).includes(b);
+  /** يبدّل دور التردد: «أساسي + ثانوي» ⇄ «ثانوي بس» (لازم يبقى واحد أساسي على الأقل) */
+  const toggleRole = (t: Tech, b: number) => {
+    if (busy || !roles || !sel(t).length || !sel(t).includes(b)) return;
+    const cur = scOf(t);
+    const next = cur.includes(b) ? cur.filter(x => x !== b) : [...cur, b];
+    if (!sel(t).some(x => !next.includes(x))) return;
+    (t === 'LTE' ? setLteSc : setNrSc)(next.sort((x, y) => x - y));
   };
 
   const toggle = (t: Tech, b: number) => {
@@ -168,15 +188,18 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
   }, [lte, nr, seen, carriers, cfg]);
   const speed = Math.round(combo.reduce((a, x) => a + x.v, 0) / 5) * 5;
 
-  const dirty = !sameSet(lte, cfg.locked) || !sameSet(nr, cfg.nrLocked);
-  const nrDirty = !sameSet(nr, cfg.nrLocked);
+  const lteScDirty = roles && !sameSet(scOf('LTE'), cfg.lteScell ?? []);
+  const nrScDirty = roles && !sameSet(scOf('NR'), cfg.nrScell ?? []);
+  const nrDirty = !sameSet(nr, cfg.nrLocked) || nrScDirty;
+  const dirty = !sameSet(lte, cfg.locked) || nrDirty || lteScDirty;
   const isAuto = !cfg.locked.length && !cfg.nrLocked.length;
   const countOn = (t: Tech) => (sel(t).length || supported(t).length);
 
   const name = (t: Tech, b: number) => (t === 'NR' ? '5G ' : '') + (mhzOf(t, b) || (t === 'NR' ? 'n' : 'B') + b);
+  const withRole = (t: Tech, b: number) => name(t, b) + (isSc(t, b) ? ' (ثانوي)' : '');
   const label = [
-    lte.length ? lte.map(b => name('LTE', b)).join(' + ') : '4G تلقائي',
-    ...(nrDirty ? [nr.length ? nr.map(b => name('NR', b)).join(' + ') : '5G تلقائي'] : []),
+    lte.length ? lte.map(b => withRole('LTE', b)).join(' + ') : '4G تلقائي',
+    ...(nrDirty ? [nr.length ? nr.map(b => withRole('NR', b)).join(' + ') : '5G تلقائي'] : []),
   ].join(' · ');
 
   const rows = list(tab);
@@ -252,6 +275,17 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
       {cfg.nrLockable === false && (
         <Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, textAlign: 'right', paddingHorizontal: 4 }}>
           ⚡ راوترك يخلي 5G تلقائي — ما يقبل تثبيت تردد 5G معيّن، فتختار هنا ترددات 4G بس.
+        </Text>
+      )}
+
+      {!!cfg.lockKinds && (
+        <Text style={{ color: C.text, fontSize: 12.5, fontWeight: '700', lineHeight: 19, textAlign: 'right', paddingHorizontal: 4 }}>
+          {`🔒 القفل الحالي — 4G: ${LOCK_KIND_TEXT[cfg.lockKinds.lte]} · 5G: ${LOCK_KIND_TEXT[cfg.lockKinds.nr]}`}
+        </Text>
+      )}
+      {roles && (
+        <Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, textAlign: 'right', paddingHorizontal: 4 }}>
+          💡 بعد ما تختار الترددات، اضغط «أساسي + ثانوي» تحت أي تردد عشان تخليه «ثانوي بس» — يندمج مع الأساسي بس الراوتر ما يختاره أساسي.
         </Text>
       )}
 
@@ -366,6 +400,9 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
                         <Text style={[s.codeChipText, { color: k.fg }]}>{(tab === 'NR' ? 'n' : 'B') + b}</Text>
                       </View>
                     </View>
+                    {roles && on && sel(tab).length > 0 && (
+                      <RoleChip sc={isSc(tab, b)} tone={TECH_TONE[tab].fg} onPress={() => toggleRole(tab, b)} />
+                    )}
                   </Pressable>
                 );
               })}
@@ -436,6 +473,9 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
                   </Text>
                   <Text style={o.code}>{(tab === 'NR' ? 'n' : 'B') + b}</Text>
                 </View>
+                {roles && on && sel(tab).length > 0 && (
+                  <RoleChip sc={isSc(tab, b)} tone={TECH_TONE[tab].fg} onPress={() => toggleRole(tab, b)} />
+                )}
               </View>
               <View style={[o.star, prim && { backgroundColor: isDark ? '#40382a' : '#fff6dc' }]}>
                 <Icon name="star" size={16} color={prim ? '#f0b020' : C.lineSoft} />
@@ -460,7 +500,8 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
 
       {/* الأزرار */}
       <Pressable
-        onPress={() => onTry(lte, nrDirty ? nr : undefined, label)}
+        onPress={() => onTry(lte, nrDirty ? nr : undefined, label,
+          roles ? { lteScell: scOf('LTE'), ...(nrDirty ? { nrScell: scOf('NR') } : {}) } : undefined)}
         disabled={busy || !dirty}
         style={[{ borderRadius: 16, overflow: 'hidden' }, (busy || !dirty) && { opacity: 0.45 }]}
       >
@@ -659,3 +700,21 @@ const o = sheet({
   ghost: { borderWidth: 1, borderColor: C.blue, borderRadius: 16, paddingVertical: 12, alignItems: 'center' },
   ghostText: { color: C.blue, fontSize: 14, fontWeight: '700' },
 });
+
+/** شارة دور التردد: «أساسي + ثانوي» أو «ثانوي بس» — تنضغط لحالها (ما تطفي التردد) */
+function RoleChip({ sc, tone, onPress }: { sc: boolean; tone: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={6}
+      style={{
+        alignSelf: 'flex-end', marginTop: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10,
+        borderWidth: 1.5, borderColor: sc ? '#e0a100' : tone, backgroundColor: sc ? (isDark ? '#40382a' : '#fff6dc') : 'transparent',
+      }}
+    >
+      <Text style={{ fontSize: 11.5, fontWeight: '800', color: sc ? '#b07d00' : tone }}>
+        {sc ? 'ثانوي بس' : 'أساسي + ثانوي'}
+      </Text>
+    </Pressable>
+  );
+}

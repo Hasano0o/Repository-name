@@ -135,6 +135,8 @@ export interface BandConfig {
   bandRoles?: boolean;
   lteScell?: number[];
   nrScell?: number[];
+  /** نوع القفل الحالي لكل تقنية (للعرض) */
+  lockKinds?: { lte: 'none' | 'band' | 'channel' | 'cell'; nr: 'none' | 'band' | 'channel' | 'cell' };
 }
 
 /** ترددات «ثانوي بس» (لازم تكون ضمن الترددات المسموحة) — للراوترات اللي bandRoles عندها true */
@@ -270,6 +272,11 @@ export interface RouterDriver {
    * — الشاشات تخفي «ثبّت على برج» و«فحص بنق الأبراج» وتعرض هذا السبب. فك التثبيت يبقى متاح.
    */
   cellLockRisk?: string;
+  /**
+   * قفل قناة: التردد + رقم القناة بدون رقم برج — الراوتر يختار أفضل برج على هالقناة.
+   * (هواوي lock-freq: lock_mode 1)
+   */
+  lockChannel?(target: { tech: 'LTE' | 'NR'; band?: number; arfcn: string }): Promise<void>;
   /** بدون tech = يفك كل التثبيتات. مع tech = يفك تثبيت 4G أو 5G بس */
   unlockCell?(tech?: 'LTE' | 'NR'): Promise<void>;
   getCellLock?(): Promise<CellLockState | null>;

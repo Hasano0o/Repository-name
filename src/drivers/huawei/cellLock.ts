@@ -95,3 +95,37 @@ export function bandLockSection(name: string, bands: number[], scellOnly: number
   if (!prim.length) prim = all;
   return sectionXml(name, '3', prim.map(b => '<freq_info><band>' + b + '</band></freq_info>'), all.join(','));
 }
+
+/** نوع القفل الحالي لكل تقنية — نفس خيارات صفحة «تحديد النطاق»: 0 بدون، 3 نطاق، 1 قناة، 2 خلية */
+export type LockKind = 'none' | 'band' | 'channel' | 'cell';
+export function lockKindOf(section: string): LockKind {
+  const m = (tag(section, 'lock_mode') ?? '0').trim();
+  return m === '3' ? 'band' : m === '1' ? 'channel' : m === '2' ? 'cell' : 'none';
+}
+
+/**
+ * قفل قناة (lock_mode 1): تردد + رقم القناة بدون رقم خلية — الراوتر يختار أفضل برج على هالقناة.
+ * القسم الثاني يتبع نفس قاعدة قفل الخلية (ينرسل كما قرأناه، ووضع الشبكة يحدد الأقسام).
+ */
+export function buildChannelLockBody(o: { tech: Tech; band?: number; arfcn: string; current: LockRaw; netMode: string }): string {
+  const entry = '<freq_info>' + (o.band ? '<band>' + o.band + '</band>' : '<band></band>') +
+    '<freq>' + o.arfcn + '</freq><pci></pci></freq_info>';
+  const mine = sectionXml(sectionName(o.tech), '1', [entry], o.band ? String(o.band) : '');
+  const otherTech: Tech = o.tech === 'NR' ? 'LTE' : 'NR';
+  const otherName = sectionName(otherTech);
+  const otherRaw = otherTech === 'NR' ? o.current.nr : o.current.lte;
+  const rest = isSectionLocked(otherRaw)
+    ? '<' + otherName + '>' + otherRaw + '</' + otherName + '>'
+    : sectionXml(otherName, '0', [], '');
+  const lte = o.tech === 'LTE' ? mine : rest;
+  const nr = o.tech === 'NR' ? mine : rest;
+  if (o.netMode === '03') return lte;
+  if (o.netMode === '08') return nr;
+  return lte + nr;
+}
+
+/** هل القراءة بعد الأمر تثبت قفل القناة المطلوب؟ */
+export function channelMatches(raw: LockRaw, tech: Tech, arfcn: string): boolean {
+  const sec = tech === 'NR' ? raw.nr : raw.lte;
+  return lockKindOf(sec) === 'channel' && (tag(sec, 'freq') ?? '').trim() === arfcn;
+}

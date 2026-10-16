@@ -7,7 +7,7 @@ import { useLocalSearchParams, useRouter, Href } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
-import { BandConfig, Signal, CellTower, Carrier } from '../../src/drivers/types';
+import { BandConfig, BandRoles, Signal, CellTower, Carrier } from '../../src/drivers/types';
 import { BandPicker, BandSeen } from '../../src/ui/BandPicker';
 import { useOperatorBands } from '../../src/store/operator';
 import { BestCombo, GuardCard, comboLabel } from '../../src/ui/BestCombo';
@@ -261,22 +261,28 @@ export default function BandsScreen() {
   };
 
   /** ═══ تركيبة من شاشة الاختيار: 4G (فاضي = تلقائي) و 5G (undefined = ما تغيّر) ═══ */
-  const applyMix = async (lte: number[], nr: number[] | undefined, label: string) => {
+  const applyMix = async (lte: number[], nr: number[] | undefined, label: string, roles?: BandRoles) => {
     if (!info || !cfg) return;
     cancelRef.current = false;
     setBusy(true);
     setError('');
     const prevLte = cfg.locked;
     const prevNr = cfg.nrLocked;
+    // الأدوار السابقة («ثانوي بس») — عشان الإرجاع يرجعها بالضبط
+    const prevRoles: BandRoles | undefined = cfg.bandRoles
+      ? { lteScell: cfg.lteScell ?? [], ...(nr ? { nrScell: cfg.nrScell ?? [] } : {}) }
+      : undefined;
     const k = (xs: number[]) => [...xs].sort((a, b) => a - b).join('+') || 'auto';
+    const rk = roles?.lteScell?.length || roles?.nrScell?.length
+      ? `:sc${k(roles?.lteScell ?? [])}/${k(roles?.nrScell ?? [])}` : '';
     try {
       const res = await safeApply({
         r: info,
-        key: `band:mix:${k(lte)}:${nr ? k(nr) : '-'}`,
+        key: `band:mix:${k(lte)}:${nr ? k(nr) : '-'}${rk}`,
         label,
         withNr: !!nr,
-        apply: d => d.setBand!(lte, nr),
-        revert: d => d.setBand!(prevLte, nr ? prevNr : undefined),
+        apply: d => d.setBand!(lte, nr, roles),
+        revert: d => d.setBand!(prevLte, nr ? prevNr : undefined, prevRoles),
         onStatus: setStatus,
         isCancelled: () => cancelRef.current,
       });
@@ -290,7 +296,7 @@ export default function BandsScreen() {
     }
   };
 
-  const confirmMix = async (lte: number[], nr: number[] | undefined, label: string) => {
+  const confirmMix = async (lte: number[], nr: number[] | undefined, label: string, roles?: BandRoles) => {
     if (!info) return;
     const k = (xs: number[]) => [...xs].sort((a, b) => a - b).join('+') || 'auto';
     const t = await lastTrial(info.id, `band:mix:${k(lte)}:${nr ? k(nr) : '-'}`);
@@ -300,7 +306,7 @@ export default function BandsScreen() {
         (lte.length === 1 ? '\n\n⚠️ تردد 4G واحد يوقف الدمج — لو تبي سرعة أكثر خلّ أكثر من تردد.' : '') +
         (nr ? '\nمع 5G نسوي تحميل قصير (حوالي ٢٥ ميقا) عشان يصحى.' : '') +
         (t ? `\n\n🧠 ${trialNote(t)}` : ''),
-      [{ text: 'إلغاء', style: 'cancel' }, { text: 'جرّب', onPress: () => applyMix(lte, nr, label) }],
+      [{ text: 'إلغاء', style: 'cancel' }, { text: 'جرّب', onPress: () => applyMix(lte, nr, label, roles) }],
     );
   };
 

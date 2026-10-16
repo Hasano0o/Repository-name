@@ -203,6 +203,7 @@ export default function TowersScreen() {
   const reloadTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   useEffect(() => () => { alive.current = false; reloadTimers.current.forEach(clearTimeout); }, []);
   const [canLock, setCanLock] = useState(false);
+  const [canChannel, setCanChannel] = useState(false);
   const [lockRisk, setLockRisk] = useState('');
   const [bandCfg, setBandCfg] = useState<BandConfig | null>(null);
   const [trialCount, setTrialCount] = useState(0);
@@ -224,7 +225,7 @@ export default function TowersScreen() {
     setError('');
     try {
       // بالتسلسل: بعض الراوترات (ZTE) ما تحب الطلبات المتوازية
-      const [list, lock, supports, sig, cfg] = await withSession(r, async d => [
+      const [list, lock, supports, sig, cfg, chan] = await withSession(r, async d => [
         d.getCells ? await d.getCells() : ([] as CellTower[]),
         d.getCellLocks
           ? await d.getCellLocks().catch(() => [] as CellLockState[])
@@ -232,6 +233,7 @@ export default function TowersScreen() {
         typeof d.lockCell === 'function' && typeof d.unlockCell === 'function' && !d.cellLockRisk,
         d.getSignal ? await d.getSignal().catch(() => null) : null,
         d.getBandConfig && d.setBand ? await d.getBandConfig().catch(() => null) : null,
+        typeof d.lockChannel === 'function' && !d.cellLockRisk,
       ] as const);
       const known = await loadConfirmed(r.id);
       const next = await rememberActive(r.id, list, known);
@@ -242,6 +244,8 @@ export default function TowersScreen() {
       setNrAvail(sig?.nrAvailable);
       setLocks(lock);
       setCanLock(supports);
+      // قفل القناة: بس لو الراوتر يدعم الأدوار (lock-freq شغال) — وإلا ما نعرضه
+      setCanChannel(chan && !!cfg?.bandRoles);
       setLockRisk(driverById(r.driverId)?.cellLockRisk ?? '');
       setBandCfg(cfg);
       setTrialCount((await loadTrials(r.id)).length);
@@ -473,6 +477,27 @@ export default function TowersScreen() {
           label: `التثبيت اليدوي على ${name}`,
           withNr: t.tech === 'NR',
           apply: d => d.lockCell!({ tech: t.tech, band: t.band, arfcn: t.arfcn, pci: t.pci }),
+          revert: d => (prevSame
+            ? d.lockCell!({ tech: t.tech, band: prevSame.band, arfcn: prevSame.arfcn, pci: prevSame.pci! })
+            : d.unlockCell!(t.tech)),
+        }),
+      },
+    ]);
+  };
+
+  /** قفل القناة بس — نفس الأمان: قياس قبل وبعد ورجوع تلقائي */
+  const onManualChannel = (t: { tech: 'LTE' | 'NR'; band: number; arfcn: string }) => {
+    if (!info) return;
+    const prevSame = locks.find(l => (l.tech ?? 'LTE') === t.tech && l.pci);
+    const name = `${bandLabel(t.tech, t.band)} · قناة ${t.arfcn}`;
+    Alert.alert('قفل القناة', `بنثبّت الراوتر على ${name}، وهو يختار أفضل برج عليها.\n\nإذا ما اتصل أو صار أسوأ، نرجّع إعدادك لحاله.`, [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'ثبّت', onPress: () => runSafe({
+          key: `chan:${t.tech}:${t.arfcn}`,
+          label: `قفل القناة ${name}`,
+          withNr: t.tech === 'NR',
+          apply: d => d.lockChannel!({ tech: t.tech, band: t.band, arfcn: t.arfcn }),
           revert: d => (prevSame
             ? d.lockCell!({ tech: t.tech, band: prevSame.band, arfcn: prevSame.arfcn, pci: prevSame.pci! })
             : d.unlockCell!(t.tech)),
@@ -891,6 +916,7 @@ export default function TowersScreen() {
             visible={new Set(cells.filter(c => c.pci && c.arfcn).map(c => seenKey({ tech: c.tech, pci: c.pci!, arfcn: c.arfcn! })))}
             busy={busy}
             onLock={onManualLock}
+            onLockChannel={canChannel ? onManualChannel : undefined}
           />
           </View>
         )}

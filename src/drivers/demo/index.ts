@@ -1,7 +1,7 @@
 import {
   RouterDriver, Capability, Signal, SignalSnapshot, CellTower, Carrier, NetworkInfo,
   DeviceDetails, Traffic, ConnectedDevice, Usage, BandConfig, CellLockTarget, CellLockState,
-  ActiveLock, DataPlan, SmsMessage, ApnProfile, DnsConfig, WifiRadio, RouterExtras, TimeRule,
+  ActiveLock, DataPlan, SmsMessage, ApnProfile, DnsConfig, WifiRadio, RouterExtras, TimeRule, BandRoles,
 } from '../types';
 import { buildSnapshot } from '../../utils/snapshot';
 import { listRouters, saveRouter } from '../../store/routers';
@@ -61,6 +61,9 @@ export class DemoDriver implements RouterDriver {
 
   private lteLocked: number[] = [];
   private nrLocked: number[] = [];
+  /** «ثانوي بس» — عشان الوضع التجريبي يعرض أدوار الترددات مثل هواوي */
+  private lteScell: number[] = [];
+  private nrScell: number[] = [];
   private mode = '00';
   private locks: CellLockState[] = [];
   private blocked = new Set<string>();
@@ -295,13 +298,22 @@ export class DemoDriver implements RouterDriver {
 
   async getBandConfig(): Promise<BandConfig> {
     await this.alive();
-    return { supported: LTE_ALL, locked: [...this.lteLocked], nrSupported: NR_ALL, nrLocked: [...this.nrLocked], mode: this.mode, modes: MODES };
+    const kind = (xs: number[]) => (xs.length ? 'band' as const : 'none' as const);
+    return {
+      supported: LTE_ALL, locked: [...this.lteLocked], nrSupported: NR_ALL, nrLocked: [...this.nrLocked], mode: this.mode, modes: MODES,
+      bandRoles: true, lteScell: [...this.lteScell], nrScell: [...this.nrScell],
+      lockKinds: { lte: kind(this.lteLocked), nr: kind(this.nrLocked) },
+    };
   }
 
-  async setBand(bands: number[], nrBands?: number[]) {
+  async setBand(bands: number[], nrBands?: number[], roles?: BandRoles) {
     await this.alive();
     this.lteLocked = bands.filter(b => LTE_ALL.includes(b));
-    if (nrBands) this.nrLocked = nrBands.filter(b => NR_ALL.includes(b));
+    this.lteScell = (roles?.lteScell ?? []).filter(b => this.lteLocked.includes(b));
+    if (nrBands) {
+      this.nrLocked = nrBands.filter(b => NR_ALL.includes(b));
+      this.nrScell = (roles?.nrScell ?? []).filter(b => this.nrLocked.includes(b));
+    }
     await sleep(600);
   }
 
@@ -336,7 +348,7 @@ export class DemoDriver implements RouterDriver {
 
   async restoreAll() {
     await this.alive();
-    this.lteLocked = []; this.nrLocked = []; this.locks = []; this.mode = '00';
+    this.lteLocked = []; this.nrLocked = []; this.lteScell = []; this.nrScell = []; this.locks = []; this.mode = '00';
     this.rebootUntil = Date.now() + 15_000;
   }
 
