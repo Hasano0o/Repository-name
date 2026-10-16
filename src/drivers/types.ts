@@ -122,6 +122,12 @@ export interface BandConfig {
   nrLocked: number[];
   mode: string;
   modes: NetworkModeOption[];
+  /**
+   * false = الراوتر فيه 5G بس ما يقبل تثبيت تردد 5G معيّن (مثل H158: بدون lock-freq) —
+   * nrSupported يكون فاضي (ما فيه شي تختاره) والشاشات توضّح إن 5G يبقى تلقائي.
+   * undefined = يقبل (أو الراوتر 4G بس).
+   */
+  nrLockable?: boolean;
 }
 export interface SmsMessage { index: string; phone: string; content: string; date: string; unread: boolean; }
 

@@ -706,12 +706,17 @@ export class HuaweiDriver implements RouterDriver {
     }
     this.log('bands supported', supported.join(','), 'locked', locked.join(',') || 'auto', 'lockFreq', this.lockFreq);
     // ═══ ترددات 5G: نعرضها إلا إذا تأكدنا إن الراوتر 4G فقط (B535، B311...)
-    const nrSupported = (await this.nrCapable().catch(() => undefined)) === false ? [] : DEFAULT_NR_BANDS;
+    const has5g = (await this.nrCapable().catch(() => undefined)) !== false;
+    // بدون lock-freq ما فيه طريقة نثبّت فيها تردد 5G (net-mode فيه ترددات 4G بس) —
+    // فما نعرض ترددات 5G للاختيار أصلاً، بدل ما المستخدم يختار والراوتر يتجاهلها بصمت
+    const nrLockable = this.lockFreq && !this.lockFreqDead;
+    const nrSupported = has5g && nrLockable ? DEFAULT_NR_BANDS : [];
     return {
       supported,
       locked,
       nrSupported,
       nrLocked,
+      ...(has5g && !nrLockable ? { nrLockable: false } : {}),
       mode: tag(cur, 'NetworkMode') ?? '00',
       modes: modes.map(v => ({ value: v, label: modeLabel(v) })),
     };

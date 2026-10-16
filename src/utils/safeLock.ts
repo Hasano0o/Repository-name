@@ -10,7 +10,7 @@ import { driverById } from '../drivers/registry';
 import { trafficBurst } from './nrprobe';
 import { isNoService } from './signal';
 import { progress, Tracker } from '../ui/Progress';
-import { runApply } from './applyGuard';
+import { runApply, trackWrites } from './applyGuard';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 /** يرجّع undefined لو الخطوة طوّلت أكثر من المسموح (بدل ما يعلق المستخدم ٤٠ دقيقة) */
@@ -372,9 +372,11 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
   say('نطبّق التغيير...');
   // لو الأمر طوّل (مثلاً ZTE يعيد التشغيل بعد تثبيت البرج) ننتظره يخلص بدل ما نرجّع ونفك وهو في النص.
   // لو لسا ما خلص بعدها، نكمّل: الخطوة الجاية تتأكد من الاتصال وترجّع الإعداد لو لزم.
-  const step = await runApply({
+  let wrote = false;
+  const step = await runApply<RouterDriver>({
     session: fn => withSession(o.r, fn, false),
-    apply: o.apply,
+    apply: d => o.apply(trackWrites(d, () => { wrote = true; })),
+    changed: () => wrote,
     firstMs: 60_000,
     extraMs: 200_000,
     onLong: () => say('الراوتر لسا يطبّق التغيير (ممكن يعيد التشغيل) — ننتظره يخلص...'),

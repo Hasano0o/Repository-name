@@ -34,6 +34,11 @@ export async function runApply<D>(o: {
   /** انتظار إضافي لو الأمر لسا شغال (إعادة تشغيل مثلاً) — بدل ما نتدخّل وهو في النص */
   extraMs: number;
   onLong?: () => void;
+  /**
+   * هل نجح أمر كتابة قبل الخطأ؟ (التطبيق ممكن يكون خطوتين: وضع الشبكة ثم الترددات)
+   * لو الخطوة الأولى غيّرت شي والثانية قالت «ما غيّرنا»، الراوتر تغيّر فعلاً ← نرجّع.
+   */
+  changed?: () => boolean;
 }): Promise<ApplyOutcome> {
   let calls = 0;
   const p = o.session(d => { calls++; return o.apply(d); });
@@ -50,6 +55,31 @@ export async function runApply<D>(o: {
     }
     return { kind: 'done' };
   } catch (e) {
-    return { kind: 'failed', error: e, skipRevert: safeToSkipRevert(e, calls) };
+    return { kind: 'failed', error: e, skipRevert: safeToSkipRevert(e, calls) && !o.changed?.() };
   }
+}
+
+/** أوامر القراءة — ما تغيّر شي في الراوتر */
+const READ_ONLY = /^(get|read|is|has|can|detect|list|login|logout|then)/;
+
+/**
+ * يلف الدرايفر ويعلّم لما ينجح أي أمر غير القراءة (setBand، setNetworkMode، lockCell…).
+ * نستخدمه عشان نعرف هل تغيّر شي قبل الخطأ.
+ */
+export function trackWrites<D extends object>(d: D, mark: () => void): D {
+  return new Proxy(d, {
+    get(t, k) {
+      const v = Reflect.get(t, k, t);
+      if (typeof v !== 'function') return v;
+      if (typeof k !== 'string' || READ_ONLY.test(k)) return v.bind(t);
+      return (...args: unknown[]) => {
+        const res = v.apply(t, args);
+        if (res && typeof (res as any).then === 'function') {
+          return (res as Promise<unknown>).then(x => { mark(); return x; });
+        }
+        mark();
+        return res;
+      };
+    },
+  });
 }

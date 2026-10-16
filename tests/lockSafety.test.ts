@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { noChange, markNoChange, isNoChange, safeToSkipRevert } from '../src/drivers/noChange';
-import { runApply } from '../src/utils/applyGuard';
+import { runApply, trackWrites } from '../src/utils/applyGuard';
 import {
   buildCellLockBody, buildUnlockBody, parseCellLocks, parseLockRaw, lockMatches, isSectionLocked,
 } from '../src/drivers/huawei/cellLock';
@@ -169,4 +169,37 @@ test('٦) نجاح القفل يتأكد بالتقنية + PCI + القناة،
   assert.equal(lockMatches(locks, 'NR', '101', ''), false);
   assert.equal(lockMatches(locks, 'NR', '55', '999'), false);
   assert.equal(lockMatches([], 'LTE', '101', '1300'), false);
+});
+
+// ─── تطبيق من خطوتين ───
+
+test('خطوة أولى غيّرت (وضع الشبكة) والثانية قالت «ما غيّرنا»: لازم نرجّع', async () => {
+  let wrote = false;
+  const driver = {
+    async setNetworkMode() {},
+    async setBand() { throw noChange('راوترك ما يسمح نثبّت ترددات 5G'); },
+    async getSignal() { return {}; },
+  };
+  const out = await runApply<typeof driver>({
+    session: async fn => fn(trackWrites(driver, () => { wrote = true; })),
+    apply: async d => { await d.setNetworkMode(); await d.setBand(); },
+    changed: () => wrote,
+    firstMs: 1000, extraMs: 1000,
+  });
+  assert.ok(out.kind === 'failed' && !out.skipRevert);
+});
+
+test('قراءات قبل الرفض ما تنحسب تغيير: نتخطى الإرجاع', async () => {
+  let wrote = false;
+  const driver = {
+    async getBandConfig() { return {}; },
+    async setBand() { throw noChange('ما يدعم'); },
+  };
+  const out = await runApply<typeof driver>({
+    session: async fn => fn(trackWrites(driver, () => { wrote = true; })),
+    apply: async d => { await d.getBandConfig(); await d.setBand(); },
+    changed: () => wrote,
+    firstMs: 1000, extraMs: 1000,
+  });
+  assert.ok(out.kind === 'failed' && out.skipRevert);
 });

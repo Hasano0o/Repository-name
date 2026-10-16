@@ -248,6 +248,13 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
         </View>
       </LinearGradient>
 
+      {/* راوتر فيه 5G بس ما يقبل تثبيت تردده — نوضّح بدل ما نخفيه بصمت */}
+      {cfg.nrLockable === false && (
+        <Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, textAlign: 'right', paddingHorizontal: 4 }}>
+          ⚡ راوترك يخلي 5G تلقائي — ما يقبل تثبيت تردد 5G معيّن، فتختار هنا ترددات 4G بس.
+        </Text>
+      )}
+
       {/* 4G / 5G */}
       {hasNr && (
         <View style={s.seg}>

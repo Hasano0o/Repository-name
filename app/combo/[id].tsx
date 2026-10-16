@@ -393,6 +393,9 @@ export default function ComboScreen() {
                   <Tile label="بدون 5G" sub="4G فقط" color={C.sub} on={nr === 'none'} onPress={() => setNr('none')} />
                 )}
               </View>
+              {cfg?.nrLockable === false && (
+                <Text style={s.hint}>⚡ راوترك ما يقبل تثبيت تردد 5G معيّن — يا تخليه «أي 5G» (البرج يختار) يا «بدون 5G».</Text>
+              )}
             </GlassCard>
 
             {!!op && (hiddenCount > 0 || allBands) && (
