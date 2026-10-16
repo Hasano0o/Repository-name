@@ -10,7 +10,7 @@ import { View, Text, Pressable } from '../i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BandConfig, Carrier } from '../drivers/types';
-import { BAND_FREQ, NR_FREQ } from '../utils/bands';
+import { BandKind, BAND_KIND_LABEL, bandMhz, bandKindOf } from '../utils/bands';
 import { C, isDark } from './theme';
 import { Icon } from './Icon';
 import Svg, { Path, Circle, Rect, Text as SvgText } from 'react-native-svg';
@@ -36,8 +36,8 @@ export type Tech = 'LTE' | 'NR';
 /** أقوى قراءة شفناها لكل تردد من الأبراج المجاورة */
 export interface BandSeen { rsrp?: number; sinr?: number; score: number }
 
-type Kind = 'far' | 'mid' | 'fast';
-const KIND_LABEL: Record<Kind, string> = { far: 'يوصل بعيد', mid: 'متوازن', fast: 'سريع' };
+type Kind = BandKind;
+const KIND_LABEL = BAND_KIND_LABEL;
 const KIND_COLOR: Record<Kind, { bg: string; fg: string; bar: string }> = isDark
   ? {
       far: { bg: '#24493c', fg: '#6adcbd', bar: '#ffd36a' },
@@ -61,8 +61,8 @@ const SW_OFF = isDark
 const LAYOUT_KEY = 'bandly.bandsLayout';
 const SIG_TEXT = ['ما ظهر برج', 'ضعيفة', 'متوسطة', 'قوية', 'قوية جداً'];
 
-const mhzOf = (tech: Tech, b: number) => parseInt((tech === 'NR' ? NR_FREQ : BAND_FREQ)[b] ?? '0', 10);
-const kindOf = (mhz: number): Kind => (mhz && mhz < 1000 ? 'far' : mhz && mhz < 2300 ? 'mid' : 'fast');
+const mhzOf = bandMhz;
+const kindOf = bandKindOf;
 const shortOf = (mhz: number) => (!mhz ? '—' : mhz >= 1000 ? (mhz / 1000).toFixed(1) + 'G' : String(mhz));
 const levelOf = (s?: BandSeen) => (!s ? 0 : s.score >= 0.75 ? 4 : s.score >= 0.55 ? 3 : s.score >= 0.35 ? 2 : 1);
 const sameSet = (a: number[], b: number[]) => a.length === b.length && a.every(x => b.includes(x));

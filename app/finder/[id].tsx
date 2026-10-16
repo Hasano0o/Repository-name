@@ -50,6 +50,15 @@ const SECTIONS: Section[] = [
         tag: 'موصى به',
         path: 'optimize',
       },
+      {
+        key: 'advisor',
+        icon: 'bulb',
+        color: tFg('#0ea5a4'),
+        title: 'المستشار الذكي',
+        sub: 'يقارن وضعك بالأبراج حولك ويقول الأفضل — قراءة بس، ما يغيّر شي',
+        tag: 'جديد',
+        path: 'advisor',
+      },
     ],
   },
   {

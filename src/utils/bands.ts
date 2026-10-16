@@ -18,3 +18,16 @@ export const nrFreq = (b: number) => (NR_FREQ[b] ? `${NR_FREQ[b]} MHz` : '');
 
 export const bandLabel = (tech: 'LTE' | 'NR', b: number) => (tech === 'NR' ? 'n' : 'B') + b;
 export const freqLabel = (tech: 'LTE' | 'NR', b: number) => (tech === 'NR' ? nrFreq(b) : bandFreq(b));
+
+/* ═══ الاسم المفهوم للتردد (مثل «700 · يوصل بعيد») — نفس تقسيم شاشة الترددات ═══ */
+export type BandKind = 'far' | 'mid' | 'fast';
+export const BAND_KIND_LABEL: Record<BandKind, string> = { far: 'يوصل بعيد', mid: 'متوازن', fast: 'سريع' };
+export const bandMhz = (tech: 'LTE' | 'NR', b: number) => parseInt((tech === 'NR' ? NR_FREQ : BAND_FREQ)[b] ?? '0', 10);
+export const bandKindOf = (mhz: number): BandKind => (mhz && mhz < 1000 ? 'far' : mhz && mhz < 2300 ? 'mid' : 'fast');
+/** «1800 · متوازن» — ولو ما نعرف التردد نرجع للرمز (B3 / n78) */
+export function friendlyBand(tech: 'LTE' | 'NR', b?: number): string {
+  if (!b) return tech === 'NR' ? '5G' : '4G';
+  const m = bandMhz(tech, b);
+  if (!m) return bandLabel(tech, b);
+  return `${m} · ${BAND_KIND_LABEL[bandKindOf(m)]}`;
+}

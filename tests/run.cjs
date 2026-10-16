@@ -15,6 +15,8 @@ const files = [
   'src/drivers/noChange.ts',
   'src/drivers/huawei/cellLock.ts',
   'src/utils/applyGuard.ts',
+  'src/utils/bands.ts',
+  'src/utils/advisor.ts',
   ...fs.readdirSync(path.join(root, 'tests')).filter(f => f.endsWith('.test.ts')).map(f => `tests/${f}`),
 ];
 
