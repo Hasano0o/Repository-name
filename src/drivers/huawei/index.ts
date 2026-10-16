@@ -18,6 +18,8 @@ import { parseTxPower, parseDlMcs, parseUlMcs } from '../../utils/linkHealth';
 import { buildSnapshot } from '../../utils/snapshot';
 import { noChange } from '../noChange';
 import { NetStandard, standardOf, standardBody } from './netStandard';
+import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
+import { HuaweiLockData, parseNetModeFields, netModeBody, netModeDiff, lockDiffForMode, lockRestoreBody, huaweiSummary } from './lockState';
 import { buildCellLockBody, buildUnlockBody, lockMatches, parseCellLocks, parseLockRaw, LockRaw, Tech as CellTech, bandLockSection, buildChannelLockBody, channelMatches, lockKindOf } from './cellLock';
 
 const tag = (xml: string, t: string) =>
@@ -888,6 +890,65 @@ export class HuaweiDriver implements RouterDriver {
     const cell = await this.getCellLock();
     if (!lf.lte.length && !lf.nr.length && !cell) return null;
     return { bands: lf.lte, nrBands: lf.nr, pci: cell?.pci };
+  }
+  /**
+   * لقطة إعدادات القفل قبل التجربة (قراءة فقط). ترمي لو ما قدرنا نقرأ كل شي —
+   * والتجربة توقف قبل أي كتابة (ما نجرّب وإحنا ما نعرف وش نرجّع).
+   */
+  async readLockState(): Promise<LockSnapshot> {
+    const netMode = parseNetModeFields(await this.get('net/net-mode'));
+    if (!netMode.some(f => f[0] === 'NetworkMode')) throw new Error('ما قدرنا نقرأ وضع الشبكة من الراوتر');
+    if (this.lockFreq === null) {
+      // لازم نعرف أكيد هل فيه net/lock-freq. الراوتر رد بكود خطأ = الرابط مو موجود (موديل قديم بدون
+      // lock-freq، الترددات كلها في net-mode اللي قرأناه). انقطاع/مهلة = ما نعرف ← نوقف التجربة
+      try {
+        const fsw = await this.get('net/net-feature-switch');
+        this.lockFreq = (num(tag(fsw, 'lock_freq_switch')) ?? 0) > 0;
+      } catch (e) {
+        // 100003/12500x = جلسة انتهت (مو «غير موجود») — نرميه وطبقة الجلسات تدخل من جديد
+        if (!(e instanceof HuaweiError) || ['100003', '125002', '125003'].includes(e.code)) throw e;
+        this.lockFreq = false;
+      }
+    }
+    let lockFreq: LockRaw | null = null;
+    if (this.lockFreq && !this.lockFreqDead) {
+      try {
+        lockFreq = parseLockRaw(await this.get('net/lock-freq'));
+      } catch (e) {
+        if (!(await this.lockFreqUnsupported(e))) throw e;
+      }
+    }
+    const data: HuaweiLockData = { netMode, lockFreq };
+    return { driver: this.id, at: Date.now(), summary: huaweiSummary(data), data };
+  }
+  /**
+   * يرجّع اللقطة كما هي: وضع الشبكة أول، بعدها أقسام القفل — ونكتب بس اللي تغيّر.
+   * بعدها نقرأ ونقارن: لو بقى فرق نرمي restoreMismatch بقائمة اللي ما رجع.
+   */
+  async restoreLockState(snap: LockSnapshot): Promise<void> {
+    if (snap.driver !== this.id) throw new Error('اللقطة من نوع راوتر ثاني — ما نرجّعها');
+    const d = snap.data as HuaweiLockData;
+    const mode = d.netMode.find(f => f[0] === 'NetworkMode')?.[1] ?? '';
+    const curNet = parseNetModeFields(await this.get('net/net-mode'));
+    if (netModeDiff(d.netMode, curNet).length) {
+      this.log('restore net-mode', netModeBody(d.netMode));
+      await this.post('net/net-mode', netModeBody(d.netMode));
+      await new Promise(r => setTimeout(r, 2000));
+    }
+    if (d.lockFreq) {
+      const cur = parseLockRaw(await this.get('net/lock-freq'));
+      if (lockDiffForMode(d.lockFreq, cur, mode).length) {
+        const body = lockRestoreBody(d.lockFreq, mode);
+        this.log('restore lock-freq', body);
+        await this.post('net/lock-freq', body);
+        await new Promise(r => setTimeout(r, 2500));
+      }
+    }
+    // التحقق: نقرأ من الراوتر نفسه — ما نصدّق «OK» من الطلب
+    const left = netModeDiff(d.netMode, parseNetModeFields(await this.get('net/net-mode')));
+    if (d.lockFreq) left.push(...lockDiffForMode(d.lockFreq, parseLockRaw(await this.get('net/lock-freq')), mode));
+    this.log('restore verify', left.join(',') || 'match');
+    if (left.length) throw restoreMismatch(left);
   }
   async lockCell(target: CellLockTarget) {
     const UNSUPPORTED = 'راوترك ما يدعم تثبيت البرج (قفل الخلية) — هالخاصية مو موجودة في هالموديل';

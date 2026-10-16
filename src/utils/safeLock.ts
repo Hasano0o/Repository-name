@@ -11,6 +11,8 @@ import { trafficBurst } from './nrprobe';
 import { isNoService } from './signal';
 import { progress, Tracker } from '../ui/Progress';
 import { runApply, trackWrites } from './applyGuard';
+import { LockSnapshot, mismatchOf, settleMsFor } from '../drivers/lockSnapshot';
+import { saveReleaseSnap, getReleaseSnap, clearReleaseSnap } from '../store/lockSnap';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 /** يرجّع undefined لو الخطوة طوّلت أكثر من المسموح (بدل ما يعلق المستخدم ٤٠ دقيقة) */
@@ -187,7 +189,9 @@ async function rescueRouterImpl(r: SavedRouter, say: (s: string) => void): Promi
  * ١. فك تثبيت الأبراج + الترددات على التلقائي (بدون إعادة تشغيل — أسرع)
  * ٢. ما رجع؟ الإنقاذ الكامل (الإعدادات الأصلية + إعادة تشغيل) أو إعادة تشغيل عادية
  */
-async function freeReleaseImpl(r: SavedRouter, say: (s: string) => void): Promise<boolean> {
+async function freeReleaseImpl(r: SavedRouter, say: (s: string) => void, keep?: LockSnapshot): Promise<boolean> {
+  // قبل ما نفك أي شي: نحفظ الإعداد عشان يقدر يرجّعه بضغطة من صفحة الراوتر
+  await rememberBeforeRelease(r, keep);
   say('نفك كل التثبيتات عشان الراوتر يلقط أقوى برج...');
   let released = false;
   for (let i = 0; i < 3 && !released; i++) {
@@ -229,7 +233,9 @@ async function freeReleaseImpl(r: SavedRouter, say: (s: string) => void): Promis
     if (await waitOnline(r, 90000, () => false)) return true;
   }
   if (canRescue(r)) {
-    try { return await rescueRouter(r, say); } catch {}
+    // «رجّع الإعدادات الأصلية» (إعدادات قديمة + إعادة تشغيل) صار زر يدوي بس في صفحة الراوتر —
+    // ما نشغّله من نفسنا
+    diag('[release] no service after release — manual rescue only');
     return false;
   }
   say('ما رجعت الإشارة — نعيد تشغيل الراوتر...');
@@ -265,15 +271,69 @@ export async function rescueRouter(r: SavedRouter, say: (s: string) => void = ()
 }
 
 /** «رجّع الإشارة» — مع نافذة التقدّم */
-export async function freeRelease(r: SavedRouter, say: (s: string) => void = () => {}): Promise<boolean> {
+/** يحفظ الإعداد قبل الفك: اللقطة اللي عندنا (من قبل التجربة) أو نقرأ الحالي */
+async function rememberBeforeRelease(r: SavedRouter, keep?: LockSnapshot) {
+  try {
+    let s = keep ?? null;
+    if (!s) {
+      const got = await withTimeout(withSession(r, async d => (d.readLockState ? d.readLockState() : null), false), 30_000);
+      s = got === STEP_TIMEOUT ? null : got;
+    }
+    if (s) {
+      await saveReleaseSnap(r.id, s);
+      diag(`[release] saved before release: ${s.summary}`);
+    }
+  } catch (e) {
+    diag(`[release] could not save settings: ${String((e as any)?.message ?? e).slice(0, 60)}`);
+  }
+}
+
+/**
+ * keep: إعداد المستخدم من قبل التجربة (يحفظ بدل الحالي — الحالي ممكن يكون إعداد التجربة اللي خرّب).
+ */
+export async function freeRelease(r: SavedRouter, say: (s: string) => void = () => {}, keep?: LockSnapshot): Promise<boolean> {
   const t = progress.start('نرجّع الإشارة', ['نفك تثبيت الأبراج والترددات', 'ننتظر الراوتر يلقط أقوى برج'], 100);
   try {
     return await freeReleaseImpl(r, tracked(t, say, [
       [/نفك كل التثبيتات/, 0], [/يلقط أقوى برج\.\.\./, 1], [/نعيد تشغيل الراوتر/, 'نعيد تشغيل الراوتر'],
-    ]));
+    ]), keep);
   } finally {
     t.end();
   }
+}
+
+/**
+ * «رجّع إعدادي اللي قبل الفك» — زر في صفحة الراوتر.
+ * يكتب الإعداد المحفوظ ويتأكد منه بالقراءة، وينتظر الخدمة مهلة الموديل. ما يفك شي من نفسه:
+ * لو ما رجع النت، المستخدم يقرر (زر «رجّع الإشارة» موجود).
+ */
+export async function restoreSavedSettings(
+  r: SavedRouter,
+  say: (s: string) => void = () => {},
+): Promise<{ exact: boolean; items?: string[]; online: boolean }> {
+  const snap = await getReleaseSnap(r.id);
+  if (!snap) throw new Error('ما فيه إعداد محفوظ');
+  if (snap.driver !== r.driverId) throw new Error('الإعداد المحفوظ لنوع راوتر ثاني');
+  return withRouterLock(r, async () => {
+    say('نرجّع إعدادك المحفوظ...');
+    let exact = false;
+    let items: string[] | undefined;
+    try {
+      await withSessionPatient(r, d => {
+        if (!d.restoreLockState) throw new Error('هذا النوع ما يدعم الإرجاع');
+        return d.restoreLockState(snap);
+      }, 90_000);
+      exact = true;
+    } catch (e) {
+      items = mismatchOf(e) ?? undefined;
+      if (!items) throw e;
+    }
+    say('ننتظر الراوتر يتصل على إعدادك...');
+    const online = await waitOnline(r, exact ? settleMsFor(r.driverId) : 45_000, () => false);
+    if (exact) await clearReleaseSnap(r.id);
+    diag(`[restore-saved] ${exact ? 'exact' : 'partial ' + (items ?? []).join(',')} online=${online}`);
+    return { exact, items, online };
+  });
 }
 
 export type TrialVerdict = 'better' | 'same' | 'worse' | 'noconn';
@@ -293,6 +353,12 @@ export interface TrialResult {
   userKeptAnyway?: boolean;
   /** فكّينا كل التثبيتات (الراوتر على التلقائي يلقط أقوى برج) */
   freed?: boolean;
+  /** رجّعنا إعدادك وتأكدنا منه بالقراءة من الراوتر */
+  exact?: boolean;
+  /** الإرجاع انكتب بس هذي ما رجعت كما كانت */
+  notRestored?: string[];
+  /** جملة جاهزة عن نتيجة الإرجاع */
+  restoreNote?: string;
 }
 
 export interface Trial {
@@ -325,7 +391,7 @@ export interface SafeApplyOpts {
 
 /** يطبّق بأمان، ومقفول لكل راوتر عشان ما تشتغل عمليتان معاً */
 export function safeApply(o: SafeApplyOpts): Promise<TrialResult> {
-  return withRouterLock(o.r.id, async () => {
+  return withRouterLock(o.r, async () => {
     const t = progress.start(o.label, ['نقيس الوضع الحالي', 'نطبّق التغيير', 'ننتظر الراوتر يتصل', 'نقيس النتيجة'], o.withNr ? 75 : 60);
     const base = o.onStatus ?? (() => {});
     const say = (msg: string) => {
@@ -337,6 +403,7 @@ export function safeApply(o: SafeApplyOpts): Promise<TrialResult> {
       else if (/ننتظر الراوتر يتصل/.test(msg)) t.step(2);
       else if (/ننتظر الإشارة تستقر|نقيس بعد التغيير/.test(msg)) t.step(3);
       else if (/نرجع الإعداد السابق|نرجّع إعدادك السابق/.test(msg)) t.step('نرجّع إعدادك السابق');
+      else if (/نقرأ إعدادك الحالي/.test(msg)) t.step(0);
       else t.note(msg);
     };
     try {
@@ -361,6 +428,87 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
     return s;
   };
 
+  // ═══ ١. لقطة إعدادك قبل أي شي (هواوي و ZTE) ═══
+  // ما قدرنا نقرأها = ما نجرّب: ما نكتب على الراوتر وإحنا ما نعرف وش نرجّع
+  const proto = driverById(o.r.driverId);
+  const canSnap = !!(proto?.readLockState && proto?.restoreLockState);
+  let snap: LockSnapshot | null = null;
+  if (canSnap) {
+    say('نقرأ إعدادك الحالي...');
+    let why = '';
+    try {
+      const got = await withTimeout(withSession(o.r, d => d.readLockState!(), false), 45_000);
+      if (got === STEP_TIMEOUT) why = 'الراوتر ما رد';
+      else snap = got;
+    } catch (e) {
+      why = String((e as any)?.message ?? e);
+    }
+    if (!snap) {
+      diag(`[${o.key}] snapshot failed: ${why.slice(0, 80)}`);
+      const err = new Error(`ما قدرنا نقرأ إعدادك الحالي من الراوتر (${why.slice(0, 70)}) — فما جرّبنا ولا غيّرنا أي شي. تأكد إن جوالك متصل بشبكة الراوتر وجرّب مرة ثانية.`);
+      (err as any).noChange = true;
+      (err as any).reverted = false;
+      throw err;
+    }
+    diag(`[${o.key}] snapshot: ${snap.summary}`);
+  }
+  const settleMs = settleMsFor(o.r.driverId);
+
+  /**
+   * يرجّع إعدادك ويتأكد منه، وبعدها يقرر:
+   * - رجع بالضبط ← ننتظر الخدمة مهلة الموديل كاملة (هواوي دقيقتين، ZTE ٤) — التأخر لحاله مو فشل
+   * - ما رجع أو رجع ناقص ← ننتظر شوي، ولو النت مقطوع نفك كل شي (النت أهم) مع حفظ إعدادك
+   * - ما نفك أي شي والنت شغال
+   */
+  type Restored = { exact: boolean; sent: boolean; items?: string[]; error?: string; online: boolean; freed: boolean };
+  const restorePrev = async (): Promise<Restored> => {
+    say('نرجّع إعدادك السابق...');
+    let exact = false;
+    let sent = false;
+    let items: string[] | undefined;
+    let error: string | undefined;
+    try {
+      await withSessionPatient(
+        o.r,
+        snap ? d => d.restoreLockState!(snap!) : o.revert,
+        90_000,
+        n => n && say('الراوتر مشغول — نحاول ندخل ونرجّع إعدادك...'),
+      );
+      sent = true;
+      exact = !!snap;
+    } catch (e) {
+      items = mismatchOf(e) ?? undefined;
+      error = items ? undefined : String((e as any)?.message ?? e);
+      reportError(`${o.key}-revert`, (items ? `mismatch: ${items.join(',')}` : `error: ${error}`).slice(0, 200), o.r);
+    }
+    diag(`[${o.key}] restore: ${exact ? 'exact' : items ? 'partial ' + items.join(',') : error ? 'error' : 'sent (unverified)'}`);
+    const good = exact || (sent && !snap);
+    say(good ? 'ننتظر الراوتر يتصل على إعدادك...' : 'ننتظر الراوتر يتصل...');
+    let online = await waitOnline(o.r, good ? settleMs : 45_000, () => false);
+    let freed = false;
+    if (!online) {
+      say('ما رجع — نفك التثبيتات عشان يلقط أقوى برج...');
+      online = await freeRelease(o.r, say, snap ?? undefined).catch(() => false);
+      freed = true;
+    }
+    return { exact, sent, items, error, online, freed };
+  };
+  const restoreText = (rs: Restored): string => {
+    const saved = snap ? ' إعدادك اللي كان قبل التجربة محفوظ — تقدر ترجّعه من صفحة الراوتر.' : '';
+    if (rs.freed) {
+      return rs.online
+        ? `↩️ ${rs.exact ? 'رجّعنا إعدادك بس الراوتر ما اتصل عليه' : 'ما قدرنا نرجّع إعدادك بالضبط'}، ففكّينا كل التثبيتات والراوتر رجع يلقط أقوى برج.${saved}`
+        : `⚠️ ما رجع الاتصال حتى بعد فك التثبيتات — من صفحة الراوتر اضغط «رجّع الإعدادات الأصلية».${saved}`;
+    }
+    if (rs.exact) return '✓ رجّعنا إعدادك السابق بالضبط (تأكدنا من قراءة الراوتر).';
+    if (rs.items?.length) return `⚠️ رجع جزئياً — هذي ما رجعت كما كانت: ${rs.items.join('، ')}. النت شغال.`;
+    if (rs.error) return `⚠️ ما قدرنا نرجّع إعدادك (${rs.error.slice(0, 80)}) — النت شغال بس الإعداد مو مثل قبل.`;
+    return '✓ أرسلنا للراوتر إعدادك السابق (هالنوع ما نقدر نتأكد منه بالقراءة) — تأكد من الإشارة بعد دقيقة.';
+  };
+  const restoreFields = (rs: Restored) => ({
+    exact: rs.exact, notRestored: rs.items, restoreNote: restoreText(rs), freed: rs.freed, restoreFailed: !rs.online,
+  });
+
   say('نقيس الوضع الحالي...');
   const b0 = await withTimeout(measure(), 60_000);
   if (b0 === STEP_TIMEOUT) {
@@ -371,7 +519,6 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
 
   say('نطبّق التغيير...');
   // لو الأمر طوّل (مثلاً ZTE يعيد التشغيل بعد تثبيت البرج) ننتظره يخلص بدل ما نرجّع ونفك وهو في النص.
-  // لو لسا ما خلص بعدها، نكمّل: الخطوة الجاية تتأكد من الاتصال وترجّع الإعداد لو لزم.
   let wrote = false;
   const step = await runApply<RouterDriver>({
     session: fn => withSession(o.r, fn, false),
@@ -381,7 +528,14 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
     extraMs: 200_000,
     onLong: () => say('الراوتر لسا يطبّق التغيير (ممكن يعيد التشغيل) — ننتظره يخلص...'),
   });
-  if (step.kind === 'stillRunning') diag(`[${o.key}] apply still running after wait`);
+  if (step.kind === 'stillRunning') {
+    // انتهت مهلة الانتظار بس الأمر نفسه لسا شغال على الراوتر — ما نرجّع ولا نفك فوقه.
+    // ننتظره يخلص فعلاً (والحجز باقي)، وبعدها نكمّل الفحص.
+    diag(`[${o.key}] apply still running after wait — waiting for it to finish`);
+    say('الراوتر لسا ينفّذ الأمر — ننتظره يخلص قبل أي خطوة...');
+    await step.pending;
+    diag(`[${o.key}] late apply finished`);
+  }
   if (step.kind === 'failed' && step.skipRevert) {
     // الخطأ صار قبل ما نرسل أي أمر — الراوتر على حاله، فما نرجّع ولا نفك أي تثبيت
     const msg = String((step.error as any)?.message ?? step.error);
@@ -392,51 +546,21 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
     throw err;
   }
   if (step.kind === 'failed') {
-    const e = step.error;
-    // الأمر نفسه انرفض في النص (مثلاً غيّرنا وضع الشبكة وبعدها رفض قفل التردد):
-    // نرجّع اللي تغيّر قبل ما نطلّع الخطأ — عشان ما يبقى الراوتر نص مطبّق وبلا خدمة
+    // الأمر انرفض في النص (ممكن الخطوة الأولى غيّرت شي): نرجّع قبل ما نطلّع الخطأ
     say('الراوتر رفض — نرجّع إعدادك...');
-    const msg = String((e as any)?.message ?? e);
-    let back = false;
-    let freed = false;
-    try {
-      await withSessionPatient(o.r, o.revert, 90_000, n => n && say('الراوتر مشغول — نحاول ندخل ونرجّع إعدادك...'));
-      back = true;
-    } catch (re) {
-      reportError(`${o.key}-revert`, `apply: ${msg.slice(0, 120)} | revert: ${String((re as any)?.message ?? re).slice(0, 120)}`, o.r);
-    }
-    if (!back) {
-      // ما قدرنا نرجّع الإعداد بالضبط — نفك كل شي ويلقط أقوى برج (ولا نخليه بلا نت)
-      say('نفك التثبيتات عشان يلقط أقوى برج...');
-      back = await freeRelease(o.r, say).catch(() => false);
-      freed = back;
-    }
-    // ما ندّعي إن إعدادك رجع بالضبط إلا لو أمر الإرجاع نفسه نجح
-    const err = new Error(!back
-      ? `${msg}\n\n⚠️ ما قدرنا نرجّع إعدادك — سكّر أي تطبيق أو صفحة للراوتر واضغط «رجّع الإشارة» من صفحة الراوتر.`
-      : freed
-        ? `${msg}\n\n↩️ ما قدرنا نرجّع إعدادك السابق بالضبط، ففكّينا كل التثبيتات والراوتر رجع يلقط أقوى برج.`
-        : `${msg}\n\n✓ أرسلنا للراوتر إعدادك السابق — تأكد من الإشارة بعد دقيقة.`);
-    (err as any).reverted = back;
+    const msg = String((step.error as any)?.message ?? step.error);
+    const rs = await restorePrev();
+    const err = new Error(`${msg}\n\n${restoreText(rs)}`);
+    (err as any).reverted = rs.exact || (rs.sent && !snap) || (rs.freed && rs.online);
     throw err;
   }
 
   say('ننتظر الراوتر يتصل...');
   const online = await waitOnline(o.r, 45000, cancelled);
   if (!online) {
-    // ما اتصل: أول نرجّع الإعداد اللي كان شغال قبل ثواني (مثلاً وضع الشبكة من SA لـ NSA) —
-    // سريع وبدون إعادة تشغيل. لو ما رجع، نفك كل شي ويلقط أقوى برج.
     say('ما اتصل — نرجّع إعدادك السابق...');
-    let back = false;
-    try {
-      await withSessionPatient(o.r, o.revert, 60_000);
-      back = await waitOnline(o.r, 40000, () => false);
-    } catch {}
-    if (!back) {
-      say('ما رجع — نفك التثبيتات عشان يلقط أقوى برج...');
-      back = await freeRelease(o.r, say);
-    }
-    const res: TrialResult = { verdict: 'noconn', kept: false, before, after: null, restoreFailed: !back, freed: true };
+    const rs = await restorePrev();
+    const res: TrialResult = { verdict: 'noconn', kept: false, before, after: null, ...restoreFields(rs) };
     await record(o.r.id, o.key, o.label, res);
     return res;
   }
@@ -455,7 +579,6 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
   else if (change !== undefined && change >= BETTER) verdict = 'better';
   let kept = verdict === 'better' || verdict === 'same';
   let userKeptAnyway = false;
-  let restoreFailed = false;
 
   // لو الجديد أسوأ — نسأل المستخدم: يثبت الجديد أم نرجع للسابق؟
   if (verdict === 'worse') {
@@ -470,16 +593,13 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
     }
   }
 
+  let extra: Partial<TrialResult> = { restoreFailed: false };
   if (!kept) {
-    say('نرجع الإعداد السابق...');
-    try { await withSession(o.r, o.revert, false); } catch {}
-    let back = await waitOnline(o.r, 45000, () => false);
-    // السابق ما رجّع الخدمة — نفك كل شي ويلقط أقوى برج
-    if (!back) back = await freeRelease(o.r, say);
-    restoreFailed = !back;
+    // خطأ الإرجاع ما ينبلع: النتيجة تقول بالضبط وش رجع ووش ما رجع
+    extra = restoreFields(await restorePrev());
   }
 
-  const res: TrialResult = { verdict, kept, before, after, change, restoreFailed, towerChanged, userKeptAnyway };
+  const res: TrialResult = { verdict, kept, before, after, change, towerChanged, userKeptAnyway, ...extra };
   await record(o.r.id, o.key, o.label, res);
   return res;
 }
@@ -600,10 +720,16 @@ export function trialMessage(res: TrialResult, label: string): { title: string; 
         };
       }
       return {
-        title: '↩️ رجعنا الإعداد السابق',
-        body: `${warn}${label} خلّى الاتصال أسوأ بـ ${pct(res.change!)}${res.before && res.after && res.after.carriers < res.before.carriers ? ' — غالباً لأنه أوقف دمج الترددات' : ''}، فرجعنا إعدادك تلقائياً.\n\n${b}${tower}`,
+        title: res.notRestored?.length ? '⚠️ رجّعنا جزء من إعدادك' : res.freed ? '↩️ فكّينا التثبيتات' : '↩️ رجعنا الإعداد السابق',
+        body: `${label} خلّى الاتصال أسوأ بـ ${pct(res.change!)}${res.before && res.after && res.after.carriers < res.before.carriers ? ' — غالباً لأنه أوقف دمج الترددات' : ''}.\n\n${res.restoreNote ?? (warn || 'رجعنا إعدادك.')}\n\n${b}${tower}`,
       };
     default:
+      if (res.restoreNote) {
+        return {
+          title: res.exact && !res.freed ? '↩️ ما اتصل — ورجّعنا إعدادك' : res.freed && !res.restoreFailed ? '↩️ ما اتصل — ورجّعنا الإشارة' : '⚠️ ما اتصل',
+          body: `الراوتر ما اتصل بعد ${label}.\n\n${res.restoreNote}`,
+        };
+      }
       if (res.freed && !res.restoreFailed) {
         return { title: '↩️ ما اتصل — ورجّعنا الإشارة', body: `الراوتر ما اتصل بعد ${label}، ففكّينا كل التثبيتات وخليناه يلقط أقوى برج تلقائياً.\n\nالإشارة رجعت — تقدر تجرّب إعداد ثاني براحتك.` };
       }

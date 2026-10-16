@@ -1,5 +1,5 @@
 import { SavedRouter } from '../store/routers';
-import { withSession } from '../store/sessions';
+import { withSession, isRouterBusyAnywhere, isRouterBusy, holdRouter } from '../store/sessions';
 import { listProfiles } from '../store/profiles';
 import { listGameLog, periodOf, PERIODS } from '../store/gameLog';
 import { getAuto, getAutoState, saveAutoState } from '../store/automation';
@@ -67,24 +67,32 @@ export async function runAutomation(r: SavedRouter, sig: Signal | null): Promise
 
   /* ── الصيانة الليلية ── */
   const inWindow = (h === 3 && m >= 30) || h === 4;
-  if (auto.nightly !== 'off' && inWindow && st.nightlyDay !== dayKey(now) && !st.pending) {
+  // تجربة أو إرجاع شغال على الراوتر: ما نعيد التشغيل ولا نغيّر الوضع — نحاول بالفحص الجاي (لسا داخل النافذة)
+  const busy = await isRouterBusyAnywhere(r);
+  if (auto.nightly !== 'off' && inWindow && st.nightlyDay !== dayKey(now) && !st.pending && !busy) {
     const traffic = await withSession(r, async d => (d.getTraffic ? d.getTraffic() : null)).catch(() => null);
     const busyNet = traffic && traffic.downBytesPerSec > 512 * 1024; // أحد يحمّل الحين؟ ما نقطع عليه
     const reason = auto.nightly === 'daily' ? 'الصيانة اليومية' : await needsReboot(r, sig, traffic);
     st.nightlyDay = dayKey(now);
     if (reason && !busyNet) {
       const before = await pingNow();
-      const ok = await withSession(r, async d => {
-        if (!d.reboot) return false;
-        await d.reboot();
-        return true;
-      }, false).catch(() => false);
+      const ok = (await isRouterBusyAnywhere(r)) ? false : await (() => {
+        // الفحص والحجز بنفس اللحظة (بدون await بينهم)
+        if (isRouterBusy(r)) return Promise.resolve(false);
+        const p = withSession(r, async d => {
+          if (!d.reboot) return false;
+          await d.reboot();
+          return true;
+        }, false);
+        holdRouter(r, p);
+        return p;
+      })().catch(() => false);
       if (ok) st.pending = { at: Date.now(), beforePing: before, reason };
     }
   }
 
   /* ── الوضع الذكي بالوقت ── */
-  if (auto.smart.enabled) {
+  if (auto.smart.enabled && !busy) {
     const period = periodOf(h);
     const target = auto.smart.map[period];
     const periodChanged = st.lastPeriod !== period;

@@ -1,5 +1,7 @@
 import type { NetStandard } from './huawei/netStandard';
 export type { NetStandard } from './huawei/netStandard';
+import type { LockSnapshot } from './lockSnapshot';
+export type { LockSnapshot } from './lockSnapshot';
 export type Capability =
   'signal' | 'devices' | 'reboot' | 'bandLock' | 'sms' | 'usage'
   | 'block' | 'traffic' | 'cells';
@@ -303,6 +305,16 @@ export interface RouterDriver {
    * كل خطوة مستقلة — لو وحدة فشلت يكمل الباقي. ما يلمس الواي فاي ولا كلمة المرور.
    */
   restoreAll?(baseline: Record<string, string> | null): Promise<void>;
+  /**
+   * لقطة إعدادات القفل الحالية (ترددات/أبراج/قنوات/وضع الشبكة) — قراءة فقط.
+   * ترمي لو ما قدرت تقرأ كل شي: التجربة توقف قبل أي كتابة. (هواوي و ZTE)
+   */
+  readLockState?(): Promise<LockSnapshot>;
+  /**
+   * يرجّع اللقطة كما كانت، وبعدها يقرأ ويقارن. لو بقى فرق يرمي خطأ فيه mismatch
+   * (قائمة اللي ما رجع) بدل ما يدّعي النجاح.
+   */
+  restoreLockState?(snap: LockSnapshot): Promise<void>;
   getDataPlan?(): Promise<DataPlan>;
   setDataPlan?(plan: DataPlan): Promise<void>;
   setNetworkMode?(mode: string): Promise<void>;

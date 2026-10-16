@@ -5,10 +5,10 @@ import { assertLanHost } from '../utils/host';
 import { getBaseline, saveBaseline } from './baseline';
 import { http } from '../drivers/http';
 import { diag } from '../services/diag';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Sess { d: RouterDriver; authAt: number; }
 const sessions = new Map<string, Sess>();
-const chains = new Map<string, Promise<unknown>>();
 
 /** بعد كذا نعيد تسجيل الدخول احتياطاً — لو المستخدم غيّر كلمة مرور الراوتر من المتصفح */
 const MAX_AGE = 5 * 60 * 1000;
@@ -82,17 +82,91 @@ async function attachBaseline(r: SavedRouter, d: RouterDriver) {
     .catch(() => {});
 }
 
-/** يمنع تشغيل عمليتين تعديل على نفس الراوتر بنفس الوقت (قفل تردد + دمج مثلاً) */
-// ١٢ دقيقة: safeApply ممكن ينتظر ZTE يعيد التشغيل (لين ~٤ دقائق) وبعدها يقيس ويرجّع —
-// بست دقائق كانت العملية اللي بعدها تبدأ والأولى لسا شغالة
-const LOCK_MAX_MS = 12 * 60 * 1000;
+/* ═══ الحجز: عملية تعديل وحدة على الراوتر الفعلي في نفس الوقت ═══
+ * المفتاح = هوية الراوتر الفعلية (نوعه + عنوانه) مثل الجلسة — مو رقم البطاقة في التطبيق،
+ * عشان نفس الراوتر لو مضاف مرتين ما تشتغل عليه عمليتين.
+ * الحجز يبقى لين تخلص العملية **فعلاً** — حتى لو انتهت مهلة الانتظار وأمر الكتابة لسا شغال
+ * (holdRouter يمسكه لين الوعد نفسه يخلص). ما فيه مهلة تفك الحجز غصب.
+ * حارس 5G والصيانة الليلية والوضع الذكي يشيكون isRouterBusyAnywhere ويتخطون لو محجوز.
+ */
+const chains = new Map<string, Promise<void>>();
+const holds = new Map<string, number>();
+const BUSY_PREFIX = 'bandly.busy:';
+/** العلامة المحفوظة تنتهي لحالها لو التطبيق انقفل في النص (ما يبقى الراوتر محجوز للأبد) */
+const BUSY_TTL = 3 * 60_000;
+const beats = new Map<string, ReturnType<typeof setInterval>>();
 
-export function withRouterLock<T>(id: string, fn: () => Promise<T>): Promise<T> {
-  const prev = chains.get(id) ?? Promise.resolve();
-  const next = prev.then(() => fn(), () => fn());
-  // لو عملية علقت لأي سبب، ما نخلي اللي بعدها تنتظر للأبد — بعد ٦ دقائق نفك الدور
-  const cap = new Promise<void>(res => setTimeout(res, LOCK_MAX_MS));
-  chains.set(id, Promise.race([next.then(() => {}, () => {}), cap]));
+/** هوية الراوتر الفعلية — نفس مفتاح الجلسة */
+export const routerKey = (r: SavedRouter) => keyOf(r);
+
+function writeMark(k: string) {
+  AsyncStorage.setItem(BUSY_PREFIX + k, String(Date.now() + BUSY_TTL)).catch(() => {});
+}
+
+function hold(k: string): () => void {
+  const n = (holds.get(k) ?? 0) + 1;
+  holds.set(k, n);
+  if (n === 1) {
+    writeMark(k);
+    beats.set(k, setInterval(() => writeMark(k), 60_000));
+  }
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    const left = (holds.get(k) ?? 1) - 1;
+    if (left > 0) { holds.set(k, left); return; }
+    holds.delete(k);
+    const b = beats.get(k);
+    if (b) clearInterval(b);
+    beats.delete(k);
+    AsyncStorage.removeItem(BUSY_PREFIX + k).catch(() => {});
+  };
+}
+
+/** يبقي الراوتر محجوز لين الوعد يخلص (أمر كتابة طوّل بعد مهلة الانتظار مثلاً) */
+export function holdRouter(r: SavedRouter, p: Promise<unknown>): void {
+  const release = hold(keyOf(r));
+  p.then(release, release);
+}
+
+/** محجوز في هذا التشغيل للتطبيق */
+export function isRouterBusy(r: SavedRouter): boolean {
+  return (holds.get(keyOf(r)) ?? 0) > 0;
+}
+
+/** محجوز هنا أو في تشغيل ثاني للتطبيق (المهام الخلفية تشتغل أحياناً في ذاكرة منفصلة) */
+export async function isRouterBusyAnywhere(r: SavedRouter): Promise<boolean> {
+  if (isRouterBusy(r)) return true;
+  try {
+    const v = Number(await AsyncStorage.getItem(BUSY_PREFIX + keyOf(r)));
+    return Number.isFinite(v) && v > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+async function waitIdle(k: string) {
+  while ((holds.get(k) ?? 0) > 0) await new Promise(res => setTimeout(res, 1000));
+}
+
+/** يمنع تشغيل عمليتين تعديل على نفس الراوتر بنفس الوقت (قفل تردد + دمج مثلاً) */
+export function withRouterLock<T>(r: SavedRouter, fn: () => Promise<T>): Promise<T> {
+  const k = keyOf(r);
+  idKey.set(r.id, k);
+  const prev = chains.get(k) ?? Promise.resolve();
+  const run = async () => {
+    // أمر من عملية سابقة لسا شغال (انتهت مهلتها بس الراوتر لسا ينفّذ) — ننتظره
+    await waitIdle(k);
+    const release = hold(k);
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  };
+  const next = prev.then(run, run);
+  chains.set(k, next.then(() => {}, () => {}));
   return next;
 }
 
@@ -199,6 +273,8 @@ export async function withSessionPatient<T>(
       const m = String((e as any)?.message ?? e);
       // قفل دخول بسبب محاولات كثيرة: ما نزيده. وأمر غير مدعوم: إعادة الدخول ما تفيد
       if (/قفل تسجيل الدخول|محاولات كثيرة|108007|ما يدعم/.test(m) || (e as any)?.unsupported) break;
+      // الإرجاع انكتب وقرأناه وما تطابق — إعادة الدخول ما تغيّر النتيجة
+      if (Array.isArray((e as any)?.mismatch)) break;
     }
   }
   throw last ?? new Error('ما قدرنا ندخل الراوتر');

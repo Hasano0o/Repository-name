@@ -12,8 +12,12 @@ import { safeToSkipRevert } from '../drivers/noChange';
 export type ApplyOutcome =
   /** الأمر خلص بدون خطأ */
   | { kind: 'done' }
-  /** الأمر ما خلص حتى بعد الانتظار الإضافي — حالته غير معروفة */
-  | { kind: 'stillRunning' }
+  /**
+   * الأمر ما خلص حتى بعد الانتظار الإضافي — حالته غير معروفة.
+   * pending يخلص لما الأمر نفسه يخلص (نجح أو فشل): المهلة انتهت بس الراوتر ممكن لسا ينفّذ،
+   * فالحجز لازم يبقى لين pending، والإرجاع ما يبدأ والأمر لسا شغال.
+   */
+  | { kind: 'stillRunning'; pending: Promise<void> }
   /** فشل. skipRevert = متأكدين إن الراوتر ما تغيّر */
   | { kind: 'failed'; error: unknown; skipRevert: boolean };
 
@@ -49,8 +53,8 @@ export async function runApply<D>(o: {
       r = await race(p, o.extraMs);
       if (r === TIMEOUT) {
         // نمنع «unhandled rejection» لو فشل بعدين
-        p.catch(() => {});
-        return { kind: 'stillRunning' };
+        const pending = p.then(() => {}, () => {});
+        return { kind: 'stillRunning', pending };
       }
     }
     return { kind: 'done' };

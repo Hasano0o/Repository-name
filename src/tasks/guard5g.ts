@@ -1,5 +1,5 @@
 import { SavedRouter } from '../store/routers';
-import { withSession } from '../store/sessions';
+import { withSession, isRouterBusyAnywhere, isRouterBusy, holdRouter } from '../store/sessions';
 import { getGuard, saveGuard } from '../store/guard';
 import { overallLevel } from '../utils/signal';
 import { notify } from '../utils/notify';
@@ -28,6 +28,18 @@ async function online(r: SavedRouter): Promise<boolean> {
 export async function runGuard(r: SavedRouter, sig: Signal | null, isOnline: boolean): Promise<boolean> {
   const g = await getGuard(r.id);
   if (!g.on) return false;
+  // تجربة أو إرجاع شغال على الراوتر (النت ينقطع وقتها طبيعي) — ما نتدخّل ولا نكتب فوقه
+  if (await isRouterBusyAnywhere(r)) return false;
+  /** كتابة من الحارس: نشيك الحجز قبلها مباشرة، ونحجز الراوتر وقتها */
+  const write = async (fn: Parameters<typeof withSession>[1]) => {
+    if (await isRouterBusyAnywhere(r)) return false;
+    // الفحص والحجز بنفس اللحظة (بدون await بينهم) — ما تدخل عملية ثانية في النص
+    if (isRouterBusy(r)) return false;
+    const p = withSession(r, fn, false);
+    holdRouter(r, p);
+    await p;
+    return true;
+  };
   try {
     const cfg = await withSession(r, d => (d.getBandConfig ? d.getBandConfig() : Promise.resolve(null)), false);
     if (!cfg) return false;
@@ -38,7 +50,7 @@ export async function runGuard(r: SavedRouter, sig: Signal | null, isOnline: boo
       await sleep(25000);
       if (await online(r)) return false;
       const saved = { lte: cfg.locked, nr: cfg.nrLocked };
-      await withSession(r, d => d.setBand!([], cfg.nrSupported.length ? [] : undefined), false);
+      if (!(await write(d => d.setBand!([], cfg.nrSupported.length ? [] : undefined)))) return false;
       const retryFailed = !!g.retriedAt;
       await saveGuard(r.id, {
         ...g,
@@ -59,7 +71,7 @@ export async function runGuard(r: SavedRouter, sig: Signal | null, isOnline: boo
       const miss = nrNow ? 0 : (g.nrMiss ?? 0) + 1;
       if (miss >= 3) {
         const saved = { lte: cfg.locked, nr: cfg.nrLocked };
-        await withSession(r, d => d.setBand!(cfg.locked, []), false);
+        if (!(await write(d => d.setBand!(cfg.locked, [])))) return false;
         await saveGuard(r.id, { ...g, saved, fellBackAt: Date.now(), reason: '5G اختفى', nrMiss: 0, retriedAt: undefined });
         notify('🛡️ حارس 5G', `${r.name}: 5G ما ظهر على (${label([], saved.nr)}) فترة طويلة، فرجّعنا 5G يختار بنفسه.`, r.id);
         return true;
@@ -80,7 +92,7 @@ export async function runGuard(r: SavedRouter, sig: Signal | null, isOnline: boo
       const lvl = overallLevel(sig ?? undefined);
       if (lvl === 'excellent' || lvl === 'good') {
         const s = g.saved;
-        await withSession(r, d => d.setBand!(s.lte, s.nr.length ? s.nr : undefined), false);
+        if (!(await write(d => d.setBand!(s.lte, s.nr.length ? s.nr : undefined)))) return false;
         await saveGuard(r.id, { ...g, retriedAt: Date.now() });
       }
     }

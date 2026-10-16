@@ -33,7 +33,9 @@ import { SyncIcon } from '../../src/ui/SyncIcon';
 import { StoreAd } from '../../src/ui/StoreAd';
 import { TechStrip } from '../../src/ui/TechStrip';
 import { ComboCard } from '../../src/ui/ComboCard';
-import { canRescue, rescueRouter, freeRelease } from '../../src/utils/safeLock';
+import { canRescue, rescueRouter, freeRelease, restoreSavedSettings } from '../../src/utils/safeLock';
+import { getReleaseSnap, clearReleaseSnap } from '../../src/store/lockSnap';
+import type { LockSnapshot } from '../../src/drivers/lockSnapshot';
 import { hostLabel } from '../../src/drivers/device';
 import { rememberOperator, learnOperatorBands } from '../../src/store/operator';
 import { hasInternet } from '../../src/utils/internet';
@@ -415,7 +417,7 @@ export default function RouterDashboard() {
   /** بلا شبكة: نفك كل التثبيتات ويلقط أقوى برج (ولو ما رجع: الإعدادات الأصلية/إعادة تشغيل) */
   const onFree = () => {
     if (!info) return;
-    Alert.alert('رجّع الإشارة', 'بنفك تثبيت الأبراج والترددات ونخلي الراوتر يلقط أقوى برج بنفسه. لو ما رجعت، نعيد تشغيله.\n\nاسم الواي فاي وكلمة المرور ما يتغيرون.', [
+    Alert.alert('رجّع الإشارة', `بنفك تثبيت الأبراج والترددات ونخلي الراوتر يلقط أقوى برج بنفسه. ${canRescue(info) ? 'إعدادك الحالي ينحفظ وتقدر ترجّعه من هنا.' : 'لو ما رجعت، نعيد تشغيله.'}\n\nاسم الواي فاي وكلمة المرور ما يتغيرون.`, [
       { text: 'إلغاء', style: 'cancel' },
       {
         text: 'رجّعها', onPress: async () => {
@@ -432,11 +434,52 @@ export default function RouterDashboard() {
             back ? '✅ رجعت الإشارة' : 'ما رجعت الشبكة للحين',
             back
               ? 'فكّينا التثبيتات والراوتر لقط أقوى برج. تقدر الحين تجرّب الأبراج والترددات براحتك.'
-              : 'فكّينا التثبيتات بس الشبكة ما رجعت. انتظر دقيقة، وتأكد من الشريحة والتغطية.',
+              : `فكّينا التثبيتات بس الشبكة ما رجعت. انتظر دقيقة، وتأكد من الشريحة والتغطية.${canRescue(info) ? '\n\nلو بقت بدون خدمة: «رجّع الإعدادات الأصلية» يرجّع الإعدادات الأصلية ويعيد التشغيل.' : ''}`,
           );
         },
       },
     ]);
+  };
+  // الإعداد اللي كان قبل «فك كل التثبيتات» (محفوظ) — نعرضه عشان يرجّعه بضغطة
+  const [relSnap, setRelSnap] = useState<LockSnapshot | null>(null);
+  useEffect(() => {
+    if (!info) return;
+    getReleaseSnap(info.id).then(s => setRelSnap(s && s.driver === info.driverId ? s : null)).catch(() => {});
+  }, [info, rescueStep]);
+  const onRestoreSaved = () => {
+    if (!info || !relSnap) return;
+    Alert.alert('رجّع إعدادك السابق', `بنرجّع الراوتر على الإعداد اللي كان قبل فك التثبيتات:\n${relSnap.summary}\n\nونتأكد منه من الراوتر نفسه. ممكن النت ينقطع دقيقة${info.driverId === 'zte' ? ' (وZTE ممكن يعيد التشغيل)' : ''}.`, [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'رجّعه', onPress: async () => {
+          setBusy(true);
+          paused.current = true;
+          setRescueStep('نبدأ...');
+          try {
+            const r = await restoreSavedSettings(info, st => setRescueStep(st));
+            Alert.alert(
+              r.exact ? (r.online ? '✅ رجع إعدادك' : 'رجع إعدادك — بس النت ما رجع للحين') : '⚠️ رجع جزء من إعدادك',
+              r.exact
+                ? (r.online
+                  ? 'رجّعنا إعدادك السابق وتأكدنا منه من الراوتر، والنت شغال.'
+                  : 'رجّعنا إعدادك السابق وتأكدنا منه، بس الراوتر ما اتصل عليه. لو بقى بدون نت اضغط «رجّع الإشارة».')
+                : `هذي ما رجعت كما كانت: ${(r.items ?? []).join('، ')}.`,
+            );
+          } catch (e: any) {
+            Alert.alert('ما تم', e?.message ?? String(e));
+          } finally {
+            paused.current = false;
+            setRescueStep('');
+            setBusy(false);
+            await loadAll(info).catch(() => {});
+          }
+        },
+      },
+    ]);
+  };
+  const onForgetSaved = () => {
+    if (!info) return;
+    clearReleaseSnap(info.id).then(() => setRelSnap(null)).catch(() => {});
   };
   const onRescue = () => {
     if (!info) return;
@@ -629,6 +672,36 @@ export default function RouterDashboard() {
           </View>
         )}
 
+        {!loading && !!relSnap && (
+          <View style={[s.rescueCard, { borderColor: C.blue }]}>
+            <Text style={[s.rescueTitle, { color: C.blue }]}>إعدادك قبل فك التثبيتات محفوظ</Text>
+            <Text style={s.rescueText}>{relSnap.summary}</Text>
+            {rescueStep ? (
+              <View style={s.rescueBusy}>
+                <ActivityIndicator color={C.blue} />
+                <Text style={s.rescueText}>{rescueStep}</Text>
+              </View>
+            ) : (
+              <View style={{ flexDirection: 'row-reverse', gap: 8 }}>
+                <Pressable
+                  style={[s.rescueBtn, { flex: 1, backgroundColor: C.blue }, busy && { opacity: 0.5 }]}
+                  onPress={onRestoreSaved} disabled={busy}
+                  accessibilityRole="button" accessibilityLabel="رجّع إعدادي السابق"
+                >
+                  <Text style={s.rescueBtnText}>رجّع إعدادي السابق</Text>
+                </Pressable>
+                <Pressable
+                  style={[s.rescueBtn, { backgroundColor: C.rowBg, paddingHorizontal: 14 }, busy && { opacity: 0.5 }]}
+                  onPress={onForgetSaved} disabled={busy}
+                  accessibilityRole="button" accessibilityLabel="تجاهل الإعداد المحفوظ"
+                >
+                  <Text style={[s.rescueBtnText, { color: C.sub }]}>تجاهل</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        )}
+
         {!loading && noNet && !noService && (
           <View style={[s.warnBanner, { backgroundColor: tBg('#e5484d14'), borderColor: tBd('#e5484d55') }]}>
             {lock && (lock.bands.length > 0 || !!lock.pci) ? (
@@ -754,10 +827,21 @@ export default function RouterDashboard() {
               <Text style={[s.ctaText, { color: tFg('#fff') }]} numberOfLines={2}>{rescueStep}</Text>
             </View>
           ) : (
-            <Pressable style={[s.cta, s.freeBtn, busy && { opacity: 0.6 }]} onPress={onFree} disabled={busy}>
-              <Icon name="refresh" size={17} color={tFg('#fff')} />
-              <Text style={[s.ctaText, { color: tFg('#fff') }]}>الأبراج طايحة — رجّع الإشارة</Text>
-            </Pressable>
+            <View style={{ gap: 8 }}>
+              <Pressable style={[s.cta, s.freeBtn, busy && { opacity: 0.6 }]} onPress={onFree} disabled={busy}>
+                <Icon name="refresh" size={17} color={tFg('#fff')} />
+                <Text style={[s.ctaText, { color: tFg('#fff') }]}>الأبراج طايحة — رجّع الإشارة</Text>
+              </Pressable>
+              {/* الإرجاع الكامل (إعدادات أصلية + إعادة تشغيل) صار يدوي بس — نعرضه هنا لما الراوتر بلا شبكة */}
+              {canRescue(info) && (
+                <Pressable
+                  style={[s.rescueBtn, busy && { opacity: 0.5 }]} onPress={onRescue} disabled={busy}
+                  accessibilityRole="button" accessibilityLabel="رجّع الإعدادات الأصلية"
+                >
+                  <Text style={s.rescueBtnText}>ما رجعت؟ رجّع الإعدادات الأصلية (يعيد التشغيل)</Text>
+                </Pressable>
+              )}
+            </View>
           )
         )}
 

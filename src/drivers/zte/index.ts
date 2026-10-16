@@ -14,6 +14,8 @@ import {
 import { buildSnapshot } from '../../utils/snapshot';
 import { noChange, markNoChange } from '../noChange';
 
+import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
+import { ZTE_LOCK_KEYS, ZteLockData, checkComplete, zteDiff, zteSummary, ZTE_PART_LABEL, lteBands, nrBands, lteCell, nrCell } from './lockState';
 const sha256Upper = (s: string) => bytesToHex(sha256(utf8ToBytes(s))).toUpperCase();
 const sha256Hex = (s: string) => bytesToHex(sha256(utf8ToBytes(s)));
 const md5Hex = (s: string) => bytesToHex(md5(utf8ToBytes(s)));
@@ -923,6 +925,64 @@ export class ZteDriver implements RouterDriver {
     }
   }
 
+  /** لقطة إعدادات القفل قبل التجربة (قراءة فقط) — ترمي لو القراءة ناقصة */
+  async readLockState(): Promise<LockSnapshot> {
+    await this.ensure();
+    const r = await this.get([...ZTE_LOCK_KEYS]);
+    const data: ZteLockData = {};
+    for (const k of ZTE_LOCK_KEYS) data[k] = (r[k] ?? '').trim();
+    checkComplete(data);
+    return { driver: this.id, at: Date.now(), summary: zteSummary(data), data };
+  }
+  /**
+   * يرجّع اللقطة: نكتب بس الأجزاء اللي تغيّرت، وبعدها نقرأ ونقارن.
+   * قفل البرج على الأجهزة اللي تحتاج إعادة تشغيل عشان تطبّقه: نعيد التشغيل وننتظر (مثل التثبيت نفسه).
+   */
+  async restoreLockState(snap: LockSnapshot): Promise<void> {
+    if (snap.driver !== this.id) throw new Error('اللقطة من نوع راوتر ثاني — ما نرجّعها');
+    const d = snap.data as ZteLockData;
+    await this.ensure();
+    const read = async () => {
+      const r = await this.get([...ZTE_LOCK_KEYS]);
+      const o: ZteLockData = {};
+      for (const k of ZTE_LOCK_KEYS) o[k] = (r[k] ?? '').trim();
+      return o;
+    };
+    const todo = zteDiff(d, await read());
+    this.log('restore parts', todo.join(',') || 'none');
+    const must = (what: string, out: string) => { if (!/success/i.test(out)) throw this.rejected(what, out); };
+    if (todo.includes('mode')) {
+      must('إرجاع وضع الشبكة', await this.act({ goformId: 'SET_BEARER_PREFERENCE', BearerPreference: d.net_select }));
+    }
+    if (todo.includes('lte')) {
+      must('إرجاع ترددات 4G', await this.act({
+        goformId: 'BAND_SELECT', is_gw_band: '0', gw_band_mask: '0',
+        is_lte_band: '1', lte_band_mask: maskFromBands(lteBands(d)),
+      }));
+    }
+    if (todo.includes('nr')) {
+      must('إرجاع ترددات 5G', await this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: nrBands(d).join(',') }));
+    }
+    let cellChanged = false;
+    if (todo.includes('lteCell')) {
+      const c = lteCell(d);
+      must('إرجاع قفل برج 4G', c === 'off'
+        ? await this.clearLteCell()
+        : await this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: d.lte_pci_lock, lte_earfcn_lock: d.lte_earfcn_lock }));
+      cellChanged = true;
+    }
+    if (todo.includes('nrCell')) {
+      const c = nrCell(d);
+      must('إرجاع قفل برج 5G', c === 'off'
+        ? await this.clearNrCell()
+        : await this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: d.nr5g_cell_lock }));
+      cellChanged = true;
+    }
+    if (cellChanged && rebootToApply.has(this.host)) await this.rebootAndWait();
+    const left = zteDiff(d, await read());
+    this.log('restore verify', left.join(',') || 'match');
+    if (left.length) throw restoreMismatch(left.map(x => ZTE_PART_LABEL[x]));
+  }
   async lockCell(t: CellLockTarget): Promise<void> {
     // كل الفحوص هنا قبل أي أمر — نعلّمها noChange عشان safeApply ما يرجّع ولا يفك شي
     const pci = String(parsePci(t.pci) ?? t.pci ?? '').trim();

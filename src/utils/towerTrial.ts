@@ -75,7 +75,7 @@ export async function runTowerTrials(r: SavedRouter, targets: TrialTarget[], pre
       : d.unlockCell!(tech)), false);
   };
 
-  await withRouterLock(r.id, async () => {
+  await withRouterLock(r, async () => {
     try {
       for (let i = 0; i < n; i++) {
         if (cancelled()) break;
