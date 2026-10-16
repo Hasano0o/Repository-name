@@ -5,14 +5,15 @@
  * ما يغيّر أي شي في الراوتر — التثبيت نفسه من صفحة الأبراج (بالقفل الآمن).
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator } from 'react-native';
+import { ActivityIndicator, Alert } from 'react-native';
 import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { useLocalSearchParams, router, Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
-import { Carrier, CellTower, Signal } from '../../src/drivers/types';
-import { loadTrials, Trial } from '../../src/utils/safeLock';
+import { Carrier, CellLockState, CellTower, Signal } from '../../src/drivers/types';
+import { loadTrials, Trial, safeApply, trialMessage } from '../../src/utils/safeLock';
+import { runTowerTrials, TrialRow, TrialTarget } from '../../src/utils/towerTrial';
 import { loadTowerPings, towerPingKey, pingAgo } from '../../src/store/towerPing';
 import { useOperatorBands } from '../../src/store/operator';
 import { measureUrl, regionUrls, selectedRegion, gameScore } from '../../src/utils/latency';
@@ -40,6 +41,8 @@ interface Scan {
   region: string;
   limits: string[];
   canLock: boolean;
+  /** التثبيتات الحالية — نرجع لها بعد التجربة، ونرجّع لها لو التثبيت صار أسوأ */
+  locks: CellLockState[];
   at: number;
 }
 
@@ -75,6 +78,7 @@ export default function Advisor() {
       let carriers: Carrier[] = [];
       let limits: string[] = [];
       let canLock = false;
+      let locks: CellLockState[] = [];
       for (let i = 0; i < ROUNDS && !cancel.current; i++) {
         setStep(`نقرأ الإشارة والأبراج (${i + 1} من ${ROUNDS})...`);
         try {
@@ -86,13 +90,15 @@ export default function Advisor() {
             if (!d.getCells) lim.push('راوترك ما يعرض الأبراج اللي حوله — نقدر نقيّم وضعك الحالي بس.');
             if (d.cellLockRisk) lim.push(d.cellLockRisk);
             else if (typeof d.lockCell !== 'function') lim.push('راوترك ما يدعم التثبيت على برج — التوصية للمعلومة فقط.');
-            return { s, c, cells, lim, lock: typeof d.lockCell === 'function' && !d.cellLockRisk };
+            const lk = d.getCellLocks ? await d.getCellLocks().catch(() => [] as CellLockState[]) : [];
+            return { s, c, cells, lim, lk, lock: typeof d.lockCell === 'function' && typeof d.unlockCell === 'function' && !d.cellLockRisk };
           }, false);
           if (res.s.rsrp !== undefined || res.s.nrRsrp !== undefined) sigs.push(res.s);
           rounds.push(res.cells);
           if (res.c.length) carriers = res.c;
           limits = res.lim;
           canLock = res.lock;
+          locks = res.lk;
         } catch (e: any) {
           if (i === ROUNDS - 1 && !sigs.length) throw e;
         }
@@ -143,7 +149,7 @@ export default function Advisor() {
         } as Candidate;
       });
 
-      if (alive.current) setScan({ current, cands, trials, region: region.name, limits, canLock, at: Date.now() });
+      if (alive.current) setScan({ current, cands, trials, region: region.name, limits, canLock, locks, at: Date.now() });
     } catch (e: any) {
       if (alive.current) setError(e?.message ?? String(e));
     } finally {
@@ -152,7 +158,111 @@ export default function Advisor() {
   };
 
   // الهدف يتغير بدون قراءة جديدة — نفس البيانات، حكم مختلف
-  const v: Verdict | null = useMemo(() => (scan ? advise(scan.current, scan.cands, goal) : null), [scan, goal]);
+  // نتائج التجربة الفعلية (تثبيت + قياس) تغلب قراءات الجيران: فيها النقاء والبنق وقت ما كان الراوتر عليه
+  const [measured, setMeasured] = useState<TrialRow[]>([]);
+  const cands = useMemo(() => {
+    if (!scan) return [];
+    return scan.cands.map(c => {
+      const m = measured.find(x => x.outcome === 'measured' && x.t.tech === c.tech && x.t.pci === c.pci);
+      if (!m) return c;
+      return {
+        ...c,
+        rsrp: m.rsrp ?? c.rsrp, rsrq: m.rsrq ?? c.rsrq, sinr: m.sinr ?? c.sinr,
+        samples: Math.max(c.samples, m.samples),
+        ping: m.ping ? { median: m.ping.ping, jitter: m.ping.jitter, loss: m.ping.loss, score: m.ping.score, at: m.ping.at } : c.ping,
+      };
+    });
+  }, [scan, measured]);
+  const v: Verdict | null = useMemo(() => (scan ? advise(scan.current, cands, goal) : null), [scan, cands, goal]);
+
+  // ─── المرحلة ٤: نجرّب أفضل الأبراج فعلياً ───
+  const [trial, setTrial] = useState<{ i: number; n: number; name: string; step: string } | null>(null);
+  const [trialNote, setTrialNote] = useState('');
+  const trialCancel = useRef(false);
+  // للأداء العام ما نضيّع وقتك على أبراج إشارتها أضعف بوضوح؛ للألعاب نجرّبها (البنق ممكن يكون أحسن)
+  const trialTargets = (): TrialTarget[] => (v?.ranked ?? [])
+    .filter(r => r.c.arfcn && (goal === 'gaming' || r.gain > -0.2))
+    .slice(0, 3)
+    .map(r => ({ tech: r.c.tech, band: r.c.band, arfcn: r.c.arfcn!, pci: r.c.pci, name: candidateName(r.c) }));
+
+  const runTrial = () => {
+    if (!info || !scan || busy) return;
+    const targets = trialTargets();
+    if (!targets.length) return;
+    Alert.alert(
+      `نجرّب ${targets.length} ${targets.length === 1 ? 'برج' : 'أبراج'} فعلياً`,
+      'نثبّت على كل برج بالدور، نقيس الإشارة والبنق، وبعدها نرجّع إعدادك مثل ما كان.\n\n' +
+        `النت بينقطع لحظات مع كل برج، وكل برج ياخذ دقيقة تقريباً. تقدر توقف في أي وقت.`,
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'ابدأ', onPress: async () => {
+            trialCancel.current = false;
+            setBusy(true);
+            setError('');
+            setTrialNote('');
+            try {
+              const run = await runTowerTrials(info, targets, scan.locks, {
+                onStep: st => alive.current && setTrial(st),
+                isCancelled: () => trialCancel.current || !alive.current,
+                samples: 3,
+              });
+              if (!alive.current) return;
+              setMeasured(run.rows);
+              const ok = run.rows.filter(x => x.outcome === 'measured').length;
+              setTrialNote(
+                (run.freed
+                  ? (run.restored ? '↩️ ما رجع الاتصال بالإرجاع العادي، ففكّينا كل التثبيتات والراوتر لقط أقوى برج. ' : '⚠️ ما قدرنا نتأكد إن الراوتر رجع — افتح صفحة الراوتر واضغط «رجّع الإشارة». ')
+                  : '✓ رجّعنا إعدادك مثل ما كان. ') +
+                (run.cancelled ? 'وقّفنا التجربة. ' : '') +
+                `قسنا ${ok} من ${targets.length}.`,
+              );
+            } catch (e: any) {
+              if (alive.current) setError(e?.message ?? String(e));
+            } finally {
+              if (alive.current) { setTrial(null); setBusy(false); }
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  /** نثبّت الأفضل (بعد ما قسناه) — بالقفل الآمن: قياس قبل وبعد ورجوع لو صار أسوأ */
+  const applyBest = () => {
+    if (!info || !scan || !v?.best?.c.arfcn) return;
+    const c = v.best.c;
+    const prevSame = scan.locks.find(l => (l.tech ?? 'LTE') === c.tech && l.pci);
+    const label = `التثبيت على ${candidateName(c)}`;
+    Alert.alert('ثبّت الأفضل', `${label}\n\nنقيس قبل وبعد، ولو صار أسوأ أو ما اتصل نرجّع إعدادك.`, [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'ثبّت', onPress: async () => {
+          setBusy(true);
+          setError('');
+          try {
+            const res = await safeApply({
+              r: info,
+              key: `cell:${c.tech}:${c.pci}:${c.arfcn}`,
+              label,
+              withNr: c.tech === 'NR',
+              onStatus: st => alive.current && setStep(st),
+              apply: d => d.lockCell!({ tech: c.tech, band: c.band, arfcn: c.arfcn, pci: c.pci }),
+              revert: d => (prevSame
+                ? d.lockCell!({ tech: c.tech, band: prevSame.band, arfcn: prevSame.arfcn, pci: prevSame.pci! })
+                : d.unlockCell!(c.tech)),
+            });
+            const m = trialMessage(res, label);
+            Alert.alert(m.title, m.body);
+          } catch (e: any) {
+            if (alive.current) setError(e?.message ?? String(e));
+          } finally {
+            if (alive.current) { setBusy(false); setStep(''); }
+          }
+        },
+      },
+    ]);
+  };
   const combos = useMemo(() => {
     if (!scan) return [];
     const seen = new Set<string>();
@@ -169,7 +279,7 @@ export default function Advisor() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 40 }]}>
         <View style={{ gap: 3 }}>
           <Text style={s.lead}>وش الأفضل لي؟</Text>
-          <Text style={s.sub}>نقرأ وضعك والأبراج حولك ونقارن — بدون ما نغيّر أي شي في الراوتر.</Text>
+          <Text style={s.sub}>نقرأ وضعك والأبراج حولك ونقارن — وما نغيّر شي إلا بإذنك.</Text>
         </View>
 
         <View style={s.seg}>
@@ -287,18 +397,53 @@ export default function Advisor() {
               </View>
             )}
 
+            {scan!.canLock && trialTargets().length > 0 && (
+              <View style={[s.card, { borderColor: C.violet + '55' }]}>
+                <Text style={s.cardTitle}>جرّبها فعلياً</Text>
+                <Text style={s.meta}>
+                  نثبّت على أفضل {trialTargets().length} بالدور، ونقيس الإشارة والنقاء والبنق وهو عليها — وبعدها نرجّعك لوضعك.
+                  التوصية تصير «مقاسة» بدل «متوقعة».
+                </Text>
+                {trial ? (
+                  <>
+                    <Text style={s.body}>{trial.name ? `${trial.i} من ${trial.n} · ${trial.name}` : ''}</Text>
+                    <Text style={s.meta}>{trial.step}</Text>
+                    <Pressable onPress={() => { trialCancel.current = true; }} style={({ pressed }) => [s.sec, pressed && { opacity: 0.8 }]}>
+                      <Text style={s.secTxt}>وقّف وارجعني لوضعي</Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <Pressable onPress={runTrial} disabled={busy} style={({ pressed }) => [s.main, { backgroundColor: C.violet }, (pressed || busy) && { opacity: 0.8 }]}>
+                    <Text style={s.mainTxt}>جرّب أفضل {trialTargets().length} فعلياً</Text>
+                  </Pressable>
+                )}
+                {!!trialNote && <Text style={s.reason}>{trialNote}</Text>}
+                {measured.map(m => (
+                  <Text key={m.t.tech + m.t.pci} style={s.meta}>
+                    • {m.t.name}: {m.outcome === 'measured'
+                      ? [m.rsrp !== undefined ? `${Math.round(m.rsrp)} dBm` : '', m.sinr !== undefined ? `نقاء ${Math.round(m.sinr)}` : '', m.ping ? `بنق ${m.ping.ping}ms` : ''].filter(Boolean).join(' · ')
+                      : m.note}
+                  </Text>
+                ))}
+              </View>
+            )}
+
+            {scan!.canLock && v.kind === 'switch' && v.best?.measured && !!v.best.c.arfcn && !trial && (
+              <Pressable onPress={applyBest} disabled={busy} style={({ pressed }) => [s.main, { backgroundColor: '#13B783' }, (pressed || busy) && { opacity: 0.8 }]}>
+                <Text style={s.mainTxt}>ثبّت الأفضل: {candidateName(v.best.c)}</Text>
+              </Pressable>
+            )}
+
             {scan!.canLock && (
               <Pressable onPress={() => router.push(`/towers/${id}` as Href)} style={({ pressed }) => [s.sec, pressed && { opacity: 0.8 }]}>
-                <Text style={s.secTxt}>
-                  {goal === 'gaming' && v.missing.some(m => /بنق مقاس/.test(m)) ? 'قِس بنق الأبراج من صفحة الأبراج' : 'افتح صفحة الأبراج'}
-                </Text>
+                <Text style={s.secTxt}>افتح صفحة الأبراج</Text>
               </Pressable>
             )}
           </>
         )}
 
         <Text style={s.note}>
-          🛡️ المستشار يقرأ بس وما يغيّر شي. لو قررت تثبّت، صفحة الأبراج تثبّت بالقفل الآمن: تقيس قبل وبعد وترجّع لو صار أسوأ.
+          🛡️ المستشار ما يغيّر شي في الراوتر إلا لما تضغط «جرّب» أو «ثبّت». التجربة ترجّعك لوضعك في الآخر، والتثبيت بالقفل الآمن: يقيس قبل وبعد ويرجّع لو صار أسوأ.
         </Text>
       </ScrollView>
     </View>

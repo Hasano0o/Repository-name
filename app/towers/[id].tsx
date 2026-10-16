@@ -16,14 +16,14 @@ import {
 import { C, tBd, tBg, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { trafficBurst, collectNr, mb } from '../../src/utils/nrprobe';
-import { safeApply, lastTrial, trialNote, trialMessage, loadTrials, freeRelease } from '../../src/utils/safeLock';
+import { safeApply, lastTrial, trialNote, trialMessage, loadTrials } from '../../src/utils/safeLock';
 import { driverById } from '../../src/drivers/registry';
 import { SeenCell, rememberSeen, seenKey } from '../../src/store/seenCells';
 import { ManualLock, ManualTarget } from '../../src/ui/ManualLock';
 import { bandLabel } from '../../src/utils/bands';
 import { TowerPing, loadTowerPings, saveTowerPing, towerPingKey, pingAgo } from '../../src/store/towerPing';
 import { measureUrl, regionUrls, selectedRegion, gameScore } from '../../src/utils/latency';
-import { withRouterLock } from '../../src/store/sessions';
+import { runTowerTrials, TrialTarget } from '../../src/utils/towerTrial';
 
 import { sheet } from '../../src/i18n';
 const BADGE_BG: Record<TowerGroup['badge'], string> = {
@@ -288,20 +288,7 @@ export default function TowersScreen() {
     } catch {}
   };
 
-  const waitOnline = async (r: SavedRouter, ms: number) => {
-    const end = Date.now() + ms;
-    while (Date.now() < end) {
-      if (scanCancel.current) return false;
-      await new Promise(x => setTimeout(x, 4000));
-      try {
-        const ok = await withSession(r, async d => (d.isConnected ? d.isConnected() : true));
-        if (ok) return true;
-      } catch {}
-    }
-    return false;
-  };
-
-  /** يقفل على كل برج بالدور ويقيس البنق، وبعدها يرجّع التثبيت اللي كان */
+  /** يقفل على كل برج بالدور ويقيس البنق، وبعدها يرجّع التثبيت اللي كان (المحرك في towerTrial) */
   const scanPings = async (cands: TowerGroup[]) => {
     if (!info) return;
     const r = info;
@@ -309,85 +296,24 @@ export default function TowersScreen() {
     setScanDone([]);
     setBusy(true);
     setError('');
-    const prev = [...locks];
-    const touched = new Set<'LTE' | 'NR'>();
-    const region = await selectedRegion();
+    const targets: TrialTarget[] = [];
+    for (const g of cands) {
+      const cell = g.cells.find(c => c === g.best && c.arfcn) ?? g.cells.find(c => c.arfcn);
+      if (!cell?.arfcn || !g.pci) continue;
+      targets.push({ tech: cell.tech, band: cell.band, arfcn: cell.arfcn, pci: g.pci, name: `برج ${g.pci} · ${bandName(cell)}` });
+    }
     try {
-      await withRouterLock(r.id, async () => {
-        for (let i = 0; i < cands.length; i++) {
-          if (scanCancel.current || !alive.current) break;
-          const g = cands[i];
-          const cell = g.cells.find(c => c === g.best && c.arfcn) ?? g.cells.find(c => c.arfcn);
-          if (!cell?.arfcn || !g.pci) continue;
-          const name = `برج ${g.pci} · ${bandName(cell)}`;
-          setScan({ i: i + 1, n: cands.length, name, step: 'نثبّت عليه...' });
-          try {
-            await withSession(r, d => d.lockCell!({ tech: cell.tech, band: cell.band, arfcn: cell.arfcn, pci: g.pci! }), false);
-            touched.add(cell.tech);
-          } catch {
-            setScanDone(x => [...x, `${name}: ما قبل التثبيت`]);
-            continue;
-          }
-          setScan({ i: i + 1, n: cands.length, name, step: 'ننتظر الاتصال...' });
-          if (!(await waitOnline(r, 120000))) {
-            // البرج ما مسك — نفك التثبيت فوراً بدل ما نكمل والراوتر طايح
-            setScanDone(x => [...x, `${name}: ما اتصل — فكّينا التثبيت`]);
-            setScan({ i: i + 1, n: cands.length, name, step: 'ما اتصل — نفك التثبيت ونرجّع الخدمة...' });
-            const was = prev.find(l => (l.tech ?? 'LTE') === cell.tech && l.pci);
-            try {
-              await withSession(r, d => (was
-                ? d.lockCell!({ tech: cell.tech, band: was.band, arfcn: was.arfcn, pci: was.pci! })
-                : d.unlockCell!(cell.tech)), false);
-            } catch {}
-            if (!(await waitOnline(r, 120000))) {
-              // ولا رجع — نرجّع الإعدادات الأصلية كاملة ونوقف الفحص
-              // ولا رجع — نفك كل شي ويلقط أقوى برج، ونوقف الفحص
-              try {
-                await freeRelease(r, st => setScan(s0 => (s0 ? { ...s0, step: st } : { i: 0, n: 0, name: '', step: st })));
-              } catch {}
-              setScanDone(x => [...x, 'وقّفنا الفحص وفكّينا التثبيتات عشان يلقط أقوى برج']);
-              touched.clear();
-              break;
-            }
-            continue;
-          }
-          await new Promise(x => setTimeout(x, 3000));
-          // نتأكد إن الراوتر فعلاً على البرج المطلوب — وإلا القياس بيكون لبرج ثاني
-          const now = await withSession(r, async d => (d.getSignal ? d.getSignal() : null)).catch(() => null);
-          const nowPci = cell.tech === 'NR' ? now?.nrPci : now?.pci;
-          if (now && nowPci && String(nowPci) !== String(g.pci)) {
-            setScanDone(x => [...x, `${name}: الراوتر راح لبرج ${nowPci} بداله`]);
-            continue;
-          }
-          setScan({ i: i + 1, n: cands.length, name, step: `نقيس البنق لـ${region.name}...` });
-          const res = await measureUrl(regionUrls(region), 12);
-          if (!res.samples) {
-            setScanDone(x => [...x, `${name}: ما وصل للإنترنت`]);
-            continue;
-          }
-          const p: TowerPing = { ping: res.median, jitter: res.jitter, loss: res.lossPct, score: gameScore(res), region: region.id, at: Date.now() };
-          const all = await saveTowerPing(r.id, towerPingKey(g.tech, g.pci), p);
-          if (alive.current) setPings(all);
-          setScanDone(x => [...x, `${name}: ${res.median}ms`]);
-        }
-
-        // نرجّع التثبيت اللي كان قبل الفحص
-        setScan(s0 => (s0 ? { ...s0, step: 'نرجّع إعدادك السابق...' } : { i: 0, n: 0, name: '', step: 'نرجّع إعدادك السابق...' }));
-        for (const tech of touched) {
-          const was = prev.find(l => (l.tech ?? 'LTE') === tech && l.pci);
-          try {
-            await withSession(r, d => (was
-              ? d.lockCell!({ tech, band: was.band, arfcn: was.arfcn, pci: was.pci! })
-              : d.unlockCell!(tech)), false);
-          } catch {}
-        }
-        if (touched.size && !(await waitOnline(r, 120000))) {
-          // الإرجاع ما رجّع الخدمة — نفك كل شي ويلقط أقوى برج بدل ما يعلق بدون خدمة
-          try {
-            await freeRelease(r, st => setScan(s0 => (s0 ? { ...s0, step: st } : { i: 0, n: 0, name: '', step: st })));
-          } catch {}
-        }
+      const run = await runTowerTrials(r, targets, [...locks], {
+        onStep: st => alive.current && setScan(st),
+        onRow: row => {
+          if (!alive.current) return;
+          setScanDone(x => [...x, `${row.t.name}: ${row.note}`]);
+          if (row.ping) loadTowerPings(r.id).then(p => alive.current && setPings(p)).catch(() => {});
+        },
+        isCancelled: () => scanCancel.current || !alive.current,
+        samples: 1,
       });
+      if (run.freed && alive.current) setScanDone(x => [...x, 'وقّفنا الفحص وفكّينا التثبيتات عشان يلقط أقوى برج']);
     } finally {
       if (alive.current) {
         setScan(null);

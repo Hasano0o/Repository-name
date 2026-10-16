@@ -602,8 +602,10 @@ export const EN: Record<string, string> = {
   // ─── المستشار الذكي ───
   'المستشار الذكي': 'Smart advisor',
   'وش الأفضل لي؟': "What's best for me?",
-  'نقرأ وضعك والأبراج حولك ونقارن — بدون ما نغيّر أي شي في الراوتر.': 'We read your current setup and nearby towers and compare — without changing anything on the router.',
-  'يقارن وضعك بالأبراج حولك ويقول الأفضل — قراءة بس، ما يغيّر شي': 'Compares your setup with nearby towers and tells you the best — read-only, changes nothing',
+  'نقرأ وضعك والأبراج حولك ونقارن — وما نغيّر شي إلا بإذنك.': 'We read your setup and nearby towers and compare — and change nothing without your OK.',
+  'جرّبها فعلياً': 'Test them for real',
+  'وقّف وارجعني لوضعي': 'Stop and restore my setup',
+  'يقارن وضعك بالأبراج حولك، يجرّبها فعلياً ويقول الأفضل — ما يغيّر شي بدون إذنك': 'Compares your setup with nearby towers, tests them for real and tells you the best — changes nothing without your OK',
   'أفضل أداء': 'Best overall',
   'للألعاب': 'For gaming',
   'افحص الحين': 'Check now',
