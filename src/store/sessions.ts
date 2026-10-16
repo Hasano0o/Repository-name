@@ -83,7 +83,9 @@ async function attachBaseline(r: SavedRouter, d: RouterDriver) {
 }
 
 /** يمنع تشغيل عمليتين تعديل على نفس الراوتر بنفس الوقت (قفل تردد + دمج مثلاً) */
-const LOCK_MAX_MS = 6 * 60 * 1000;
+// ١٢ دقيقة: safeApply ممكن ينتظر ZTE يعيد التشغيل (لين ~٤ دقائق) وبعدها يقيس ويرجّع —
+// بست دقائق كانت العملية اللي بعدها تبدأ والأولى لسا شغالة
+const LOCK_MAX_MS = 12 * 60 * 1000;
 
 export function withRouterLock<T>(id: string, fn: () => Promise<T>): Promise<T> {
   const prev = chains.get(id) ?? Promise.resolve();

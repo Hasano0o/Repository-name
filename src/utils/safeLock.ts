@@ -10,6 +10,7 @@ import { driverById } from '../drivers/registry';
 import { trafficBurst } from './nrprobe';
 import { isNoService } from './signal';
 import { progress, Tracker } from '../ui/Progress';
+import { runApply } from './applyGuard';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 /** يرجّع undefined لو الخطوة طوّلت أكثر من المسموح (بدل ما يعلق المستخدم ٤٠ دقيقة) */
@@ -369,16 +370,33 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
   const before = b0;
 
   say('نطبّق التغيير...');
-  // لو الأمر نفسه علق، نكمّل: الخطوة الجاية تتأكد من الاتصال وترجّع الإعداد لو لزم.
-  // (لو الراوتر رفض برسالة خطأ، الخطأ يطلع للمستخدم مثل قبل)
-  try {
-    await withTimeout(withSession(o.r, o.apply, false), 60_000);
-  } catch (e) {
+  // لو الأمر طوّل (مثلاً ZTE يعيد التشغيل بعد تثبيت البرج) ننتظره يخلص بدل ما نرجّع ونفك وهو في النص.
+  // لو لسا ما خلص بعدها، نكمّل: الخطوة الجاية تتأكد من الاتصال وترجّع الإعداد لو لزم.
+  const step = await runApply({
+    session: fn => withSession(o.r, fn, false),
+    apply: o.apply,
+    firstMs: 60_000,
+    extraMs: 200_000,
+    onLong: () => say('الراوتر لسا يطبّق التغيير (ممكن يعيد التشغيل) — ننتظره يخلص...'),
+  });
+  if (step.kind === 'stillRunning') diag(`[${o.key}] apply still running after wait`);
+  if (step.kind === 'failed' && step.skipRevert) {
+    // الخطأ صار قبل ما نرسل أي أمر — الراوتر على حاله، فما نرجّع ولا نفك أي تثبيت
+    const msg = String((step.error as any)?.message ?? step.error);
+    diag(`[${o.key}] stopped before any change: ${msg.slice(0, 80)}`);
+    const err = new Error(/لم ننفذ|ما غيّرنا/.test(msg) ? msg : `${msg}\n\nما غيّرنا أي شي في الراوتر — إعدادك الحالي على حاله.`);
+    (err as any).noChange = true;
+    (err as any).reverted = false;
+    throw err;
+  }
+  if (step.kind === 'failed') {
+    const e = step.error;
     // الأمر نفسه انرفض في النص (مثلاً غيّرنا وضع الشبكة وبعدها رفض قفل التردد):
     // نرجّع اللي تغيّر قبل ما نطلّع الخطأ — عشان ما يبقى الراوتر نص مطبّق وبلا خدمة
     say('الراوتر رفض — نرجّع إعدادك...');
     const msg = String((e as any)?.message ?? e);
     let back = false;
+    let freed = false;
     try {
       await withSessionPatient(o.r, o.revert, 90_000, n => n && say('الراوتر مشغول — نحاول ندخل ونرجّع إعدادك...'));
       back = true;
@@ -389,10 +407,14 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
       // ما قدرنا نرجّع الإعداد بالضبط — نفك كل شي ويلقط أقوى برج (ولا نخليه بلا نت)
       say('نفك التثبيتات عشان يلقط أقوى برج...');
       back = await freeRelease(o.r, say).catch(() => false);
+      freed = back;
     }
-    const err = new Error(back
-      ? `${msg}\n\n✓ رجّعنا إعدادك السابق.`
-      : `${msg}\n\n⚠️ ما قدرنا نرجّع إعدادك — سكّر أي تطبيق أو صفحة للراوتر واضغط «رجّع الإشارة» من صفحة الراوتر.`);
+    // ما ندّعي إن إعدادك رجع بالضبط إلا لو أمر الإرجاع نفسه نجح
+    const err = new Error(!back
+      ? `${msg}\n\n⚠️ ما قدرنا نرجّع إعدادك — سكّر أي تطبيق أو صفحة للراوتر واضغط «رجّع الإشارة» من صفحة الراوتر.`
+      : freed
+        ? `${msg}\n\n↩️ ما قدرنا نرجّع إعدادك السابق بالضبط، ففكّينا كل التثبيتات والراوتر رجع يلقط أقوى برج.`
+        : `${msg}\n\n✓ أرسلنا للراوتر إعدادك السابق — تأكد من الإشارة بعد دقيقة.`);
     (err as any).reverted = back;
     throw err;
   }

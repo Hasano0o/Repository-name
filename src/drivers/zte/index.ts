@@ -12,6 +12,7 @@ import {
   parsePci, decodeBandMask, encodeBandMask, parseZteCa, bandLabel,
 } from '../../utils/normalize';
 import { buildSnapshot } from '../../utils/snapshot';
+import { noChange, markNoChange } from '../noChange';
 
 const sha256Upper = (s: string) => bytesToHex(sha256(utf8ToBytes(s))).toUpperCase();
 const sha256Hex = (s: string) => bytesToHex(sha256(utf8ToBytes(s)));
@@ -923,14 +924,16 @@ export class ZteDriver implements RouterDriver {
   }
 
   async lockCell(t: CellLockTarget): Promise<void> {
-    await this.ensure();
+    // كل الفحوص هنا قبل أي أمر — نعلّمها noChange عشان safeApply ما يرجّع ولا يفك شي
     const pci = String(parsePci(t.pci) ?? t.pci ?? '').trim();
     const arfcn = (t.arfcn ?? '').trim();
-    if (!pci) throw new Error('ما عندنا رقم البرج (PCI) — ما نقدر نثبّت عليه');
-    if (!arfcn) throw new Error('الراوتر ما أعطانا رقم تردد هذا البرج (EARFCN) — ثبّت التردد بدلاً منه');
+    if (!pci) throw noChange('ما عندنا رقم البرج (PCI) — ما نقدر نثبّت عليه');
+    if (!arfcn) throw noChange('الراوتر ما أعطانا رقم تردد هذا البرج (EARFCN) — ثبّت التردد بدلاً منه');
+    if (t.tech === 'NR' && !t.band) throw noChange('ما نعرف تردد 5G لهذا البرج');
+    try { await this.ensure(); } catch (e) { throw markNoChange(e); }
     let out: string;
     if (t.tech === 'NR') {
-      if (!t.band) throw new Error('ما نعرف تردد 5G لهذا البرج');
+      if (!t.band) throw noChange('ما نعرف تردد 5G لهذا البرج');
       out = await this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: `${pci},${arfcn},${t.band},${nrScs(t.band)}` });
     } else {
       out = await this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: pci, lte_earfcn_lock: arfcn });

@@ -16,6 +16,8 @@ import { getWifiRadios, setWifiChannel, wifiDebug } from './wifi';
 import * as extras from './extras';
 import { parseTxPower, parseDlMcs, parseUlMcs } from '../../utils/linkHealth';
 import { buildSnapshot } from '../../utils/snapshot';
+import { noChange } from '../noChange';
+import { buildCellLockBody, buildUnlockBody, lockMatches, parseCellLocks, parseLockRaw, LockRaw, Tech as CellTech } from './cellLock';
 
 const tag = (xml: string, t: string) =>
   xml.match(new RegExp(`<${t}>([\\s\\S]*?)</${t}>`))?.[1];
@@ -820,29 +822,22 @@ export class HuaweiDriver implements RouterDriver {
     if (mode === '08') return nr;
     return lte + nr;
   }
-  private sectionXml(name: string, mode: string, entries: string[], allBands: string) {
-    return '<' + name + '><lock_mode>' + mode + '</lock_mode><freq_infos>' +
-      entries.join('') + '</freq_infos><all_bands>' + allBands + '</all_bands></' + name + '>';
-  }
-  private async readCellLockRaw(): Promise<{ lte: string; nr: string }> {
+  private async readCellLockRaw(): Promise<LockRaw> {
     try {
-      const xml = await this.get('net/lock-freq');
-      return { lte: tag(xml, 'lte_info') ?? '', nr: tag(xml, 'nr_info') ?? '' };
+      return parseLockRaw(await this.get('net/lock-freq'));
     } catch {
       return { lte: '', nr: '' };
     }
   }
+  /**
+   * قراءة صارمة: ترمي لو القراءة فشلت (بدل ما ترجع «ما فيه قفل»).
+   * نستخدمها داخل التثبيت عشان نفرّق بين «ما فيه قفل» و«ما قدرنا نقرأ».
+   */
+  private async readCellLockStrict(): Promise<LockRaw> {
+    return parseLockRaw(await this.get('net/lock-freq'));
+  }
   async getCellLocks(): Promise<CellLockState[]> {
-    const raw = await this.readCellLockRaw();
-    const out: CellLockState[] = [];
-    for (const [tech, sec] of [['LTE', raw.lte], ['NR', raw.nr]] as const) {
-      if (!sec || (tag(sec, 'lock_mode') ?? '0') === '0') continue;
-      const pci = (tag(sec, 'pci') ?? '').trim();
-      if (!pci) continue;
-      const band = parseInt(tag(sec, 'band') ?? '', 10);
-      out.push({ tech, pci, band: Number.isFinite(band) ? band : undefined, arfcn: (tag(sec, 'freq') ?? '').trim() || undefined });
-    }
-    return out;
+    return parseCellLocks(await this.readCellLockRaw());
   }
   async getCellLock(): Promise<CellLockState | null> {
     return (await this.getCellLocks())[0] ?? null;
@@ -854,47 +849,92 @@ export class HuaweiDriver implements RouterDriver {
     return { bands: lf.lte, nrBands: lf.nr, pci: cell?.pci };
   }
   async lockCell(target: CellLockTarget) {
+    const UNSUPPORTED = 'راوترك ما يدعم تثبيت البرج (قفل الخلية) — هالخاصية مو موجودة في هالموديل';
     const pci = (target.pci ?? '').trim();
-    if (!pci) throw new Error('ما عندنا رقم الخلية (PCI) لهذا البرج');
+    // كل الأخطاء قبل أول أمر POST تنرمي بعلامة noChange: ما أرسلنا شي، فما فيه شي نرجّعه
+    if (!pci) throw noChange('ما عندنا رقم الخلية (PCI) لهذا البرج');
     const arfcn = arfcnOf(target.arfcn);
     const band = target.band;
-    const isNr = target.tech === 'NR';
-    const name = isNr ? 'nr_info' : 'lte_info';
-    const other = isNr ? 'lte_info' : 'nr_info';
-    const entry = '<freq_info>' +
-      (band ? '<band>' + band + '</band>' : '<band></band>') +
-      '<freq>' + arfcn + '</freq><pci>' + pci + '</pci></freq_info>';
-    if (this.lockFreqDead) throw new Error('راوترك ما يدعم تثبيت البرج (قفل الخلية) — هالخاصية مو موجودة في هالموديل');
+    const tech: CellTech = target.tech === 'NR' ? 'NR' : 'LTE';
+    const isNr = tech === 'NR';
+    if (this.lockFreqDead) throw noChange(UNSUPPORTED);
+
+    // لا تحاول قفل خلية NR عندما يكون الراوتر مضبوطًا على 4G فقط.
+    let currentMode = '';
+    try {
+      currentMode = tag(await this.get('net/net-mode'), 'NetworkMode') ?? '';
+    } catch {
+      throw noChange(
+        'تعذر قراءة وضع الشبكة. لم ننفذ قفل البرج؛ تحقق من اتصال الراوتر وحاول مجددًا.'
+      );
+    }
+
+    if (isNr && currentMode === '03') {
+      throw noChange(
+        'تعذر تثبيت برج 5G لأن الراوتر مضبوط على 4G فقط. ' +
+        'غيّر وضع الشبكة إلى 4G + 5G إذا كان مدعومًا، ثم أعد المحاولة. ' +
+        'لم ننفذ قفل البرج.'
+      );
+    }
+    if (!isNr && currentMode === '08') {
+      throw noChange(
+        'تعذر تثبيت برج 4G لأن الراوتر مضبوط على 5G فقط. ' +
+        'غيّر وضع الشبكة إلى 4G + 5G، ثم أعد المحاولة. لم ننفذ قفل البرج.'
+      );
+    }
+
+    // نقرأ الأقفال الحالية قبل أي أمر: عشان ما نمسح قفل التقنية الثانية،
+    // ولو القراءة فشلت نوقف (ما نرسل أمر وإحنا ما نعرف وش على الراوتر)
+    let current: LockRaw;
+    try {
+      current = await this.readCellLockStrict();
+    } catch (e) {
+      if (await this.lockFreqUnsupported(e)) throw noChange(UNSUPPORTED);
+      throw noChange('ما قدرنا نقرأ تثبيت البرج الحالي من الراوتر، فما غيّرنا شي. جرّب مرة ثانية.');
+    }
+    const otherBefore = parseCellLocks(current).find(l => l.tech !== tech);
+
     const candidates = this.cellLockMode ? [this.cellLockMode] : ['2', '4', '1', '5'];
     let lastErr: unknown;
+    let accepted = false;
     for (const mode of candidates) {
-      const mine = this.sectionXml(name, mode, [entry], band ? String(band) : '');
-      const rest = this.sectionXml(other, '0', [], '');
-      const body = await this.trimByMode(isNr ? rest : mine, isNr ? mine : rest);
+      const body = buildCellLockBody({ tech, pci, arfcn, band, mode, current, netMode: currentMode });
       this.log('cell-lock try mode', mode, body);
       try {
         await this.post('net/lock-freq', body);
       } catch (e) {
-        if (await this.lockFreqUnsupported(e)) throw new Error('راوترك ما يدعم تثبيت البرج (قفل الخلية) — هالخاصية مو موجودة في هالموديل');
+        // الراوتر رد بخطأ صريح على هالصيغة — نجرّب الصيغة اللي بعدها
+        if (!accepted && await this.lockFreqUnsupported(e)) throw noChange(UNSUPPORTED);
         lastErr = e;
         continue;
       }
+      accepted = true;
       await new Promise(r => setTimeout(r, 2500));
-      const now = await this.getCellLock();
-      this.log('cell-lock readback', JSON.stringify(now));
-      if (now && now.pci === pci) {
+      let locks: CellLockState[];
+      try {
+        locks = parseCellLocks(await this.readCellLockStrict());
+      } catch {
+        // الراوتر قبل الأمر وما نقدر نتأكد وش صار — ما نعيد أوامر بعمى.
+        // (بدون noChange: safeApply يرجّع الإعداد السابق)
+        throw new Error('الراوتر قبل أمر التثبيت لكن ما قدرنا نتأكد من النتيجة — وقّفنا بدل ما نعيد الأمر.');
+      }
+      this.log('cell-lock readback', JSON.stringify(locks));
+      if (lockMatches(locks, tech, pci, arfcn)) {
         this.cellLockMode = mode;
+        if (otherBefore && !locks.some(l => l.tech === otherBefore.tech && l.pci === otherBefore.pci)) {
+          this.log('cell-lock: other tech lock was dropped by the router', JSON.stringify(otherBefore));
+        }
         return;
       }
     }
-    try { await this.unlockCell(); } catch {}
+    // لا تمسح الأقفال السابقة عند فشل محاولة تثبيت خلية جديدة.
     if (lastErr) throw lastErr;
-    throw new Error('الراوتر ما قبل قفل الخلية على هذا البرج');
+    throw new Error('الراوتر ما قبل قفل الخلية على هذا البرج؛ أبقينا الأقفال السابقة دون مسحها.');
   }
-  async unlockCell() {
-    if (this.lockFreqDead) return; // الموديل ما يدعم قفل الخلية — ما فيه شي نفكه
-    const body = this.sectionXml('lte_info', '0', [], '') + this.sectionXml('nr_info', '0', [], '');
-    this.log('cell-lock clearing');
+  async unlockCell(tech?: 'LTE' | 'NR') {
+    if (this.lockFreqDead) return; // الموديل ما يدعم قفل الخلية
+    const body = buildUnlockBody(tech);
+    this.log('cell-lock clearing', tech ?? 'all');
     try {
       await this.post('net/lock-freq', body);
     } catch (e) {
