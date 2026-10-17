@@ -15,7 +15,7 @@ import {
   lvlColor, lvlSoft,
 } from '../src/ui/Pro';
 
-import { tBd, tBg, tFg } from '../src/ui/theme';
+import { tBd, tBg, tFg, isDark } from '../src/ui/theme';
 import { desktop } from '../src/desktop/bridge';
 import { CityAsk } from '../src/ui/CityAsk';
 import { WhatsNew } from '../src/ui/WhatsNew';
@@ -430,7 +430,7 @@ const s = sheet({
   statUnit: { color: tFg('rgba(255,255,255,0.8)'), fontSize: 10.5, fontWeight: '700' },
   statLbl: { color: tFg('rgba(255,255,255,0.8)'), fontSize: 11, fontWeight: '600' },
 
-  card: { backgroundColor: P.card, borderRadius: 24, padding: 14, gap: 12, borderWidth: 1.5, borderColor: P.border, ...shadow },
+  card: { backgroundColor: P.card, borderRadius: 24, padding: 14, gap: 12, ...(isDark ? { borderWidth: 1, borderColor: P.border } : { ...shadow, shadowOpacity: 0.09, shadowRadius: 14, elevation: 4 }) },
   row: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
   avatar: { width: 52, height: 52, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   name: { color: P.text, fontSize: 17, fontWeight: '800', textAlign: 'right', flexShrink: 1 },

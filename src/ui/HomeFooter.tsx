@@ -7,26 +7,25 @@
 import { ReactNode, useState } from 'react';
 import { ActivityIndicator, Linking, Alert } from 'react-native';
 import { View, Text, Pressable } from '../i18n/rn';
-import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path } from 'react-native-svg';
 import * as Updates from 'expo-updates';
 import { router, Href } from 'expo-router';
 import { Icon, IconName } from './Icon';
 import { P } from './Pro';
-import { THEME_PREF, ThemePref, setThemePref, tBg, tBd } from './theme';
+import { THEME_PREF, ThemePref, setThemePref, tBg, tBd, tFg, isDark } from './theme';
 import { desktop } from '../desktop/bridge';
 import { invite } from './InviteCard';
 import { sheet, LANG, Lang, setLang, EN_MODE } from '../i18n';
 import { diagText, sendSupportReport } from '../services/errors';
 
 // ═══ ١) المربعات ═══
-function PeopleIcon() {
+function PeopleIcon({ c = '#ffffff' }: { c?: string }) {
   return (
     <Svg width={21} height={21} viewBox="0 0 24 24" fill="none">
-      <Circle cx={9} cy={8} r={3.4} fill="#ffffff" />
-      <Path d="M2.6 19.5c.6-3.4 3.2-5.4 6.4-5.4s5.8 2 6.4 5.4" fill="#ffffff" />
-      <Circle cx={17.2} cy={9} r={2.6} fill="rgba(255,255,255,0.75)" />
-      <Path d="M15.6 14.4c2.8-.3 5.2 1.4 5.8 4.6" stroke="rgba(255,255,255,0.75)" strokeWidth={2} strokeLinecap="round" />
+      <Circle cx={9} cy={8} r={3.4} fill={c} />
+      <Path d="M2.6 19.5c.6-3.4 3.2-5.4 6.4-5.4s5.8 2 6.4 5.4" fill={c} />
+      <Circle cx={17.2} cy={9} r={2.6} fill={c} opacity={0.7} />
+      <Path d="M15.6 14.4c2.8-.3 5.2 1.4 5.8 4.6" stroke={c} strokeOpacity={0.7} strokeWidth={2} strokeLinecap="round" />
     </Svg>
   );
 }
@@ -36,7 +35,7 @@ function Tile({ title, sub, colors, icon, onPress }: {
 }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [s.tile, pressed && s.pressed]}>
-      <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.tileIcon}>{icon}</LinearGradient>
+      <View style={[s.tileIcon, { backgroundColor: tBg(colors[1] + '1f'), borderColor: tBd(colors[1] + '33') }]}>{icon}</View>
       <Text style={s.tileTitle} numberOfLines={1}>{title}</Text>
       <Text style={s.tileSub} numberOfLines={1}>{sub}</Text>
     </Pressable>
@@ -184,12 +183,12 @@ export function HomeFooter({ onExplore }: { onExplore: () => void }) {
     <View style={{ gap: 12, marginTop: 4 }}>
       <View style={s.tiles}>
         <Tile title="وضع الفني" sub="عميل عن بُعد" colors={['#22c3e6', '#0b86a1']}
-          icon={<Icon name="aim" size={20} color="#fff" stroke={2.2} />}
+          icon={<Icon name="aim" size={22} color={tFg('#0b86a1')} stroke={2.2} />}
           onPress={() => (desktop?.openTech ? desktop.openTech() : router.push('/tech' as Href))} />
         <Tile title="جهاز جديد" sub="غير مدعوم؟" colors={['#a78bfa', '#6a45ec']}
-          icon={<Icon name="compass" size={20} color="#fff" stroke={2.2} />} onPress={onExplore} />
-        <Tile title="ادعُ ربعك" sub="شارك الرابط" colors={['#f472b6', '#a855f7']}
-          icon={<PeopleIcon />} onPress={invite} />
+          icon={<Icon name="compass" size={22} color={tFg('#6a45ec')} stroke={2.2} />} onPress={onExplore} />
+        <Tile title="ادعُ ربعك" sub="شارك الرابط" colors={['#f472b6', '#c0389b']}
+          icon={<PeopleIcon c={tFg('#c0389b')} />} onPress={invite} />
       </View>
 
       <View style={[s.card, s.contact]}>
@@ -224,18 +223,22 @@ export function HomeFooter({ onExplore }: { onExplore: () => void }) {
   );
 }
 
+const SOFT = isDark
+  ? { borderWidth: 1, borderColor: P.border }
+  : { borderWidth: 0, shadowColor: '#1b2b5c', shadowOpacity: 0.09, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 4 };
+
 const s = sheet({
   pressed: { opacity: 0.8, transform: [{ scale: 0.97 }] },
   tiles: { flexDirection: 'row-reverse', gap: 10 },
   tile: {
-    flex: 1, alignItems: 'center', gap: 4, paddingVertical: 12, paddingHorizontal: 6,
-    backgroundColor: P.card, borderRadius: 18, borderWidth: 1.5, borderColor: P.border,
+    flex: 1, alignItems: 'center', gap: 4, paddingVertical: 16, paddingHorizontal: 6,
+    backgroundColor: P.card, borderRadius: 22, ...SOFT,
   },
-  tileIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 3 },
+  tileIcon: { width: 48, height: 48, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   tileTitle: { color: P.text, fontSize: 13, fontWeight: '800' },
   tileSub: { color: P.sub, fontSize: 10.5, fontWeight: '600' },
 
-  card: { backgroundColor: P.card, borderRadius: 18, borderWidth: 1.5, borderColor: P.border, paddingHorizontal: 14, paddingVertical: 4 },
+  card: { backgroundColor: P.card, borderRadius: 22, ...SOFT, paddingHorizontal: 14, paddingVertical: 4 },
   contact: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, paddingVertical: 12 },
   ways: { flexDirection: 'row-reverse', gap: 7 },
   way: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
