@@ -1016,14 +1016,18 @@ export class ZteDriver implements RouterDriver {
    * نرسل فاضي أول، وصفر بس لو الراوتر رفض الفاضي.
    */
   private async clearLteCell(): Promise<string> {
-    const o = await this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: '', lte_earfcn_lock: '' });
-    if (/success/i.test(o)) return o;
-    return this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: '0', lte_earfcn_lock: '0' });
+    // ⚠️ لا نرسل 0/0 أبداً — حتى لو رفض الفاضي. سجل MU5001 (١٨ أكتوبر): الفاضي انرفض فنزلنا للصفر،
+    // والراوتر ثبت على «برج 0» وطاح بدون خدمة ولا رجع حتى بإعادة التشغيل (يحتاج ضبط مصنع).
+    // ولو ما فيه قفل أصلاً ما نرسل شي.
+    const cur = await this.get(['lte_pci_lock', 'lte_earfcn_lock']).catch(() => null);
+    if (cur && !(cur.lte_pci_lock || '').trim() && !(cur.lte_earfcn_lock || '').trim()) return '{"result":"success"}';
+    return this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: '', lte_earfcn_lock: '' });
   }
   private async clearNrCell(): Promise<string> {
-    const o = await this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: '' });
-    if (/success/i.test(o)) return o;
-    return this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: '0,0,0,0' });
+    // نفس القاعدة: ما نرسل 0,0,0,0 (برج وهمي = بدون خدمة)
+    const cur = await this.get(['nr5g_cell_lock']).catch(() => null);
+    if (cur && !(cur.nr5g_cell_lock || '').trim()) return '{"result":"success"}';
+    return this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: '' });
   }
 
   async unlockCell(tech?: 'LTE' | 'NR'): Promise<void> {
