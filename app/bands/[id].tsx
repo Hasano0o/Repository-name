@@ -661,8 +661,7 @@ export default function BandsScreen() {
               setStatus('نغيّر وضع الشبكة...');
               await withSession(info, d => d.setNetworkMode!(mode), false);
               setStatus('ننتظر الاتصال...');
-              // ZTE ياخذ وقت أطول يمسك برج بعد تغيير الوضع
-              const ok = await waitConnected(info, [], info.driverId === 'zte' ? 120000 : 45000);
+              const ok = await waitConnected(info, [], 45000);
               if (!ok) {
                 setStatus('ما اتصل — نرجع الإعداد السابق...');
                 await withSession(info, d => d.setNetworkMode!(prev), false);

@@ -779,10 +779,9 @@ export class ZteDriver implements RouterDriver {
       const raw = (r.net_select || '').trim();
       if (raw) {
         mode = ZTE_TO_CODE[raw] ?? raw;
-        // نفس أسماء صفحة ZTE نفسها عشان المستخدم يتعرف عليها
         modes = [
-          { value: '00', label: 'تلقائي (5G/4G/3G)' },
-          { value: '0803', label: '5G NSA (4G + 5G)' },
+          { value: '00', label: 'تلقائي' },
+          { value: '0803', label: '4G + 5G' },
           { value: '03', label: '4G فقط' },
           { value: '08', label: '5G فقط (SA)' },
         ];
@@ -795,28 +794,8 @@ export class ZteDriver implements RouterDriver {
   async setNetworkMode(mode: string): Promise<void> {
     await this.ensure();
     const v = CODE_TO_ZTE[mode] ?? mode;
-    const now = async () => ((await this.get(['net_select']).catch(() => ({} as Record<string, string>))).net_select || '').trim();
     const out = await this.act({ goformId: 'SET_BEARER_PREFERENCE', BearerPreference: v });
-    await sleep(1500);
-    if (/success/i.test(out) && (await now()) === v) return;
-    // بعض موديلات ZTE ترفض تغيير وضع الشبكة والمودم متصل («يجب قطع الاتصال»):
-    // نقطع البيانات ← نغيّر ← نتأكد بالقراءة ← نرجّع الاتصال (حتى لو فشل التغيير، ما نخليه مقطوع)
-    this.log('setNetworkMode: rejected while connected — disconnect first');
-    await this.act({ goformId: 'DISCONNECT_NETWORK' }).catch(() => '');
-    for (let i = 0; i < 6; i++) {
-      await sleep(2000);
-      const r = await this.get(['ppp_status']).catch(() => ({} as Record<string, string>));
-      if (/disconnected/i.test(r.ppp_status || '')) break;
-    }
-    let ok = false;
-    try {
-      const out2 = await this.act({ goformId: 'SET_BEARER_PREFERENCE', BearerPreference: v });
-      await sleep(1500);
-      ok = /success/i.test(out2) && (await now()) === v;
-    } finally {
-      await this.act({ goformId: 'CONNECT_NETWORK' }).catch(() => '');
-    }
-    if (!ok) throw this.rejected('تغيير وضع الشبكة', out);
+    if (!/success/i.test(out)) throw this.rejected('تغيير وضع الشبكة', out);
   }
 
   async setBand(bands: number[] | 'keep', nrBands?: number[]): Promise<void> {
