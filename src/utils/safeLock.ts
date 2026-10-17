@@ -232,12 +232,10 @@ async function freeReleaseImpl(r: SavedRouter, say: (s: string) => void, keep?: 
     // المودم ياخذ وقت يمسح الأبراج — نعطيه دقيقة ونص قبل ما نعيد التشغيل
     if (await waitOnline(r, 90000, () => false)) return true;
   }
-  if (canRescue(r)) {
-    // «رجّع الإعدادات الأصلية» (إعدادات قديمة + إعادة تشغيل) صار زر يدوي بس في صفحة الراوتر —
-    // ما نشغّله من نفسنا
-    diag('[release] no service after release — manual rescue only');
-    return false;
-  }
+  // التثبيتات انفكّت والراوتر بعده «بدون خدمة» — بعض الموديلات (ZTE MU5001) ما تطلع من هالحالة
+  // إلا بإعادة تشغيل. الإعادة ما تغيّر أي إعداد (عكس «الإعدادات الأصلية» اللي تبقى زر يدوي).
+  // قبل ١٧ أكتوبر كنا نسويها تلقائي، وشلناها بالغلط — فصار الراوتر يعلق بدون خدمة.
+  diag('[release] no service after release — rebooting');
   say('ما رجعت الإشارة — نعيد تشغيل الراوتر...');
   try {
     await withSession(r, async d => { if (d.reboot) await d.reboot(); }, false);

@@ -39,6 +39,6 @@ export function mismatchOf(e: unknown): string[] | null {
 /** أقصى وقت ننتظر فيه الخدمة بعد إرجاع متحقق منه، قبل ما نفك كل شي (حسب نوع الراوتر) */
 export const SETTLE_MS: Record<string, number> = {
   'huawei-lte': 2 * 60_000,
-  zte: 4 * 60_000,
+  zte: 2 * 60_000,
 };
 export const settleMsFor = (driverId: string) => SETTLE_MS[driverId] ?? 2 * 60_000;
