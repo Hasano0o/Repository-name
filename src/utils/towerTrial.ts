@@ -12,7 +12,9 @@ import { SavedRouter } from '../store/routers';
 import { withSession, withRouterLock, RouterOp } from '../store/sessions';
 import { CellLockState, Signal } from '../drivers/types';
 import { isNoChange } from '../drivers/noChange';
-import { waitOnline, freeRelease } from './safeLock';
+import { waitOnline, freeRelease, readSnapOrStop, undoPin } from './safeLock';
+import type { LockSnapshot } from '../drivers/lockSnapshot';
+import { settleMsFor } from '../drivers/lockSnapshot';
 import { measureUrl, regionUrls, selectedRegion, gameScore } from './latency';
 import { TowerPing, saveTowerPing, towerPingKey } from '../store/towerPing';
 import { diag } from '../services/diag';
@@ -47,6 +49,10 @@ export interface TrialRun {
   /** اضطرينا نفك كل التثبيتات عشان يلقط أقوى برج */
   freed: boolean;
   cancelled: boolean;
+  /** رجّعنا إعدادك من اللقطة وتأكدنا منه بالقراءة */
+  exact?: boolean;
+  /** الإرجاع انكتب بس هذي ما رجعت كما كانت */
+  notRestored?: string[];
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -70,14 +76,30 @@ export async function runTowerTrials(r: SavedRouter, targets: TrialTarget[], pre
   let restored = true;
   const n = targets.length;
   const push = (row: TrialRow) => { rows.push(row); o.onRow?.(row); diag(`[trial] ${row.t.name}: ${row.outcome} ${row.note}`); };
-  const restoreTech = async (tech: 'LTE' | 'NR') => {
+  let snap: LockSnapshot | null = null;
+  let exact: boolean | undefined;
+  let notRestored: string[] | undefined;
+  /** بدون لقطة (ماركات ثانية): نرجّع تثبيت البرج اللي كان على التقنية أو نفك تثبيتها بس */
+  const restoreTechOld = async (tech: 'LTE' | 'NR') => {
     const was = prev.find(l => (l.tech ?? 'LTE') === tech && l.pci);
     await withSession(r, d => (was
       ? d.lockCell!({ tech, band: was.band, arfcn: was.arfcn, pci: was.pci! })
       : d.unlockCell!(tech)), false);
   };
+  /** نرجّع إعدادك كما كان: اللقطة (هواوي/ZTE) وإلا الطريقة القديمة لكل تقنية لمسناها */
+  const restoreAll = async () => {
+    if (snap) {
+      const u = await undoPin(r, snap, 'LTE');
+      exact = u.exact;
+      notRestored = u.items;
+      return;
+    }
+    for (const tech of touched) { try { await restoreTechOld(tech); } catch {} }
+  };
 
   await withRouterLock(r, async op => {
+    // لقطة إعدادك قبل أول برج — ما قدرنا نقرأها = ما نجرّب ولا نكتب شي
+    snap = await readSnapOrStop(r);
     try {
       for (let i = 0; i < n; i++) {
         if (cancelled()) break;
@@ -96,11 +118,12 @@ export async function runTowerTrials(r: SavedRouter, targets: TrialTarget[], pre
         if (!(await waitOnline(r, 120000, cancelled))) {
           push({ t, outcome: 'noconn', samples: 0, note: 'ما اتصل — فكّينا التثبيت' });
           step({ i: i + 1, n, name: t.name, step: 'ما اتصل — نرجّع الخدمة...' });
-          try { await restoreTech(t.tech); } catch {}
-          if (!(await waitOnline(r, 120000, () => false))) {
+          try { await restoreAll(); } catch {}
+          touched.clear();
+          if (!(await waitOnline(r, snap ? settleMsFor(r.driverId) : 120000, () => false))) {
             // ولا رجع — نفك كل شي ويلقط أقوى برج، ونوقف التجربة
             freed = true;
-            restored = await freeRelease(r, st => step({ i: i + 1, n, name: t.name, step: st }), undefined, op).catch(() => false);
+            restored = await freeRelease(r, st => step({ i: i + 1, n, name: t.name, step: st }), snap ?? undefined, op).catch(() => false);
             touched.clear();
             break;
           }
@@ -143,14 +166,14 @@ export async function runTowerTrials(r: SavedRouter, targets: TrialTarget[], pre
       // نرجّع التثبيت اللي كان — حتى لو انلغى أو صار خطأ في النص
       if (!freed && touched.size) {
         step({ i: n, n, name: '', step: 'نرجّع إعدادك السابق...' });
-        for (const tech of touched) { try { await restoreTech(tech); } catch {} }
-        if (!(await waitOnline(r, 120000, () => false))) {
+        try { await restoreAll(); } catch {}
+        if (!(await waitOnline(r, snap ? settleMsFor(r.driverId) : 120000, () => false))) {
           // الإرجاع ما رجّع الخدمة — نفك كل شي ويلقط أقوى برج بدل ما يعلق بدون خدمة
           freed = true;
-          restored = await freeRelease(r, st => step({ i: n, n, name: '', step: st }), undefined, op).catch(() => false);
+          restored = await freeRelease(r, st => step({ i: n, n, name: '', step: st }), snap ?? undefined, op).catch(() => false);
         }
       }
     }
   }, { op: o.op, label: 'فحص الأبراج' });
-  return { rows, restored, freed, cancelled: cancelled() };
+  return { rows, restored, freed, cancelled: cancelled(), exact, notRestored };
 }

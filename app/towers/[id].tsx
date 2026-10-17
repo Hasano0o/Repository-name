@@ -314,6 +314,11 @@ export default function TowersScreen() {
         samples: 1,
       });
       if (run.freed && alive.current) setScanDone(x => [...x, 'وقّفنا الفحص وفكّينا التثبيتات عشان يلقط أقوى برج']);
+      else if (run.notRestored?.length && alive.current) setScanDone(x => [...x, `⚠️ رجع جزء من إعدادك — هذي ما رجعت كما كانت: ${run.notRestored!.join('، ')}`]);
+      else if (run.exact && alive.current) setScanDone(x => [...x, '✓ رجّعنا إعدادك السابق بالضبط (تأكدنا من قراءة الراوتر)']);
+    } catch (e: any) {
+      // الراوتر مشغول، أو ما قدرنا نقرأ إعدادك قبل الفحص — ما بدأنا ولا غيّرنا شي
+      if (alive.current) Alert.alert('ما بدأ الفحص', e?.message ?? String(e));
     } finally {
       if (alive.current) {
         setScan(null);

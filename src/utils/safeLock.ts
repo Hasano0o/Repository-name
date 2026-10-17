@@ -340,6 +340,49 @@ export async function restoreSavedSettings(
   }, { label: 'رجّع إعدادي السابق' });
 }
 
+/**
+ * لقطة إعدادك قبل أي تثبيت (هواوي و ZTE).
+ * الراوتر يدعمها وما قدرنا نقرأها ← نرمي خطأ «ما غيّرنا شي» (ما نثبّت وإحنا ما نعرف وش نرجّع).
+ * الراوتر ما يدعمها ← null (الإرجاع يرجع لفك تثبيت التقنية نفسها بس).
+ */
+export async function readSnapOrStop(r: SavedRouter): Promise<LockSnapshot | null> {
+  const proto = driverById(r.driverId);
+  if (!proto?.readLockState || !proto?.restoreLockState) return null;
+  let why = '';
+  try {
+    const got = await withTimeout(withSession(r, d => d.readLockState!(), false), 45_000);
+    if (got !== STEP_TIMEOUT) return got;
+    why = 'الراوتر ما رد';
+  } catch (e) {
+    why = String((e as any)?.message ?? e);
+  }
+  const err = new Error(`ما قدرنا نقرأ إعدادك الحالي من الراوتر (${why.slice(0, 70)}) — فما ثبّتنا ولا غيّرنا أي شي. جرّب مرة ثانية.`);
+  (err as any).noChange = true;
+  (err as any).reverted = false;
+  throw err;
+}
+
+/**
+ * يرجّع اللي كان قبل تثبيت سوّته الشاشة نفسها — وبس:
+ * فيه لقطة ← نرجّعها ونتأكد منها (تقنية ثانية وأقفال ترددات/قنوات ما تنلمس إلا لو تغيّرت).
+ * ما فيه لقطة (ماركات ثانية) ← نفك تثبيت التقنية اللي ثبّتناها بس، مو الكل.
+ * لازم تنادى وهي داخل عملية على الراوتر (withRouterLock).
+ */
+export async function undoPin(r: SavedRouter, snap: LockSnapshot | null, tech: 'LTE' | 'NR'): Promise<{ exact: boolean; items?: string[] }> {
+  if (snap) {
+    try {
+      await withSessionPatient(r, d => d.restoreLockState!(snap), 90_000);
+      return { exact: true };
+    } catch (e) {
+      const items = mismatchOf(e);
+      if (items) return { exact: false, items };
+      throw e;
+    }
+  }
+  await withSession(r, d => (d.unlockCell ? d.unlockCell(tech) : Promise.resolve()), false);
+  return { exact: false };
+}
+
 export type TrialVerdict = 'better' | 'same' | 'worse' | 'noconn';
 
 export interface TrialResult {

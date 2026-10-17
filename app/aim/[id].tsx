@@ -1,3 +1,6 @@
+import { diag } from '../../src/services/diag';
+import type { LockSnapshot } from '../../src/drivers/lockSnapshot';
+import { readSnapOrStop, undoPin } from '../../src/utils/safeLock';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Share, Vibration, Platform, Linking } from 'react-native';
 import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
@@ -273,6 +276,9 @@ export default function AimScreen() {
   const nrRef = useRef(false);
   const cellTick = useRef(0);
   const tempPinRef = useRef(false);
+  /** إعدادك قبل أول تثبيت سوّته هالشاشة (لقطة) + تقنية التثبيت — الفك يرجّع لها بس، ما يلمس غيرها */
+  const pinSnapRef = useRef<LockSnapshot | null>(null);
+  const pinTechRef = useRef<'LTE' | 'NR'>('LTE');
   const infoRef = useRef<SavedRouter | null>(null);
   const beeperRef = useRef<AimBeeper | null>(null);
 
@@ -434,7 +440,14 @@ export default function AimScreen() {
       }
       if (tempPinRef.current && infoRef.current) {
         tempPinRef.current = false;
-        routerWrite(infoRef.current, d => (d.unlockCell ? d.unlockCell() : Promise.resolve()), { label: 'فك التثبيت المؤقت' }).catch(() => {});
+        // نرجّع اللي كان قبل التثبيت المؤقت بس — مو «فك الكل»
+        const r0 = infoRef.current;
+        const snap = pinSnapRef.current;
+        const tech0 = pinTechRef.current;
+        pinSnapRef.current = null;
+        withRouterLock(r0, () => undoPin(r0, snap, tech0), { label: 'فك التثبيت المؤقت' })
+          .then(u => diag(`[aim] temp pin undone ${u.exact ? 'exact' : u.items ? 'partial ' + u.items.join(',') : 'tech-only'}`))
+          .catch(e => diag(`[aim] temp pin undo failed: ${String(e?.message ?? e).slice(0, 60)}`));
       }
     };
   }, [id, tick]));
@@ -462,10 +475,24 @@ export default function AimScreen() {
     setBaseline(null);
   };
 
-  /** التثبيت + التأكد + الفك لو ما اتصل: عملية وحدة على الراوتر */
+  /**
+   * لقطة إعدادك ← التثبيت ← التأكد ← لو ما اتصل نرجّع اللقطة (مو «فك الكل»). عملية وحدة على الراوتر.
+   * اللقطة تنحفظ (أول تثبيت بس) عشان الفك بعدين يرجّع لها.
+   */
   const lockAndVerify = (r: SavedRouter, target: CellLockTarget): Promise<boolean> =>
-    withRouterLock(r, () => lockAndVerifyInner(r, target), { label: 'التثبيت على البرج' });
-  const lockAndVerifyInner = async (r: SavedRouter, target: CellLockTarget): Promise<boolean> => {
+    withRouterLock(r, async () => {
+      const snap = pinned ? pinSnapRef.current : await readSnapOrStop(r);
+      const ok = await lockAndVerifyInner(r, target, snap);
+      if (ok && !pinned) { pinSnapRef.current = snap; pinTechRef.current = target.tech === 'NR' ? 'NR' : 'LTE'; }
+      if (!ok && pinned) {
+        // رجّعنا اللي كان قبل أول تثبيت لهالشاشة — يعني التثبيت السابق انشال بعد
+        setPinned(null);
+        tempPinRef.current = false;
+        pinSnapRef.current = null;
+      }
+      return ok;
+    }, { label: 'التثبيت على البرج' });
+  const lockAndVerifyInner = async (r: SavedRouter, target: CellLockTarget, snap: LockSnapshot | null): Promise<boolean> => {
     await withSession(r, d => d.lockCell!(target), false);
     const deadline = Date.now() + 30000;
     while (Date.now() < deadline) {
@@ -479,7 +506,8 @@ export default function AimScreen() {
         if (ok) return true;
       } catch {}
     }
-    try { await withSession(r, d => d.unlockCell!(), false); } catch {}
+    // ما اتصل: نرجّع إعدادك اللي كان قبل هالتثبيت بالضبط (أو نفك تقنيته بس للماركات بدون لقطة)
+    try { await undoPin(r, snap, target.tech === 'NR' ? 'NR' : 'LTE'); } catch {}
     return false;
   };
 
@@ -491,9 +519,13 @@ export default function AimScreen() {
     if (pinned) {
       setPinBusy(true);
       try {
-        await routerWrite(info, d => d.unlockCell!(), { label: 'فك التثبيت' });
+        // الفك يرجّع اللي كان قبل تثبيت هالشاشة — ما يفك أقفال كانت عندك قبل
+        const snap = pinSnapRef.current;
+        const u = await withRouterLock(info, () => undoPin(info, snap, pinTechRef.current), { label: 'فك التثبيت' });
         setPinned(null);
         tempPinRef.current = false;
+        pinSnapRef.current = null;
+        if (u.items?.length) Alert.alert('رجع جزء من إعدادك', `هذي ما رجعت كما كانت: ${u.items.join('، ')}.`);
       } catch (e: any) {
         Alert.alert('ما انفك التثبيت', e?.message ?? String(e));
       } finally { setPinBusy(false); }
@@ -506,7 +538,7 @@ export default function AimScreen() {
     try {
       const ok = await lockAndVerify(info, target);
       if (ok) { setPinned(rd.cell); tempPinRef.current = true; reset(); }
-      else { Alert.alert('ما نجح التثبيت', 'الراوتر ما ثبت على البرج، فرجّعناه للوضع التلقائي.'); }
+      else { Alert.alert('ما نجح التثبيت', 'الراوتر ما ثبت على البرج، فرجّعنا إعدادك اللي كان قبل.'); }
     } catch (e: any) {
       Alert.alert('ما نجح التثبيت', e?.message ?? String(e));
     } finally { setPinBusy(false); }
@@ -656,9 +688,11 @@ export default function AimScreen() {
           setPinBusy(true);
           try {
             if (action === 'unlock') {
+              // طلب صريح «فك التثبيت» من الفني بموافقتك: الراوتر يرجع تلقائي
               await routerWrite(r, d => d.unlockCell!(), { label: 'فك التثبيت' });
               setPinned(null);
               tempPinRef.current = false;
+              pinSnapRef.current = null;
               host.result(cid, true, 'تم فك التثبيت — الراوتر على الوضع التلقائي');
             } else {
               const ok = await lockAndVerify(r, target!);
@@ -667,7 +701,7 @@ export default function AimScreen() {
                 tempPinRef.current = false;
                 host.result(cid, true, `تم التثبيت على ${cellName(cell)}`);
               } else {
-                host.result(cid, false, 'الراوتر ما اتصل على هذا البرج، رجع للتلقائي');
+                host.result(cid, false, 'الراوتر ما اتصل على هذا البرج، فرجّعنا إعداده اللي كان قبل');
               }
             }
           } catch (e: any) {
