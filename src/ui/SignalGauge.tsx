@@ -1,6 +1,6 @@
-import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, Line, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
 import { View } from '../i18n/rn';
-import { C } from './theme';
+import { C, isDark } from './theme';
 
 /* ═══ مؤشر إشارة صغير (عدّاد بإبرة) ═══
  * قوس ٢٤٠° خفيف، الجزء الملوّن لحد القراءة بلون التقييم، شرطات ناعمة،
@@ -23,23 +23,29 @@ function arc(cx: number, cy: number, r: number, from: number, to: number): strin
   return `M ${a.x.toFixed(2)} ${a.y.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${b.x.toFixed(2)} ${b.y.toFixed(2)}`;
 }
 
-export function SignalGauge({ ratio, color, size = 120, has = true }: {
+export function SignalGauge({ ratio, color, size = 120, has = true, dial = false }: {
   /** ٠ = أضعف، ١ = أقوى */
   ratio: number;
   color: string;
   size?: number;
   /** فيه قراءة؟ لو لا: القوس فاضي وما فيه إبرة */
   has?: boolean;
+  /** وجه معدني دائري خلف الإبرة (شكل العدّاد) */
+  dial?: boolean;
 }) {
   const f = Math.max(0, Math.min(1, has ? ratio : 0));
   const stroke = Math.round(size * 0.075);
   const r = size / 2 - stroke / 2 - 2;
   const cx = size / 2;
   const cy = r + stroke / 2 + 2;
-  const h = Math.ceil(cy + r * Math.sin(rad(30)) + stroke / 2 + 4);
+  const dr0 = r - stroke / 2 - 4;
+  // مع الوجه: نطوّل الارتفاع عشان الدائرة ما تنقص من تحت
+  const h = Math.ceil(dial ? cy + dr0 + 3 : cy + r * Math.sin(rad(30)) + stroke / 2 + 4);
   const valAng = START + SWEEP * f;
   const tip = pt(cx, cy, r - stroke - 4, valAng);
   const gid = `g${Math.round(size)}${color.replace(/[^0-9a-z]/gi, '')}`;
+  const dr = dr0;
+  const face = isDark ? ['#3a465c', '#232c3e'] : ['#ffffff', '#d3dae4'];
 
   return (
     <View style={{ width: size, height: h, alignSelf: 'center' }}>
@@ -49,10 +55,23 @@ export function SignalGauge({ ratio, color, size = 120, has = true }: {
             <Stop offset="0" stopColor={color} stopOpacity={0.45} />
             <Stop offset="1" stopColor={color} stopOpacity={1} />
           </LinearGradient>
+          <RadialGradient id={`${gid}f`} cx="45%" cy="38%" r="65%">
+            <Stop offset="0" stopColor={face[0]} />
+            <Stop offset="1" stopColor={face[1]} />
+          </RadialGradient>
         </Defs>
 
+        {/* وجه العدّاد */}
+        {dial && (
+          <>
+            <Circle cx={cx} cy={cy} r={dr} fill={`url(#${gid}f)`} />
+            <Circle cx={cx} cy={cy} r={dr} fill="none" stroke={isDark ? '#4a5870' : '#c3ccd8'} strokeWidth={1} />
+            <Circle cx={cx} cy={cy} r={dr * 0.62} fill="none" stroke={isDark ? '#ffffff' : '#ffffff'} strokeOpacity={isDark ? 0.06 : 0.7} strokeWidth={1} />
+          </>
+        )}
+
         {/* المسار */}
-        <Path d={arc(cx, cy, r, START, START + SWEEP)} stroke={C.track} strokeOpacity={0.55}
+        <Path d={arc(cx, cy, r, START, START + SWEEP)} stroke={dial ? C.cardBorder : C.track} strokeOpacity={dial ? 0.7 : 0.55}
           strokeWidth={stroke} strokeLinecap="round" fill="none" />
 
         {/* الجزء المعبّى */}

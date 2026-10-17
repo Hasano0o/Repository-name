@@ -15,7 +15,7 @@ import { SignalGauge } from '../../src/ui/SignalGauge';
 import { RANGE, ratioOf } from '../../src/ui/Pro';
 import { Level, LEVEL_COLOR, LEVEL_LABEL, rsrpLevel, rsrqLevel, sinrLevel, rssiLevel } from '../../src/utils/signal';
 
-import { C, tBg, tFg } from '../../src/ui/theme';
+import { C, tBg, tFg, isDark } from '../../src/ui/theme';
 import { sheet } from '../../src/i18n';
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -57,14 +57,14 @@ function MetricCard({
   ratio: number;
 }) {
   return (
-    <View style={g.metricCard}>
+    <LinearGradient colors={[tBg('#fbfcfe'), tBg('#e4e9f0'), tBg('#f1f4f8')]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={g.metricCard}>
       <View style={g.metricHead}>
         <View style={[g.metricIcon, { backgroundColor: tBg(iconBg) }]}>
           <Icon name={icon} size={14} color={tFg(iconColor)} />
         </View>
         <Text style={g.metricName}>{name}</Text>
       </View>
-      <SignalGauge ratio={ratio} color={grade.color} has={value !== undefined} size={118} />
+      <SignalGauge ratio={ratio} color={grade.color} has={value !== undefined} size={122} dial />
       <View style={g.metricValueRow}>
         <Text style={[g.metricValue, { color: grade.color }]}>
           {value ?? '—'}
@@ -74,7 +74,7 @@ function MetricCard({
       <View style={[g.gradeChip, { backgroundColor: grade.color + '18' }]}>
         <Text style={[g.gradeChipTxt, { color: grade.color }]}>{grade.label}</Text>
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -393,9 +393,9 @@ const g = sheet({
   mainCard: {
     borderRadius: 24, padding: 16, gap: 12,
     borderWidth: 1.5,
-    shadowColor: '#0D2350', shadowOpacity: 0.05,
-    shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    shadowColor: '#1b2b5c', shadowOpacity: isDark ? 0 : 0.10,
+    shadowRadius: 16, shadowOffset: { width: 0, height: 6 },
+    elevation: isDark ? 0 : 4,
   },
   mainHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 14 },
   mainIconBox: {
@@ -421,10 +421,10 @@ const g = sheet({
     marginTop: 4,
   },
   metricCard: {
-    flexBasis: '47%', flexGrow: 1,
-    backgroundColor: tBg('#F3F6FB'), borderRadius: 18,
-    borderWidth: 1, borderColor: BORDER,
+    flexBasis: '47%', flexGrow: 1, borderRadius: 18,
+    borderWidth: 1, borderColor: isDark ? BORDER : '#cfd7e2',
     paddingVertical: 12, paddingHorizontal: 10, gap: 4,
+    shadowColor: '#1b2b5c', shadowOpacity: isDark ? 0 : 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: isDark ? 0 : 3,
   },
   metricHead: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 6,
@@ -446,8 +446,9 @@ const g = sheet({
   gradeChipTxt: { fontSize: 10.5, fontWeight: '900' },
   // Rings card
   ringsCard: {
-    backgroundColor: CARD, borderRadius: 22, padding: 14, gap: 12,
-    borderWidth: 1.5, borderColor: BORDER,
+    borderRadius: 24, padding: 14, gap: 12,
+    backgroundColor: isDark ? CARD : 'rgba(255,255,255,0.88)', borderWidth: 1, borderColor: isDark ? BORDER : '#ffffff',
+    shadowColor: '#1b2b5c', shadowOpacity: isDark ? 0 : 0.10, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: isDark ? 0 : 4,
   },
   ringsHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   ringsIcon: {
@@ -459,8 +460,9 @@ const g = sheet({
 
   // Generic card
   card: {
-    backgroundColor: CARD, borderRadius: 22, padding: 14, gap: 10,
-    borderWidth: 1.5, borderColor: BORDER,
+    borderRadius: 24, padding: 14, gap: 10,
+    backgroundColor: isDark ? CARD : 'rgba(255,255,255,0.88)', borderWidth: 1, borderColor: isDark ? BORDER : '#ffffff',
+    shadowColor: '#1b2b5c', shadowOpacity: isDark ? 0 : 0.10, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: isDark ? 0 : 4,
   },
   cardHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   cardIcon: {
@@ -476,11 +478,12 @@ const g = sheet({
 
   // Toggle
   toggleBtn: {
-    borderWidth: 1.5, borderColor: BLUE,
-    borderRadius: 999, paddingVertical: 6, paddingHorizontal: 14,
+    borderWidth: 1.5, borderColor: PURPLE, backgroundColor: isDark ? CARD : '#ffffff',
+    borderRadius: 999, paddingVertical: 7, paddingHorizontal: 16,
+    shadowColor: PURPLE, shadowOpacity: isDark ? 0 : 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: isDark ? 0 : 2,
   },
-  toggleBtnOn: { backgroundColor: BLUE },
-  toggleTxt: { color: BLUE, fontWeight: '800', fontSize: 12 },
+  toggleBtnOn: { backgroundColor: PURPLE },
+  toggleTxt: { color: tFg(PURPLE), fontWeight: '800', fontSize: 12 },
 
   // Check rows
   checkRow: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: 8 },
