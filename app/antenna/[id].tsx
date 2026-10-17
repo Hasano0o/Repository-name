@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { RefreshControl, ActivityIndicator, Dimensions } from 'react-native';
+import { RefreshControl, ActivityIndicator, Dimensions, Image } from 'react-native';
 import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -197,8 +197,11 @@ export default function AntennaAdvisor() {
               style={[g.mainCard, { borderColor: theme.main + '60' }]}
             >
               <View style={g.mainHead}>
-                <View style={[g.mainIconBox, { backgroundColor: theme.main + '20' }]}>
-                  <Text style={{ fontSize: 30 }}>{theme.icon}</Text>
+                <View style={g.mainIconBox}>
+                  <Image source={require('../../assets/images/antenna-dish.png')} style={{ width: 80, height: 80 }} resizeMode="contain" />
+                  <View style={[g.needBadge, { backgroundColor: theme.main }]}>
+                    <Text style={g.needBadgeTxt}>{adv.need === 'no' ? '✓' : adv.need === 'yes' ? '!' : '?'}</Text>
+                  </View>
                 </View>
                 <View style={{ flex: 1, alignItems: 'flex-end' }}>
                   <Text style={g.mainQ}>هل تحتاج أنتنا خارجية؟</Text>
@@ -399,9 +402,16 @@ const g = sheet({
   },
   mainHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 14 },
   mainIconBox: {
-    width: 60, height: 60, borderRadius: 20,
+    width: 80, height: 80,
     alignItems: 'center', justifyContent: 'center',
   },
+  needBadge: {
+    position: 'absolute', bottom: 2, left: 2,
+    width: 22, height: 22, borderRadius: 11,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: isDark ? CARD : '#ffffff',
+  },
+  needBadgeTxt: { color: '#ffffff', fontSize: 12, fontWeight: '900', lineHeight: 15 },
   mainQ: { color: MUTED, fontSize: 12.5, fontWeight: '700', textAlign: 'right' },
   mainHeadline: { fontSize: 17, fontWeight: '900', textAlign: 'right', marginTop: 3, lineHeight: 24 },
 
