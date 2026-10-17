@@ -141,7 +141,7 @@ export default function NewIp() {
 
   const run = (m: 'auto' | 'reboot' = 'auto') => {
     if (!info) return;
-    const direct = m === 'reboot' || (skipQuick && canReboot && !canDetach);
+    const direct = m === 'reboot' || (skipQuick && canReboot && !detachFirst);
     const msg = direct
       ? 'نعيد تشغيل الراوتر من التطبيق — هذي الطريقة اللي تغيّر الآي بي عند شركتك. النت بينقطع حوالي دقيقتين، ونعرض لك الآي بي الجديد لما يرجع.'
       : 'نجرّب أول قطع سريع للبيانات (ثواني). لو الشركة رجّعت نفس الآي بي، نعيد تشغيل الراوتر من التطبيق تلقائي (دقيقتين تقريباً).';
@@ -187,7 +187,7 @@ export default function NewIp() {
                 setMode('reboot');
                 fresh = await doReboot('٢/٢ — الشركة رجّعت نفس الآي بي، نعيد تشغيل الراوتر (دقيقتين تقريباً)...');
                 // نتذكّر: المرة الجاية نروح لإعادة التشغيل على طول
-                if (differs(old, fresh)) AsyncStorage.setItem(`newip.reboot.${info.id}`, '1').catch(() => {});
+                if (differs(old, fresh)) { AsyncStorage.setItem(`newip.reboot.${info.id}`, '1').catch(() => {}); setSkipQuick(true); }
               }
               // (موقوف) فصل كامل عن البرج
               if (mounted.current && canDetach && !differs(old, fresh)) {
@@ -231,6 +231,11 @@ export default function NewIp() {
                 if (mounted.current && canReboot && !differs(old, fresh)) {
                   setMode('reboot');
                   fresh = await doReboot('الشركة رجّعت نفس الآي بي — نعيد تشغيل الراوتر (دقيقتين تقريباً)...');
+                  // شركتك ما تغيّر الآي بي إلا بإعادة التشغيل ← المرة الجاية نروح لها على طول (نوفر القطع والفصل)
+                  if (differs(old, fresh)) {
+                    AsyncStorage.setItem(`newip.reboot.${info.id}`, '1').catch(() => {});
+                    setSkipQuick(true);
+                  }
                 }
               }
             }
