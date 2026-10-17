@@ -919,13 +919,22 @@ export default function RouterDashboard() {
                 </Pressable>
               )}
             </View>
-            <Pressable onPress={toggleMore} style={s.moreToggle} accessibilityRole="button" hitSlop={6}>
-              <GroupTitle title="أدوات أكثر" color={tFg('#f97316')} />
-              <View style={{ flex: 1 }} />
-              <Text style={s.moreHint}>{moreOpen ? 'إخفاء' : 'الإعدادات والأدوات الباقية'}</Text>
-              <View style={{ transform: [{ rotate: moreOpen ? '-90deg' : '90deg' }] }}>
-                <Icon name="chevron" size={16} color={C.sub} />
-              </View>
+            <Pressable onPress={toggleMore} accessibilityRole="button" hitSlop={4}
+              style={({ pressed }) => [s.moreBtnWrap, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}>
+              <LinearGradient colors={[tBg('#fff6ec'), tBg('#ffe4c7')]} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={s.moreBtn}>
+                <LinearGradient colors={['#fb923c', '#ea580c']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.moreBtnIcon}>
+                  <Icon name="layers" size={20} color="#fff" stroke={2.2} />
+                </LinearGradient>
+                <View style={{ flex: 1, alignItems: 'flex-end', gap: 2 }}>
+                  <Text style={s.moreBtnTitle}>أدوات أكثر</Text>
+                  <Text style={s.moreBtnSub} numberOfLines={1}>{moreOpen ? 'اضغط للإخفاء' : 'الأنتنا · الأماكن · التقرير · الإعدادات…'}</Text>
+                </View>
+                <View style={s.moreBtnChev}>
+                  <View style={{ transform: [{ rotate: moreOpen ? '-90deg' : '90deg' }] }}>
+                    <Icon name="chevron" size={16} color={tFg('#c2410c')} stroke={2.6} />
+                  </View>
+                </View>
+              </LinearGradient>
             </Pressable>
             {moreOpen && (
             <View style={s.moreGrid}>
@@ -1224,6 +1233,22 @@ const s = sheet({
   moreTitle: { color: C.sub, fontSize: 13, fontWeight: '800' },
   moreToggle: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   moreHint: { color: C.sub, fontSize: 11.5, fontWeight: '700' },
+  moreBtnWrap: {
+    borderRadius: 18,
+    shadowColor: '#ea580c', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 4,
+  },
+  moreBtn: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 12,
+    borderRadius: 18, paddingVertical: 12, paddingHorizontal: 12,
+    borderWidth: 1, borderColor: tBd('#fdc68f'),
+  },
+  moreBtnIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  moreBtnTitle: { color: tFg('#9a3412'), fontSize: 15, fontWeight: '900' },
+  moreBtnSub: { color: tFg('#c2410c'), fontSize: 11.5, fontWeight: '700', opacity: 0.85 },
+  moreBtnChev: {
+    width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: tBg('#ffffffb3'), borderWidth: 1, borderColor: tBd('#fdc68f'),
+  },
   moreGrid: {
     flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8,
   },
