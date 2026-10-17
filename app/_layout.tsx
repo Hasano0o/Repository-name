@@ -2,8 +2,8 @@ import '../src/desktop/install'; // نسخة الويندوز: توجيه الط
 import '../src/desktop/scrollbar'; // نسخة الويندوز: شريط تمرير ظاهر تسحبه بالماوس
 import { patchAlert, tr } from '../src/i18n';
 import { useEffect } from 'react';
-import { pingDaily } from '../src/services/stats';
-import { Stack } from 'expo-router';
+import { pingDaily, markScreen } from '../src/services/stats';
+import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 
@@ -67,6 +67,9 @@ const SCREENS: [string, string][] = [
   ['tech', 'وضع الفني'],
 ];
 
+// اسم الشاشة بالعربي من أول جزء في المسار (/towers/abc ← الأبراج) — للإحصائيات
+const SCREEN_NAME: Record<string, string> = Object.fromEntries(SCREENS.map(([k, t]) => [k.split('/')[0], t]));
+
 // شاشات فيها عنوان كبير داخل الصفحة — ما نكرره في الشريط العلوي
 const OWN_TITLE = new Set(['aim/[id]', 'antenna/[id]']);
 // شاشات لها ترويسة كاملة خاصة (فيها زر الرجوع) — نخفي الشريط العلوي
@@ -79,6 +82,12 @@ export default function RootLayout() {
     IBMPlexSansArabic_600SemiBold,
     IBMPlexSansArabic_700Bold,
   });
+
+  const path = usePathname();
+  useEffect(() => {
+    const seg = (path || '/').split('/').filter(Boolean)[0] ?? 'index';
+    if (seg !== 'index') markScreen(SCREEN_NAME[seg] ?? seg);
+  }, [path]);
 
   useEffect(() => {
     if (loaded || error) {

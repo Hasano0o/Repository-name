@@ -121,6 +121,13 @@ async def ping(req: Request):
         raise HTTPException(400)
     routers = [_clean(x, 24) for x in (b.get("routers") or [])[:6] if isinstance(x, str)]
     logins = [_clean(x, 24) for x in (b.get("logins") or [])[:6] if isinstance(x, str)]
+    screens: dict[str, int] = {}
+    raw_sc = b.get("screens")
+    if isinstance(raw_sc, dict):
+        for k, v in list(raw_sc.items())[:60]:
+            name = _clean(k, 30)
+            if name and isinstance(v, (int, float)) and v > 0:
+                screens[name] = min(int(v), 500)
     country = await asyncio.to_thread(_country, ip)
     rec = {
         "country": country,
@@ -135,12 +142,17 @@ async def ping(req: Request):
         "logins": logins,
         "login_ever": bool(b.get("loginEver")),
         "new_app": "logins" in b,
+        "screens": screens,
         "at": int(now),
     }
     day = _today()
     async with _lock:
         dp = DAYS / f"{day}.json"
         d = _load(dp, {})
+        # لو الجهاز أرسل مرتين بنفس اليوم نجمع العدادات بدل ما نمسح الأولى
+        prev = (d.get(did) or {}).get("screens") or {}
+        for k, v in prev.items():
+            rec["screens"][k] = min(rec["screens"].get(k, 0) + int(v), 1000)
         d[did] = rec
         _save(dp, d)
         devs = _load(DEVICES, {})
@@ -166,9 +178,16 @@ def build_summary(day: str | None = None) -> dict:
     devs = _load(DEVICES, {})
     week_ago = (datetime.now(RIYADH) - timedelta(days=6)).strftime("%Y-%m-%d")
     week = set()
+    opens: Counter = Counter()
+    users: dict[str, set] = {}
     for p in DAYS.glob("*.json"):
         if p.stem >= week_ago:
-            week |= set(_load(p, {}).keys())
+            wd = _load(p, {})
+            week |= set(wd.keys())
+            for did_, r in wd.items():
+                for k, v in (r.get("screens") or {}).items():
+                    opens[k] += int(v)
+                    users.setdefault(k, set()).add(did_)
     recs = list(d.values())
     for r in recs:
         r["os"] = _os(r)
@@ -192,6 +211,7 @@ def build_summary(day: str | None = None) -> dict:
         "app": top("update", 4),
         "routers": Counter(x for r in recs for x in (r.get("routers") or [])).most_common(6),
         "funnel": _funnel(recs),
+        "screens": [(k, v, len(users.get(k, ()))) for k, v in opens.most_common(25)],
         "history": _history(day, devs),
     }
 
@@ -280,6 +300,11 @@ def _fmt(s: dict) -> str:
             f"  • التجريبي بس: {fu['demo_only']}\n"
             f"  • ما أضافوا شي: {fu['none']}\n\n"
         )
+    sc = s.get("screens") or []
+    tools = ""
+    if sc:
+        tools = "🧭 <b>الأدوات الأكثر استخداماً</b> (آخر ٧ أيام · فتحات · أجهزة):\n" + "\n".join(
+            f"  {i}. {k}: {v} · {u} جهاز" for i, (k, v, u) in enumerate(sc, 1)) + "\n\n"
     return (
         f"📊 <b>إحصائيات Bandly — {s['day']}</b>\n\n"
         f"👥 نشطين اليوم: <b>{s['active_today']}</b>{diff(s['active_today'], y['active'] if y else None)}\n"
@@ -290,6 +315,7 @@ def _fmt(s: dict) -> str:
         f"🏙️ المدن:\n{lines(s['cities'])}\n\n"
         f"📶 الراوترات:\n{lines(s['routers'])}\n\n"
         f"{fun}"
+        f"{tools}"
         f"📲 الأنظمة:\n  • 🍎 آيفون: {s['os']['ios']}\n  • 🤖 أندرويد: {s['os']['android']}\n\n"
         f"🏷️ الجوالات:\n{lines(s['brands'])}\n\n"
         f"🍎 نسخ iOS:\n{lines(s['ios_ver'])}\n\n"

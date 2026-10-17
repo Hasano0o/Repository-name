@@ -13,6 +13,17 @@ import { listRouters } from '../store/routers';
 const CITY_KEY = 'bandly.city';
 const LAST_KEY = 'bandly.stats.lastDay';
 const LOGIN_KEY = 'bandly.stats.logins';
+const SCREENS_KEY = 'bandly.stats.screens';
+
+/** فتح شاشة — نزيد عدّادها بس (رقم، بدون أي بيانات شخصية). ينرسل مع الإحصائية اليومية */
+export async function markScreen(name: string) {
+  if (!name) return;
+  try {
+    const m: Record<string, number> = JSON.parse((await AsyncStorage.getItem(SCREENS_KEY)) || '{}');
+    m[name] = (m[name] ?? 0) + 1;
+    await AsyncStorage.setItem(SCREENS_KEY, JSON.stringify(m));
+  } catch {}
+}
 
 /** دخول حقيقي ناجح لراوتر (مو التجريبي) — نسجّل النوع واليوم، وأول دخول باليوم يحدّث الإحصائية */
 export async function markLogin(driverName: string) {
@@ -66,6 +77,8 @@ export async function pingDaily(force = false): Promise<void> {
       logins = Object.keys(m).filter(k => m[k] === day);
       loginEver = Object.keys(m).length > 0;
     } catch {}
+    let screens: Record<string, number> = {};
+    try { screens = JSON.parse((await AsyncStorage.getItem(SCREENS_KEY)) || '{}'); } catch {}
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 8000);
     const r = await fetch(`${LIVE_BASE}/live-api/stats/ping`, {
@@ -84,9 +97,21 @@ export async function pingDaily(force = false): Promise<void> {
         routers: [...new Set(routers)],
         logins,
         loginEver,
+        screens,
       }),
     }).finally(() => clearTimeout(t));
-    if (r.ok) await AsyncStorage.setItem(LAST_KEY, day);
+    if (r.ok) {
+      await AsyncStorage.setItem(LAST_KEY, day);
+      // نطرح اللي انرسل بس — أي فتحة صارت أثناء الإرسال تبقى للمرة الجاية
+      try {
+        const now: Record<string, number> = JSON.parse((await AsyncStorage.getItem(SCREENS_KEY)) || '{}');
+        for (const k of Object.keys(screens)) {
+          const left = (now[k] ?? 0) - screens[k];
+          if (left > 0) now[k] = left; else delete now[k];
+        }
+        await AsyncStorage.setItem(SCREENS_KEY, JSON.stringify(now));
+      } catch {}
+    }
   } catch {
     // ما يهم — نجرب المرة الجاية
   } finally {
