@@ -383,11 +383,25 @@ def _save_state(d: dict) -> None:
     os.replace(tmp, STATE)
 
 
+class _Btn(types.InlineKeyboardButton):
+    """زر ملوّن (Bot API 9.4): primary أزرق · success أخضر · danger أحمر — تليجرام القديم يطلعه عادي"""
+
+    def __init__(self, text, style=None, **kw):
+        super().__init__(text, **kw)
+        self._bstyle = style
+
+    def to_dict(self):
+        d = super().to_dict()
+        if self._bstyle:
+            d["style"] = self._bstyle
+        return d
+
+
 def _dl_kb() -> types.InlineKeyboardMarkup:
     kb = types.InlineKeyboardMarkup()
-    kb.row(types.InlineKeyboardButton("🍎 آيفون (App Store)", url=L_IOS),
-           types.InlineKeyboardButton("🤖 أندرويد", url=L_APK))
-    kb.row(types.InlineKeyboardButton("💻 ويندوز", url=L_WIN))
+    kb.row(_Btn("🍎 آيفون (App Store)", style="primary", url=L_IOS),
+           _Btn("🤖 أندرويد", style="success", url=L_APK))
+    kb.row(_Btn("💻 ويندوز", style="danger", url=L_WIN))
     return kb
 
 
