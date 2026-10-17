@@ -9,7 +9,7 @@ import { isLanHost } from '../src/utils/host';
 import { detectDriver } from '../src/drivers/registry';
 import { addDemoRouter } from '../src/drivers/demo';
 import { DesktopNetCard, explainDetectFailure, useDesktopNet } from '../src/ui/DesktopNet';
-import { getRouter, saveRouter, updateRouter, deleteRouter, listRouters, SavedRouter, setWifi, SavedWifi } from '../src/store/routers';
+import { getRouter, saveRouter, updateRouter, deleteRouter, listRouters, SavedRouter, setWifi, SavedWifi, getLabel, setLabel, LabelCreds } from '../src/store/routers';
 import { LabelScannerHost, ensureScanner } from '../src/ui/scanner';
 import type { LabelData } from '../src/utils/routerLabel';
 import { dropSession } from '../src/store/sessions';
@@ -49,6 +49,7 @@ export default function AddRouterScreen() {
   const [scanning, setScanning] = useState(false);
   const [wifi, setWifiState] = useState<SavedWifi | null>(null);
   const [scanMsg, setScanMsg] = useState('');
+  const scannedLabel = useRef<LabelCreds | null>(null);
   // يظهر حتى بالنسخ القديمة (يطلب التحديث) — بس مو بالويندوز
   const canScan = Platform.OS !== 'web';
   // نسخة الويندوز: حالة الشبكة + تعبئة عنوان الراوتر تلقائياً (ما لم يغيّره المستخدم)
@@ -136,6 +137,10 @@ export default function AddRouterScreen() {
   function onScanned(d: LabelData) {
     const got: string[] = [];
     if (d.host) { pickHost(d.host); got.push('العنوان'); }
+    scannedLabel.current = {
+      username: d.username, adminPassword: d.adminPassword,
+      ssid: d.wifi?.ssid, wifiPassword: d.wifi?.password,
+    };
     if (d.username) { setUsername(d.username); got.push('اسم المستخدم'); }
     if (d.adminPassword) { setPassword(d.adminPassword); got.push('كلمة المرور'); }
     if (d.wifi?.ssid) {
@@ -229,6 +234,10 @@ export default function AddRouterScreen() {
         }
       }
       if (wifi?.ssid) { try { await setWifi(saved.id, wifi); } catch {} }
+      // بيانات الملصق: لو صوّر الملصق نحفظها لحالها (منفصلة عن الكلمة الحالية) — تنفع بعد ضبط المصنع
+      if (scannedLabel.current) {
+        try { await setLabel(saved.id, { ...(await getLabel(saved.id)), ...scannedLabel.current }); } catch {}
+      }
       nav.replace({ pathname: '/router/[id]', params: { id: saved.id } });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);

@@ -9,7 +9,7 @@ import { ScrollView, View, Text, Pressable, TextInput } from '../../src/i18n/rn'
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams, Href } from 'expo-router';
-import { SavedRouter, getRouter } from '../../src/store/routers';
+import { SavedRouter, getRouter, getLabel, setPassword } from '../../src/store/routers';
 import { reportError } from '../../src/services/errors';
 import { withSession } from '../../src/store/sessions';
 import { ConnectedDevice, RouterExtras, TimeRule } from '../../src/drivers/types';
@@ -293,9 +293,18 @@ export default function ControlCenter() {
       await withSession(info, d => d.factoryReset!(), false).catch(e => {
         if (!/timeout|network|fetch|abort|ما رد|ما قدرنا نوصل/i.test(String(e?.message ?? e))) throw e;
       });
-      Alert.alert('الراوتر يرجع لضبط المصنع',
-        '١) انتظر ٣ دقايق لين يشتغل.\n٢) اتصل بالواي فاي اللي اسمه على الملصق، بكلمة مرور الملصق.\n٣) في Bandly: عدّل الراوتر وحط كلمة دخول الملصق (أو صوّر الملصق ونعبّيها لك).\n٤) شغّل «رجّع النت لحاله لو طاح» من مركز التحكم لو موجود.',
-        [{ text: 'تمام', onPress: () => router.replace(`/add-router?id=${info.id}` as Href) }]);
+      const lb = await getLabel(info.id).catch(() => null);
+      if (lb?.adminPassword) {
+        // عندنا كلمة الملصق — نخليها هي المحفوظة، فالتطبيق يدخل لحاله بعد ما يشتغل الراوتر
+        await setPassword(info.id, lb.adminPassword).catch(() => {});
+        Alert.alert('الراوتر يرجع لضبط المصنع',
+          `١) انتظر ٣ دقايق لين يشتغل.\n٢) اتصل بالواي فاي «${lb.ssid || 'اللي على الملصق'}»${lb.wifiPassword ? ` بكلمة: ${lb.wifiPassword}` : ' بكلمة الملصق'}\n٣) ارجع لـ Bandly — بيدخل الراوتر لحاله بكلمة الملصق المحفوظة.\n٤) شغّل «رجّع النت لحاله لو طاح» من مركز التحكم لو موجود.`,
+          [{ text: 'تمام', onPress: () => router.back() }]);
+      } else {
+        Alert.alert('الراوتر يرجع لضبط المصنع',
+          '١) انتظر ٣ دقايق لين يشتغل.\n٢) اتصل بالواي فاي اللي اسمه على الملصق، بكلمة مرور الملصق.\n٣) في Bandly: عدّل الراوتر وحط كلمة دخول الملصق (أو صوّر الملصق ونعبّيها لك).\n٤) شغّل «رجّع النت لحاله لو طاح» من مركز التحكم لو موجود.',
+          [{ text: 'تمام', onPress: () => router.replace(`/add-router?id=${info.id}` as Href) }]);
+      }
     } catch (e: any) {
       if (mounted.current) setError(e?.message ?? String(e));
       reportError('control', e, info);

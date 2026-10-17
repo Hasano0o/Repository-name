@@ -1,6 +1,6 @@
 import { RouterDriver } from '../drivers/types';
 import { driverById } from '../drivers/registry';
-import { SavedRouter, getPassword } from './routers';
+import { SavedRouter, getPassword, getLabel, setPassword } from './routers';
 import { assertLanHost } from '../utils/host';
 import { getBaseline, saveBaseline } from './baseline';
 import { http } from '../drivers/http';
@@ -53,7 +53,20 @@ async function doConnect(r: SavedRouter, force = false): Promise<RouterDriver> {
   const pw = (await getPassword(r.id)) ?? '';
   diag(`[login] ${r.driverId}${force ? ' (force)' : ''}`);
   try {
-    await d.login(r.host, r.username, pw);
+    try {
+      await d.login(r.host, r.username, pw);
+    } catch (e: any) {
+      // الكلمة المحفوظة ما نفعت — غالباً الراوتر انضبط مصنع. نجرّب «كلمة الملصق» مرة وحدة بس،
+      // وما نجرّب لو الراوتر قريب يقفل الدخول (عشان ما نقفله على المستخدم)
+      const msg = String(e?.message ?? e);
+      const label = /كلمة المرور|108006|108002/.test(msg) && !/قفل|مقفول|محاولات كثيرة|محاولة وحدة/.test(msg)
+        ? await getLabel(r.id).catch(() => null) : null;
+      if (!label?.adminPassword || label.adminPassword === pw) throw e;
+      diag(`[login] saved password failed — trying label password`);
+      await d.login(r.host, label.username || r.username, label.adminPassword);
+      await setPassword(r.id, label.adminPassword).catch(() => {});
+      diag(`[login] label password worked — saved it`);
+    }
   } finally {
     // لا نحتفظ بكلمة المرور في متغير أطول من اللازم (نتساعد مع GC)
     // لا نقدر "نمسح" متغير نصي في JS، لكن تضييق النطاق يخفف.

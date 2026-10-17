@@ -14,6 +14,33 @@ export interface SavedRouter {
 const KEY = 'routers:v1';
 const pwKey = (id: string) => `router_pw_${id}`;
 const wifiKey = (id: string) => `router_wifi_${id}`;
+const labelKey = (id: string) => `router_label_${id}`;
+
+/**
+ * «بيانات الملصق»: بيانات المصنع اللي تحت الراوتر — تنحفظ مرة وحدة ومنفصلة عن الكلمة الحالية،
+ * عشان بعد ضبط المصنع يرجع التطبيق يدخل لحاله، والمستخدم يشوفها وقت الحاجة. مشفّرة على الجهاز بس.
+ */
+export interface LabelCreds { username?: string; adminPassword?: string; ssid?: string; wifiPassword?: string }
+
+export async function getLabel(id: string): Promise<LabelCreds | null> {
+  try {
+    const raw = await secret.get(labelKey(id));
+    return raw ? (JSON.parse(raw) as LabelCreds) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function setLabel(id: string, l: LabelCreds | null): Promise<void> {
+  const clean = l && Object.fromEntries(Object.entries(l).map(([k, v]) => [k, (v ?? '').trim()]).filter(([, v]) => v)) as LabelCreds;
+  if (!clean || !Object.keys(clean).length) { try { await secret.del(labelKey(id)); } catch {} return; }
+  await secret.set(labelKey(id), JSON.stringify(clean));
+}
+
+/** نغيّر كلمة الدخول المحفوظة بس (مثلاً بعد ما نجحت كلمة الملصق) */
+export async function setPassword(id: string, password: string): Promise<void> {
+  if (password) await secret.set(pwKey(id), password);
+}
 
 /** بيانات الواي فاي (للمشاركة مع الضيوف) — محفوظة مشفّرة مثل كلمة مرور الإدارة */
 export interface SavedWifi { ssid: string; password: string; security?: string }
@@ -93,6 +120,7 @@ export async function deleteRouter(id: string) {
   await AsyncStorage.setItem(KEY, JSON.stringify(all.filter(r => r.id !== id)));
   try { await secret.del(pwKey(id)); } catch {}
   try { await secret.del(wifiKey(id)); } catch {}
+  try { await secret.del(labelKey(id)); } catch {}
 }
 
 export function getPassword(id: string) {

@@ -41,7 +41,8 @@ import { rememberOperator, learnOperatorBands } from '../../src/store/operator';
 import { hasInternet } from '../../src/utils/internet';
 import { reportOutage } from '../../src/services/community';
 
-import { sheet, tr } from '../../src/i18n';
+import { sheet, tr } from '../../src/i18n';import { LabelCard } from '../../src/ui/LabelCard';
+
 interface Features {
   bands: boolean; sms: boolean; block: boolean; reboot: boolean; devices: boolean; cells: boolean; details: boolean; plan: boolean; network: boolean; carriers: boolean;
 }
@@ -1015,6 +1016,7 @@ export default function RouterDashboard() {
           </View>
         )}
 
+        {!loading && info && info.host !== 'demo' && info.host !== 'device' && <LabelCard routerId={info.id} />}
         {!loading && info && (
           <Pressable
             onPress={() => router.push(`/add-router?id=${info.id}` as Href)}
