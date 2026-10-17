@@ -143,6 +143,8 @@ async def ping(req: Request):
         "login_ever": bool(b.get("loginEver")),
         "new_app": "logins" in b,
         "screens": screens,
+        "blocker": _clean(b.get("blocker"), 16),
+        "blocker_note": _clean(b.get("blockerNote"), 40),
         "at": int(now),
     }
     day = _today()
@@ -178,6 +180,7 @@ def build_summary(day: str | None = None) -> dict:
     devs = _load(DEVICES, {})
     week_ago = (datetime.now(RIYADH) - timedelta(days=6)).strftime("%Y-%m-%d")
     week = set()
+    blockers: dict[str, tuple[str, str]] = {}
     opens: Counter = Counter()
     users: dict[str, set] = {}
     for p in DAYS.glob("*.json"):
@@ -185,6 +188,8 @@ def build_summary(day: str | None = None) -> dict:
             wd = _load(p, {})
             week |= set(wd.keys())
             for did_, r in wd.items():
+                if r.get("blocker"):
+                    blockers[did_] = (r["blocker"], r.get("blocker_note") or "")
                 for k, v in (r.get("screens") or {}).items():
                     opens[k] += int(v)
                     users.setdefault(k, set()).add(did_)
@@ -212,6 +217,8 @@ def build_summary(day: str | None = None) -> dict:
         "routers": Counter(x for r in recs for x in (r.get("routers") or [])).most_common(6),
         "funnel": _funnel(recs),
         "screens": [(k, v, len(users.get(k, ()))) for k, v in opens.most_common(25)],
+        "blockers": Counter(b for b, _ in blockers.values()).most_common(),
+        "blocker_notes": Counter(n for b, n in blockers.values() if n).most_common(8),
         "history": _history(day, devs),
     }
 
@@ -300,6 +307,15 @@ def _fmt(s: dict) -> str:
             f"  • التجريبي بس: {fu['demo_only']}\n"
             f"  • ما أضافوا شي: {fu['none']}\n\n"
         )
+    BL = {"none": "ما عنده راوتر الحين", "unsupported": "راوتره مو موجود", "howto": "ما عرف كيف يضيفه", "browsing": "يتفرج بس"}
+    bl = s.get("blockers") or []
+    blk = ""
+    if bl:
+        blk = "🚧 <b>ليش ما أضافوا راوتر؟</b> (آخر ٧ أيام):\n" + "\n".join(f"  • {BL.get(k, k)}: {v}" for k, v in bl)
+        notes = s.get("blocker_notes") or []
+        if notes:
+            blk += "\n  راوترات طلبوها: " + "، ".join(f"{n} ({c})" for n, c in notes)
+        blk += "\n\n"
     sc = s.get("screens") or []
     tools = ""
     if sc:
@@ -315,6 +331,7 @@ def _fmt(s: dict) -> str:
         f"🏙️ المدن:\n{lines(s['cities'])}\n\n"
         f"📶 الراوترات:\n{lines(s['routers'])}\n\n"
         f"{fun}"
+        f"{blk}"
         f"{tools}"
         f"📲 الأنظمة:\n  • 🍎 آيفون: {s['os']['ios']}\n  • 🤖 أندرويد: {s['os']['android']}\n\n"
         f"🏷️ الجوالات:\n{lines(s['brands'])}\n\n"

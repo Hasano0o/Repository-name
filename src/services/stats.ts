@@ -77,6 +77,12 @@ export async function pingDaily(force = false): Promise<void> {
       logins = Object.keys(m).filter(k => m[k] === day);
       loginEver = Object.keys(m).length > 0;
     } catch {}
+    let blocker = '';
+    let blockerNote = '';
+    try {
+      const b = JSON.parse((await AsyncStorage.getItem('bandly.blocker')) || 'null');
+      if (b && typeof b.r === 'string') { blocker = b.r; blockerNote = typeof b.note === 'string' ? b.note : ''; }
+    } catch {}
     let screens: Record<string, number> = {};
     try { screens = JSON.parse((await AsyncStorage.getItem(SCREENS_KEY)) || '{}'); } catch {}
     const ctrl = new AbortController();
@@ -98,6 +104,8 @@ export async function pingDaily(force = false): Promise<void> {
         logins,
         loginEver,
         screens,
+        blocker,
+        blockerNote,
       }),
     }).finally(() => clearTimeout(t));
     if (r.ok) {

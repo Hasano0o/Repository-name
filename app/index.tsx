@@ -18,6 +18,7 @@ import {
 import { tBd, tBg, tFg, isDark } from '../src/ui/theme';
 import { desktop } from '../src/desktop/bridge';
 import { CityAsk } from '../src/ui/CityAsk';
+import { BlockerAsk } from '../src/ui/BlockerAsk';
 import { WhatsNew } from '../src/ui/WhatsNew';
 import { LangAsk, LangLink } from '../src/ui/LangPicker';
 import { HomeFooter } from '../src/ui/HomeFooter';
@@ -162,6 +163,7 @@ export default function RoutersList() {
           <Icon name="compass" size={16} color={P.violet} />
           <Text style={s.linkTxt}>استكشاف جهاز غير مدعوم</Text>
         </Pressable>
+        <BlockerAsk onAdd={add} onExplore={explore} />
         {desktop?.openTech && (
           // الويندوز: الفني غالباً ما عنده راوتر مضاف — نعطيه وضع الفني من البداية
           <Pressable style={s.link} onPress={() => desktop?.openTech?.()}>
@@ -213,6 +215,7 @@ export default function RoutersList() {
           <HomeHeader {...header} onAdd={add} onExplore={explore} />
           <LangAsk />
           <CityAsk />
+          {items.every(i => i.driverId === 'demo') && <BlockerAsk onAdd={add} onExplore={explore} />}
           </View>
         }
         refreshControl={

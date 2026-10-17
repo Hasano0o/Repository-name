@@ -110,11 +110,13 @@ export function HomeHeader(p: HomeHeaderProps) {
       <View style={s.btns}>
         <Pressable onPress={p.onAdd} accessibilityLabel="إضافة راوتر" hitSlop={6}
           style={({ pressed }) => [s.btn, s.btnAdd, pressed && { opacity: 0.8 }]}>
-          <Icon name="plus" size={20} color={P.blue} stroke={2.6} />
+          <Icon name="plus" size={18} color={P.blue} stroke={2.8} />
+          <Text style={[s.btnLbl, { color: P.blue }]}>راوتر</Text>
         </Pressable>
         <Pressable onPress={p.onExplore} accessibilityLabel="استكشاف جهاز غير مدعوم" hitSlop={6}
           style={({ pressed }) => [s.btn, s.btnAlt, pressed && { opacity: 0.8 }]}>
-          <Icon name="compass" size={19} color="#ffffff" stroke={2.1} />
+          <Icon name="compass" size={17} color="#ffffff" stroke={2.1} />
+          <Text style={[s.btnLbl, { color: '#ffffff' }]}>استكشف</Text>
         </Pressable>
       </View>
     </Hero>
@@ -134,7 +136,8 @@ const s = sheet({
   chip: { borderRadius: 7, paddingHorizontal: 8, paddingVertical: 2 },
   chipTxt: { fontSize: 11.5, fontWeight: '500' },
   btns: { gap: 8 },
-  btn: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  btn: { width: 54, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 1 },
+  btnLbl: { fontSize: 10, fontWeight: '800', lineHeight: 13 },
   btnAdd: { backgroundColor: '#ffffff' },
   btnAlt: { backgroundColor: 'rgba(255,255,255,0.18)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
 });
