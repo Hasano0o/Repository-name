@@ -174,6 +174,10 @@ def _os(r: dict) -> str:
     return "ios" if not r.get("brand") and "." in v else "android"
 
 
+# شاشات ما لها عنوان في SCREENS بالتطبيق — تنرسل باسم المسار
+_SCREEN_FIX = {"details": "التفاصيل", "hunt": "صيد الإشارة"}
+
+
 def build_summary(day: str | None = None) -> dict:
     day = day or _today()
     d = _load(DAYS / f"{day}.json", {})
@@ -191,6 +195,7 @@ def build_summary(day: str | None = None) -> dict:
                 if r.get("blocker"):
                     blockers[did_] = (r["blocker"], r.get("blocker_note") or "")
                 for k, v in (r.get("screens") or {}).items():
+                    k = _SCREEN_FIX.get(k, k)
                     opens[k] += int(v)
                     users.setdefault(k, set()).add(did_)
     recs = list(d.values())

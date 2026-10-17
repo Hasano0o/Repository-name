@@ -68,7 +68,7 @@ const SCREENS: [string, string][] = [
 ];
 
 // اسم الشاشة بالعربي من أول جزء في المسار (/towers/abc ← الأبراج) — للإحصائيات
-const SCREEN_NAME: Record<string, string> = Object.fromEntries(SCREENS.map(([k, t]) => [k.split('/')[0], t]));
+const SCREEN_NAME: Record<string, string> = { details: 'التفاصيل', ...Object.fromEntries(SCREENS.map(([k, t]) => [k.split('/')[0], t])) };
 
 // شاشات فيها عنوان كبير داخل الصفحة — ما نكرره في الشريط العلوي
 const OWN_TITLE = new Set(['aim/[id]', 'antenna/[id]']);
