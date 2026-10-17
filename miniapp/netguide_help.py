@@ -3,7 +3,7 @@ help_fixes.py — «حلول المشاكل» في بوت Bandly (@NetGuide1_bot
 
   • زر «🛠 حلول المشاكل» في قائمة البوت ← قائمة المشاكل ← الحل خطوة بخطوة
   • روابط مباشرة من التطبيق: t.me/NetGuide1_bot?start=fix_login (أو start=help للقائمة)
-  • في قروب الدعم: لو أحد سأل عن مشكلة معروفة، البوت يرد بملخص الحل + زر «الحل كامل»
+  • في قروب الدعم: لو أحد سأل عن مشكلة معروفة، البوت ينزل الحل كامل في القروب نفسه
     (لازم البوت يكون مشرف في القروب عشان يشوف الرسائل)
 
 يُستدعى من hub.py:
@@ -306,10 +306,9 @@ def register(bot) -> None:
                 if now - _last.get((chat.id, key), 0) < COOLDOWN:
                     continue
                 _last[(chat.id, key)] = now
-                f = FIXES[key]
-                kb = types.InlineKeyboardMarkup()
-                kb.row(types.InlineKeyboardButton("📖 الحل كامل", url=f"https://t.me/{BOT}?start=fix_{key}"))
-                bot.reply_to(m, f"💡 <b>{f['t']}</b>\n{f['s']}", parse_mode="HTML", reply_markup=kb)
+                # الحل كامل هنا في القروب — ما نحوّل للبوت
+                bot.reply_to(m, f"💡 {fix_text(key)}\n\n<i>ما انحلت؟ اكتب تفاصيل أكثر هنا ونساعدك 🤝</i>",
+                             parse_mode="HTML", disable_web_page_preview=True)
             except Exception as e:
                 print("[help] group:", e)
 
