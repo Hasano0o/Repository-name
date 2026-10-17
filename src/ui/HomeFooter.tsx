@@ -191,14 +191,14 @@ export function HomeFooter({ onExplore }: { onExplore: () => void }) {
           icon={<PeopleIcon c={tFg('#c0389b')} />} onPress={invite} />
       </View>
 
-      <Pressable onPress={() => openWay('https://t.me/NetGuide1_bot?start=help')}
+      <Pressable onPress={() => openWay('https://t.me/BandlyHelp')}
         style={({ pressed }) => [s.card, s.contact, pressed && s.pressed]}>
         <View style={[s.way, { backgroundColor: '#ef4444' }]}>
           <Icon name="settings" size={17} color="#fff" stroke={2.2} />
         </View>
         <View style={s.rowTxt}>
           <Text style={s.rowLabel}>حلول المشاكل</Text>
-          <Text style={s.rowValue}>خطوات جاهزة + قروب الدعم في تليجرام</Text>
+          <Text style={s.rowValue}>قروب الدعم في تليجرام — اسأل ونساعدك</Text>
         </View>
         <View style={{ transform: [{ scaleX: -1 }] }}><Icon name="chevron" size={16} color={P.faint} /></View>
       </Pressable>

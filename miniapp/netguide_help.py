@@ -22,7 +22,8 @@ from telebot import types
 BOT = "NetGuide1_bot"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CFG = os.path.join(HERE, "help_group.json")
-DEFAULT_GROUP = -5462203499   # BandlyHelp — يتحدث تلقائياً لو صار سوبر قروب
+GROUP_USERNAME = "BandlyHelp"  # القروب عام: نعرف رقمه من المعرّف (يتغير الرقم لما يصير سوبر قروب)
+DEFAULT_GROUP = -5462203499
 COOLDOWN = 15 * 60            # نفس الحل ما يتكرر في القروب قبل ربع ساعة
 
 # ═══ الحلول ═══
@@ -201,15 +202,19 @@ def group_id() -> int:
 
 
 def group_link() -> str:
-    return _cfg().get("link") or ""
+    return _cfg().get("link") or f"https://t.me/{GROUP_USERNAME}"
 
 
 def _refresh_link(bot) -> None:
     """رابط القروب: المعرّف العام لو موجود، وإلا رابط دعوة (يحتاج البوت مشرف بصلاحية الدعوة)"""
     d = _cfg()
-    gid = int(d.get("group") or DEFAULT_GROUP)
     try:
-        ch = bot.get_chat(gid)
+        ch = bot.get_chat(f"@{GROUP_USERNAME}")
+    except Exception:
+        ch = None
+    gid = ch.id if ch else int(d.get("group") or DEFAULT_GROUP)
+    try:
+        ch = ch or bot.get_chat(gid)
         if getattr(ch, "username", None):
             d["link"] = f"https://t.me/{ch.username}"
         elif getattr(ch, "invite_link", None):
