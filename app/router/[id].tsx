@@ -899,6 +899,26 @@ export default function RouterDashboard() {
 
         {!loading && info && (
           <View style={s.moreCard}>
+            {/* الأكثر طلباً — ظاهرة دايماً */}
+            <GroupTitle title="الأكثر طلباً" color={tFg('#0e7d93')} />
+            <View style={s.moreGrid}>
+              {info.driverId !== 'device' && (
+                <Pressable style={[s.moreTile, { backgroundColor: tBg('#0e7d9312'), borderColor: tBd('#0e7d9330') }]} onPress={() => router.push(`/newip/${info.id}` as Href)}>
+                  <View style={[s.moreIcon, { backgroundColor: tBg('#0e7d93') }]}>
+                    <Icon name="refresh" size={18} color={tFg('#fff')} />
+                  </View>
+                  <Text style={s.moreLbl}>آي بي جديد</Text>
+                </Pressable>
+              )}
+              {['huawei-lte', 'zte', 'demo'].includes(info.driverId) && (
+                <Pressable style={[s.moreTile, { backgroundColor: tBg('#4338ca12'), borderColor: tBd('#4338ca35') }]} onPress={() => router.push(`/control/${info.id}` as Href)}>
+                  <View style={[s.moreIcon, { backgroundColor: tBg('#4338ca') }]}>
+                    <Icon name="settings" size={18} color={tFg('#fff')} />
+                  </View>
+                  <Text style={s.moreLbl}>مركز التحكم</Text>
+                </Pressable>
+              )}
+            </View>
             <Pressable onPress={toggleMore} style={s.moreToggle} accessibilityRole="button" hitSlop={6}>
               <GroupTitle title="أدوات أكثر" color={tFg('#f97316')} />
               <View style={{ flex: 1 }} />
@@ -935,14 +955,6 @@ export default function RouterDashboard() {
                   <Text style={s.moreLbl}>شارك الواي فاي</Text>
                 </Pressable>
               )}
-              {['huawei-lte', 'zte', 'demo'].includes(info.driverId) && (
-                <Pressable style={[s.moreTile, { backgroundColor: tBg('#4338ca12'), borderColor: tBd('#4338ca35') }]} onPress={() => router.push(`/control/${info.id}` as Href)}>
-                  <View style={[s.moreIcon, { backgroundColor: tBg('#4338ca') }]}>
-                    <Icon name="settings" size={18} color={tFg('#fff')} />
-                  </View>
-                  <Text style={s.moreLbl}>مركز التحكم</Text>
-                </Pressable>
-              )}
               {feat.sms && (
                 <Pressable style={[s.moreTile, { backgroundColor: tBg('#16a34a12'), borderColor: tBd('#16a34a30') }]} onPress={() => router.push(`/sms/${info.id}` as Href)}>
                   <View style={[s.moreIcon, { backgroundColor: tBg('#16a34a') }]}>
@@ -974,14 +986,6 @@ export default function RouterDashboard() {
                   <Text style={s.moreLbl}>الوضع الذكي</Text>
                 </Pressable>
                 </>
-              )}
-              {info.driverId !== 'device' && (
-                <Pressable style={[s.moreTile, { backgroundColor: tBg('#0e7d9312'), borderColor: tBd('#0e7d9330') }]} onPress={() => router.push(`/newip/${info.id}` as Href)}>
-                  <View style={[s.moreIcon, { backgroundColor: tBg('#0e7d93') }]}>
-                    <Icon name="refresh" size={18} color={tFg('#fff')} />
-                  </View>
-                  <Text style={s.moreLbl}>آي بي جديد</Text>
-                </Pressable>
               )}
               <Pressable style={[s.moreTile, { backgroundColor: tBg('#f43f5e12'), borderColor: tBd('#f43f5e30') }]} onPress={() => router.push('/monitor' as Href)}>
                 <View style={[s.moreIcon, { backgroundColor: tBg('#f43f5e') }]}>
