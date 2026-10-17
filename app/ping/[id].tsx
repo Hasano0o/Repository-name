@@ -23,6 +23,7 @@ import { bandLabel, freqLabel } from '../../src/utils/bands';
 import { C, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { RegionGrid, flagOf } from '../../src/ui/RegionGrid';
+import { GamePrepCard } from '../../src/ui/GamePrepCard';
 
 import { sheet } from '../../src/i18n';
 type Tech = 'LTE' | 'NR';
@@ -514,6 +515,8 @@ export default function GameScreen() {
         {!loading && (
           <RegionGrid value={region} onPick={pickRegion} disabled={running || busy} />
         )}
+
+        {!loading && info && <GamePrepCard info={info} reg={reg} disabled={running || busy} />}
 
         {!loading && (
           <GlassCard title="جاهز للعب؟" icon="🎮" tint={C.greenSoft} collapsible={false}>
