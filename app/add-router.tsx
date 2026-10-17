@@ -299,6 +299,158 @@ export default function AddRouterScreen() {
             </View>
           </LinearGradient>
 
+          {/* النموذج */}
+          <View style={styles.card}>
+            {!isDevice && (<>
+            <LinearGradient
+              colors={[tBg('#eef3ff'), tBg('#f4efff')]}
+              start={{ x: 1, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={styles.credBox}
+            >
+              <View style={styles.credHead}>
+                <View style={styles.credIcon}><Text style={{ fontSize: 17 }}>🔑</Text></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.credTitle}>بيانات دخول الراوتر</Text>
+                  <Text style={styles.credSub}>مكتوبة على الملصق تحت الراوتر (Password)</Text>
+                </View>
+                {canScan && (
+                  <Pressable
+                    onPress={() => ensureScanner() && setScanning(true)}
+                    disabled={busy}
+                    hitSlop={6}
+                    style={({ pressed }) => [styles.credScan, pressed && { opacity: 0.75 }]}
+                  >
+                    <Text style={styles.credScanTxt}>📷 صوّره</Text>
+                  </Pressable>
+                )}
+              </View>
+              <Field label="اسم المستخدم" icon="user" color={tFg('#12b76a')} focused={focus === 'user'}>
+                <TextInput
+                  value={username}
+                  onChangeText={setUsername}
+                  onFocus={() => setFocus('user')}
+                  onBlur={() => setFocus(null)}
+                  placeholder="admin"
+                  placeholderTextColor={tFg('#9aa3bd')}
+                  style={[styles.input, styles.ltr]}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="username"
+                  returnKeyType="next"
+                />
+              </Field>
+
+              <Field label="كلمة المرور" icon="lock" color={tFg('#f97316')} focused={focus === 'pass'}>
+                <View style={styles.passwordRow}>
+                  <TextInput
+                    value={password}
+                    onChangeText={setPassword}
+                    onFocus={() => setFocus('pass')}
+                    onBlur={() => setFocus(null)}
+                    placeholder="••••••••"
+                    placeholderTextColor={tFg('#9aa3bd')}
+                    style={[styles.input, styles.ltr, styles.passwordInput]}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    secureTextEntry={!showPass}
+                    autoComplete="password"
+                    textContentType="password"
+                    returnKeyType="done"
+                    onSubmitEditing={onSave}
+                  />
+                  <Pressable
+                    onPress={() => setShowPass((v) => !v)}
+                    hitSlop={10}
+                    style={styles.eye}
+                    accessibilityRole="button"
+                    accessibilityLabel={showPass ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                  >
+                    <Icon name={showPass ? 'eye-off' : 'eye'} size={20} color={C.sub} />
+                  </Pressable>
+                </View>
+              </Field>
+            </LinearGradient>
+            {!!scanMsg && <Text style={styles.passHint}>{scanMsg}</Text>}
+
+            <DesktopNetCard net={net} />
+            <Field label="عنوان الراوتر (IP)" icon="tower" color={tFg('#2f6bff')} focused={focus === 'host'}>
+              <TextInput
+                value={host}
+                onChangeText={pickHost}
+                onFocus={() => setFocus('host')}
+                onBlur={() => setFocus(null)}
+                placeholder="192.168.8.1"
+                placeholderTextColor={tFg('#9aa3bd')}
+                style={[styles.input, styles.ltr]}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="off"
+                keyboardType="numbers-and-punctuation"
+                returnKeyType="next"
+              />
+            </Field>
+            <View style={styles.hosts}>
+              {COMMON_HOSTS.map(h => {
+                const on = host.trim() === h.host;
+                return (
+                  <Pressable
+                    key={h.host}
+                    onPress={() => pickHost(h.host)}
+                    style={({ pressed }) => [styles.hostChip, on && styles.hostChipOn, pressed && { opacity: 0.7 }]}
+                  >
+                    <Text style={[styles.hostIp, on && { color: tFg('#fff') }]}>{h.host}</Text>
+                    <Text style={[styles.hostHint, on && { color: tFg('rgba(255,255,255,0.85)') }]}>{h.hint}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            </>)}
+
+            <Field label="اسم الراوتر" hint="اختياري" icon="home" color={tFg('#8b5cf6')} focused={focus === 'name'}>
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                onFocus={() => setFocus('name')}
+                onBlur={() => setFocus(null)}
+                placeholder="مثال: راوتر الصالة"
+                placeholderTextColor={tFg('#9aa3bd')}
+                style={styles.input}
+                returnKeyType="next"
+              />
+            </Field>
+
+
+            <Pressable
+              onPress={onSave}
+              disabled={busy}
+              style={({ pressed }) => [styles.primaryWrap, (busy || pressed) && { opacity: 0.85 }]}
+            >
+              <LinearGradient
+                colors={[tBg('#2f6bff'), tBg('#6a4cff')]}
+                start={{ x: 1, y: 0 }}
+                end={{ x: 0, y: 0 }}
+                style={styles.primaryBtn}
+              >
+                {busy ? (
+                  <View style={styles.busyRow}>
+                    <ActivityIndicator color={tFg('#fff')} />
+                    {!!step && <Text style={styles.primaryBtnText}>{step}</Text>}
+                  </View>
+                ) : (
+                  <Text style={styles.primaryBtnText}>
+                    {isEdit ? '💾 حفظ التعديلات' : '🔗 اتصل وأضف الراوتر'}
+                  </Text>
+                )}
+              </LinearGradient>
+            </Pressable>
+
+            <Pressable onPress={() => nav.back()} disabled={busy} style={styles.ghostBtn}>
+              <Text style={styles.ghostBtnText}>إلغاء</Text>
+            </Pressable>
+          </View>
+
           {/* «هذا الجهاز» — للأجهزة اللي تشتغل بنظام أندرويد وفيها شريحة */}
           {!isEdit && Platform.OS === 'android' && (
             <Pressable
@@ -351,132 +503,6 @@ export default function AddRouterScreen() {
             </Pressable>
           )}
           <LabelScannerHost visible={scanning} onClose={() => setScanning(false)} onResult={onScanned} />
-
-          {/* النموذج */}
-          <View style={styles.card}>
-            <Field label="اسم الراوتر" hint="اختياري" icon="home" color={tFg('#8b5cf6')} focused={focus === 'name'}>
-              <TextInput
-                value={name}
-                onChangeText={setName}
-                onFocus={() => setFocus('name')}
-                onBlur={() => setFocus(null)}
-                placeholder="مثال: راوتر الصالة"
-                placeholderTextColor={tFg('#9aa3bd')}
-                style={styles.input}
-                returnKeyType="next"
-              />
-            </Field>
-
-            {!isDevice && (<>
-            <DesktopNetCard net={net} />
-            <Field label="عنوان الراوتر (IP)" icon="tower" color={tFg('#2f6bff')} focused={focus === 'host'}>
-              <TextInput
-                value={host}
-                onChangeText={pickHost}
-                onFocus={() => setFocus('host')}
-                onBlur={() => setFocus(null)}
-                placeholder="192.168.8.1"
-                placeholderTextColor={tFg('#9aa3bd')}
-                style={[styles.input, styles.ltr]}
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="off"
-                keyboardType="numbers-and-punctuation"
-                returnKeyType="next"
-              />
-            </Field>
-            <View style={styles.hosts}>
-              {COMMON_HOSTS.map(h => {
-                const on = host.trim() === h.host;
-                return (
-                  <Pressable
-                    key={h.host}
-                    onPress={() => pickHost(h.host)}
-                    style={({ pressed }) => [styles.hostChip, on && styles.hostChipOn, pressed && { opacity: 0.7 }]}
-                  >
-                    <Text style={[styles.hostIp, on && { color: tFg('#fff') }]}>{h.host}</Text>
-                    <Text style={[styles.hostHint, on && { color: tFg('rgba(255,255,255,0.85)') }]}>{h.hint}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <Field label="اسم المستخدم" icon="user" color={tFg('#12b76a')} focused={focus === 'user'}>
-              <TextInput
-                value={username}
-                onChangeText={setUsername}
-                onFocus={() => setFocus('user')}
-                onBlur={() => setFocus(null)}
-                placeholder="admin"
-                placeholderTextColor={tFg('#9aa3bd')}
-                style={[styles.input, styles.ltr]}
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="username"
-                returnKeyType="next"
-              />
-            </Field>
-
-            <Field label="كلمة المرور" icon="lock" color={tFg('#f97316')} focused={focus === 'pass'}>
-              <View style={styles.passwordRow}>
-                <TextInput
-                  value={password}
-                  onChangeText={setPassword}
-                  onFocus={() => setFocus('pass')}
-                  onBlur={() => setFocus(null)}
-                  placeholder="••••••••"
-                  placeholderTextColor={tFg('#9aa3bd')}
-                  style={[styles.input, styles.ltr, styles.passwordInput]}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  secureTextEntry={!showPass}
-                  autoComplete="password"
-                  textContentType="password"
-                  returnKeyType="done"
-                  onSubmitEditing={onSave}
-                />
-                <Pressable
-                  onPress={() => setShowPass((v) => !v)}
-                  hitSlop={10}
-                  style={styles.eye}
-                  accessibilityRole="button"
-                  accessibilityLabel={showPass ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
-                >
-                  <Icon name={showPass ? 'eye-off' : 'eye'} size={20} color={C.sub} />
-                </Pressable>
-              </View>
-            </Field>
-            <Text style={styles.passHint}>غالباً مكتوبة على ملصق تحت الراوتر (Password / كلمة مرور الإدارة)</Text>
-            </>)}
-
-            <Pressable
-              onPress={onSave}
-              disabled={busy}
-              style={({ pressed }) => [styles.primaryWrap, (busy || pressed) && { opacity: 0.85 }]}
-            >
-              <LinearGradient
-                colors={[tBg('#2f6bff'), tBg('#6a4cff')]}
-                start={{ x: 1, y: 0 }}
-                end={{ x: 0, y: 0 }}
-                style={styles.primaryBtn}
-              >
-                {busy ? (
-                  <View style={styles.busyRow}>
-                    <ActivityIndicator color={tFg('#fff')} />
-                    {!!step && <Text style={styles.primaryBtnText}>{step}</Text>}
-                  </View>
-                ) : (
-                  <Text style={styles.primaryBtnText}>
-                    {isEdit ? '💾 حفظ التعديلات' : '🔗 اتصل وأضف الراوتر'}
-                  </Text>
-                )}
-              </LinearGradient>
-            </Pressable>
-
-            <Pressable onPress={() => nav.back()} disabled={busy} style={styles.ghostBtn}>
-              <Text style={styles.ghostBtnText}>إلغاء</Text>
-            </Pressable>
-          </View>
 
           {isEdit && (
             <Pressable
@@ -567,6 +593,17 @@ const styles = sheet({
     position: 'absolute', right: S.sm, top: 0, bottom: 0, width: 40,
     alignItems: 'center', justifyContent: 'center',
   },
+  credBox: {
+    borderRadius: 20, padding: S.md, paddingBottom: 2, marginBottom: S.md,
+    borderWidth: 1.5, borderColor: tBd('#c9d8ff'),
+    shadowColor: '#2f6bff', shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2,
+  },
+  credHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, marginBottom: S.md },
+  credIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: tBg('#ffffff'), alignItems: 'center', justifyContent: 'center' },
+  credTitle: { color: C.text, fontSize: 15.5, fontWeight: '900', textAlign: 'right' },
+  credSub: { color: C.sub, fontSize: 11.5, textAlign: 'right', marginTop: 1 },
+  credScan: { backgroundColor: tBg('#12b76a'), borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
+  credScanTxt: { color: tFg('#fff'), fontSize: 12, fontWeight: '800' },
   passHint: { color: C.muted, fontSize: 11.5, textAlign: 'right', marginTop: -6, lineHeight: 17 },
 
   primaryWrap: {
