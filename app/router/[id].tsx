@@ -159,6 +159,16 @@ export default function RouterDashboard() {
   /** آخر دمج شفناه — الدمج يشتغل وقت التحميل بس، فنعرضه بدل ما «يختفي» */
   const [lastCa, setLastCa] = useState<{ bands: string[]; n: number; at: number } | null>(null);
 
+  // ═══ «أدوات أكثر»: مطوية افتراضياً، ونتذكر اختيار المستخدم ═══
+  const [moreOpen, setMoreOpen] = useState(false);
+  useEffect(() => {
+    AsyncStorage.getItem('bandly.router.moreOpen').then(v => { if (v === '1') setMoreOpen(true); }).catch(() => {});
+  }, []);
+  const toggleMore = () => setMoreOpen(o => {
+    AsyncStorage.setItem('bandly.router.moreOpen', o ? '0' : '1').catch(() => {});
+    return !o;
+  });
+
   // ═══ آخر دمج: نقرأه من التخزين، ونحدّثه كل ما شفنا أكثر من ناقل — ونتعلّم ترددات الشبكة ═══
   const caKey = `bandly.lastCa.${id}`;
   useEffect(() => {
@@ -879,24 +889,44 @@ export default function RouterDashboard() {
             <TileGrid>
               <ToolTile icon="speed" color={tFg('#12b76a')} title="السرعة" sub="تنزيل ورفع"
                 onPress={() => router.push(`/speed/${info.id}` as Href)} />
-              <ToolTile icon="antenna" color={tFg('#f97316')} title="الأنتنا" sub="تحتاجها؟"
-                onPress={() => router.push(`/antenna/${info.id}` as Href)} />
               <ToolTile icon="chart" color={tFg('#0891b2')} title="التفاصيل" sub="كل الأرقام"
                 onPress={() => router.push(`/details/${info.id}` as Href)} />
               <ToolTile icon="phone" color={tFg('#8b5cf6')} title="الأجهزة" sub="المتصلين"
                 onPress={() => router.push(`/device/${info.id}` as Href)} />
-              <ToolTile icon="pin" color={tFg('#0ea5a4')} title="الأماكن" sub="وين أحط الراوتر؟"
-                onPress={() => router.push(`/places/${info.id}` as Href)} />
-              <ToolTile icon="report" color={tFg('#64748b')} title="التقرير" sub="شاركه بصورة"
-                onPress={() => router.push(`/report/${info.id}` as Href)} />
             </TileGrid>
           </>
         )}
 
         {!loading && info && (
           <View style={s.moreCard}>
-            <GroupTitle title="إعدادات وأدوات" color={tFg('#f97316')} />
+            <Pressable onPress={toggleMore} style={s.moreToggle} accessibilityRole="button" hitSlop={6}>
+              <GroupTitle title="أدوات أكثر" color={tFg('#f97316')} />
+              <View style={{ flex: 1 }} />
+              <Text style={s.moreHint}>{moreOpen ? 'إخفاء' : 'الإعدادات والأدوات الباقية'}</Text>
+              <View style={{ transform: [{ rotate: moreOpen ? '-90deg' : '90deg' }] }}>
+                <Icon name="chevron" size={16} color={C.sub} />
+              </View>
+            </Pressable>
+            {moreOpen && (
             <View style={s.moreGrid}>
+              <Pressable style={[s.moreTile, { backgroundColor: tBg('#f9731612'), borderColor: tBd('#f9731630') }]} onPress={() => router.push(`/antenna/${info.id}` as Href)}>
+                <View style={[s.moreIcon, { backgroundColor: tBg('#f97316') }]}>
+                  <Icon name="antenna" size={18} color={tFg('#fff')} />
+                </View>
+                <Text style={s.moreLbl}>الأنتنا</Text>
+              </Pressable>
+              <Pressable style={[s.moreTile, { backgroundColor: tBg('#0ea5a412'), borderColor: tBd('#0ea5a430') }]} onPress={() => router.push(`/places/${info.id}` as Href)}>
+                <View style={[s.moreIcon, { backgroundColor: tBg('#0ea5a4') }]}>
+                  <Icon name="pin" size={18} color={tFg('#fff')} />
+                </View>
+                <Text style={s.moreLbl}>الأماكن</Text>
+              </Pressable>
+              <Pressable style={[s.moreTile, { backgroundColor: tBg('#64748b12'), borderColor: tBd('#64748b30') }]} onPress={() => router.push(`/report/${info.id}` as Href)}>
+                <View style={[s.moreIcon, { backgroundColor: tBg('#64748b') }]}>
+                  <Icon name="report" size={18} color={tFg('#fff')} />
+                </View>
+                <Text style={s.moreLbl}>التقرير</Text>
+              </Pressable>
               {info.driverId !== 'device' && (
                 <Pressable style={[s.moreTile, { backgroundColor: tBg('#2f6bff12'), borderColor: tBd('#2f6bff30') }]} onPress={() => router.push(`/wifi/${info.id}` as Href)}>
                   <View style={[s.moreIcon, { backgroundColor: tBg('#2f6bff') }]}>
@@ -968,6 +998,7 @@ export default function RouterDashboard() {
                 </Pressable>
               )}
             </View>
+            )}
           </View>
         )}
 
@@ -1187,6 +1218,8 @@ const s = sheet({
     borderBottomWidth: 1, borderBottomColor: C.line,
   },
   moreTitle: { color: C.sub, fontSize: 13, fontWeight: '800' },
+  moreToggle: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
+  moreHint: { color: C.sub, fontSize: 11.5, fontWeight: '700' },
   moreGrid: {
     flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8,
   },
