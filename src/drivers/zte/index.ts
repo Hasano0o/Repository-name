@@ -798,8 +798,12 @@ export class ZteDriver implements RouterDriver {
     if (!/success/i.test(out)) throw this.rejected('تغيير وضع الشبكة', out);
   }
 
-  async setBand(bands: number[], nrBands?: number[]): Promise<void> {
+  async setBand(bands: number[] | 'keep', nrBands?: number[]): Promise<void> {
     await this.ensure();
+    if (bands !== 'keep') await this.setLteBands(bands);
+    if (nrBands) await this.setNrBands(nrBands);
+  }
+  private async setLteBands(bands: number[]): Promise<void> {
     // «فك التثبيت» = الترددات الأصلية للراوتر لو نعرفها (مو قائمة تخمينية — كانت تشيل ترددات زي B38 ويطيح الراوتر بدون خدمة)
     const all = this.baseLte() ?? [...new Set([...DEFAULT_LTE, ...(await this.readLocks()).lte])];
     const lte = bands.length ? bands : all;
@@ -809,18 +813,17 @@ export class ZteDriver implements RouterDriver {
       is_lte_band: '1', lte_band_mask: maskFromBands(lte),
     });
     if (!/success/i.test(out)) throw this.rejected('تثبيت الترددات', out);
-    if (nrBands) {
-      const nr = nrBands.length ? nrBands : (this.baseNr() ?? DEFAULT_NR);
-      const cur = (await this.readLocks()).nr;
-      const same = cur.length === nr.length && nr.every(b => cur.includes(b));
-      if (!same) {
-        let o2 = await this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: nr.join(',') });
-        if (!/success/i.test(o2) && !nrBands.length) {
-          o2 = await this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: SAFE_NR.join(',') });
-        }
-        if (!/success/i.test(o2)) throw this.rejected('تثبيت ترددات 5G', o2);
-      }
+  }
+  private async setNrBands(nrBands: number[]): Promise<void> {
+    const nr = nrBands.length ? nrBands : (this.baseNr() ?? DEFAULT_NR);
+    const cur = (await this.readLocks()).nr;
+    const same = cur.length === nr.length && nr.every(b => cur.includes(b));
+    if (same) return;
+    let o2 = await this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: nr.join(',') });
+    if (!/success/i.test(o2) && !nrBands.length) {
+      o2 = await this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: SAFE_NR.join(',') });
     }
+    if (!/success/i.test(o2)) throw this.rejected('تثبيت ترددات 5G', o2);
   }
 
   async getActiveLock(): Promise<ActiveLock | null> {

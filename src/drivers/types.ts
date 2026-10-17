@@ -269,7 +269,11 @@ export interface RouterDriver {
   placeCheckCancel?(): Promise<void>;
   getBandConfig?(): Promise<BandConfig>;
   /** roles: اختياري — أي تردد فيه يصير «ثانوي بس» (الراوترات اللي ما تدعمه تتجاهله) */
-  setBand?(bands: number[], nrBands?: number[], roles?: BandRoles): Promise<void>;
+  /**
+   * bands = 'keep': ما نلمس قسم 4G أبد (قفل برج/قناة/ترددات يبقى مثل ما هو) — لما نغيّر 5G بس.
+   * nrBands = undefined: ما نلمس 5G.
+   */
+  setBand?(bands: number[] | 'keep', nrBands?: number[], roles?: BandRoles): Promise<void>;
   lockCell?(target: CellLockTarget): Promise<void>;
   /**
    * لو موجود: التثبيت على برج خطر على هذا النوع (مثلاً ZTE يطيح بدون خدمة/واي فاي لين ضبط المصنع)

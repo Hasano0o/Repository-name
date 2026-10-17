@@ -154,7 +154,7 @@ export default function ComboScreen() {
               apply: async d => {
                 if (nr === 'none') {
                   if (orig.mode !== LTE_ONLY && d.setNetworkMode) await d.setNetworkMode(LTE_ONLY);
-                  await d.setBand!(lte, orig.nrLocked, roles && { ...roles, nrScell: origRoles?.nrScell });
+                  await d.setBand!(lte, undefined, roles); // 5G «مثل ما هو»
                 } else {
                   if ((orig.mode === LTE_ONLY || orig.mode === '08') && d.setNetworkMode) await d.setNetworkMode('00');
                   await d.setBand!(lte, nrBands, roles);

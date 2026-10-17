@@ -106,7 +106,7 @@ export default function Anchor5G() {
                 key: `anchor:B${best.band}`,
                 label,
                 withNr: true,
-                apply: d => d.setBand!([best.band], cfg.nrLocked),
+                apply: d => d.setBand!([best.band], undefined),
                 revert: d => d.setBand!(cfg.locked, cfg.nrLocked),
                 onStatus: st => { if (mounted.current) setStatus(st); },
               });

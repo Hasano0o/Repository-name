@@ -71,7 +71,7 @@ export async function runGuard(r: SavedRouter, sig: Signal | null, isOnline: boo
       const miss = nrNow ? 0 : (g.nrMiss ?? 0) + 1;
       if (miss >= 3) {
         const saved = { lte: cfg.locked, nr: cfg.nrLocked };
-        if (!(await write(d => d.setBand!(cfg.locked, [])))) return false;
+        if (!(await write(d => d.setBand!('keep', [])))) return false;
         await saveGuard(r.id, { ...g, saved, fellBackAt: Date.now(), reason: '5G اختفى', nrMiss: 0, retriedAt: undefined });
         notify('🛡️ حارس 5G', `${r.name}: 5G ما ظهر على (${label([], saved.nr)}) فترة طويلة، فرجّعنا 5G يختار بنفسه.`, r.id);
         return true;

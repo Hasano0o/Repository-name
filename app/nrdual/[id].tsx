@@ -66,7 +66,7 @@ export default function NrDual() {
   const G = LTE ? '4G' : '5G';
   const freq = (b: number) => (LTE ? (LTE_MHZ[b] ? `${LTE_MHZ[b]} ميقا` : '') : MHZ[b] ?? '');
   /** نقفل على تردد واحد للتقنية المختارة، ونخلي الثانية مثل ما هي */
-  const lockTo = (c: BandConfig, b: number) => (d: any) => (LTE ? d.setBand!([b], c.nrLocked) : d.setBand!(c.locked, [b]));
+  const lockTo = (c: BandConfig, b: number) => (d: any) => (LTE ? d.setBand!([b], undefined) : d.setBand!('keep', [b]));
   const insets = useSafeAreaInsets();
   const [info, setInfo] = useState<SavedRouter | null>(null);
   const [cfg, setCfg] = useState<BandConfig | null>(null);

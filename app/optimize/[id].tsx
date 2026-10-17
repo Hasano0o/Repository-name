@@ -133,7 +133,7 @@ export default function OptimizeScreen() {
         upd(i, { status: 'testing', note: 'نقفل التردد...' });
         try {
           await withSession(info, d => (
-            tech === 'NR' ? d.setBand!(origLte, [band]) : d.setBand!([band], origNr)
+            tech === 'NR' ? d.setBand!('keep', [band]) : d.setBand!([band], undefined)
           ), false);
           upd(i, { note: 'ننتظر الاتصال...' });
           const ok = await waitOnline(info, 35000);
@@ -183,7 +183,7 @@ export default function OptimizeScreen() {
             key: `band:${best.tech}:${best.band}`,
             label,
             withNr: best.tech === 'NR',
-            apply: d => (best.tech === 'NR' ? d.setBand!(origLte, [best.band]) : d.setBand!([best.band], origNr)),
+            apply: d => (best.tech === 'NR' ? d.setBand!('keep', [best.band]) : d.setBand!([best.band], undefined)),
             revert: d => d.setBand!(origLte, origNr),
             onStatus: st => { if (mounted.current) setStatus(st); },
           });

@@ -493,7 +493,8 @@ export default function TowersScreen() {
           withNr: isNr,
           // التقنية الثانية «مثل ما هي» (undefined) — مو القائمة اللي قرأناها: cfg.nrLocked/locked فيها
           // أقفال الترددات بس، فلو عليها قفل برج أو قناة كانت تنرسل فاضية وينمسح القفل
-          apply: d => (isNr ? d.setBand!(prevLte, [tower.band!]) : d.setBand!([tower.band!], undefined)),
+          // التقنية الثانية «مثل ما هي»: 'keep' لـ 4G و undefined لـ 5G — قفل برج/قناة عليها ما ينمسح
+          apply: d => (isNr ? d.setBand!('keep', [tower.band!]) : d.setBand!([tower.band!], undefined)),
           revert: d => d.setBand!(prevLte, prevNr),
         }),
       });

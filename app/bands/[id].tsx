@@ -190,7 +190,7 @@ export default function BandsScreen() {
           r: info,
           key: `band:LTE:${[...bands].sort((a, b) => a - b).join('+')}`,
           label,
-          apply: d => d.setBand!(bands, nrPrev),
+          apply: d => d.setBand!(bands, undefined), // 5G «مثل ما هو» (قفل برج/قناة عليه يبقى)
           revert: d => d.setBand!(prev, nrPrev),
           onStatus: setStatus,
           isCancelled: () => cancelRef.current,
@@ -244,8 +244,8 @@ export default function BandsScreen() {
           key: `band:NR:${[...nr].sort((a, b) => a - b).join('+')}`,
           label,
           withNr: true,
-          apply: d => d.setBand!(cfg.locked, nr),
-          revert: d => d.setBand!(cfg.locked, prev),
+          apply: d => d.setBand!('keep', nr),
+          revert: d => d.setBand!('keep', prev),
           onStatus: setStatus,
           isCancelled: () => cancelRef.current,
         });
@@ -255,12 +255,12 @@ export default function BandsScreen() {
         return;
       }
       setStatus('نلغي تثبيت 5G...');
-      await withSession(info, d => d.setBand!(cfg.locked, nr), false);
+      await withSession(info, d => d.setBand!('keep', nr), false);
       await load(info);
       Alert.alert('تم', 'ألغينا تثبيت 5G');
     } catch (e: any) {
       setError(e?.message ?? String(e));
-      try { await withSession(info, d => d.setBand!(cfg.locked, prev), false); } catch {}
+      try { await withSession(info, d => d.setBand!('keep', prev), false); } catch {}
     } finally {
       if (mounted.current) { setBusy(false); setStatus(''); }
     }

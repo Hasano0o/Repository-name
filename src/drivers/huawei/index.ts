@@ -805,25 +805,34 @@ export class HuaweiDriver implements RouterDriver {
     return (await this.readLockFreq()).lte;
   }
   /** nrBands = 'keep': نرسل قسم 5G كما قرأناه (قفل خلية أو ترددات بأدوارها) — ما نلمسه */
-  private async lockFreqBands(bands: number[], nrBands: number[] | 'keep', roles?: BandRoles) {
+  private async lockFreqBands(bands: number[] | 'keep', nrBands: number[] | 'keep', roles?: BandRoles) {
+    if (bands === 'keep' && nrBands === 'keep') return;
+    // نقرأ الأقسام الحالية مرة وحدة لو بنرجّع واحد منها كما هو
+    const raw = bands === 'keep' || nrBands === 'keep' ? parseLockRaw(await this.get('net/lock-freq')) : null;
+    let lteSection: string;
+    if (bands === 'keep') {
+      // 4G ما انطلب يتغير: نرسل قسمه مثل ما هو بالضبط (قفل برج أو قناة يبقى)
+      lteSection = raw!.lte ? '<lte_info>' + raw!.lte + '</lte_info>' : bandLockSection('lte_info', []);
+    } else {
+      lteSection = bandLockSection('lte_info', bands, roles?.lteScell);
+    }
     let nrSection: string;
     if (nrBands === 'keep') {
-      const raw = parseLockRaw(await this.get('net/lock-freq'));
-      nrSection = raw.nr ? '<nr_info>' + raw.nr + '</nr_info>' : bandLockSection('nr_info', []);
+      nrSection = raw!.nr ? '<nr_info>' + raw!.nr + '</nr_info>' : bandLockSection('nr_info', []);
     } else {
       nrSection = bandLockSection('nr_info', nrBands, roles?.nrScell);
     }
-    const body = await this.trimByMode(bandLockSection('lte_info', bands, roles?.lteScell), nrSection);
+    const body = await this.trimByMode(lteSection, nrSection);
     this.log('lock-freq sending', body);
     await this.post('net/lock-freq', body);
     await new Promise(r => setTimeout(r, 2500));
     const after = await this.readLockFreq();
     this.log('lock-freq readback lte', after.lte.join(',') || 'auto', 'nr', after.nr.join(',') || 'auto');
     const ok = (want: number[], got: number[]) => !want.length || want.every(b => got.includes(b));
-    if (!ok(bands, after.lte) || (nrBands !== 'keep' && !ok(nrBands, after.nr))) {
+    if ((bands !== 'keep' && !ok(bands, after.lte)) || (nrBands !== 'keep' && !ok(nrBands, after.nr))) {
       throw new Error('الراوتر قبل الطلب لكن ما طبّق القفل');
     }
-    if (!bands.length && after.lte.length) throw new Error('ما قدرنا نرجع الوضع التلقائي');
+    if (bands !== 'keep' && !bands.length && after.lte.length) throw new Error('ما قدرنا نرجع الوضع التلقائي');
     if (nrBands !== 'keep' && !nrBands.length && after.nr.length) throw new Error('ما قدرنا نرجع وضع 5G للتلقائي');
     // دور «ثانوي بس»: نتأكد إن الراوتر حفظه (لو ما يدعمه يخليها أساسي+ثانوي — مو خطر بس نبلّغ)
     const sc = (want: number[] | undefined, got: number[]) => !want?.length || want.every(b => got.includes(b));
@@ -831,7 +840,8 @@ export class HuaweiDriver implements RouterDriver {
       throw new Error('الراوتر قفل الترددات بس ما حفظ «ثانوي بس» — كلها صارت تقدر تكون أساسي');
     }
   }
-  async setBand(bands: number[], nrBands?: number[], roles?: BandRoles) {
+  async setBand(bands: number[] | 'keep', nrBands?: number[], roles?: BandRoles) {
+    if (bands === 'keep' && nrBands === undefined) return;
     if (this.lockFreq === null) {
       try {
         const fsw = await this.get('net/net-feature-switch');
@@ -855,6 +865,7 @@ export class HuaweiDriver implements RouterDriver {
     if (nrBands && nrBands.length) {
       throw noChange('راوترك ما يسمح نثبّت ترددات 5G (يقبل تثبيت ترددات 4G بس) — ما غيّرنا أي شي. خلّ 5G على «تلقائي» وجرّب.');
     }
+    if (bands === 'keep') return; // 5G بس (وفاضي) وما فيه شي 4G نغيّره
     await this.writeNetMode({ bands });
   }
   /** مثل صفحة الراوتر نفسها: وضع 4G فقط (03) ما يرسل قسم 5G، ووضع 5G فقط (08) ما يرسل قسم 4G */

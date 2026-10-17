@@ -306,10 +306,12 @@ export class DemoDriver implements RouterDriver {
     };
   }
 
-  async setBand(bands: number[], nrBands?: number[], roles?: BandRoles) {
+  async setBand(bands: number[] | 'keep', nrBands?: number[], roles?: BandRoles) {
     await this.alive();
-    this.lteLocked = bands.filter(b => LTE_ALL.includes(b));
-    this.lteScell = (roles?.lteScell ?? []).filter(b => this.lteLocked.includes(b));
+    if (bands !== 'keep') {
+      this.lteLocked = bands.filter(b => LTE_ALL.includes(b));
+      this.lteScell = (roles?.lteScell ?? []).filter(b => this.lteLocked.includes(b));
+    }
     if (nrBands) {
       this.nrLocked = nrBands.filter(b => NR_ALL.includes(b));
       this.nrScell = (roles?.nrScell ?? []).filter(b => this.nrLocked.includes(b));

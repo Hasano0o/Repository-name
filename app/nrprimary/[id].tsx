@@ -121,7 +121,7 @@ export default function NrPrimary() {
         op, r: info, key: `nrprim:${P}`, label: `5G أساسي ${bandLabel('NR', P)}`, withNr: true, onStatus: say,
         apply: async d => {
           if (orig.mode !== SA && d.setNetworkMode) await d.setNetworkMode(SA);
-          await d.setBand!(orig.locked, [P]);
+          await d.setBand!('keep', [P]);
         },
         revert: async d => {
           if (d.setNetworkMode && orig.mode !== SA) { try { await d.setNetworkMode(orig.mode); } catch {} }
@@ -147,11 +147,11 @@ export default function NrPrimary() {
           op, r: info, key: `nrprim:${P}+${S.join('+')}`, label, withNr: true, onStatus: say,
           apply: async d => {
             await d.lockCell!(cell);
-            await d.setBand!(orig.locked, [P, ...S]);
+            await d.setBand!('keep', [P, ...S]);
           },
           revert: async d => {
             try { await d.unlockCell?.(); } catch {}
-            await d.setBand!(orig.locked, [P]);
+            await d.setBand!('keep', [P]);
           },
         });
         if (!r2.kept) {

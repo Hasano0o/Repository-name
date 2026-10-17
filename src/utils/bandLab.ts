@@ -229,7 +229,7 @@ export async function runAnchorScan(o: {
         const band = rows[i].band;
         update(i, { status: 'testing', note: 'نثبّت التردد...' });
         try {
-          await withSession(r, d => d.setBand!([band], cfg.nrLocked), false);
+          await withSession(r, d => d.setBand!([band], undefined), false);
           update(i, { note: 'ننتظر الاتصال...' });
           const ok = await waitOnline(r, 40000, isCancelled);
           if (isCancelled()) { update(i, { status: 'pending', note: undefined }); break; }

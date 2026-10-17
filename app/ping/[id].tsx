@@ -298,7 +298,7 @@ export default function GameScreen() {
 
   const applyTarget = (t: Target, c: BandConfig) => (d: RouterDriver): Promise<void> => {
     if (t.kind === 'lteOnly') return d.setNetworkMode!(LTE_ONLY);
-    if (t.kind === 'band') return t.tech === 'NR' ? d.setBand!(c.locked, [t.band!]) : d.setBand!([t.band!], c.nrLocked);
+    if (t.kind === 'band') return t.tech === 'NR' ? d.setBand!('keep', [t.band!]) : d.setBand!([t.band!], undefined);
     return Promise.resolve();
   };
 
