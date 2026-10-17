@@ -4,7 +4,7 @@
  * كل قسم يظهر بس لو الراوتر يدعمه. وكل تغيير نقرأه بعد الحفظ ونتأكد إنه انحفظ فعلاً.
  */
 import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Switch, Modal } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Switch, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import { ScrollView, View, Text, Pressable, TextInput } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -588,7 +588,8 @@ export default function ControlCenter() {
         )}
       </ScrollView>
 
-      <Modal visible={!!wifiSheet} transparent animationType="slide" onRequestClose={() => setWifiSheet(null)}>
+      <Modal visible={!!wifiSheet} transparent animationType="slide" onRequestClose={() => setWifiSheet(null)} statusBarTranslucent>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Pressable style={s.backdrop} onPress={() => setWifiSheet(null)} />
         {wifiSheet && (
           <View style={[s.sheet, { paddingBottom: insets.bottom + 16 }]}>
@@ -615,6 +616,7 @@ export default function ControlCenter() {
             </Pressable>
           </View>
         )}
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={!!picker} transparent animationType="slide" onRequestClose={() => setPicker(null)}>

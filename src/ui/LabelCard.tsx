@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Modal, Share } from 'react-native';
+import { Alert, Modal, Share, KeyboardAvoidingView, Platform } from 'react-native';
 import { View, Text, Pressable, TextInput, ScrollView } from '../i18n/rn';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getLabel, setLabel, LabelCreds } from '../store/routers';
@@ -59,13 +59,14 @@ export function LabelCard({ routerId }: { routerId: string }) {
         <View style={[s.badge, !has && s.badgeOff]}><Text style={[s.badgeTxt, !has && { color: C.sub }]}>{has ? 'محفوظة' : 'أضفها'}</Text></View>
       </Pressable>
 
-      <Modal visible={open} transparent animationType="slide" onRequestClose={close}>
+      <Modal visible={open} transparent animationType="slide" onRequestClose={close} statusBarTranslucent>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.kav}>
         <Pressable style={s.backdrop} onPress={close} />
         <View style={[s.sheet, { paddingBottom: insets.bottom + 16 }]}>
           <View style={s.grip} />
           <Text style={s.sheetTitle}>بيانات الملصق</Text>
           <Text style={s.sheetSub}>اللي مكتوب على الملصق تحت الراوتر. ترجع لها بعد ضبط المصنع. محفوظة مشفّرة على جوالك بس، وما تطلع لأي مكان.</Text>
-          <ScrollView style={{ maxHeight: 420 }} keyboardShouldPersistTaps="handled">
+          <ScrollView style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 8 }}>
             {FIELDS.map(f => {
               const v = (edit ? edit[f.k] : data?.[f.k]) ?? '';
               if (!edit && !v) return null;
@@ -106,6 +107,7 @@ export function LabelCard({ routerId }: { routerId: string }) {
             </View>
           )}
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );
@@ -122,8 +124,9 @@ const s = sheet({
   badge: { backgroundColor: tBg('#0f766e'), borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   badgeOff: { backgroundColor: C.rowBg },
   badgeTxt: { color: tFg('#ffffff'), fontSize: 11.5, fontWeight: '800' },
+  kav: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
-  sheet: { backgroundColor: C.card, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 18, gap: 6 },
+  sheet: { backgroundColor: C.card, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 18, gap: 6, maxHeight: '88%' },
   grip: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: C.cardBorder, marginBottom: 6 },
   sheetTitle: { color: C.text, fontSize: 18, fontWeight: '900', textAlign: 'right' },
   sheetSub: { color: C.sub, fontSize: 12.5, lineHeight: 19, textAlign: 'right', marginBottom: 6 },
