@@ -24,7 +24,7 @@ const hhmm = (v?: string, def = '00:00') => {
   return m ? `${m[1].padStart(2, '0')}:${m[2].padStart(2, '0')}` : def;
 };
 
-export interface Ap { ChipIndex: string; AccessPointIndex: string; AccessPointSwitchStatus: string; SSID?: string; AuthMode?: string; QrImageShow?: string; GuestSSIDActiveTime?: string }
+export interface Ap { ChipIndex: string; AccessPointIndex: string; AccessPointSwitchStatus: string; SSID?: string; AuthMode?: string; QrImageShow?: string; GuestSSIDActiveTime?: string; ApIsolate?: string; ApBroadcastDisabled?: string; EncrypType?: string; Password?: string }
 
 export async function accessPoints(io: ZteIo): Promise<Ap[]> {
   const r = await io.getRaw('queryAccessPointInfo').catch(() => null);
@@ -67,6 +67,12 @@ export async function zteExtras(io: ZteIo): Promise<RouterExtras> {
   const main = aps.filter(a => a.AccessPointIndex === '0');
   if (main.length) {
     ex.bands = main.map(a => ({ band: a.ChipIndex === '1' ? '5' as const : '2.4' as const, on: a.AccessPointSwitchStatus === '1' }));
+    ex.wifiNets = main.filter(a => a.SSID).map(a => ({
+      index: a.ChipIndex,
+      band: a.ChipIndex === '1' ? '5' as const : '2.4' as const,
+      name: a.SSID!,
+      secured: /PSK/i.test(a.AuthMode ?? ''),
+    }));
   }
   const g = aps.find(a => a.ChipIndex === '0' && a.AccessPointIndex === '1');
   if (g) {
@@ -219,4 +225,45 @@ export async function zteSetAutoRecover(io: ZteIo, on: boolean) {
 export async function zteSetWifiSleep(io: ZteIo, mins: number) {
   const v = String(mins);
   await setAndVerify(io, { goformId: 'SET_WIFI_SLEEP_INFO', sysIdleTimeToSleep: v }, 'sysIdleTimeToSleep', v, 'نوم الواي فاي');
+}
+
+/**
+ * اسم الواي فاي وكلمة المرور (MU5001 — مجرّب حي ١٨ أكتوبر على شبكة الضيوف ورجّعناها):
+ * نفس طلب صفحة الراوتر setAccessPointInfo لكل شريحة (0 = ٢.٤، 1 = ٥)، وكلمة المرور base64.
+ * الراوتر يرد «failure» وهو يطبّق — فنحكم بإعادة القراءة. لو الجوال انفصل (على نفس الشبكة) ما نقدر نقرأ، فنعتبره مرسل.
+ */
+export async function zteSetWifiNames(io: ZteIo, names: { index: string; name: string }[], password?: string) {
+  if (password && !/^[\x20-\x7e]{8,63}$/.test(password)) throw new Error('كلمة المرور لازم تكون ٨ أحرف إنجليزية أو أرقام أو أكثر');
+  const aps = await accessPoints(io);
+  const jobs = names.map(n => ({ n, ap: aps.find(a => a.ChipIndex === n.index && a.AccessPointIndex === '0' && a.SSID) }))
+    .filter(j => j.ap && (j.ap.SSID !== j.n.name || !!password));
+  for (const { n, ap } of jobs) {
+    const psk = /PSK/i.test(ap!.AuthMode ?? '');
+    const body: Record<string, string> = {
+      goformId: 'setAccessPointInfo', ChipIndex: n.index, AccessPointIndex: '0',
+      QrImageShow: ap!.QrImageShow || '0', lan_sec_ssid_control: '', wifi_syncparas_flag: '',
+      AccessPointSwitchStatus: ap!.AccessPointSwitchStatus,
+      SSID: n.name, ApIsolate: ap!.ApIsolate ?? '0', AuthMode: ap!.AuthMode ?? 'WPA2PSK',
+      ApBroadcastDisabled: ap!.ApBroadcastDisabled ?? '0',
+      EncrypType: psk ? (ap!.EncrypType || 'CCMP') : 'NONE',
+    };
+    if (psk) body.Password = password ? btoa(password) : (ap!.Password ?? '');
+    await io.act(body).catch(() => '');
+    await sleep(2500);
+  }
+  // نتأكد بالقراءة (لو قدرنا)
+  for (let i = 0; i < 6; i++) {
+    const list = await accessPoints(io).catch(() => null);
+    if (!list?.length) { await sleep(1500); continue; }
+    const bad = jobs.filter(({ n }) => list.find(a => a.ChipIndex === n.index && a.AccessPointIndex === '0')?.SSID !== n.name);
+    if (!bad.length) return;
+    await sleep(1500);
+    if (i === 5) throw new Error('الراوتر ما حفظ اسم الواي فاي الجديد');
+  }
+}
+
+/** ضبط المصنع — نفس زر صفحة الراوتر (RESTORE_FACTORY_SETTINGS) */
+export async function zteFactoryReset(io: ZteIo) {
+  const out = await io.act({ goformId: 'RESTORE_FACTORY_SETTINGS' });
+  if (!ok(out)) throw fail('ضبط المصنع', out);
 }

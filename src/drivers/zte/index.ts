@@ -7,7 +7,7 @@ import {
   SignalSnapshot, CellLockState, CellLockTarget, WifiRadio,
 } from '../types';
 import { http } from '../http';
-import { ZteIo, zteExtras, zteSetUpnp, zteSetDmz, zteSetLedNight, zteSetBandOn, zteSetGuest, zteSetUrlBlocks, zteRadios, zteSetChannel, zteSetAutoRecover, zteSetWifiSleep } from './extras';
+import { ZteIo, zteExtras, zteSetUpnp, zteSetDmz, zteSetLedNight, zteSetBandOn, zteSetGuest, zteSetUrlBlocks, zteRadios, zteSetChannel, zteSetAutoRecover, zteSetWifiSleep, zteSetWifiNames, zteFactoryReset } from './extras';
 import {
   parsePci, decodeBandMask, encodeBandMask, parseZteCa, bandLabel,
 } from '../../utils/normalize';
@@ -1208,6 +1208,8 @@ export class ZteDriver implements RouterDriver {
   async setGuest(on: boolean, offHours: number) { await this.ensure(); return zteSetGuest(this.io(), on, offHours); }
   async setUrlBlocks(list: { url: string; macs: string[] }[]) { await this.ensure(); return zteSetUrlBlocks(this.io(), list); }
   async setAutoRecover(on: boolean) { await this.ensure(); return zteSetAutoRecover(this.io(), on); }
+  async setWifiNames(names: { index: string; name: string }[], password?: string) { await this.ensure(); return zteSetWifiNames(this.io(), names, password); }
+  async factoryReset() { await this.ensure(); return zteFactoryReset(this.io()); }
   async setWifiSleep(mins: number) { await this.ensure(); return zteSetWifiSleep(this.io(), mins); }
 
   async wifiDebug(): Promise<string> {
