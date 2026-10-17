@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, } from 'react-native';
+import { ActivityIndicator, Alert, Share } from 'react-native';
 import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -42,6 +42,29 @@ const lightColor = (l: Light) => (l === 'green' ? C.green : l === 'yellow' ? '#e
 const lightEmoji = (l: Light) => (l === 'green' ? '🟢' : l === 'yellow' ? '🟡' : '🔴');
 const scoreColor = (sc: number) => lightColor(scoreLight(sc));
 
+/** جملة واحدة تلخّص الفرق بين قبل وبعد التثبيت */
+function cmpVerdict(b: LatencyResult, a: LatencyResult): string {
+  const d = b.median - a.median;
+  if (d >= 5) return `البنق نزل ${d}ms ✅ — اتصالك صار أسرع للعب`;
+  if (a.jitter + 3 <= b.jitter) return `التذبذب نزل من ${b.jitter} إلى ${a.jitter}ms ✅ — اللعب بيكون أثبت`;
+  if (d <= -5) return `البنق زاد ${-d}ms — جرّب الفحص مرة ثانية بوقت ثاني`;
+  return 'النتيجة قريبة من قبل — الفرق بسيط الحين';
+}
+
+/** نص المشاركة (واتساب/تويتر...) */
+function cmpText(c: { label: string; region: string; before: LatencyResult; after: LatencyResult; bScore: number; aScore: number }): string {
+  return [
+    '🎮 نتيجة مُحسّن الألعاب في Bandly',
+    `سيرفرات ${c.region} · على ${c.label}`,
+    `قبل: بنق ${c.before.median}ms · تذبذب ${c.before.jitter}ms · فقد ${c.before.lossPct}% (${c.bScore}/100)`,
+    `بعد: بنق ${c.after.median}ms · تذبذب ${c.after.jitter}ms · فقد ${c.after.lossPct}% (${c.aScore}/100)`,
+    cmpVerdict(c.before, c.after),
+    '',
+    'حمّل Bandly: https://has-host.com/dl/bandly.apk',
+    'آيفون: https://apps.apple.com/sa/app/id6819877993',
+  ].join('\n');
+}
+
 
 // لون كل خيار في مُحسّن اللعبة: الحالي أزرق، 5G بنفسجي، 4G أخضر، «4G فقط» تركوازي
 const GREEN_DEEP = '#1f9e63';
@@ -76,6 +99,9 @@ export default function GameScreen() {
   const [running, setRunning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
+  // قبل وبعد التثبيت — نعرضها كبطاقة قابلة للمشاركة
+  const [compare, setCompare] = useState<{ label: string; region: string; before: LatencyResult; bScore: number; after: LatencyResult; aScore: number } | null>(null);
+  const scanRegRef = useRef(REGIONS[0]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const cancel = useRef(false);
@@ -324,6 +350,8 @@ export default function GameScreen() {
       Alert.alert('غيّرنا المنطقة', `خوادم ${reg.name} ما ترد من شبكتك الحين، فبنقيس على ${scanReg.name} بدالها`);
     }
     setStatus('');
+    scanRegRef.current = scanReg;
+    setCompare(null);
     // الفحص كله عملية وحدة على الراوتر: ما يبدأ لو فيه عملية ثانية، ولا تدخل عليه عملية ثانية
     await runRouterOp(info, 'فحص البنق', async () => {
     let modeChanged = false;
@@ -420,6 +448,17 @@ export default function GameScreen() {
               await load(info);
               const m = trialMessage(res, label);
               let saved = false;
+              if (res.kept && baseRow?.res) {
+                // نقيس بعد التثبيت على نفس المنطقة اللي قسنا عليها قبل — عشان المقارنة تكون عادلة
+                try {
+                  setStatus('نقيس البنق بعد التثبيت...');
+                  await waitOnline(info, 30000);
+                  const after = await measureUrl(regionUrls(scanRegRef.current), 20);
+                  if (after.samples && mounted.current) {
+                    setCompare({ label: best.label, region: scanRegRef.current.name, before: baseRow.res, bScore: baseRow.score ?? gameScore(baseRow.res), after, aScore: gameScore(after) });
+                  }
+                } catch {} finally { setStatus(''); }
+              }
               if (res.kept) {
                 try {
                   const now = await withSession(info, async d => (d.getBandConfig ? d.getBandConfig() : null));
@@ -610,6 +649,29 @@ export default function GameScreen() {
                 )}
               </View>
             )}
+          </GlassCard>
+        )}
+
+        {!loading && info && compare && (
+          <GlassCard title="قبل وبعد" icon="📊" tint={C.greenSoft} collapsible={false}>
+            <Text style={s.hint}>على «{compare.label}» — قياس لسيرفرات {compare.region}</Text>
+            <View style={s.cmpRow}>
+              {([['بعد', compare.after, compare.aScore, true], ['قبل', compare.before, compare.bScore, false]] as const).map(([t, r, sc, isAfter]) => (
+                <View key={t} style={[s.cmpCol, isAfter && { borderColor: C.green }]}>
+                  <Text style={[s.cmpHead, isAfter && { color: C.green }]}>{t}</Text>
+                  <Text style={s.cmpBig}>{r.median}<Text style={s.cmpUnit}> ms</Text></Text>
+                  <Text style={s.cmpSmall}>تذبذب {r.jitter}ms · فقد {r.lossPct}%</Text>
+                  <Text style={[s.cmpScore, { color: scoreColor(sc) }]}>{sc}/100</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={s.bestTitle}>{cmpVerdict(compare.before, compare.after)}</Text>
+            <Pressable
+              style={s.btn}
+              onPress={() => Share.share({ message: cmpText(compare) }).catch(() => {})}
+            >
+              <Text style={s.btnText}>شارك النتيجة</Text>
+            </Pressable>
           </GlassCard>
         )}
 
@@ -883,6 +945,13 @@ const s = sheet({
   rowVals: { color: C.sub, fontSize: 11, textAlign: 'right' },
   barTrack: { height: 6, borderRadius: 3, backgroundColor: C.lineSoft, overflow: 'hidden', flexDirection: 'row-reverse' },
   barFill: { height: 6, borderRadius: 3 },
+  cmpRow: { flexDirection: 'row', gap: 10 },
+  cmpCol: { flex: 1, borderWidth: 1.5, borderColor: C.cardBorder, borderRadius: 14, padding: 12, alignItems: 'center', gap: 4 },
+  cmpHead: { color: C.sub, fontWeight: '800', fontSize: 13 },
+  cmpBig: { color: C.text, fontWeight: '900', fontSize: 26 },
+  cmpUnit: { color: C.sub, fontWeight: '700', fontSize: 13 },
+  cmpSmall: { color: C.sub, fontSize: 12 },
+  cmpScore: { fontWeight: '900', fontSize: 15 },
   bestBox: { borderTopWidth: 1, borderTopColor: C.cardBorder, paddingTop: 12, gap: 10 },
   bestTitle: { color: C.green, fontWeight: '800', fontSize: 14, textAlign: 'right', lineHeight: 21 },
 });
