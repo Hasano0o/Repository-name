@@ -131,7 +131,9 @@ export class ZteDriver implements RouterDriver {
   capabilities: Capability[] = ['signal', 'devices', 'traffic', 'usage', 'reboot', 'cells', 'bandLock'];
   // تجربة حقيقية (MU5001، ٤ أكتوبر ٢٠٢٦): التثبيت على برج ما يمسكه يطيّح الخدمة (LIMITED_SERVICE)
   // بس الراوتر يبقى حي، وفك التثبيت + إعادة التشغيل يرجّعه — فالميزة شغالة مع الإرجاع التلقائي.
-  // لو احتجنا نوقفها مرة ثانية: cellLockRisk = '...'
+  // ١٨ أكتوبر (MU5001 حي): الفك بالفاضي يرد failure وما يفك، و0/0 + إعادة التشغيل علّق الراوتر «بدون خدمة»
+  // لين ضبط المصنع. ما عندنا فك مضمون — فنوقف تثبيت البرج على ZTE (تثبيت الترددات يبقى شغّال).
+  cellLockRisk = 'تثبيت البرج موقوف على راوترات ZTE — فكّه ما يشتغل بأمان على هالموديلات، وممكن يعلّق الراوتر بدون خدمة لين ضبط المصنع. استخدم تثبيت الترددات بداله.';
   private host = '';
   private password = '';
   /** إعدادات الراوتر الأصلية (من أول اتصال وهو نظيف) */
@@ -1011,16 +1013,23 @@ export class ZteDriver implements RouterDriver {
   }
 
   /**
-   * فك تثبيت برج 4G. مجرّب حي على MU5001 (١٨ أكتوبر): الفاضي يرد failure وما يفك القفل أصلاً،
-   * و 0/0 يرد success ويفك (هذي طريقة ZTE المعروفة) — يتطبّق بعد إعادة التشغيل.
-   * نخلي الفاضي أول لأن بعض الموديلات تقبله، وبعده 0/0.
+   * فك تثبيت برج 4G. مجرّب حي على MU5001 (١٨ أكتوبر): الفاضي يرد failure وما يفك القفل،
+   * و0/0 ينقبل بس بعد إعادة التشغيل علق الراوتر بدون خدمة لين ضبط المصنع.
+   * أهم شي: **لو ما فيه قفل ما نرسل شي** — ليلة ١٧ أكتوبر «رجّع الإشارة» أرسل 0/0 لراوتر نظيف وعلّقه.
    */
   private async clearLteCell(): Promise<string> {
+    const cur = await this.get(['lte_pci_lock', 'lte_earfcn_lock']).catch(() => null);
+    const v = (x?: string) => (x ?? '').trim();
+    if (cur && !v(cur.lte_earfcn_lock) && !v(cur.lte_pci_lock)) return '{"result":"success"}';
+    if (cur && v(cur.lte_earfcn_lock) === '0' && v(cur.lte_pci_lock) === '0') return '{"result":"success"}';
     const o = await this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: '', lte_earfcn_lock: '' });
     if (/success/i.test(o)) return o;
     return this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: '0', lte_earfcn_lock: '0' });
   }
   private async clearNrCell(): Promise<string> {
+    const cur = await this.get(['nr5g_cell_lock']).catch(() => null);
+    const f = (cur?.nr5g_cell_lock ?? '').split(',').map(x => x.trim());
+    if (cur && (!f[0] || f.every(x => !x || x === '0'))) return '{"result":"success"}';
     const o = await this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: '' });
     if (/success/i.test(o)) return o;
     return this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: '0,0,0,0' });
