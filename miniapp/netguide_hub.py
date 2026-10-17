@@ -15,6 +15,12 @@ from datetime import datetime, timedelta, timezone
 
 from telebot import types
 
+try:
+    import help_fixes   # حلول المشاكل + الرد في قروب الدعم
+except Exception as _e:  # الملف مو موجود ← البوت يكمل بدونه
+    help_fixes = None
+    print('[hub] help_fixes:', _e)
+
 APP = "https://has-host.com/bandly-app/"
 DEV = "https://t.me/hasa_n20"
 LIVE_DIR = "/root/bandly-live"
@@ -236,6 +242,8 @@ def keyboard() -> types.InlineKeyboardMarkup:
     kb.row(Btn("📥 تحميل التطبيق (أندرويد)", style="success", callback_data="hubapk"))
     kb.row(Btn("💻 نسخة الكمبيوتر (ويندوز)", url=WIN))
     kb.row(Btn("📱 افتح تطبيق Bandly", style="primary", web_app=types.WebAppInfo(APP)))
+    if help_fixes:
+        kb.row(Btn("🛠 حلول المشاكل", style="danger", callback_data="hlp:menu"))
     kb.row(wa("🛠️ سجّل كفني", "tech"), wa("📢 اطلب إعلان", "ad"))
     kb.row(wa("🔌 أضف جهازك", "device"), wa("💬 ملاحظاتك", "feedback"))
     kb.row(wa("👷 الفنيين", "techs"), types.InlineKeyboardButton("👨‍💻 المبرمج", url=DEV))
@@ -288,6 +296,8 @@ def public_start(bot, msg):
     if arg.lower().startswith("r_"):
         note_ref(arg[2:], msg.from_user)
         arg = ""
+    if help_fixes and arg and help_fixes.handle_start(bot, msg, arg):
+        return
     deep = DEEP.get(arg.lower()) if arg else None
     if deep:
         text, btn, page = deep
@@ -305,6 +315,8 @@ def register(bot, is_owner, api_post=None, owner_id: int = 0):
             if getattr(m.chat, "type", "") == "private":
                 remember(m.from_user)
     bot.set_update_listener(_listen)
+    if help_fixes:
+        help_fixes.register(bot)
 
     # أول تشغيل: القائمة تبدأ من الحين، ونضيف اللي سبق وأرسلوا طلبات من التطبيق المصغر.
     # وأول رسالة تعريف بعد ٣ أيام عشان القائمة تكبر قبلها.

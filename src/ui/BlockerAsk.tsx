@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Linking } from 'react-native';
 import { View, Text, Pressable, TextInput } from '../i18n/rn';
 import { P } from './Pro';
 import { Icon } from './Icon';
@@ -97,7 +98,12 @@ export function BlockerAsk({ onAdd, onExplore }: { onAdd: () => void; onExplore:
           {pick === 'howto' && (
             <>
               <Text style={s.sub}>أسهل طريقة: اضغط «إضافة راوتر» ثم «امسح ملصق الراوتر» وصوّر الملصق اللي تحته — نعبّي البيانات لحالها. تأكد إن جوالك متصل بواي فاي الراوتر.</Text>
-              <Pressable style={s.btn} onPress={onAdd}><Text style={s.btnTxt}>إضافة راوتر</Text></Pressable>
+              <View style={s.row}>
+                <Pressable style={s.btn} onPress={onAdd}><Text style={s.btnTxt}>إضافة راوتر</Text></Pressable>
+                <Pressable onPress={() => Linking.openURL('https://t.me/NetGuide1_bot?start=fix_add').catch(() => {})} hitSlop={8}>
+                  <Text style={[s.skip, { color: P.blue }]}>الخطوات في تليجرام</Text>
+                </Pressable>
+              </View>
             </>
           )}
           {(pick === 'none' || pick === 'browsing') && (
