@@ -314,3 +314,149 @@ def register(bot) -> None:
 
     bot.set_update_listener(_group_listener)
     threading.Thread(target=_refresh_link, args=(bot,), daemon=True).start()
+    threading.Thread(target=_group_scheduler, args=(bot,), daemon=True).start()
+
+    # تجربة فورية للمالك: /grouptip أو /grouplinks في خاص البوت
+    @bot.message_handler(commands=["grouptip", "grouplinks"], func=lambda m: getattr(m.chat, "type", "") == "private" and _is_owner(m))
+    def _test(m):
+        ok = post_tip(bot) if m.text.startswith("/grouptip") else post_links(bot)
+        bot.reply_to(m, "✅ انرسل للقروب" if ok else "❌ ما انرسل — شوف السجل")
+
+
+
+# ═══ النشر المجدول في القروب ═══
+# أوقات ثابتة بتوقيت الرياض (مو كل X ساعة — عشان ما تنزلق مع إعادة التشغيل):
+#   • ميزة يومياً ٩:١٥ مساءً — بعد العشاء، وقت ذروة النت والألعاب والناس فاضية تقرأ
+#   • بطاقة روابط التحميل: تتثبّت في القروب، وتنعاد كل جمعة ٤:٣٠ العصر (تنحذف القديمة)
+#   • ما فيه نشر بالليل ولا الصبح الباكر
+from datetime import datetime, timedelta, timezone
+
+RIYADH = timezone(timedelta(hours=3))
+STATE = os.path.join(HERE, "help_posts.json")
+TIP_AT = (21, 15)
+LINKS_AT = (4, 16, 30)   # (يوم الأسبوع: الجمعة=4، ساعة، دقيقة)
+
+L_IOS = "https://apps.apple.com/sa/app/id6819877993"
+L_APK = "https://has-host.com/dl/bandly.apk"
+L_WIN = "https://has-host.com/dl/Bandly-Setup.exe"
+
+TIPS = [
+    ("🔊 وجّه الأنتنا بالصوت", "افتح «التوجيه» ولف الراوتر أو الأنتنا وأنت تسمع — كل ما قوي الصوت والاهتزاز، قربت من أقوى إشارة. بدون ما تشوف أرقام."),
+    ("🎯 صيد الإشارة", "للأنتنا الخارجية: سهم كبير يأشر لأقوى اتجاه مثل تطبيقات القبلة، وحلقة تتلوّن من بارد لحار، و«احفظ الاتجاه» لما تلقاه."),
+    ("🗼 هل فيه برج أفضل؟", "شاشة «الأبراج» تقارن برجك بالأبراج حولك، وتقول لك لو فيه برج أقوى — وتقدر تجربه بضغطة."),
+    ("⚡ أفضل تردد", "التطبيق يجرّب ترددات راوترك وحدة وحدة ويختار الأسرع لك — وبعدها يرجّع إعدادك لو ما عجبك."),
+    ("🎮 مُحسّن الألعاب", "يقيس البنق لسيرفر لعبتك (اختر الدولة من الأعلام)، ويجرّب الترددات ويثبّت الأقل بنق — مع مقارنة قبل وبعد تشاركها."),
+    ("🕹️ جهّزني للعب", "ضغطة وحدة قبل المباراة: يطبّق اللي يثبّت البنق عندك أنت حسب تاريخك، وبعد ما تخلص «رجّع إعدادي»."),
+    ("🕵️ كاشف اللاق", "شغّله وأنت تلعب — يرسم البنق لحظة بلحظة، ولما يصير تقطيع يقول لك السبب: برج تغيّر؟ 5G طاح؟ جهاز يحمّل؟ الواي فاي؟"),
+    ("🔄 آي بي جديد", "محظور من لعبة أو موقع؟ ضغطة وحدة ويجيك آي بي جديد — والتطبيق يتعلّم الطريقة اللي تنفع مع شركتك."),
+    ("🎛️ مركز التحكم", "كل إعدادات الراوتر المهمة في مكان واحد وبالعربي — بدون ما تفتح صفحة الراوتر المعقدة."),
+    ("📹 وضع الفني", "تبي أحد يساعدك؟ شارك قراءاتك مع فني عن بُعد، ويكلّمك صوت وفيديو ويشوف الأنتنا وأنت توجّهها."),
+    ("📷 امسح ملصق الراوتر", "تضيف راوترك؟ صوّر الملصق اللي تحته — العنوان وكلمة المرور تتعبى لحالها. وتقدر تشارك بيانات الواي فاي بضغطة."),
+    ("🔔 المراقبة والتنبيهات", "التطبيق يراقب راوترك بالخلفية وينبهك لو طاح النت أو ضعفت الإشارة — مع تقرير أسبوعي."),
+    ("📡 مستشار الأنتنا", "يقرأ إشارتك ويقول لك بصراحة: تحتاج أنتنا خارجية ولا لا؟ وأي نوع يناسبك، وكيف تركّبها صح."),
+    ("🏠 وين أحط الراوتر؟", "«الأماكن»: قِس في كل غرفة أو مكان، والتطبيق يقارن ويقول لك أفضل مكان للراوتر."),
+    ("🕐 الوضع الذكي", "خلّ الراوتر يغيّر إعداده بالوقت: وضع الألعاب بالليل، وضع المشاهدة العصر — وصيانة ليلية تعيد التشغيل لو احتاج."),
+    ("💻 Bandly على الكمبيوتر", "نسخة ويندوز كاملة — نفس المزايا على الشاشة الكبيرة، وتتحدث لحالها."),
+]
+
+
+def _is_owner(m) -> bool:
+    try:
+        import __main__
+        return int(getattr(__main__, "OWNER_ID", 0) or 0) == m.from_user.id
+    except Exception:
+        return False
+
+
+def _state() -> dict:
+    try:
+        with open(STATE, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_state(d: dict) -> None:
+    tmp = STATE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(d, f, ensure_ascii=False)
+    os.replace(tmp, STATE)
+
+
+def _dl_kb() -> types.InlineKeyboardMarkup:
+    kb = types.InlineKeyboardMarkup()
+    kb.row(types.InlineKeyboardButton("🍎 آيفون (App Store)", url=L_IOS),
+           types.InlineKeyboardButton("🤖 أندرويد", url=L_APK))
+    kb.row(types.InlineKeyboardButton("💻 ويندوز", url=L_WIN))
+    return kb
+
+
+def post_links(bot) -> bool:
+    """بطاقة التحميل: تنحذف القديمة وتنزل جديدة وتتثبّت"""
+    st = _state()
+    gid = group_id()
+    old = st.get("links_msg")
+    if old:
+        try:
+            bot.delete_message(gid, old)
+        except Exception:
+            pass
+    try:
+        m = bot.send_message(gid,
+            "📲 <b>حمّل Bandly</b> — اطلع أقوى إشارة من راوترك\n\n"
+            "وجّه الأنتنا بالصوت، ثبّت أفضل برج وتردد، وقلّل البنق للألعاب 🎮\n"
+            "متوفر على الآيفون والأندرويد والكمبيوتر 👇",
+            parse_mode="HTML", reply_markup=_dl_kb(), disable_web_page_preview=True)
+        try:
+            bot.pin_chat_message(gid, m.message_id, disable_notification=True)
+        except Exception as e:
+            print("[help] pin:", e)
+        st["links_msg"] = m.message_id
+        _save_state(st)
+        return True
+    except Exception as e:
+        print("[help] links:", e)
+        return False
+
+
+def post_tip(bot) -> bool:
+    """ميزة اليوم — بالدور، كل يوم وحدة"""
+    st = _state()
+    i = int(st.get("tip_i", 0)) % len(TIPS)
+    title, body = TIPS[i]
+    try:
+        bot.send_message(group_id(),
+            f"💡 <b>ميزة اليوم: {title}</b>\n\n{body}\n\n<i>عندك سؤال عنها؟ اكتبه هنا 👇</i>",
+            parse_mode="HTML", reply_markup=_dl_kb(), disable_web_page_preview=True)
+        st["tip_i"] = i + 1
+        _save_state(st)
+        return True
+    except Exception as e:
+        print("[help] tip:", e)
+        return False
+
+
+def _group_scheduler(bot) -> None:
+    time.sleep(60)
+    # أول تشغيل: نثبّت بطاقة الروابط مرة وحدة
+    if not _state().get("links_msg"):
+        post_links(bot)
+    while True:
+        try:
+            now = datetime.now(RIYADH)
+            today = now.strftime("%Y-%m-%d")
+            st = _state()
+            # ميزة اليوم (لو فات وقتها وأقل من ساعتين نرسلها — عشان إعادة التشغيل ما تضيّعها)
+            tip_t = now.replace(hour=TIP_AT[0], minute=TIP_AT[1], second=0, microsecond=0)
+            if st.get("tip_day") != today and tip_t <= now < tip_t + timedelta(hours=2):
+                if post_tip(bot):
+                    st = _state(); st["tip_day"] = today; _save_state(st)
+            # الروابط: كل جمعة
+            wd, h, mi = LINKS_AT
+            links_t = now.replace(hour=h, minute=mi, second=0, microsecond=0)
+            if now.weekday() == wd and st.get("links_day") != today and links_t <= now < links_t + timedelta(hours=2):
+                if post_links(bot):
+                    st = _state(); st["links_day"] = today; _save_state(st)
+        except Exception as e:
+            print("[help] scheduler:", e)
+        time.sleep(60)
