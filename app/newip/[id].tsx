@@ -1,3 +1,4 @@
+import { runRouterOp } from '../../src/utils/routerOp';
 /**
  * آي بي جديد — تصعيد تلقائي: ١) قطع بيانات سريع  ٢) لو نفس الآي بي: فصل كامل عن البرج (reattach)
  * — هذا اللي يخلي الشركة تفك الآي بي مثل الطفي — ٣) إعادة تشغيل كخيار أخير.
@@ -149,6 +150,8 @@ export default function NewIp() {
       { text: 'إلغاء', style: 'cancel' },
       {
         text: 'يلا', onPress: async () => {
+          // كل خطوات تغيير الآي بي (قطع/فصل/إعادة تشغيل/فك) عملية وحدة على الراوتر
+          await runRouterOp(info, 'آي بي جديد', async op => {
           setBusy(true); setError(''); setAfter(null); setStep('');
           try {
             const old = before ?? await readIps(info);
@@ -163,7 +166,7 @@ export default function NewIp() {
               return settle(150000).catch(async e3 => {
                 // رجع من إعادة التشغيل بدون أبراج: غالباً وضع شبكة/ترددات عالقة — نفكها
                 setStatus('الراوتر ما رجع يمسك برج — نفك التثبيتات ونرجّع وضع الشبكة...');
-                if (!(await freeRelease(info, t => mounted.current && setStatus(t)).catch(() => false))) throw e3;
+                if (!(await freeRelease(info, t => mounted.current && setStatus(t), undefined, op).catch(() => false))) throw e3;
                 return readIps(info);
               });
             };
@@ -203,7 +206,7 @@ export default function NewIp() {
                     setStatus('الراوتر ما رجع يمسك برج — نرجّعه...');
                     await withSessionPatient(info, d => (d.wakeRadio ? d.wakeRadio() : Promise.resolve()), 60_000).catch(() => {});
                     if (await waitOnline(info, 60000, () => !mounted.current)) return readIps(info);
-                    if (!(await freeRelease(info, t => mounted.current && setStatus(t)).catch(() => false))) throw e3;
+                    if (!(await freeRelease(info, t => mounted.current && setStatus(t), undefined, op).catch(() => false))) throw e3;
                     return readIps(info);
                   });
                   const secs = Math.round((Date.now() - t0) / 1000);
@@ -238,6 +241,7 @@ export default function NewIp() {
           } finally {
             if (mounted.current) { setBusy(false); setStatus(''); }
           }
+          });
         },
       },
     ]);

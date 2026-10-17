@@ -1,3 +1,4 @@
+import { runRouterOp } from '../../src/utils/routerOp';
 /**
  * «5G الأساسي» — تختار أي تردد 5G يكون الأساسي (PCell) في وضع SA، ووش ينضم معه.
  * مثال: n77 رفعه أقوى بس البرج يحطه ثانوي تحت n41 → نخليه هو الأساسي ونضيف n41 ثانوي.
@@ -110,13 +111,14 @@ export default function NrPrimary() {
 
   const go = async (P: number, S: number[], label: string) => {
     if (!info || !cfg) return;
+    await runRouterOp(info, label, async op => {
     const orig = cfg;
     setBusy(true); setError(''); setVerdict(null);
     const say = (t: string) => mounted.current && setStatus(t);
     try {
       // ١) الأساسي لحاله في SA
       const r1 = await safeApply({
-        r: info, key: `nrprim:${P}`, label: `5G أساسي ${bandLabel('NR', P)}`, withNr: true, onStatus: say,
+        op, r: info, key: `nrprim:${P}`, label: `5G أساسي ${bandLabel('NR', P)}`, withNr: true, onStatus: say,
         apply: async d => {
           if (orig.mode !== SA && d.setNetworkMode) await d.setNetworkMode(SA);
           await d.setBand!(orig.locked, [P]);
@@ -142,7 +144,7 @@ export default function NrPrimary() {
       if (S.length && p && p.tech === 'NR' && p.band === P && p.pci && canCell) {
         const cell = { tech: 'NR' as const, band: P, pci: p.pci, arfcn: p.arfcn };
         const r2 = await safeApply({
-          r: info, key: `nrprim:${P}+${S.join('+')}`, label, withNr: true, onStatus: say,
+          op, r: info, key: `nrprim:${P}+${S.join('+')}`, label, withNr: true, onStatus: say,
           apply: async d => {
             await d.lockCell!(cell);
             await d.setBand!(orig.locked, [P, ...S]);
@@ -189,6 +191,7 @@ export default function NrPrimary() {
     } finally {
       if (mounted.current) { setBusy(false); setStatus(''); try { await load(info); } catch {} }
     }
+    });
   };
 
   const Chip = ({ b, on, onPress, color }: { b: number; on: boolean; onPress: () => void; color: string }) => (

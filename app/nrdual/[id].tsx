@@ -1,3 +1,4 @@
+import { runRouterOp } from '../../src/utils/routerOp';
 /**
  * الدمج المزدوج — نفس التردد مرتين:
  *   5G: n77+n77 / n78+n78 (الافتراضي)
@@ -126,6 +127,8 @@ export default function NrDual() {
 
   const run = async () => {
     if (!info || !cfg) return;
+    // الفحص كله عملية وحدة على الراوتر
+    await runRouterOp(info, NAME, async op => {
     cancel.current = false;
     setRunning(true); setFinished(false); setError('');
     const list: Row[] = rows.map(r => ({ band: r.band, status: 'pending' }));
@@ -169,9 +172,10 @@ export default function NrDual() {
       try { await withSession(info, d => d.setBand!(cfg.locked, cfg.nrLocked), false); } catch {}
       // لو ما رجع (بعض راوترات ZTE تعلق بعد القفل) نفك كل شي عشان يلقط أقوى برج
       const back = await waitOnline(info, 45000, () => false);
-      if (!back) await freeRelease(info, st => { if (mounted.current) setStatus(st); }).catch(() => false);
+      if (!back) await freeRelease(info, st => { if (mounted.current) setStatus(st); }, undefined, op).catch(() => false);
       if (mounted.current) { setRunning(false); setFinished(true); setStatus(''); }
     }
+    });
   };
 
   const dual = rows.filter(r => r.status === 'done' && (r.nrCount ?? 0) >= 2)
@@ -226,6 +230,7 @@ export default function NrDual() {
         { text: 'إلغاء', style: 'cancel' },
         {
           text: 'ثبّت', onPress: async () => {
+            await runRouterOp(info, `قفل ${G} على ${P}${b}`, async () => {
             cancel.current = false;
             setRunning(true); setError(''); setManual(null);
             try {
@@ -247,6 +252,7 @@ export default function NrDual() {
             } finally {
               if (mounted.current) { setRunning(false); setStatus(''); }
             }
+            });
           },
         },
       ],
@@ -255,12 +261,13 @@ export default function NrDual() {
 
   const manualRevert = async () => {
     if (!info || !cfg) return;
+    await runRouterOp(info, 'رجّع إعدادي', async op => {
     setRunning(true); setError('');
     try {
       setStatus('نرجّع إعدادك...');
       await withSession(info, d => d.setBand!(cfg.locked, cfg.nrLocked), false);
       const back = await waitOnline(info, 45000, () => false);
-      if (!back) await freeRelease(info, st => { if (mounted.current) setStatus(st); }).catch(() => false);
+      if (!back) await freeRelease(info, st => { if (mounted.current) setStatus(st); }, undefined, op).catch(() => false);
       if (mounted.current) setManual(null);
     } catch (e: any) {
       if (mounted.current) setError(e?.message ?? String(e));
@@ -268,6 +275,7 @@ export default function NrDual() {
     } finally {
       if (mounted.current) { setRunning(false); setStatus(''); }
     }
+    });
   };
 
   return (

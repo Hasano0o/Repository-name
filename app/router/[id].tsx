@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router';
 import { SavedRouter, getRouter, deleteRouter } from '../../src/store/routers';
-import { withSession, dropSession } from '../../src/store/sessions';
+import { withSession, dropSession, routerWrite } from '../../src/store/sessions';
 import { Signal, Usage, ConnectedDevice, Traffic, RouterDriver, DeviceDetails, DataPlan, ActiveLock } from '../../src/drivers/types';
 import {
   Level, LEVEL_COLOR, LEVEL_LABEL, overallLevel, parseBands, parseNrBands, signalScore,
@@ -340,7 +340,7 @@ export default function RouterDashboard() {
         text: 'إعادة تشغيل', style: 'destructive', onPress: async () => {
           setBusy(true);
           try {
-            await withSession(info, d => (d.reboot ? d.reboot() : Promise.resolve()), false);
+            await routerWrite(info, d => (d.reboot ? d.reboot() : Promise.resolve()), { label: 'إعادة تشغيل' });
             dropSession(info.id);
             Alert.alert('تم', 'الراوتر يعيد التشغيل الحين');
             router.back();
@@ -397,10 +397,10 @@ export default function RouterDashboard() {
         text: 'ارجع', onPress: async () => {
           setBusy(true);
           try {
-            await withSession(info, async d => {
+            await routerWrite(info, async d => {
               if (d.unlockCell) await d.unlockCell();
               if (d.setBand) await d.setBand([], []);
-            }, false);
+            }, { label: 'رجوع للتلقائي' });
             await loadAll(info);
           } catch (e: any) {
             Alert.alert('ما تم', e?.message ?? String(e));
@@ -524,7 +524,7 @@ export default function RouterDashboard() {
         text: 'فعّل', onPress: async () => {
           setBusy(true);
           try {
-            await withSession(info, d => d.setNetworkMode!('00'), false);
+            await routerWrite(info, d => d.setNetworkMode!('00'), { label: 'الوضع التلقائي' });
             await loadAll(info);
           } catch (e: any) {
             Alert.alert('ما تم', e?.message ?? String(e));

@@ -1,3 +1,4 @@
+import { runRouterOp } from '../../src/utils/routerOp';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, } from 'react-native';
 import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
@@ -132,6 +133,7 @@ export default function NsaCombo() {
 
   const run = async () => {
     if (!info || !cfg) return;
+    await runRouterOp(info, 'تجربة تركيبات NSA', async op => {
     cancel.current = false;
     setRunning(true); setFinished(false); setError('');
     const list: Row[] = rows.map(r => ({ lte: r.lte, nr: r.nr, status: 'pending' }));
@@ -167,9 +169,16 @@ export default function NsaCombo() {
           u({ status: snap ? 'done' : 'failed', snap, note: snap ? undefined : 'فشل القياس' });
         };
         try {
-          const r = await capped(one(), COMBO_MAX_MS);
+          const pending = one();
+          const r = await capped(pending, COMBO_MAX_MS);
           if (r === 'stop') break;
-          if (r === TIMEOUT) gone = true;
+          if (r === TIMEOUT) {
+            gone = true;
+            // انتهت المهلة بس أوامر هالتركيبة ممكن لسا شغالة على الراوتر — ننتظرها تخلص فعلاً
+            // قبل التركيبة الجاية (لا أمرين فوق بعض)
+            setStatus('الراوتر لسا ينفّذ التركيبة اللي طوّلت — ننتظره يخلص...');
+            await pending.catch(() => {});
+          }
           if (r === TIMEOUT && list[i].status === 'testing') {
             upd(i, { status: 'failed', note: 'طوّل الراوتر — تخطيناها' });
           }
@@ -182,6 +191,7 @@ export default function NsaCombo() {
       await waitOnline(info, 45000, () => false);
       if (mounted.current) { setRunning(false); setFinished(true); setStatus(''); }
     }
+    });
   };
 
   const apply = () => {

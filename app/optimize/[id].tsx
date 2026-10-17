@@ -1,3 +1,4 @@
+import { runRouterOp } from '../../src/utils/routerOp';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, } from 'react-native';
 import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
@@ -108,6 +109,7 @@ export default function OptimizeScreen() {
 
   const run = async () => {
     if (!info || !cfg || !cands.length) return;
+    await runRouterOp(info, 'مُحسّن الترددات', async op => {
     const origLte = cfg.locked;
     const origNr = cfg.nrLocked;
     cancel.current = false;
@@ -176,6 +178,7 @@ export default function OptimizeScreen() {
 
           const label = `التثبيت على ${bandLabel(best.tech, best.band)}`;
           const res = await safeApply({
+            op,
             r: info,
             key: `band:${best.tech}:${best.band}`,
             label,
@@ -224,6 +227,7 @@ export default function OptimizeScreen() {
         try { await load(info); } catch {}
       }
     }
+    });
   };
 
   if (loading) return <View style={s.center}><ActivityIndicator color={C.blue} /></View>;

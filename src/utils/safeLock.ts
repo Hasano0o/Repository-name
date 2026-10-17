@@ -2,7 +2,7 @@ import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Carrier, RouterDriver, Signal } from '../drivers/types';
 import { SavedRouter } from '../store/routers';
-import { withSession, withSessionPatient, withRouterLock, dropSession } from '../store/sessions';
+import { withSession, withSessionPatient, withRouterLock, dropSession, RouterOp } from '../store/sessions';
 import { reportError } from '../services/errors';
 import { diag } from '../services/diag';
 import { getBaseline } from '../store/baseline';
@@ -261,13 +261,15 @@ function tracked(t: Tracker, say: (s: string) => void, map: [RegExp, number | st
 }
 
 /** الإنقاذ: الإعدادات الأصلية + إعادة تشغيل — مع نافذة التقدّم */
-export async function rescueRouter(r: SavedRouter, say: (s: string) => void = () => {}): Promise<boolean> {
-  const t = progress.start('نرجّع إعدادات الراوتر الأصلية', ['نفك الأقفال ونرجّع الإعدادات', 'الراوتر يعيد التشغيل ويرجع'], 200);
-  try {
-    return await rescueRouterImpl(r, tracked(t, say, [[/نفك كل الأقفال/, 0], [/يعيد التشغيل/, 1]]));
-  } finally {
-    t.end();
-  }
+export async function rescueRouter(r: SavedRouter, say: (s: string) => void = () => {}, op?: RouterOp): Promise<boolean> {
+  return withRouterLock(r, async () => {
+    const t = progress.start('نرجّع إعدادات الراوتر الأصلية', ['نفك الأقفال ونرجّع الإعدادات', 'الراوتر يعيد التشغيل ويرجع'], 200);
+    try {
+      return await rescueRouterImpl(r, tracked(t, say, [[/نفك كل الأقفال/, 0], [/يعيد التشغيل/, 1]]));
+    } finally {
+      t.end();
+    }
+  }, { op, label: 'رجّع الإعدادات الأصلية' });
 }
 
 /** «رجّع الإشارة» — مع نافذة التقدّم */
@@ -291,15 +293,17 @@ async function rememberBeforeRelease(r: SavedRouter, keep?: LockSnapshot) {
 /**
  * keep: إعداد المستخدم من قبل التجربة (يحفظ بدل الحالي — الحالي ممكن يكون إعداد التجربة اللي خرّب).
  */
-export async function freeRelease(r: SavedRouter, say: (s: string) => void = () => {}, keep?: LockSnapshot): Promise<boolean> {
-  const t = progress.start('نرجّع الإشارة', ['نفك تثبيت الأبراج والترددات', 'ننتظر الراوتر يلقط أقوى برج'], 100);
-  try {
-    return await freeReleaseImpl(r, tracked(t, say, [
-      [/نفك كل التثبيتات/, 0], [/يلقط أقوى برج\.\.\./, 1], [/نعيد تشغيل الراوتر/, 'نعيد تشغيل الراوتر'],
-    ]), keep);
-  } finally {
-    t.end();
-  }
+export async function freeRelease(r: SavedRouter, say: (s: string) => void = () => {}, keep?: LockSnapshot, op?: RouterOp): Promise<boolean> {
+  return withRouterLock(r, async () => {
+    const t = progress.start('نرجّع الإشارة', ['نفك تثبيت الأبراج والترددات', 'ننتظر الراوتر يلقط أقوى برج'], 100);
+    try {
+      return await freeReleaseImpl(r, tracked(t, say, [
+        [/نفك كل التثبيتات/, 0], [/يلقط أقوى برج\.\.\./, 1], [/نعيد تشغيل الراوتر/, 'نعيد تشغيل الراوتر'],
+      ]), keep);
+    } finally {
+      t.end();
+    }
+  }, { op, label: 'رجّع الإشارة' });
 }
 
 /**
@@ -333,7 +337,7 @@ export async function restoreSavedSettings(
     if (exact) await clearReleaseSnap(r.id);
     diag(`[restore-saved] ${exact ? 'exact' : 'partial ' + (items ?? []).join(',')} online=${online}`);
     return { exact, items, online };
-  });
+  }, { label: 'رجّع إعدادي السابق' });
 }
 
 export type TrialVerdict = 'better' | 'same' | 'worse' | 'noconn';
@@ -359,6 +363,8 @@ export interface TrialResult {
   notRestored?: string[];
   /** جملة جاهزة عن نتيجة الإرجاع */
   restoreNote?: string;
+  /** noconn: offline = الراوتر ما اتصل أبد، nosignal = اتصل بس ما طلعت قراءة إشارة على الإعداد الجديد */
+  reason?: 'offline' | 'nosignal';
 }
 
 export interface Trial {
@@ -387,11 +393,13 @@ export interface SafeApplyOpts {
   onStatus?: (s: string) => void;
   isCancelled?: () => boolean;
   withNr?: boolean;
+  /** عملية شغالة على الراوتر (فحص فيه كذا تجربة) — التجربة تكمّل جواها بدل ما تنرفض */
+  op?: RouterOp;
 }
 
 /** يطبّق بأمان، ومقفول لكل راوتر عشان ما تشتغل عمليتان معاً */
 export function safeApply(o: SafeApplyOpts): Promise<TrialResult> {
-  return withRouterLock(o.r, async () => {
+  return withRouterLock(o.r, async op => {
     const t = progress.start(o.label, ['نقيس الوضع الحالي', 'نطبّق التغيير', 'ننتظر الراوتر يتصل', 'نقيس النتيجة'], o.withNr ? 75 : 60);
     const base = o.onStatus ?? (() => {});
     const say = (msg: string) => {
@@ -407,14 +415,14 @@ export function safeApply(o: SafeApplyOpts): Promise<TrialResult> {
       else t.note(msg);
     };
     try {
-      return await safeApplyInner({ ...o, onStatus: say });
+      return await safeApplyInner({ ...o, op, onStatus: say }, t);
     } finally {
       t.end();
     }
-  });
+  }, { op: o.op, label: o.label });
 }
 
-async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
+async function safeApplyInner(o: SafeApplyOpts, track: Tracker = progress.none): Promise<TrialResult> {
   const say0 = o.onStatus ?? (() => {});
   const say = (t: string) => { diag(`[${o.key}] ${t}`); say0(t); };
   diag(`[${o.key}] start: ${o.label}`);
@@ -463,6 +471,8 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
   type Restored = { exact: boolean; sent: boolean; items?: string[]; error?: string; online: boolean; freed: boolean };
   const restorePrev = async (): Promise<Restored> => {
     say('نرجّع إعدادك السابق...');
+    // الإرجاع + انتظار الخدمة على إعدادك (لين مهلة الموديل) — التقدير القديم كان ناقص
+    track.extend(Math.round(settleMs / 1000) + 30);
     let exact = false;
     let sent = false;
     let items: string[] | undefined;
@@ -488,7 +498,8 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
     let freed = false;
     if (!online) {
       say('ما رجع — نفك التثبيتات عشان يلقط أقوى برج...');
-      online = await freeRelease(o.r, say, snap ?? undefined).catch(() => false);
+      track.extend(150);
+      online = await freeRelease(o.r, say, snap ?? undefined, o.op).catch(() => false);
       freed = true;
     }
     return { exact, sent, items, error, online, freed };
@@ -533,6 +544,7 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
     // ننتظره يخلص فعلاً (والحجز باقي)، وبعدها نكمّل الفحص.
     diag(`[${o.key}] apply still running after wait — waiting for it to finish`);
     say('الراوتر لسا ينفّذ الأمر — ننتظره يخلص قبل أي خطوة...');
+    track.extend(120);
     await step.pending;
     diag(`[${o.key}] late apply finished`);
   }
@@ -560,7 +572,7 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
   if (!online) {
     say('ما اتصل — نرجّع إعدادك السابق...');
     const rs = await restorePrev();
-    const res: TrialResult = { verdict: 'noconn', kept: false, before, after: null, ...restoreFields(rs) };
+    const res: TrialResult = { verdict: 'noconn', kept: false, before, after: null, reason: 'offline', ...restoreFields(rs) };
     await record(o.r.id, o.key, o.label, res);
     return res;
   }
@@ -599,7 +611,10 @@ async function safeApplyInner(o: SafeApplyOpts): Promise<TrialResult> {
     extra = restoreFields(await restorePrev());
   }
 
-  const res: TrialResult = { verdict, kept, before, after, change, towerChanged, userKeptAnyway, ...extra };
+  const res: TrialResult = {
+    verdict, kept, before, after, change, towerChanged, userKeptAnyway, ...extra,
+    ...(verdict === 'noconn' ? { reason: 'nosignal' as const } : {}),
+  };
   await record(o.r.id, o.key, o.label, res);
   return res;
 }
@@ -725,9 +740,14 @@ export function trialMessage(res: TrialResult, label: string): { title: string; 
       };
     default:
       if (res.restoreNote) {
+        // الراوتر اتصل بس ما طلعت إشارة على الإعداد الجديد (غالباً البرج مو موجود عندك) ≠ ما اتصل أبد
+        const noSig = res.reason === 'nosignal';
+        const head = noSig ? 'ما لقينا إشارة عليه' : 'ما اتصل';
         return {
-          title: res.exact && !res.freed ? '↩️ ما اتصل — ورجّعنا إعدادك' : res.freed && !res.restoreFailed ? '↩️ ما اتصل — ورجّعنا الإشارة' : '⚠️ ما اتصل',
-          body: `الراوتر ما اتصل بعد ${label}.\n\n${res.restoreNote}`,
+          title: res.exact && !res.freed ? `↩️ ${head} — ورجّعنا إعدادك` : res.freed && !res.restoreFailed ? `↩️ ${head} — ورجّعنا الإشارة` : `⚠️ ${head}`,
+          body: (noSig
+            ? `ما طلعت إشارة بعد ${label} — غالباً البرج أو التردد مو موجود عندك أو بعيد.`
+            : `الراوتر ما اتصل بعد ${label}.`) + `\n\n${res.restoreNote}`,
         };
       }
       if (res.freed && !res.restoreFailed) {

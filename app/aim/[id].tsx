@@ -45,7 +45,7 @@ const Haptics = {
 };
 
 import { SavedRouter, getRouter } from '../../src/store/routers';
-import { withSession } from '../../src/store/sessions';
+import { withSession, routerWrite, withRouterLock } from '../../src/store/sessions';
 import { Signal, CellTower, CellLockTarget } from '../../src/drivers/types';
 import { Level, LEVEL_COLOR, overallLevel, signalScore, parseBands, parseNrBands } from '../../src/utils/signal';
 import { trafficBurst } from '../../src/utils/nrprobe';
@@ -434,7 +434,7 @@ export default function AimScreen() {
       }
       if (tempPinRef.current && infoRef.current) {
         tempPinRef.current = false;
-        withSession(infoRef.current, d => (d.unlockCell ? d.unlockCell() : Promise.resolve()), false).catch(() => {});
+        routerWrite(infoRef.current, d => (d.unlockCell ? d.unlockCell() : Promise.resolve()), { label: 'فك التثبيت المؤقت' }).catch(() => {});
       }
     };
   }, [id, tick]));
@@ -462,7 +462,10 @@ export default function AimScreen() {
     setBaseline(null);
   };
 
-  const lockAndVerify = async (r: SavedRouter, target: CellLockTarget): Promise<boolean> => {
+  /** التثبيت + التأكد + الفك لو ما اتصل: عملية وحدة على الراوتر */
+  const lockAndVerify = (r: SavedRouter, target: CellLockTarget): Promise<boolean> =>
+    withRouterLock(r, () => lockAndVerifyInner(r, target), { label: 'التثبيت على البرج' });
+  const lockAndVerifyInner = async (r: SavedRouter, target: CellLockTarget): Promise<boolean> => {
     await withSession(r, d => d.lockCell!(target), false);
     const deadline = Date.now() + 30000;
     while (Date.now() < deadline) {
@@ -488,7 +491,7 @@ export default function AimScreen() {
     if (pinned) {
       setPinBusy(true);
       try {
-        await withSession(info, d => d.unlockCell!(), false);
+        await routerWrite(info, d => d.unlockCell!(), { label: 'فك التثبيت' });
         setPinned(null);
         tempPinRef.current = false;
       } catch (e: any) {
@@ -653,7 +656,7 @@ export default function AimScreen() {
           setPinBusy(true);
           try {
             if (action === 'unlock') {
-              await withSession(r, d => d.unlockCell!(), false);
+              await routerWrite(r, d => d.unlockCell!(), { label: 'فك التثبيت' });
               setPinned(null);
               tempPinRef.current = false;
               host.result(cid, true, 'تم فك التثبيت — الراوتر على الوضع التلقائي');

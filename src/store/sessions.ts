@@ -6,6 +6,7 @@ import { getBaseline, saveBaseline } from './baseline';
 import { http } from '../drivers/http';
 import { diag } from '../services/diag';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createRouterLocks, RouterOp, routerBusyError, isRouterBusyError } from './routerLockCore';
 
 interface Sess { d: RouterDriver; authAt: number; }
 const sessions = new Map<string, Sess>();
@@ -82,92 +83,60 @@ async function attachBaseline(r: SavedRouter, d: RouterDriver) {
     .catch(() => {});
 }
 
-/* ═══ الحجز: عملية تعديل وحدة على الراوتر الفعلي في نفس الوقت ═══
+/* ═══ الحجز / طبقة التحكم الموحّدة (القلب في routerLockCore.ts) ═══
  * المفتاح = هوية الراوتر الفعلية (نوعه + عنوانه) مثل الجلسة — مو رقم البطاقة في التطبيق،
  * عشان نفس الراوتر لو مضاف مرتين ما تشتغل عليه عمليتين.
- * الحجز يبقى لين تخلص العملية **فعلاً** — حتى لو انتهت مهلة الانتظار وأمر الكتابة لسا شغال
- * (holdRouter يمسكه لين الوعد نفسه يخلص). ما فيه مهلة تفك الحجز غصب.
+ * فيه عملية شغالة ← الثانية تنرفض فوراً. الحجز يبقى لين العملية تخلص فعلاً (بدون مهلة تفكه).
  * حارس 5G والصيانة الليلية والوضع الذكي يشيكون isRouterBusyAnywhere ويتخطون لو محجوز.
  */
-const chains = new Map<string, Promise<void>>();
-const holds = new Map<string, number>();
-const BUSY_PREFIX = 'bandly.busy:';
-/** العلامة المحفوظة تنتهي لحالها لو التطبيق انقفل في النص (ما يبقى الراوتر محجوز للأبد) */
-const BUSY_TTL = 3 * 60_000;
-const beats = new Map<string, ReturnType<typeof setInterval>>();
+const locks = createRouterLocks({
+  get: k => AsyncStorage.getItem(k),
+  set: (k, v) => AsyncStorage.setItem(k, v),
+  remove: k => AsyncStorage.removeItem(k),
+}, { log: diag });
 
 /** هوية الراوتر الفعلية — نفس مفتاح الجلسة */
 export const routerKey = (r: SavedRouter) => keyOf(r);
 
-function writeMark(k: string) {
-  AsyncStorage.setItem(BUSY_PREFIX + k, String(Date.now() + BUSY_TTL)).catch(() => {});
-}
-
-function hold(k: string): () => void {
-  const n = (holds.get(k) ?? 0) + 1;
-  holds.set(k, n);
-  if (n === 1) {
-    writeMark(k);
-    beats.set(k, setInterval(() => writeMark(k), 60_000));
-  }
-  let done = false;
-  return () => {
-    if (done) return;
-    done = true;
-    const left = (holds.get(k) ?? 1) - 1;
-    if (left > 0) { holds.set(k, left); return; }
-    holds.delete(k);
-    const b = beats.get(k);
-    if (b) clearInterval(b);
-    beats.delete(k);
-    AsyncStorage.removeItem(BUSY_PREFIX + k).catch(() => {});
-  };
-}
-
-/** يبقي الراوتر محجوز لين الوعد يخلص (أمر كتابة طوّل بعد مهلة الانتظار مثلاً) */
+/** يبقي الراوتر محجوز لين الوعد يخلص (أمر كتابة من مهمة خلفية مثلاً) */
 export function holdRouter(r: SavedRouter, p: Promise<unknown>): void {
-  const release = hold(keyOf(r));
-  p.then(release, release);
+  locks.holdPromise(keyOf(r), p);
 }
 
 /** محجوز في هذا التشغيل للتطبيق */
 export function isRouterBusy(r: SavedRouter): boolean {
-  return (holds.get(keyOf(r)) ?? 0) > 0;
+  return locks.isBusy(keyOf(r));
 }
 
 /** محجوز هنا أو في تشغيل ثاني للتطبيق (المهام الخلفية تشتغل أحياناً في ذاكرة منفصلة) */
-export async function isRouterBusyAnywhere(r: SavedRouter): Promise<boolean> {
-  if (isRouterBusy(r)) return true;
-  try {
-    const v = Number(await AsyncStorage.getItem(BUSY_PREFIX + keyOf(r)));
-    return Number.isFinite(v) && v > Date.now();
-  } catch {
-    return false;
-  }
+export function isRouterBusyAnywhere(r: SavedRouter): Promise<boolean> {
+  return locks.isBusyAnywhere(keyOf(r));
 }
 
-async function waitIdle(k: string) {
-  while ((holds.get(k) ?? 0) > 0) await new Promise(res => setTimeout(res, 1000));
-}
+export type { RouterOp };
+export { routerBusyError, isRouterBusyError };
 
-/** يمنع تشغيل عمليتين تعديل على نفس الراوتر بنفس الوقت (قفل تردد + دمج مثلاً) */
-export function withRouterLock<T>(r: SavedRouter, fn: () => Promise<T>): Promise<T> {
+/**
+ * أي تعديل على الراوتر (تثبيت، فك، ترددات، وضع الشبكة، إعادة تشغيل) يمر من هنا.
+ * op: الخطوات اللي جوا عملية شغالة (safeApply داخل فحص، الفك داخل الإرجاع) تمرر العملية نفسها وتكمّل.
+ */
+export function withRouterLock<T>(
+  r: SavedRouter,
+  fn: (op: RouterOp) => Promise<T>,
+  opts: { op?: RouterOp; label?: string } = {},
+): Promise<T> {
   const k = keyOf(r);
   idKey.set(r.id, k);
-  const prev = chains.get(k) ?? Promise.resolve();
-  const run = async () => {
-    // أمر من عملية سابقة لسا شغال (انتهت مهلتها بس الراوتر لسا ينفّذ) — ننتظره
-    await waitIdle(k);
-    const release = hold(k);
-    try {
-      return await fn();
-    } finally {
-      release();
-    }
-  };
-  const next = prev.then(run, run);
-  chains.set(k, next.then(() => {}, () => {}));
-  return next;
+  return locks.withLock(k, fn, opts);
+}
+
+/** أمر كتابة واحد (أو كم أمر مع بعض) بجلسة الراوتر — من خلال الطبقة الموحّدة */
+export function routerWrite<T>(
+  r: SavedRouter,
+  fn: (d: RouterDriver) => Promise<T>,
+  opts: { op?: RouterOp; label?: string } = {},
+): Promise<T> {
+  return withRouterLock(r, () => withSession(r, fn, false), opts);
 }
 
 const AUTH_FAIL = /(كلمة المرور|جلسة عالقة|جلسة أخرى|محاولات كثيرة|تعذّر تسجيل الدخول|قفل تسجيل الدخول|مستخدم ثاني|108006|108007|108001|108002)/;

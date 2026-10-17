@@ -1,3 +1,4 @@
+import { runRouterOp } from '../../src/utils/routerOp';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, } from 'react-native';
 import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
@@ -6,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Href } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SavedRouter, getRouter } from '../../src/store/routers';
-import { withSession } from '../../src/store/sessions';
+import { withSession, routerWrite, withRouterLock } from '../../src/store/sessions';
 import { BandConfig, BandRoles, Signal, CellTower, Carrier } from '../../src/drivers/types';
 import { BandPicker, BandSeen } from '../../src/ui/BandPicker';
 import { useOperatorBands } from '../../src/store/operator';
@@ -175,6 +176,7 @@ export default function BandsScreen() {
 
   const applyBands = async (bands: number[]) => {
     if (!info || !cfg) return;
+    await runRouterOp(info, bands.length ? `التثبيت على ${names(bands)}` : 'رجوع للتلقائي', async op => {
     const prev = cfg.locked;
     cancelRef.current = false;
     setBusy(true);
@@ -184,6 +186,7 @@ export default function BandsScreen() {
       const label = `التثبيت على ${names(bands)}`;
       try {
         const res = await safeApply({
+          op,
           r: info,
           key: `band:LTE:${[...bands].sort((a, b) => a - b).join('+')}`,
           label,
@@ -209,7 +212,7 @@ export default function BandsScreen() {
       const ok = await waitConnected(info, bands, 45000);
       if (!ok && bands.length) {
         // أهم شي ترجع الإشارة: نفك كل التثبيتات ويلقط أقوى برج (مو الإعداد السابق)
-        const back = await freeRelease(info, st => setStatus(st));
+        const back = await freeRelease(info, st => setStatus(st), undefined, op);
         Alert.alert('ما نجح التثبيت', back
           ? 'الراوتر ما قدر يتصل على الترددات المختارة، ففكّينا كل التثبيتات ولقط أقوى برج تلقائياً — الإشارة رجعت.'
           : 'الراوتر ما قدر يتصل، وفكّينا كل التثبيتات بس الشبكة ما رجعت للحين. انتظر دقيقة وتأكد من الشريحة والتغطية.');
@@ -222,10 +225,12 @@ export default function BandsScreen() {
     } finally {
       if (mounted.current) { setBusy(false); setStatus(''); }
     }
+    });
   };
 
   const applyNr = async (nr: number[]) => {
     if (!info || !cfg) return;
+    await runRouterOp(info, 'تثبيت 5G', async op => {
     const prev = cfg.nrLocked;
     cancelRef.current = false;
     setBusy(true);
@@ -234,6 +239,7 @@ export default function BandsScreen() {
       if (nr.length) {
         const label = `تثبيت 5G على ${nr.map(b => 'n' + b).join(' + ')}`;
         const res = await safeApply({
+          op,
           r: info,
           key: `band:NR:${[...nr].sort((a, b) => a - b).join('+')}`,
           label,
@@ -258,11 +264,13 @@ export default function BandsScreen() {
     } finally {
       if (mounted.current) { setBusy(false); setStatus(''); }
     }
+    });
   };
 
   /** ═══ تركيبة من شاشة الاختيار: 4G (فاضي = تلقائي) و 5G (undefined = ما تغيّر) ═══ */
   const applyMix = async (lte: number[], nr: number[] | undefined, label: string, roles?: BandRoles) => {
     if (!info || !cfg) return;
+    await runRouterOp(info, label, async op => {
     cancelRef.current = false;
     setBusy(true);
     setError('');
@@ -277,6 +285,7 @@ export default function BandsScreen() {
       ? `:sc${k(roles?.lteScell ?? [])}/${k(roles?.nrScell ?? [])}` : '';
     try {
       const res = await safeApply({
+          op,
         r: info,
         key: `band:mix:${k(lte)}:${nr ? k(nr) : '-'}${rk}`,
         label,
@@ -294,6 +303,7 @@ export default function BandsScreen() {
     } finally {
       if (mounted.current) { setBusy(false); setStatus(''); }
     }
+    });
   };
 
   const confirmMix = async (lte: number[], nr: number[] | undefined, label: string, roles?: BandRoles) => {
@@ -383,7 +393,7 @@ export default function BandsScreen() {
           setError('');
           try {
             setStatus('نرجّع الوضع التلقائي...');
-            await withSession(info, d => d.setBand!([], cfg.nrSupported.length ? [] : undefined), false);
+            await routerWrite(info, d => d.setBand!([], cfg.nrSupported.length ? [] : undefined), { label: 'الوضع التلقائي' });
             setStatus('ننتظر الراوتر يتصل بالشبكة...');
             await waitConnected(info, [], 45000);
             await load(info);
@@ -477,6 +487,7 @@ export default function BandsScreen() {
 
   const runScan = async (targets: { tech: 'LTE' | 'NR'; band: number }[]) => {
     if (!info || !cfg) return;
+    await runRouterOp(info, 'فحص الترددات', async op => {
     const original = cfg.locked;
     cancelRef.current = false;
     scanningRef.current = true;
@@ -541,7 +552,7 @@ export default function BandsScreen() {
       }
       // الإرجاع ما رجّع الخدمة؟ نفك كل التثبيتات ويلقط أقوى برج بدل ما يعلق
       try {
-        if (!(await waitOnline(info, 60000, () => false))) await freeRelease(info);
+        if (!(await waitOnline(info, 60000, () => false))) await freeRelease(info, undefined, undefined, op);
       } catch {}
       scanningRef.current = false;
       const at = Date.now();
@@ -563,6 +574,7 @@ export default function BandsScreen() {
         await load(info);
       }
     }
+    });
   };
 
   // نتائج الفحص الدقيق (تثبيت على كل تردد) تكمّل قراءات الأبراج المجاورة
@@ -633,15 +645,18 @@ export default function BandsScreen() {
           setBusy(true);
           setError('');
           try {
-            setStatus('نغيّر وضع الشبكة...');
-            await withSession(info, d => d.setNetworkMode!(mode), false);
-            setStatus('ننتظر الاتصال...');
-            const ok = await waitConnected(info, [], 45000);
-            if (!ok) {
-              setStatus('ما اتصل — نرجع الإعداد السابق...');
-              await withSession(info, d => d.setNetworkMode!(prev), false);
-              Alert.alert('ما نجح التحويل', 'الراوتر ما اتصل على الوضع المختار، فرجعنا الإعداد السابق.');
-            }
+            // التحويل + الانتظار + الإرجاع عملية وحدة على الراوتر
+            await withRouterLock(info, async () => {
+              setStatus('نغيّر وضع الشبكة...');
+              await withSession(info, d => d.setNetworkMode!(mode), false);
+              setStatus('ننتظر الاتصال...');
+              const ok = await waitConnected(info, [], 45000);
+              if (!ok) {
+                setStatus('ما اتصل — نرجع الإعداد السابق...');
+                await withSession(info, d => d.setNetworkMode!(prev), false);
+                Alert.alert('ما نجح التحويل', 'الراوتر ما اتصل على الوضع المختار، فرجعنا الإعداد السابق.');
+              }
+            }, { label: 'وضع الشبكة' });
             await load(info);
           } catch (e: any) {
             setError(e?.message ?? String(e));

@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, } from 'react-native';
 import { ScrollView, View, Text, TextInput, Pressable } from '../../src/i18n/rn';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
-import { withSession } from '../../src/store/sessions';
+import { withSession, routerWrite } from '../../src/store/sessions';
 import { BandConfig } from '../../src/drivers/types';
 import { Profile, Role, ROLES, listProfiles, saveProfile, deleteProfile, profileSummary, setProfileRole } from '../../src/store/profiles';
 import { C } from '../../src/ui/theme';
@@ -74,12 +74,12 @@ export default function ProfilesScreen() {
         onPress: async () => {
           setBusy(true); setError(''); setStatus('نطبّق الإعدادات...');
           try {
-            const applied = await withSession(info, async d => {
+            const applied = await routerWrite(info, async d => {
               if (p.mode && d.setNetworkMode) { try { await d.setNetworkMode(p.mode); } catch {} }
               if (!d.setBand) return false;
               await d.setBand(p.bands, p.nrBands);
               return true;
-            }, false);
+            }, { label: `تطبيق «${p.name}»` });
             if (!applied) {
               Alert.alert('غير مدعوم', 'راوترك ما يدعم قفل الترددات، فما انطبق شي.');
               return;

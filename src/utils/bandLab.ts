@@ -1,6 +1,6 @@
 import { BandConfig, Carrier, CellTower, RouterDriver, Signal } from '../drivers/types';
 import { SavedRouter } from '../store/routers';
-import { withSession } from '../store/sessions';
+import { withSession, withRouterLock } from '../store/sessions';
 import { snapshot, waitOnline, Snapshot } from './safeLock';
 import { trafficBurst } from './nrprobe';
 import { measureLatency, LatencyResult } from './latency';
@@ -122,66 +122,69 @@ export async function runCaLab(o: {
   measureSpeed?: boolean;
 }): Promise<void> {
   const { r, cfg, rows, update, isCancelled, measureSpeed = false } = o;
-  try {
-    for (let i = 0; i < rows.length; i++) {
-      if (isCancelled()) break;
-      const row = rows[i];
-      const lte = row.bands;
-      const nr = row.nrBands ?? [];
-      update(i, { status: 'testing', note: 'نثبّت...' });
-      try {
-        const nrLock = nr.length ? nr : cfg.nrLocked;
-        await withSession(r, d => d.setBand!(lte, nrLock), false);
-        update(i, { note: 'ننتظر الاتصال...' });
-        const ok = await waitOnline(r, 40000, isCancelled);
-        if (isCancelled()) { update(i, { status: 'pending', note: undefined }); break; }
-        if (!ok) { update(i, { status: 'failed', note: 'ما اتصل على هالتركيبة' }); continue; }
+  // الفحص كله عملية وحدة على الراوتر — ينرفض لو فيه عملية ثانية، وما تدخل عليه عملية ثانية
+  await withRouterLock(r, async () => {
+    try {
+      for (let i = 0; i < rows.length; i++) {
+        if (isCancelled()) break;
+        const row = rows[i];
+        const lte = row.bands;
+        const nr = row.nrBands ?? [];
+        update(i, { status: 'testing', note: 'نثبّت...' });
+        try {
+          const nrLock = nr.length ? nr : cfg.nrLocked;
+          await withSession(r, d => d.setBand!(lte, nrLock), false);
+          update(i, { note: 'ننتظر الاتصال...' });
+          const ok = await waitOnline(r, 40000, isCancelled);
+          if (isCancelled()) { update(i, { status: 'pending', note: undefined }); break; }
+          if (!ok) { update(i, { status: 'failed', note: 'ما اتصل على هالتركيبة' }); continue; }
 
-        // لو فيها 5G: نصحّي بتحميل قصير
-        if (nr.length) {
-          update(i, { note: 'نصحّي 5G...' });
-          await trafficBurst(4500, 10_000_000, isCancelled).catch(() => 0);
-        }
-        update(i, { note: 'ننتظر الدمج يستقر...' });
-        await sleep(4000);
-
-        update(i, { note: 'نقيس الإشارة...' });
-        const snap = await snapshot(r, nr.length > 0, 3);
-        const nrActive = !!snap?.nr;
-
-        // سرعة + بنق
-        let speedMbps: number | undefined;
-        let pingMs: number | undefined;
-        if (measureSpeed && !isCancelled()) {
-          update(i, { note: 'نقيس السرعة...' });
-          try {
-            const t0 = Date.now();
-            const bytes = await trafficBurst(6500, 25_000_000, isCancelled);
-            const secs = Math.max(1, (Date.now() - t0) / 1000);
-            speedMbps = Math.round((bytes * 8) / (secs * 1_000_000) * 10) / 10;
-          } catch {}
-          if (!isCancelled()) {
-            update(i, { note: 'نقيس الاستجابة...' });
-            try {
-              const lat: LatencyResult = await measureLatency(6);
-              if (lat.samples) pingMs = lat.median;
-            } catch {}
+          // لو فيها 5G: نصحّي بتحميل قصير
+          if (nr.length) {
+            update(i, { note: 'نصحّي 5G...' });
+            await trafficBurst(4500, 10_000_000, isCancelled).catch(() => 0);
           }
-        }
+          update(i, { note: 'ننتظر الدمج يستقر...' });
+          await sleep(4000);
 
-        update(i, {
-          status: snap ? 'done' : 'failed',
-          snap, speedMbps, pingMs, nrActive,
-          note: snap ? undefined : 'فشل القياس',
-        });
-      } catch (e: any) {
-        update(i, { status: 'failed', note: e?.message ?? 'خطأ' });
+          update(i, { note: 'نقيس الإشارة...' });
+          const snap = await snapshot(r, nr.length > 0, 3);
+          const nrActive = !!snap?.nr;
+
+          // سرعة + بنق
+          let speedMbps: number | undefined;
+          let pingMs: number | undefined;
+          if (measureSpeed && !isCancelled()) {
+            update(i, { note: 'نقيس السرعة...' });
+            try {
+              const t0 = Date.now();
+              const bytes = await trafficBurst(6500, 25_000_000, isCancelled);
+              const secs = Math.max(1, (Date.now() - t0) / 1000);
+              speedMbps = Math.round((bytes * 8) / (secs * 1_000_000) * 10) / 10;
+            } catch {}
+            if (!isCancelled()) {
+              update(i, { note: 'نقيس الاستجابة...' });
+              try {
+                const lat: LatencyResult = await measureLatency(6);
+                if (lat.samples) pingMs = lat.median;
+              } catch {}
+            }
+          }
+
+          update(i, {
+            status: snap ? 'done' : 'failed',
+            snap, speedMbps, pingMs, nrActive,
+            note: snap ? undefined : 'فشل القياس',
+          });
+        } catch (e: any) {
+          update(i, { status: 'failed', note: e?.message ?? 'خطأ' });
+        }
       }
+    } finally {
+      try { await withSession(r, d => d.setBand!(cfg.locked, cfg.nrLocked), false); } catch {}
+      await waitOnline(r, 45000, () => false);
     }
-  } finally {
-    try { await withSession(r, d => d.setBand!(cfg.locked, cfg.nrLocked), false); } catch {}
-    await waitOnline(r, 45000, () => false);
-  }
+  }, { label: 'تجربة التركيبات' });
 }
 
 // ─── كاشف مرساة 5G ───
@@ -218,49 +221,52 @@ export async function runAnchorScan(o: {
   isCancelled: () => boolean;
 }): Promise<void> {
   const { r, cfg, rows, update, isCancelled } = o;
-  try {
-    for (let i = 0; i < rows.length; i++) {
-      if (isCancelled()) break;
-      const band = rows[i].band;
-      update(i, { status: 'testing', note: 'نثبّت التردد...' });
-      try {
-        await withSession(r, d => d.setBand!([band], cfg.nrLocked), false);
-        update(i, { note: 'ننتظر الاتصال...' });
-        const ok = await waitOnline(r, 40000, isCancelled);
-        if (isCancelled()) { update(i, { status: 'pending', note: undefined }); break; }
-        if (!ok) { update(i, { status: 'failed', note: 'ما فيه تغطية على هالتردد' }); continue; }
-        update(i, { note: 'نصحّي 5G بتحميل قصير...' });
-        const burst = trafficBurst(12000, 30_000_000, isCancelled);
-        await sleep(2500);
-        let best: { active: boolean; band?: number; rsrp?: number; lte?: number } = { active: false };
-        const end = Date.now() + 10000;
-        while (Date.now() < end && !isCancelled()) {
-          try {
-            const x = await withSession(r, readNr, false);
-            const better = (x.active && !best.active) ||
-              (x.active === best.active && (x.rsrp ?? -999) > (best.rsrp ?? -999));
-            if (better) best = x;
-          } catch {}
-          await sleep(1500);
+  // الفحص كله عملية وحدة على الراوتر — ينرفض لو فيه عملية ثانية، وما تدخل عليه عملية ثانية
+  await withRouterLock(r, async () => {
+    try {
+      for (let i = 0; i < rows.length; i++) {
+        if (isCancelled()) break;
+        const band = rows[i].band;
+        update(i, { status: 'testing', note: 'نثبّت التردد...' });
+        try {
+          await withSession(r, d => d.setBand!([band], cfg.nrLocked), false);
+          update(i, { note: 'ننتظر الاتصال...' });
+          const ok = await waitOnline(r, 40000, isCancelled);
+          if (isCancelled()) { update(i, { status: 'pending', note: undefined }); break; }
+          if (!ok) { update(i, { status: 'failed', note: 'ما فيه تغطية على هالتردد' }); continue; }
+          update(i, { note: 'نصحّي 5G بتحميل قصير...' });
+          const burst = trafficBurst(12000, 30_000_000, isCancelled);
+          await sleep(2500);
+          let best: { active: boolean; band?: number; rsrp?: number; lte?: number } = { active: false };
+          const end = Date.now() + 10000;
+          while (Date.now() < end && !isCancelled()) {
+            try {
+              const x = await withSession(r, readNr, false);
+              const better = (x.active && !best.active) ||
+                (x.active === best.active && (x.rsrp ?? -999) > (best.rsrp ?? -999));
+              if (better) best = x;
+            } catch {}
+            await sleep(1500);
+          }
+          await burst.catch(() => 0);
+          update(i, {
+            status: 'done',
+            nrActive: best.active,
+            nrSeen: best.rsrp !== undefined,
+            nrBand: best.band,
+            nrRsrp: best.rsrp,
+            lteRsrp: best.lte,
+            note: undefined,
+          });
+        } catch (e: any) {
+          update(i, { status: 'failed', note: e?.message ?? 'خطأ' });
         }
-        await burst.catch(() => 0);
-        update(i, {
-          status: 'done',
-          nrActive: best.active,
-          nrSeen: best.rsrp !== undefined,
-          nrBand: best.band,
-          nrRsrp: best.rsrp,
-          lteRsrp: best.lte,
-          note: undefined,
-        });
-      } catch (e: any) {
-        update(i, { status: 'failed', note: e?.message ?? 'خطأ' });
       }
+    } finally {
+      try { await withSession(r, d => d.setBand!(cfg.locked, cfg.nrLocked), false); } catch {}
+      await waitOnline(r, 45000, () => false);
     }
-  } finally {
-    try { await withSession(r, d => d.setBand!(cfg.locked, cfg.nrLocked), false); } catch {}
-    await waitOnline(r, 45000, () => false);
-  }
+  }, { label: 'كاشف مرساة 5G' });
 }
 
 // ─── «لقّ لي أفضل تركيبة» — 4G + 5G مع بعض ───

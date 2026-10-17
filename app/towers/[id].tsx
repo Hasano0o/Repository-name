@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
-import { withSession } from '../../src/store/sessions';
+import { withSession, routerWrite } from '../../src/store/sessions';
 import { CellTower, CellLockState, BandConfig } from '../../src/drivers/types';
 import { LEVEL_COLOR, LEVEL_LABEL, LEVEL_SOFT, overallLevel } from '../../src/utils/signal';
 import { towerKey, towerTitle } from '../../src/utils/cells';
@@ -367,7 +367,7 @@ export default function TowersScreen() {
           setError('');
           setStatus('نفك التثبيت...');
           try {
-            await withSession(info, d => d.unlockCell!(tech), false);
+            await routerWrite(info, d => d.unlockCell!(tech), { label: 'فك التثبيت' });
             await load(info);
             followUp(info);
             Alert.alert('تم', 'انفك التثبيت — الراوتر رجع يختار بنفسه');

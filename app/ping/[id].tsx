@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
+import { runRouterOp } from '../../src/utils/routerOp';
 import { safeApply, trialMessage } from '../../src/utils/safeLock';
 import { BandConfig, CellTower, RouterDriver } from '../../src/drivers/types';
 import {
@@ -323,6 +324,8 @@ export default function GameScreen() {
       Alert.alert('غيّرنا المنطقة', `خوادم ${reg.name} ما ترد من شبكتك الحين، فبنقيس على ${scanReg.name} بدالها`);
     }
     setStatus('');
+    // الفحص كله عملية وحدة على الراوتر: ما يبدأ لو فيه عملية ثانية، ولا تدخل عليه عملية ثانية
+    await runRouterOp(info, 'فحص البنق', async () => {
     let modeChanged = false;
     let bandChanged = false;
     cancel.current = false;
@@ -386,6 +389,7 @@ export default function GameScreen() {
         refreshPeriods(info, scanReg.id);
       }
     }
+    });
   };
 
   const ranked = rows.filter(r => r.status === 'done' && r.score !== undefined).sort((a, b) => b.score! - a.score!);

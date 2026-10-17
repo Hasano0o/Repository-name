@@ -1,10 +1,11 @@
 import { SavedRouter } from '../store/routers';
-import { withSession } from '../store/sessions';
+import { routerWrite } from '../store/sessions';
 import { Profile } from '../store/profiles';
 
 /** يطبّق ملف/وضع محفوظ مباشرة (بدون رجوع تلقائي — المستخدم اختاره بنفسه) */
 export async function applyProfile(r: SavedRouter, p: Profile): Promise<boolean> {
-  const applied = await withSession(r, async d => {
+  // من خلال الطبقة الموحّدة: لو فيه عملية ثانية على الراوتر يرمي «مشغول» وما يكتب شي
+  const applied = await routerWrite(r, async d => {
     if (!d.setBand) return false;
     if (p.mode && d.setNetworkMode) {
       const cur = d.getBandConfig ? await d.getBandConfig().catch(() => null) : null;
@@ -12,7 +13,7 @@ export async function applyProfile(r: SavedRouter, p: Profile): Promise<boolean>
     }
     await d.setBand(p.bands, p.nrBands);
     return true;
-  }, false);
+  }, { label: `تطبيق «${p.name}»` });
   if (applied) await new Promise(res => setTimeout(res, 6000));
   return applied;
 }

@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
-import { withSession } from '../../src/store/sessions';
+import { withSession, routerWrite } from '../../src/store/sessions';
 import { BandConfig, Carrier, CellTower } from '../../src/drivers/types';
 import { safeApply, trialMessage, lastTrial, Trial } from '../../src/utils/safeLock';
 import { NetStandard, NET_STANDARDS, STANDARD_LABEL } from '../../src/drivers/huawei/netStandard';
@@ -208,10 +208,10 @@ export default function ComboScreen() {
         text: 'رجّع', onPress: async () => {
           setBusy(true);
           try {
-            await withSession(info, async d => {
+            await routerWrite(info, async d => {
               if ((cfg.mode === LTE_ONLY || cfg.mode === '08') && d.setNetworkMode) await d.setNetworkMode('00');
               await d.setBand!([], []);
-            }, false);
+            }, { label: 'رجوع للتلقائي' });
             setPrimary(null); setExtra([]); setNr('any'); setVerdict(null);
             await load(info);
           } catch (e: any) {

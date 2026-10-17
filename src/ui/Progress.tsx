@@ -38,10 +38,19 @@ export interface Tracker {
   note: (t: string) => void;
   /** نخفي النافذة مؤقتاً (مثلاً لما نسأل المستخدم سؤال) */
   hide: (h: boolean) => void;
+  /** الخطوة الجاية بتاخذ secs ثانية تقريباً — نمدّ «باقي تقريباً» لو التقدير صار ناقص */
+  extend: (secs: number) => void;
   end: () => void;
 }
 
-const noop: Tracker = { step: () => {}, note: () => {}, hide: () => {}, end: () => {} };
+function extendBy(secs: number) {
+  if (!state) return;
+  const elapsed = (Date.now() - state.startedAt) / 1000;
+  const want = Math.ceil(elapsed + secs);
+  if (want > state.estSecs) { state.estSecs = want; emit(); }
+}
+
+const noop: Tracker = { step: () => {}, note: () => {}, hide: () => {}, extend: () => {}, end: () => {} };
 
 export const progress = {
   start(title: string, steps: string[], estSecs: number): Tracker {
@@ -57,6 +66,7 @@ export const progress = {
         step: i => { if (!state) return; state.step = typeof i === 'number' ? base + i : addStep(i); emit(); },
         note: t => { if (state) { state.note = t; emit(); } },
         hide: () => {},
+        extend: extendBy,
         end: () => { depth = Math.max(0, depth - 1); },
       };
     }
@@ -67,6 +77,7 @@ export const progress = {
       step: i => { if (!state) return; state.step = typeof i === 'number' ? i : addStep(i); state.note = ''; emit(); },
       note: t => { if (state) { state.note = t; emit(); } },
       hide: h => { if (state) { state.hidden = h; emit(); } },
+      extend: extendBy,
       end: () => {
         depth = 0;
         state = null;

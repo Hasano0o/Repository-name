@@ -9,7 +9,7 @@
  * - الانتظار يستخدم waitOnline حق القفل الآمن (يكشف «خدمة محدودة» بعد).
  */
 import { SavedRouter } from '../store/routers';
-import { withSession, withRouterLock } from '../store/sessions';
+import { withSession, withRouterLock, RouterOp } from '../store/sessions';
 import { CellLockState, Signal } from '../drivers/types';
 import { isNoChange } from '../drivers/noChange';
 import { waitOnline, freeRelease } from './safeLock';
@@ -58,6 +58,8 @@ export async function runTowerTrials(r: SavedRouter, targets: TrialTarget[], pre
   isCancelled?: () => boolean;
   /** عينات إشارة لكل برج (افتراضي ٣) */
   samples?: number;
+  /** عملية شغالة على الراوتر (لو الفحص جزء من عملية أكبر) */
+  op?: RouterOp;
 } = {}): Promise<TrialRun> {
   const cancelled = o.isCancelled ?? (() => false);
   const step = o.onStep ?? (() => {});
@@ -75,7 +77,7 @@ export async function runTowerTrials(r: SavedRouter, targets: TrialTarget[], pre
       : d.unlockCell!(tech)), false);
   };
 
-  await withRouterLock(r, async () => {
+  await withRouterLock(r, async op => {
     try {
       for (let i = 0; i < n; i++) {
         if (cancelled()) break;
@@ -98,7 +100,7 @@ export async function runTowerTrials(r: SavedRouter, targets: TrialTarget[], pre
           if (!(await waitOnline(r, 120000, () => false))) {
             // ولا رجع — نفك كل شي ويلقط أقوى برج، ونوقف التجربة
             freed = true;
-            restored = await freeRelease(r, st => step({ i: i + 1, n, name: t.name, step: st })).catch(() => false);
+            restored = await freeRelease(r, st => step({ i: i + 1, n, name: t.name, step: st }), undefined, op).catch(() => false);
             touched.clear();
             break;
           }
@@ -145,10 +147,10 @@ export async function runTowerTrials(r: SavedRouter, targets: TrialTarget[], pre
         if (!(await waitOnline(r, 120000, () => false))) {
           // الإرجاع ما رجّع الخدمة — نفك كل شي ويلقط أقوى برج بدل ما يعلق بدون خدمة
           freed = true;
-          restored = await freeRelease(r, st => step({ i: n, n, name: '', step: st })).catch(() => false);
+          restored = await freeRelease(r, st => step({ i: n, n, name: '', step: st }), undefined, op).catch(() => false);
         }
       }
     }
-  });
+  }, { op: o.op, label: 'فحص الأبراج' });
   return { rows, restored, freed, cancelled: cancelled() };
 }
