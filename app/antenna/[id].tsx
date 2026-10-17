@@ -11,6 +11,8 @@ import { withSession } from '../../src/store/sessions';
 import { Carrier, CellTower, Signal } from '../../src/drivers/types';
 import { adviseAntenna, AntennaAdvice, Need } from '../../src/utils/antenna';
 import { Icon } from '../../src/ui/Icon';
+import { SignalGauge } from '../../src/ui/SignalGauge';
+import { RANGE, ratioOf } from '../../src/ui/Pro';
 import { Level, LEVEL_COLOR, LEVEL_LABEL, rsrpLevel, rsrqLevel, sinrLevel, rssiLevel } from '../../src/utils/signal';
 
 import { C, tBg, tFg } from '../../src/ui/theme';
@@ -42,7 +44,7 @@ const rssiGrade = (v?: number) => toGrade(rssiLevel(v));
 
 /** بطاقة مؤشر صغيرة */
 function MetricCard({
-  icon, iconBg, iconColor, name, value, unit, grade,
+  icon, iconBg, iconColor, name, value, unit, grade, ratio,
 }: {
   icon: 'chart' | 'speed' | 'tower' | 'bands';
   iconBg: string;
@@ -51,15 +53,18 @@ function MetricCard({
   value?: number;
   unit: string;
   grade: Grade;
+  /** مكان القراءة على المؤشر (٠ أضعف · ١ أقوى) */
+  ratio: number;
 }) {
   return (
     <View style={g.metricCard}>
       <View style={g.metricHead}>
-        <View style={[g.metricIcon, { backgroundColor: iconBg }]}>
-          <Icon name={icon} size={14} color={iconColor} />
+        <View style={[g.metricIcon, { backgroundColor: tBg(iconBg) }]}>
+          <Icon name={icon} size={14} color={tFg(iconColor)} />
         </View>
         <Text style={g.metricName}>{name}</Text>
       </View>
+      <SignalGauge ratio={ratio} color={grade.color} has={value !== undefined} size={118} />
       <View style={g.metricValueRow}>
         <Text style={[g.metricValue, { color: grade.color }]}>
           {value ?? '—'}
@@ -237,6 +242,7 @@ export default function AntennaAdvisor() {
                   iconBg="#DFF9ED"
                   iconColor="#16A34A"
                   name="RSRP"
+                  ratio={ratioOf(sig.rsrp, RANGE.rsrp)}
                   value={sig.rsrp}
                   unit="dBm"
                   grade={rsrpGrade(sig.rsrp)}
@@ -246,6 +252,7 @@ export default function AntennaAdvisor() {
                   iconBg="#E1F5FF"
                   iconColor="#0891B2"
                   name="SINR"
+                  ratio={ratioOf(sig.sinr, RANGE.sinr)}
                   value={sig.sinr}
                   unit="dB"
                   grade={sinrGrade(sig.sinr)}
@@ -255,6 +262,7 @@ export default function AntennaAdvisor() {
                   iconBg="#FEF3C7"
                   iconColor="#D97706"
                   name="RSRQ"
+                  ratio={ratioOf(sig.rsrq, RANGE.rsrq)}
                   value={sig.rsrq}
                   unit="dB"
                   grade={rsrqGrade(sig.rsrq)}
@@ -264,6 +272,7 @@ export default function AntennaAdvisor() {
                   iconBg="#EEE8FF"
                   iconColor="#7C3AED"
                   name="RSSI"
+                  ratio={ratioOf(sig.rssi, RANGE.rssi)}
                   value={sig.rssi}
                   unit="dBm"
                   grade={rssiGrade(sig.rssi)}
@@ -413,9 +422,9 @@ const g = sheet({
   },
   metricCard: {
     flexBasis: '47%', flexGrow: 1,
-    backgroundColor: tBg('#E9EEF5'), borderRadius: 14,
-    borderWidth: 1.5, borderColor: BORDER,
-    paddingVertical: 12, paddingHorizontal: 10, gap: 6,
+    backgroundColor: tBg('#F3F6FB'), borderRadius: 18,
+    borderWidth: 1, borderColor: BORDER,
+    paddingVertical: 12, paddingHorizontal: 10, gap: 4,
   },
   metricHead: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 6,
@@ -426,12 +435,12 @@ const g = sheet({
   },
   metricName: { color: MUTED, fontSize: 11.5, fontWeight: '800' },
   metricValueRow: {
-    flexDirection: 'row-reverse', alignItems: 'baseline', gap: 3,
+    flexDirection: 'row-reverse', alignItems: 'baseline', justifyContent: 'center', gap: 3, marginTop: -6,
   },
   metricValue: { fontSize: 24, fontWeight: '900', letterSpacing: -0.5, lineHeight: 28 },
   metricUnit: { color: MUTED, fontSize: 10.5, fontWeight: '700' },
   gradeChip: {
-    alignSelf: 'flex-end',
+    alignSelf: 'center',
     paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999,
   },
   gradeChipTxt: { fontSize: 10.5, fontWeight: '900' },
