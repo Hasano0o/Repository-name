@@ -35,8 +35,8 @@ export function LabelCard({ routerId }: { routerId: string }) {
   const save = async () => {
     if (!edit) return;
     await setLabel(routerId, edit);
-    setEdit(null);
     load();
+    close();
   };
 
   const remove = () => Alert.alert('حذف بيانات الملصق', 'بنمسحها من جوالك. تقدر تضيفها مرة ثانية متى ما بغيت.', [
