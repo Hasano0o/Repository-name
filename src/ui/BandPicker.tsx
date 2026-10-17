@@ -498,7 +498,7 @@ export function BandPicker({ cfg, seen, staleSeen = {}, staleDays = 0, carriers,
                   <RoleChip sc={isSc(tab, b)} tone={TECH_TONE[tab].fg} onPress={() => toggleRole(tab, b)} />
                 )}
               </View>
-              <View style={[o.star, prim && { backgroundColor: isDark ? '#40382a' : '#fff6dc' }]}>
+              <View style={[o.star, prim && { backgroundColor: isDark ? '#3a3528' : '#fff6dc' }]}>
                 <Icon name="star" size={16} color={prim ? '#f0b020' : C.lineSoft} />
               </View>
               <View style={[o.sw, on ? { backgroundColor: C.blue, borderColor: C.blue, justifyContent: 'flex-start' } : { ...SW_OFF, justifyContent: 'flex-end' }]}>
@@ -603,10 +603,10 @@ const s = sheet({
   grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
   tile: {
     flexBasis: '47%', flexGrow: 1, borderRadius: 16, borderWidth: 1, gap: 8,
-    borderColor: isDark ? '#3a3128' : '#edf0f6', backgroundColor: isDark ? '#2a231c' : '#ffffff',
+    borderColor: isDark ? '#334055' : '#edf0f6', backgroundColor: isDark ? '#232c3e' : '#ffffff',
     paddingVertical: 10, paddingHorizontal: 10,
   },
-  tileOn: { borderColor: isDark ? '#4a3d30' : '#dfe7fb', backgroundColor: isDark ? '#30281f' : '#fbfcff' },
+  tileOn: { borderColor: isDark ? '#3d4c66' : '#dfe7fb', backgroundColor: isDark ? '#28324a' : '#fbfcff' },
   tileTop: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   headText: { color: C.muted, fontSize: 11.5, fontWeight: '700' },
   badge: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
@@ -689,10 +689,10 @@ const o = sheet({
   headText: { color: C.muted, fontSize: 11.5, fontWeight: '700' },
   row: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12, minHeight: 62,
-    marginHorizontal: 10, borderRadius: 16, borderWidth: 1, borderColor: isDark ? '#3a3128' : '#edf0f6',
-    backgroundColor: isDark ? '#2a231c' : '#ffffff',
+    marginHorizontal: 10, borderRadius: 16, borderWidth: 1, borderColor: isDark ? '#334055' : '#edf0f6',
+    backgroundColor: isDark ? '#232c3e' : '#ffffff',
   },
-  rowOn: { borderColor: isDark ? '#4a3d30' : '#dfe7fb', backgroundColor: isDark ? '#30281f' : '#fbfcff' },
+  rowOn: { borderColor: isDark ? '#3d4c66' : '#dfe7fb', backgroundColor: isDark ? '#28324a' : '#fbfcff' },
   badge: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   badgeText: { fontSize: 11.5, fontWeight: '700' },
   mid: { flex: 1, minWidth: 0, gap: 3, alignItems: 'flex-end' },
@@ -730,7 +730,7 @@ function RoleChip({ sc, tone, onPress }: { sc: boolean; tone: string; onPress: (
       hitSlop={6}
       style={{
         alignSelf: 'flex-end', marginTop: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10,
-        borderWidth: 1.5, borderColor: sc ? '#e0a100' : tone, backgroundColor: sc ? (isDark ? '#40382a' : '#fff6dc') : 'transparent',
+        borderWidth: 1.5, borderColor: sc ? '#e0a100' : tone, backgroundColor: sc ? (isDark ? '#3a3528' : '#fff6dc') : 'transparent',
       }}
     >
       <Text style={{ fontSize: 11.5, fontWeight: '800', color: sc ? '#b07d00' : tone }}>

@@ -124,7 +124,7 @@ export function GuardCard({
   return (
     <View style={s.card}>
       <Pressable style={s.head} onPress={onToggle}>
-        <View style={[s.icon, { backgroundColor: isDark ? '#24493c' : '#e3f8ef' }]}>
+        <View style={[s.icon, { backgroundColor: isDark ? '#1f4335' : '#e3f8ef' }]}>
           <Icon name="lock" size={18} color={isDark ? '#6adcbd' : '#0f7a52'} />
         </View>
         <View style={{ flex: 1, alignItems: 'flex-end' }}>
@@ -159,7 +159,7 @@ const s = sheet({
   hint: { color: C.muted, fontSize: 11.5, fontWeight: '600', textAlign: 'right', lineHeight: 18 },
   row: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 8, borderRadius: 14, borderWidth: 1,
-    borderColor: isDark ? '#3a3128' : '#edf0f6', paddingVertical: 10, paddingHorizontal: 12,
+    borderColor: isDark ? '#334055' : '#edf0f6', paddingVertical: 10, paddingHorizontal: 12,
   },
   rowBest: { borderColor: VIOLET_LINE, backgroundColor: VIOLET_SOFT },
   rowTitle: { color: C.text, fontSize: 13.5, fontWeight: '700', flexShrink: 1 },
