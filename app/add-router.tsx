@@ -20,11 +20,11 @@ import { cellModuleAvailable, cellNative } from '../modules/bandly-cell/src';
 
 import { sheet } from '../src/i18n';
 /** عناوين الراوترات الشائعة — اختصار بضغطة */
-const COMMON_HOSTS: { host: string; hint: string }[] = [
-  { host: '192.168.8.1', hint: 'هواوي' },
-  { host: '192.168.0.1', hint: 'ZTE' },
-  { host: '192.168.1.1', hint: 'عام' },
-  { host: '192.168.31.1', hint: 'شاومي' },
+const COMMON_HOSTS: { host: string; hint: string; color: string }[] = [
+  { host: '192.168.8.1', hint: 'هواوي', color: '#e5484d' },
+  { host: '192.168.0.1', hint: 'ZTE', color: '#2f6bff' },
+  { host: '192.168.31.1', hint: 'شاومي', color: '#ff7a1a' },
+  { host: '192.168.1.1', hint: 'غيره', color: '#7c5cff' },
 ];
 
 export default function AddRouterScreen() {
@@ -37,6 +37,7 @@ export default function AddRouterScreen() {
   const [host, setHost] = useState('192.168.8.1');
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
+  const [passHelp, setPassHelp] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState('');
@@ -370,6 +371,29 @@ export default function AddRouterScreen() {
                   </Pressable>
                 </View>
               </Field>
+
+              <Pressable onPress={() => setPassHelp(v => !v)} hitSlop={6} style={styles.helpToggle}>
+                <Text style={styles.helpToggleTxt}>{passHelp ? '▲' : '▼'}  وين ألقى كلمة المرور؟</Text>
+              </Pressable>
+              {passHelp && (
+                <View style={styles.helpBox}>
+                  {[
+                    ['1', 'اقلب الراوتر', 'فيه ملصق تحته أو خلفه، عليه بيانات الراوتر.'],
+                    ['2', 'دوّر على كلمة المرور', 'مكتوبة جنب: Password أو Admin Password أو Login Password. واسم المستخدم غالباً admin.'],
+                    ['3', 'لا تخلطها بالواي فاي', 'WiFi Key / WLAN Key هي كلمة الواي فاي. لو ما فيه غيرها على الملصق جرّبها، بعض الرواترات تستخدمها للدخول بعد.'],
+                    ['4', 'غيّرتها قبل؟', 'لو أنت أو الفني غيّرتها من إعدادات الراوتر، اكتب الجديدة — اللي على الملصق ما تشتغل بعد التغيير.'],
+                  ].map(([n, t, d]) => (
+                    <View key={n} style={styles.helpRow}>
+                      <View style={styles.helpNum}><Text style={styles.helpNumTxt}>{n}</Text></View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.helpTitle}>{t}</Text>
+                        <Text style={styles.helpDesc}>{d}</Text>
+                      </View>
+                    </View>
+                  ))}
+                  <Text style={styles.helpNote}>نسيتها؟ زر Reset (اضغطه ١٠ ثواني بقلم) يرجّع كلمة الملصق — بس يمسح إعداداتك كلها، فخلّه آخر حل.</Text>
+                </View>
+              )}
             </LinearGradient>
             {!!scanMsg && <Text style={styles.passHint}>{scanMsg}</Text>}
 
@@ -390,17 +414,25 @@ export default function AddRouterScreen() {
                 returnKeyType="next"
               />
             </Field>
+            <Text style={styles.hostsCap}>وش نوع راوترك؟ اختره والعنوان يتعبى لحاله 👇</Text>
             <View style={styles.hosts}>
               {COMMON_HOSTS.map(h => {
                 const on = host.trim() === h.host;
+                const col = tFg(h.color);
                 return (
                   <Pressable
                     key={h.host}
                     onPress={() => pickHost(h.host)}
-                    style={({ pressed }) => [styles.hostChip, on && styles.hostChipOn, pressed && { opacity: 0.7 }]}
+                    style={({ pressed }) => [
+                      styles.hostChip,
+                      { borderColor: on ? col : tBd(h.color + '40'), backgroundColor: on ? col : tBg(h.color + '12') },
+                      on && { shadowColor: h.color, shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+                      pressed && { opacity: 0.75, transform: [{ scale: 0.97 }] },
+                    ]}
                   >
-                    <Text style={[styles.hostIp, on && { color: tFg('#fff') }]}>{h.host}</Text>
-                    <Text style={[styles.hostHint, on && { color: tFg('rgba(255,255,255,0.85)') }]}>{h.hint}</Text>
+                    {on && <View style={styles.hostCheck}><Text style={{ color: col, fontSize: 10, fontWeight: '900' }}>✓</Text></View>}
+                    <Text style={[styles.hostBrand, { color: on ? tFg('#fff') : col }]}>{h.hint}</Text>
+                    <Text style={[styles.hostIp, { color: on ? tFg('rgba(255,255,255,0.9)') : C.sub }]}>{h.host}</Text>
                   </Pressable>
                 );
               })}
@@ -579,14 +611,27 @@ const styles = sheet({
     textAlign: 'right',
   },
   ltr: { textAlign: 'left', writingDirection: 'ltr', fontWeight: '700', letterSpacing: 0.3 },
-  hosts: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6, marginTop: -4, marginBottom: S.md },
+  hostsCap: { color: C.sub, fontSize: 12, fontWeight: '700', textAlign: 'right', marginTop: -4, marginBottom: 8 },
+  hosts: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8, marginBottom: S.md },
   hostChip: {
-    borderRadius: 12, borderWidth: 1, borderColor: tBd('#d6e2ff'), backgroundColor: tBg('#eef3ff'),
-    paddingHorizontal: 10, paddingVertical: 5, alignItems: 'center',
+    flexBasis: '47%', flexGrow: 1, borderRadius: 16, borderWidth: 1.5,
+    paddingVertical: 10, paddingHorizontal: 8, alignItems: 'center', gap: 2,
   },
-  hostChipOn: { backgroundColor: C.blue, borderColor: C.blue },
-  hostIp: { color: C.blue, fontSize: 12, fontWeight: '800' },
-  hostHint: { color: C.sub, fontSize: 9.5, fontWeight: '700' },
+  hostCheck: {
+    position: 'absolute', top: 6, left: 6, width: 18, height: 18, borderRadius: 9,
+    backgroundColor: tBg('#ffffff'), alignItems: 'center', justifyContent: 'center',
+  },
+  hostBrand: { fontSize: 15, fontWeight: '900' },
+  hostIp: { fontSize: 11.5, fontWeight: '700', writingDirection: 'ltr' },
+  helpToggle: { alignSelf: 'flex-end', paddingVertical: 4, marginTop: -4, marginBottom: S.sm },
+  helpToggleTxt: { color: C.blue, fontSize: 13, fontWeight: '800' },
+  helpBox: { backgroundColor: tBg('#ffffff'), borderRadius: 14, padding: S.md, gap: 10, marginBottom: S.md },
+  helpRow: { flexDirection: 'row-reverse', gap: 10, alignItems: 'flex-start' },
+  helpNum: { width: 24, height: 24, borderRadius: 12, backgroundColor: C.blue, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  helpNumTxt: { color: tFg('#fff'), fontSize: 12, fontWeight: '900' },
+  helpTitle: { color: C.text, fontSize: 13.5, fontWeight: '800', textAlign: 'right' },
+  helpDesc: { color: C.sub, fontSize: 12, lineHeight: 18, textAlign: 'right', marginTop: 1 },
+  helpNote: { color: tFg('#b45309'), fontSize: 11.5, lineHeight: 17, textAlign: 'right', backgroundColor: tBg('#fff7e6'), borderRadius: 10, padding: 8 },
   passwordRow: { position: 'relative', justifyContent: 'center' },
   passwordInput: { paddingRight: 46 },
   eye: {
