@@ -23,7 +23,7 @@ BOT = "NetGuide1_bot"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CFG = os.path.join(HERE, "help_group.json")
 GROUP_USERNAME = "BandlyHelp"  # القروب عام: نعرف رقمه من المعرّف (يتغير الرقم لما يصير سوبر قروب)
-DEFAULT_GROUP = -5462203499
+DEFAULT_GROUP = -1003985239175  # صار سوبر قروب (الرقم القديم -5462203499)
 COOLDOWN = 15 * 60            # نفس الحل ما يتكرر في القروب قبل ربع ساعة
 
 # ═══ الحلول ═══
