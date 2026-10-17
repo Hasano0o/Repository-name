@@ -68,6 +68,19 @@ export async function getExtras(io: Io): Promise<RouterExtras> {
       }
     }
   }
+  // ── الشبكات الأساسية (الاسم وكلمة المرور) ──
+  if (mb) {
+    const nets = ssidBlocks(mb).filter(b => tag(b, 'wifiisguestnetwork') !== '1' && tag(b, 'Index') !== undefined)
+      .map(b => ({
+        index: tag(b, 'Index')!,
+        band: radioBand(b),
+        name: unesc(tag(b, 'WifiSsid') ?? ''),
+        secured: !/^open$/i.test(tag(b, 'WifiAuthmode') ?? ''),
+      }));
+    // راوترات فيها شبكات مخفية إضافية لنفس الراديو — نعرض اللي لها اسم بس
+    const seen = new Set<string>();
+    out.wifiNets = nets.filter(n => n.name && !seen.has(n.band + n.name) && seen.add(n.band + n.name));
+  }
   // ── تشغيل/إطفاء كل شبكة ──
   const sw = await ok(io, 'wlan/status-switch-settings');
   if (sw) {
@@ -178,4 +191,27 @@ export async function setLedNight(io: Io, on: boolean, start: string, end: strin
 }
 export async function setAutoReboot(io: Io, on: boolean) {
   await io.post('diagnosis/time_reboot', xml({ enable: on ? '1' : '0' }));
+}
+
+/**
+ * اسم الواي فاي وكلمة المرور — نفس طريقة صفحة الراوتر: نرسل كل الشبكات (بدون كلمات السر القديمة عشان ما تتغيّر)،
+ * ونغيّر اسم الشبكات المطلوبة، وكلمة المرور (لو انعطت) لكل الشبكات الأساسية المحمية.
+ */
+export async function setWifiNames(io: Io, names: { index: string; name: string }[], password?: string) {
+  const x = await io.get('wlan/multi-basic-settings');
+  const want = new Map(names.map(n => [n.index, n.name]));
+  const blocks = ssidBlocks(x).map(b => {
+    let c = stripSecrets(b);
+    const idx = tag(b, 'Index') ?? '';
+    const guest = tag(b, 'wifiisguestnetwork') === '1';
+    if (!guest && want.has(idx)) {
+      c = c.replace(/<WifiSsid>[^<]*<\/WifiSsid>/, `<WifiSsid>${esc(want.get(idx)!)}</WifiSsid>`);
+    }
+    if (!guest && password && !/^open$/i.test(tag(b, 'WifiAuthmode') ?? '') && want.has(idx)) {
+      c += `<WifiWpapsk>${esc(password)}</WifiWpapsk>`;
+      if (/WPA3/i.test(tag(b, 'WifiAuthmode') ?? '')) c += `<MixWifiWpapsk>${esc(password)}</MixWifiWpapsk>`;
+    }
+    return `<Ssid>${c}</Ssid>`;
+  });
+  await io.post('wlan/multi-basic-settings', `<Ssids>${blocks.join('')}</Ssids><WifiRestart>1</WifiRestart>`);
 }

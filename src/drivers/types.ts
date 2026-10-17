@@ -70,6 +70,8 @@ export interface RouterExtras {
   autoRecover?: boolean;
   /** الواي فاي ينام بعد كذا دقيقة بدون أجهزة — -1 = دايماً شغّال (راوترات البطارية) */
   wifiSleep?: number;
+  /** شبكات الواي فاي الأساسية (بدون الضيوف) — للتعديل على الاسم وكلمة المرور */
+  wifiNets?: { index: string; band: '2.4' | '5'; name: string; secured: boolean }[];
   /** صحة الجهاز: البطارية والحرارة (°م) — throttle = الراوتر قاعد يخفّف قوته بسبب الحرارة */
   health?: { battery?: number; charging?: boolean; tempC?: number; throttle?: boolean };
 }
@@ -349,6 +351,10 @@ export interface RouterDriver {
   addTimeRule?(r: { mac: string; name: string; days: string; start: string; end: string }): Promise<void>;
   updateTimeRule?(r: TimeRule, action: 'update' | 'delete', on?: boolean): Promise<void>;
   setUrlBlocks?(list: { url: string; macs: string[] }[]): Promise<void>;
+  /** يغيّر اسم كل شبكة (حسب index) وكلمة المرور (لو انعطت) — الجوال بينفصل بعدها */
+  setWifiNames?(names: { index: string; name: string }[], password?: string): Promise<void>;
+  /** ضبط المصنع: كل الإعدادات والواي فاي وكلمة الدخول ترجع لللي على الملصق */
+  factoryReset?(): Promise<void>;
   setAutoRecover?(on: boolean): Promise<void>;
   setWifiSleep?(mins: number): Promise<void>;
 }

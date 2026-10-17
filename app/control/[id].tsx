@@ -18,7 +18,7 @@ import { P, shadow } from '../../src/ui/Pro';
 import { C, tBg, tBd, tFg } from '../../src/ui/theme';
 
 import { sheet } from '../../src/i18n';
-type Key = 'nat' | 'upnp' | 'dmz' | 'led' | 'reboot' | 'guest' | 'b2.4' | 'b5' | 'rule' | 'url' | 'recover' | 'sleep';
+type Key = 'nat' | 'upnp' | 'dmz' | 'led' | 'reboot' | 'guest' | 'b2.4' | 'b5' | 'rule' | 'url' | 'recover' | 'sleep' | 'wifi' | 'reset';
 
 const hhmm = (mins: number) => `${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')}`;
 /** مدة التشغيل: «01:01:47» → «ساعة و ١ دقيقة» */
@@ -130,6 +130,9 @@ export default function ControlCenter() {
   const [info, setInfo] = useState<SavedRouter | null>(null);
   const [ex, setEx] = useState<RouterExtras | null>(null);
   const [wifiCh, setWifiCh] = useState(false);
+  const [canReset, setCanReset] = useState(false);
+  const [canRename, setCanRename] = useState(false);
+  const [wifiSheet, setWifiSheet] = useState<{ names: Record<string, string>; pass: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<Key | null>(null);
   const [error, setError] = useState('');
@@ -152,8 +155,9 @@ export default function ControlCenter() {
       if (!r) { setError('الراوتر غير موجود'); setLoading(false); return; }
       setInfo(r);
       try {
-        const caps = await withSession(r, async d => ({ wifi: !!d.setWifiChannel }), false).catch(() => ({ wifi: false }));
-        if (mounted.current) setWifiCh(caps.wifi);
+        const caps = await withSession(r, async d => ({ wifi: !!d.setWifiChannel, reset: !!d.factoryReset, rename: !!d.setWifiNames }), false)
+          .catch(() => ({ wifi: false, reset: false, rename: false }));
+        if (mounted.current) { setWifiCh(caps.wifi); setCanReset(caps.reset); setCanRename(caps.rename); }
         await read(r);
         const devs = await withSession(r, d => (d.getDevices ? d.getDevices() : Promise.resolve([] as ConnectedDevice[])), false).catch(() => []);
         if (mounted.current) setDevNames(Object.fromEntries(devs.flatMap(x => [[x.mac.toUpperCase(), x.name || x.mac], ...(x.ip ? [[x.ip, x.name || x.mac]] : [])])));
@@ -236,6 +240,70 @@ export default function ControlCenter() {
   };
   const removeUrl = (u: string) => apply('url', d => d.setUrlBlocks((ex?.urlBlocks ?? []).filter(x => x.url !== u)), x => !x.urlBlocks?.some(y => y.url === u));
 
+  /* ═══ اسم الواي فاي وكلمة المرور ═══ */
+  const openWifiSheet = () => {
+    const nets = ex?.wifiNets ?? [];
+    setWifiSheet({ names: Object.fromEntries(nets.map(n => [n.index, n.name])), pass: '' });
+  };
+  const saveWifi = () => {
+    const w = wifiSheet;
+    if (!w || !info) return;
+    const nets = ex?.wifiNets ?? [];
+    const names = nets.map(n => ({ index: n.index, name: (w.names[n.index] ?? n.name).trim() }));
+    if (names.some(n => !n.name || n.name.length > 32)) { Alert.alert('اسم الشبكة', 'اكتب اسم من ١ إلى ٣٢ حرف.'); return; }
+    const pass = w.pass.trim();
+    if (pass && (pass.length < 8 || pass.length > 63)) { Alert.alert('كلمة المرور', 'كلمة مرور الواي فاي لازم تكون من ٨ إلى ٦٣ حرف.'); return; }
+    const changedName = names.some(n => n.name !== nets.find(x => x.index === n.index)?.name);
+    if (!changedName && !pass) { setWifiSheet(null); return; }
+    const main = names[0]?.name ?? '';
+    Alert.alert('تغيير الواي فاي',
+      `كل الأجهزة بتنفصل عن الواي فاي، وجوالك معها.\n\nبعدها اتصل بالشبكة «${main}»${pass ? ' بكلمة المرور الجديدة' : ''} وارجع للتطبيق.${pass ? '\n\n⚠️ احفظ كلمة المرور الجديدة قبل ما تكمل.' : ''}`,
+      [{ text: 'إلغاء', style: 'cancel' }, {
+        text: 'غيّرها', style: 'destructive', onPress: async () => {
+          setWifiSheet(null); setBusy('wifi'); setError('');
+          try {
+            // الجوال بينفصل وسط الأمر — الرد ممكن ما يوصل، فما نحكم بالخطأ هنا
+            await withSession(info, d => d.setWifiNames!(names, pass || undefined), false).catch(e => {
+              if (!/timeout|network|fetch|abort|ما رد|ما قدرنا نوصل/i.test(String(e?.message ?? e))) throw e;
+            });
+            Alert.alert('✓ أرسلنا التغيير', `الراوتر يعيد تشغيل الواي فاي. اتصل بـ «${main}»${pass ? ' بكلمة المرور الجديدة' : ''}، وبعدها افتح مركز التحكم مرة ثانية تتأكد.`);
+          } catch (e: any) {
+            if (mounted.current) setError(e?.message ?? String(e));
+            reportError('control', e, info);
+          } finally {
+            if (mounted.current) setBusy(null);
+          }
+        },
+      }]);
+  };
+
+  /* ═══ ضبط المصنع ═══ */
+  const askReset = () => Alert.alert('ضبط المصنع',
+    'كل إعدادات الراوتر تنمسح وترجع مثل يوم ما اشتريته:\n\n• اسم الواي فاي وكلمته ← اللي على الملصق\n• كلمة دخول الراوتر ← اللي على الملصق\n• الترددات والأقفال والإعدادات ← الافتراضي\n\nجرّب «رجّع الإشارة» و«الإعدادات الأصلية» قبلها. هذا آخر حل.',
+    [{ text: 'إلغاء', style: 'cancel' }, {
+      text: 'كمّل', style: 'destructive', onPress: () => Alert.alert('متأكد؟', 'ما تقدر تتراجع بعدها. صوّر الملصق اللي تحت الراوتر قبل ما تكمل.', [
+        { text: 'لا', style: 'cancel' },
+        { text: 'امسح كل شي', style: 'destructive', onPress: doReset },
+      ]),
+    }]);
+  const doReset = async () => {
+    if (!info) return;
+    setBusy('reset'); setError('');
+    try {
+      await withSession(info, d => d.factoryReset!(), false).catch(e => {
+        if (!/timeout|network|fetch|abort|ما رد|ما قدرنا نوصل/i.test(String(e?.message ?? e))) throw e;
+      });
+      Alert.alert('الراوتر يرجع لضبط المصنع',
+        '١) انتظر ٣ دقايق لين يشتغل.\n٢) اتصل بالواي فاي اللي اسمه على الملصق، بكلمة مرور الملصق.\n٣) في Bandly: عدّل الراوتر وحط كلمة دخول الملصق (أو صوّر الملصق ونعبّيها لك).\n٤) شغّل «رجّع النت لحاله لو طاح» من مركز التحكم لو موجود.',
+        [{ text: 'تمام', onPress: () => router.replace(`/add-router?id=${info.id}` as Href) }]);
+    } catch (e: any) {
+      if (mounted.current) setError(e?.message ?? String(e));
+      reportError('control', e, info);
+    } finally {
+      if (mounted.current) setBusy(null);
+    }
+  };
+
   const empty = ex && !ex.nat && ex.upnp === undefined && !ex.dmz && !ex.ledNight && !ex.autoReboot && !ex.guest && !ex.bands && !ex.timeRules && !ex.urlBlocks && ex.autoRecover === undefined && ex.wifiSleep === undefined && !ex.health;
   const games = ex && (ex.nat || ex.upnp !== undefined || ex.dmz);
 
@@ -309,7 +377,7 @@ export default function ControlCenter() {
               </Section>
             )}
 
-            {(wifiCh || !!ex?.bands?.length) && (
+            {(wifiCh || !!ex?.bands?.length || (canRename && !!ex?.wifiNets?.length)) && (
               <Section icon="wifi" title="الواي فاي" caption="شبكاتك واتصال أنظف بين أجهزتك والراوتر" colors={['#38bdf8', '#2563eb']}>
                 {ex?.bands?.map(b => (
                   <Row key={b.band} title={b.band === '5' ? 'شبكة ٥ جيجا' : 'شبكة ٢.٤ جيجا'}
@@ -317,6 +385,15 @@ export default function ControlCenter() {
                     right={<Toggle value={b.on} busy={busy === `b${b.band}`} color="#2563eb"
                       onChange={v => (v ? apply(`b${b.band}` as Key, d => d.setBandOn(b.band, true), x => !!x.bands?.find(y => y.band === b.band && y.on)) : bandOff(b.band))} />} />
                 ))}
+                {canRename && !!ex?.wifiNets?.length && (
+                  <Pressable onPress={openWifiSheet} disabled={!!busy} style={({ pressed }) => [s.navRow, pressed && { opacity: 0.7 }]}>
+                    <View style={{ flex: 1, gap: 3 }}>
+                      <Text style={s.rowTitle}>اسم الشبكة وكلمة المرور</Text>
+                      <Text style={s.rowSub}>{busy === 'wifi' ? 'نرسل التغيير...' : ex.wifiNets.map(n => n.name).join(' · ')}</Text>
+                    </View>
+                    {busy === 'wifi' ? <ActivityIndicator color={tFg('#2563eb')} /> : <View style={s.chev}><Icon name="chevron" size={16} color={tFg('#2563eb')} stroke={2.4} /></View>}
+                  </Pressable>
+                )}
                 {wifiCh && (
                   <Pressable onPress={() => info && router.push(`/wifich/${info.id}` as Href)} style={({ pressed }) => [s.navRow, pressed && { opacity: 0.7 }]}>
                     <View style={{ flex: 1, gap: 3 }}>
@@ -478,7 +555,19 @@ export default function ControlCenter() {
               </Section>
             )}
 
-            {empty && !wifiCh && (
+            {canReset && (
+              <View style={[s.section, shadow, s.resetBox]}>
+                <Pressable onPress={askReset} disabled={!!busy} style={({ pressed }) => [s.navRow, { paddingHorizontal: 16 }, pressed && { opacity: 0.7 }]}>
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <Text style={[s.rowTitle, { color: tFg('#be123c') }]}>ضبط المصنع</Text>
+                    <Text style={s.rowSub}>آخر حل لو الراوتر علق وما رجع بأي طريقة. يمسح كل الإعدادات.</Text>
+                  </View>
+                  {busy === 'reset' ? <ActivityIndicator color={tFg('#be123c')} /> : <Icon name="refresh" size={20} color={tFg('#be123c')} />}
+                </Pressable>
+              </View>
+            )}
+
+            {empty && !wifiCh && !canReset && (
               <View style={[s.section, shadow, { alignItems: 'center', padding: 22 }]}>
                 <Text style={s.rowTitle}>راوترك ما يسمح بهالإعدادات من التطبيق</Text>
                 <Text style={[s.rowSub, { textAlign: 'center', marginTop: 6 }]}>نضيف دعم موديلات أكثر مع التحديثات.</Text>
@@ -489,6 +578,35 @@ export default function ControlCenter() {
           </>
         )}
       </ScrollView>
+
+      <Modal visible={!!wifiSheet} transparent animationType="slide" onRequestClose={() => setWifiSheet(null)}>
+        <Pressable style={s.backdrop} onPress={() => setWifiSheet(null)} />
+        {wifiSheet && (
+          <View style={[s.sheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={s.grip} />
+            <Text style={s.sheetTitle}>اسم الشبكة وكلمة المرور</Text>
+            <Text style={s.sheetSub}>بعد الحفظ بتنفصل كل الأجهزة، وتتصل من جديد بالاسم والكلمة الجديدة.</Text>
+            {(ex?.wifiNets ?? []).map(n => (
+              <View key={n.index} style={{ gap: 6, marginTop: 10 }}>
+                <Text style={s.rowTitle}>{n.band === '5' ? 'شبكة ٥ جيجا' : 'شبكة ٢.٤ جيجا'}</Text>
+                <TextInput value={wifiSheet.names[n.index] ?? ''} maxLength={32} autoCapitalize="none" autoCorrect={false}
+                  onChangeText={t => setWifiSheet(w => w && ({ ...w, names: { ...w.names, [n.index]: t } }))}
+                  style={s.urlInput} placeholder="اسم الشبكة" placeholderTextColor={P.faint} />
+              </View>
+            ))}
+            <View style={{ gap: 6, marginTop: 10 }}>
+              <Text style={s.rowTitle}>كلمة مرور جديدة</Text>
+              <TextInput value={wifiSheet.pass} maxLength={63} autoCapitalize="none" autoCorrect={false}
+                onChangeText={t => setWifiSheet(w => w && ({ ...w, pass: t }))}
+                style={s.urlInput} placeholder="اتركها فاضية لو ما تبي تغيّرها" placeholderTextColor={P.faint} />
+              <Text style={s.rowSub}>٨ أحرف أو أكثر. اكتبها في مكان قبل ما تحفظ.</Text>
+            </View>
+            <Pressable onPress={saveWifi} style={({ pressed }) => [s.saveBtn, { backgroundColor: tBg('#2563eb') }, pressed && { opacity: 0.85 }]}>
+              <Text style={s.saveTxt}>احفظ</Text>
+            </Pressable>
+          </View>
+        )}
+      </Modal>
 
       <Modal visible={!!picker} transparent animationType="slide" onRequestClose={() => setPicker(null)}>
         <Pressable style={s.backdrop} onPress={() => setPicker(null)} />
@@ -637,6 +755,7 @@ const s = sheet({
   chipTxtOn: { color: tFg('#ffffff') },
   err: { backgroundColor: tBg('#fff1f2'), borderRadius: 14, padding: 12, borderWidth: 1, borderColor: tBd('#fecdd3') },
   errTxt: { color: tFg('#be123c'), fontSize: 13.5, lineHeight: 21, textAlign: 'right' },
+  resetBox: { borderColor: tBd('#fecdd3') },
   foot: { color: P.faint, fontSize: 12, textAlign: 'center', lineHeight: 19, paddingHorizontal: 10 },
   backdrop: { flex: 1, backgroundColor: 'rgba(8,12,30,0.45)' },
   sheet: { backgroundColor: C.card, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 18, gap: 6 },
