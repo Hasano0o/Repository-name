@@ -125,17 +125,6 @@ function caBandString(r: Record<string, string>): string | undefined {
   return parts.join(' + ');
 }
 
-/**
- * طبّق الراوتر الترددات؟ نفس القائمة = تمام. والراوتر أحياناً يشيل ترددات ما يدعمها من القائمة،
- * فنقبل لو تغيّرت عن قبل وصارت جزء من المطلوب. ما تغيّرت عن قبل (والمطلوب غيرها) = ما طبّق.
- */
-function bandsApplied(want: number[], before: number[], now: number[]): boolean {
-  const same = (a: number[], b: number[]) => a.length === b.length && a.every(x => b.includes(x));
-  if (same(want, now)) return true;
-  if (!now.length) return false;
-  return !same(before, now) && now.every(x => want.includes(x));
-}
-
 export class ZteDriver implements RouterDriver {
   id = 'zte';
   name = 'ZTE';
@@ -728,8 +717,6 @@ export class ZteDriver implements RouterDriver {
     const step = async (name: string, fn: () => Promise<string>) => {
       try { if (/success/i.test(await fn())) ok.push(name); } catch (e) { this.log('restore', name, 'failed', (e as any)?.message); }
     };
-    // بعض الموديلات تتجاهل الأوامر وهي متصلة — نقطع البيانات أول (بنعيد التشغيل بالأخير على أي حال)
-    await this.dataOff().catch(() => {});
     // ١. فك التثبيت على الأبراج
     await step('lte-cell', () => this.clearLteCell());
     await step('nr-cell', () => this.clearNrCell());
@@ -760,10 +747,7 @@ export class ZteDriver implements RouterDriver {
     const mode = origMode && !/^WL|WCDMA|GSM/i.test(origMode) ? origMode : CODE_TO_ZTE['0803'];
     await step('mode', () => this.act({ goformId: 'SET_BEARER_PREFERENCE', BearerPreference: mode }));
     this.log('restoreAll ok:', ok.join(','));
-    if (!ok.length) {
-      await this.dataOn();
-      throw new Error('الراوتر ما قبل أي أمر — تأكد إنك متصل بالواي فاي حقه وجرّب مرة ثانية');
-    }
+    if (!ok.length) throw new Error('الراوتر ما قبل أي أمر — تأكد إنك متصل بالواي فاي حقه وجرّب مرة ثانية');
     // ٥. إعادة تشغيل عشان كل شي يتطبّق
     try { await this.post({ goformId: 'REBOOT_DEVICE' }); } catch {}
   }
@@ -774,48 +758,6 @@ export class ZteDriver implements RouterDriver {
     const lte = bandsFromMask(r.lte_band_lock);
     const nr = nrList(pick(r, 'nr5g_nsa_band_lock', 'nr5g_band_lock', 'nr5g_sa_band_lock'));
     return { lte, nr };
-  }
-
-  /**
-   * بعض موديلات ZTE (مثل MU5001) ترد «success» على أوامر الترددات والأقفال وهي متصلة — وما تطبّقها.
-   * نقطع البيانات وننتظر الانقطاع الفعلي.
-   */
-  private async dataOff(): Promise<void> {
-    await this.act({ goformId: 'DISCONNECT_NETWORK' }).catch(() => '');
-    for (let i = 0; i < 6; i++) {
-      await sleep(2000);
-      const r = await this.get(['ppp_status']).catch(() => ({} as Record<string, string>));
-      if (/disconnected/i.test(r.ppp_status || '')) break;
-    }
-  }
-  private async dataOn(): Promise<void> {
-    await this.act({ goformId: 'CONNECT_NETWORK' }).catch(() => '');
-  }
-
-  /**
-   * يكتب ويتأكد بالقراءة. لو الراوتر رفض أو قال «تم» وما طبّق: نقطع الاتصال ← نعيد ← نتأكد ← نرجّع الاتصال
-   * (الاتصال يرجع دايماً حتى لو فشلنا). لو برضو ما تطبّق نرمي خطأ صريح بدل ما نقول «تم».
-   */
-  private async writeVerified(what: string, write: () => Promise<string>, applied: () => Promise<boolean>): Promise<void> {
-    const out = await write();
-    await sleep(1200);
-    if (/success/i.test(out) && (await applied().catch(() => false))) return;
-    this.log(what, /success/i.test(out) ? 'said success but not applied' : 'rejected', '— retry with data off');
-    let out2 = '';
-    let ok = false;
-    try {
-      await this.dataOff();
-      out2 = await write();
-      await sleep(1500);
-      ok = /success/i.test(out2) && (await applied().catch(() => false));
-    } finally {
-      await this.dataOn();
-    }
-    if (ok) { this.log(what, 'applied with data off'); return; }
-    if (/success/i.test(out2 || out)) {
-      throw new Error(`الراوتر قال «تم» بس ما طبّق ${what} — راوترك ما يقبل هالتغيير من التطبيق. ما تغيّر شي.`);
-    }
-    throw this.rejected(what, out2 || out);
   }
 
   async getBandConfig(): Promise<BandConfig> {
@@ -886,30 +828,23 @@ export class ZteDriver implements RouterDriver {
     // «فك التثبيت» = الترددات الأصلية للراوتر لو نعرفها (مو قائمة تخمينية — كانت تشيل ترددات زي B38 ويطيح الراوتر بدون خدمة)
     const all = this.baseLte() ?? [...new Set([...DEFAULT_LTE, ...(await this.readLocks()).lte])];
     const lte = bands.length ? bands : all;
-    const before = (await this.readLocks()).lte;
-    await this.writeVerified('تثبيت الترددات', () => this.act({
+    const out = await this.act({
       goformId: 'BAND_SELECT',
       is_gw_band: '0', gw_band_mask: '0',
       is_lte_band: '1', lte_band_mask: maskFromBands(lte),
-    }), async () => bandsApplied(lte, before, (await this.readLocks()).lte));
+    });
+    if (!/success/i.test(out)) throw this.rejected('تثبيت الترددات', out);
   }
   private async setNrBands(nrBands: number[]): Promise<void> {
     const nr = nrBands.length ? nrBands : (this.baseNr() ?? DEFAULT_NR);
     const cur = (await this.readLocks()).nr;
     const same = cur.length === nr.length && nr.every(b => cur.includes(b));
     if (same) return;
-    const nrNow = async () => (await this.readLocks()).nr;
-    try {
-      await this.writeVerified('تثبيت ترددات 5G',
-        () => this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: nr.join(',') }),
-        async () => bandsApplied(nr, cur, await nrNow()));
-    } catch (e) {
-      if (nrBands.length) throw e;
-      // فك التثبيت: القائمة الآمنة لو الراوتر ما قبل قائمته
-      await this.writeVerified('فك تثبيت ترددات 5G',
-        () => this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: SAFE_NR.join(',') }),
-        async () => bandsApplied(SAFE_NR, cur, await nrNow()));
+    let o2 = await this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: nr.join(',') });
+    if (!/success/i.test(o2) && !nrBands.length) {
+      o2 = await this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: SAFE_NR.join(',') });
     }
+    if (!/success/i.test(o2)) throw this.rejected('تثبيت ترددات 5G', o2);
   }
 
   async getActiveLock(): Promise<ActiveLock | null> {
@@ -1037,54 +972,35 @@ export class ZteDriver implements RouterDriver {
       for (const k of ZTE_LOCK_KEYS) o[k] = (r[k] ?? '').trim();
       return o;
     };
-    const todo0 = zteDiff(d, await read());
-    this.log('restore parts', todo0.join(',') || 'none');
+    const todo = zteDiff(d, await read());
+    this.log('restore parts', todo.join(',') || 'none');
+    const must = (what: string, out: string) => { if (!/success/i.test(out)) throw this.rejected(what, out); };
+    if (todo.includes('mode')) {
+      must('إرجاع وضع الشبكة', await this.act({ goformId: 'SET_BEARER_PREFERENCE', BearerPreference: d.net_select }));
+    }
+    if (todo.includes('lte')) {
+      must('إرجاع ترددات 4G', await this.act({
+        goformId: 'BAND_SELECT', is_gw_band: '0', gw_band_mask: '0',
+        is_lte_band: '1', lte_band_mask: maskFromBands(lteBands(d)),
+      }));
+    }
+    if (todo.includes('nr')) {
+      must('إرجاع ترددات 5G', await this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: nrBands(d).join(',') }));
+    }
     let cellChanged = false;
-    const applyParts = async (todo: ReturnType<typeof zteDiff>, strict: boolean) => {
-      const must = (what: string, out: string) => { if (strict && !/success/i.test(out)) throw this.rejected(what, out); };
-      if (todo.includes('mode')) {
-        must('إرجاع وضع الشبكة', await this.act({ goformId: 'SET_BEARER_PREFERENCE', BearerPreference: d.net_select }));
-      }
-      if (todo.includes('lte')) {
-        must('إرجاع ترددات 4G', await this.act({
-          goformId: 'BAND_SELECT', is_gw_band: '0', gw_band_mask: '0',
-          is_lte_band: '1', lte_band_mask: maskFromBands(lteBands(d)),
-        }));
-      }
-      if (todo.includes('nr')) {
-        must('إرجاع ترددات 5G', await this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: nrBands(d).join(',') }));
-      }
-      if (todo.includes('lteCell')) {
-        const c = lteCell(d);
-        must('إرجاع قفل برج 4G', c === 'off'
-          ? await this.clearLteCell()
-          : await this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: d.lte_pci_lock, lte_earfcn_lock: d.lte_earfcn_lock }));
-        cellChanged = true;
-      }
-      if (todo.includes('nrCell')) {
-        const c = nrCell(d);
-        must('إرجاع قفل برج 5G', c === 'off'
-          ? await this.clearNrCell()
-          : await this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: d.nr5g_cell_lock }));
-        cellChanged = true;
-      }
-    };
-    // أول محاولة: بدون ما نوقف أي رفض — نتحقق بالقراءة بعدها
-    await applyParts(todo0, false);
-    await sleep(1200);
-    // قفل البرج على الموديلات اللي تحتاج إعادة تشغيل: يتطبّق بعد الإعادة تحت، مو الحين
-    const needsReboot = rebootToApply.has(this.host);
-    const pending = zteDiff(d, await read()).filter(x => !((x === 'lteCell' || x === 'nrCell') && needsReboot));
-    if (pending.length) {
-      // الراوتر قال تم وما طبّق (أو رفض وهو متصل): نقطع البيانات ونعيد الناقص بس
-      this.log('restore not applied while connected:', pending.join(','), '— retry with data off');
-      try {
-        await this.dataOff();
-        await applyParts(pending, true);
-        await sleep(1500);
-      } finally {
-        await this.dataOn();
-      }
+    if (todo.includes('lteCell')) {
+      const c = lteCell(d);
+      must('إرجاع قفل برج 4G', c === 'off'
+        ? await this.clearLteCell()
+        : await this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: d.lte_pci_lock, lte_earfcn_lock: d.lte_earfcn_lock }));
+      cellChanged = true;
+    }
+    if (todo.includes('nrCell')) {
+      const c = nrCell(d);
+      must('إرجاع قفل برج 5G', c === 'off'
+        ? await this.clearNrCell()
+        : await this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: d.nr5g_cell_lock }));
+      cellChanged = true;
     }
     if (cellChanged && rebootToApply.has(this.host)) await this.rebootAndWait();
     const left = zteDiff(d, await read());
