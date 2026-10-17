@@ -11,7 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BandConfig, BandRoles, Carrier } from '../drivers/types';
 import { BandKind, BAND_KIND_LABEL, bandMhz, bandKindOf } from '../utils/bands';
-import { C, isDark } from './theme';
+import { C, isDark, tBg, tBd, tFg } from './theme';
 import { Icon } from './Icon';
 import Svg, { Path, Circle, Rect, Text as SvgText } from 'react-native-svg';
 
@@ -85,6 +85,9 @@ function estMbps(tech: Tech, b: number, seen?: BandSeen, bw?: number) {
 export interface BandPickerProps {
   cfg: BandConfig;
   seen: Record<string, BandSeen>; // المفتاح "LTE:28" أو "NR:78"
+  /** قراءات فحص قديم (أكثر من أسبوع) — نعرضها باهتة مع عمرها، وما نعتمدها في الترتيب والاقتراح */
+  staleSeen?: Record<string, BandSeen>;
+  staleDays?: number;
   carriers: Carrier[];
   activeLte: number[];
   activeNr: number[];
@@ -102,7 +105,7 @@ export interface BandPickerProps {
   op?: { name: string; bands: { lte: number[]; nr: number[] } } | null;
 }
 
-export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onTry, onAuto, none = [], onScan, scanning, scanNote, op }: BandPickerProps) {
+export function BandPicker({ cfg, seen, staleSeen = {}, staleDays = 0, carriers, activeLte, activeNr, busy, onTry, onAuto, none = [], onScan, scanning, scanNote, op }: BandPickerProps) {
   const [tab, setTab] = useState<Tech>('LTE');
   const [showAll, setShowAll] = useState(false);
   // شكل القائمة: مربعات (الجديد) أو صفوف (القديم) — يتذكر اختيارك
@@ -138,6 +141,9 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
   /** «ما ظهر برج» كانت مضلّلة: الراوتر ما يقيس إلا ترددات قريبة من اللي ماسكه */
   const sigText = (t: Tech, b: number, lvl: number) =>
     lvl > 0 ? SIG_TEXT[lvl] : none.includes(t + ':' + b) ? 'ما فيه برج' : 'غير مفحوص';
+  /** قراءة الفحص القديم لتردد ما له قراءة حديثة */
+  const oldOf = (t: Tech, b: number) => (seen[t + ':' + b] ? undefined : staleSeen[t + ':' + b]);
+  const ago = staleDays === 1 ? 'أمس' : staleDays === 2 ? 'قبل يومين' : `قبل ${staleDays} أيام`;
   const unknownOf = (t: Tech) => supported(t).filter(b =>
     !seen[t + ':' + b] && !none.includes(t + ':' + b) && !(t === 'LTE' ? activeLte : activeNr).includes(b));
 
@@ -337,10 +343,23 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
             style={({ pressed }) => [s.scanBox, { borderColor: TECH_TONE[tab].line, backgroundColor: TECH_TONE[tab].soft }, (pressed || busy) && { opacity: 0.7 }]}>
             <Icon name="target" size={16} color={TECH_TONE[tab].fg} stroke={2.2} />
             <Text style={[s.scanTxt, { color: TECH_TONE[tab].fg }]}>
-              نفحص لك {unknownOf(tab).length} {unknownOf(tab).length === 1 ? 'تردد' : 'ترددات'} غير مفحوصة
+              {Object.keys(staleSeen).some(k => k.startsWith(tab + ':'))
+                ? `آخر فحص ${ago} — نعيد فحص ${unknownOf(tab).length} ${unknownOf(tab).length === 1 ? 'تردد' : 'ترددات'}`
+                : `نفحص لك ${unknownOf(tab).length} ${unknownOf(tab).length === 1 ? 'تردد' : 'ترددات'} غير مفحوصة`}
             </Text>
           </Pressable>
         ))}
+        {tab === 'NR' && !scanning && activeNr.length === 0 && (
+          // ما فيه 5G حي: نقول السبب بدل ما تبان الترددات كلها «غير مفحوص» بدون تفسير
+          <View style={[s.scanBox, { borderColor: tBd('#f0b02066'), backgroundColor: tBg('#fff6dc') }]}>
+            <Icon name="bulb" size={16} color={tFg('#9a6a00')} stroke={2.2} />
+            <Text style={[s.scanTxt, { color: tFg('#9a6a00'), fontWeight: '700' }]}>
+              {cfg.nrLocked.length
+                ? `الراوتر مو ماسك 5G الحين — 5G مقفل على ${cfg.nrLocked.map(b => 'n' + b).join(' + ')}. لو ما فيه برج عليه، رجّع 5G للتلقائي.`
+                : 'الراوتر مو ماسك 5G الحين — قراءات 5G تطلع من الفحص أو لما يتصل على 5G.'}
+            </Text>
+          </View>
+        )}
         {groups.map(g => (
           <View key={g.kind} style={{ gap: 8 }}>
             <View style={s.groupHead}>
@@ -352,7 +371,8 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
               {g.bands.map(b => {
                 const mhz = mhzOf(tab, b);
                 const k = KIND_COLOR[g.kind];
-                const sv = seen[tab + ':' + b];
+                const old = oldOf(tab, b);
+                const sv = seen[tab + ':' + b] ?? old;
                 const lvl = levelOf(sv);
                 const live = (tab === 'LTE' ? activeLte : activeNr).includes(b);
                 const prim = !!pcc && pcc.tech === tab && pcc.band === b;
@@ -387,13 +407,13 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
                       </View>
                     </View>
                     <View style={s.subRow}>
-                      <View style={s.bars}>
+                      <View style={[s.bars, !!old && !live && { opacity: 0.45 }]}>
                         {[1, 2, 3, 4].map(n => (
                           <View key={n} style={[s.bar, { height: 3 + n * 2.25, backgroundColor: n <= lvl ? barColor : C.lineSoft }]} />
                         ))}
                       </View>
                       <Text style={[s.sub, live && { color: C.green, fontWeight: '800' }]} numberOfLines={1}>
-                        {live ? 'متصل عليه ✓' : sigText(tab, b, lvl)}
+                        {live ? 'متصل عليه ✓' : old ? `${sigText(tab, b, lvl)} · ${ago}` : sigText(tab, b, lvl)}
                       </Text>
                       <View style={{ flex: 1 }} />
                       <View style={[s.codeChip, { backgroundColor: k.bg }]}>
@@ -431,7 +451,8 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
         {rows.map(b => {
           const mhz = mhzOf(tab, b);
           const k = KIND_COLOR[kindOf(mhz)];
-          const sv = seen[tab + ':' + b];
+          const old = oldOf(tab, b);
+          const sv = seen[tab + ':' + b] ?? old;
           const lvl = levelOf(sv);
           const live = (tab === 'LTE' ? activeLte : activeNr).includes(b);
           const prim = !!pcc && pcc.tech === tab && pcc.band === b;
@@ -469,7 +490,7 @@ export function BandPicker({ cfg, seen, carriers, activeLte, activeNr, busy, onT
                   </View>
                   {(live || lvl > 0) && <View style={[o.dot, { backgroundColor: live ? C.green : barColor }]} />}
                   <Text style={[o.sub, live && { color: C.green }]} numberOfLines={1}>
-                    {live ? 'متصل عليه الحين' : sigText(tab, b, lvl)}
+                    {live ? 'متصل عليه الحين' : old ? `${sigText(tab, b, lvl)} · ${ago}` : sigText(tab, b, lvl)}
                   </Text>
                   <Text style={o.code}>{(tab === 'NR' ? 'n' : 'B') + b}</Text>
                 </View>

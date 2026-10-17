@@ -588,6 +588,17 @@ export default function BandsScreen() {
     if (!seenWithScan[k] || r.score > seenWithScan[k].score) seenWithScan[k] = { rsrp: r.rsrp, sinr: r.sinr, score: r.score };
   }
   const scanNone = scanRows.filter(r => r.status === 'nocov').map(r => r.tech + ':' + r.band);
+  // فحص أقدم من أسبوع: ما نعتمده (الأبراج تتغيّر) بس نعرضه باهت مع عمره بدل ما تختفي القراءات
+  // (قراءات 5G في هواوي تجي من الفحص بس — الراوتر ما يعطي أبراج 5G المجاورة)
+  const staleDays = !scanFresh && scanAt ? Math.floor((Date.now() - scanAt) / 86400000) : 0;
+  const staleSeen: Record<string, BandSeen> = {};
+  if (staleDays) {
+    for (const r of scan) {
+      if (r.status !== 'done' || r.score === undefined) continue;
+      const k = r.tech + ':' + r.band;
+      if (!seenWithScan[k]) staleSeen[k] = { rsrp: r.rsrp, sinr: r.sinr, score: r.score };
+    }
+  }
   const scanNote = (() => {
     const i = scan.findIndex(r => r.status === 'testing');
     if (i < 0) return '';
@@ -738,6 +749,8 @@ export default function BandsScreen() {
             <BandPicker
               cfg={cfg}
               seen={seenWithScan}
+              staleSeen={staleSeen}
+              staleDays={staleDays}
               carriers={carriers}
               activeLte={active}
               activeNr={[...knownNrLive]}
