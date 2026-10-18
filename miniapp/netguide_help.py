@@ -24,8 +24,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CFG = os.path.join(HERE, "help_group.json")
 GROUP_USERNAME = "BandlyHelp"  # القروب عام: نعرف رقمه من المعرّف (يتغير الرقم لما يصير سوبر قروب)
 DEFAULT_GROUP = -1003985239175  # صار سوبر قروب (الرقم القديم -5462203499)
-# قروبات إضافية ينزل فيها النشر المجدول بس (ميزة اليوم + بطاقة التحميل) — بدون الرد التلقائي.
-# لازم البوت يكون عضو فيها (ومشرف عشان يثبّت البطاقة). الإضافة: معرّف القروب بدون @
+# قروبات إضافية ينزل فيها النشر المجدول بس (ميزة اليوم + بطاقة التحميل) — إرسال فقط:
+# بدون تثبيت، بدون حذف البطاقة القديمة، وبدون الرد التلقائي. يكفي البوت عضو فيها. المعرّف بدون @
 EXTRA_GROUPS = ["waad055833"]
 COOLDOWN = 15 * 60            # نفس الحل ما يتكرر في القروب قبل ربع ساعة
 
@@ -422,8 +422,9 @@ def _post_links_to(bot, key, gid) -> bool:
     """بطاقة التحميل: تنحذف القديمة وتنزل جديدة وتتثبّت"""
     st = _state()
     msgs = st.setdefault("links_msgs", {})
-    old = msgs.get(key) or (st.get("links_msg") if key == "main" else None)
-    if old:
+    main = key == "main"
+    old = msgs.get(key) or (st.get("links_msg") if main else None)
+    if old and main:
         try:
             bot.delete_message(gid, old)
         except Exception:
@@ -434,10 +435,11 @@ def _post_links_to(bot, key, gid) -> bool:
             "وجّه الأنتنا بالصوت، ثبّت أفضل برج وتردد، وقلّل البنق للألعاب 🎮\n"
             "متوفر على الآيفون والأندرويد والكمبيوتر 👇",
             parse_mode="HTML", reply_markup=_dl_kb(), disable_web_page_preview=True)
-        try:
-            bot.pin_chat_message(gid, m.message_id, disable_notification=True)
-        except Exception as e:
-            print(f"[help] pin {key}:", e)
+        if main:
+            try:
+                bot.pin_chat_message(gid, m.message_id, disable_notification=True)
+            except Exception as e:
+                print("[help] pin:", e)
         st = _state()
         st.setdefault("links_msgs", {})[key] = m.message_id
         if key == "main":
