@@ -276,7 +276,10 @@ export class HuaweiDriver implements RouterDriver {
         return this.post(p, body, undefined, true, true);
       }
       // POST: ما نعلّم الجلسة خربانة هنا — 100003 على أمر حفظ غالباً «غير مدعوم» (مثل net/lock-freq في H158)
-      throw new HuaweiError(code);
+      const err = new HuaweiError(code);
+      // في التقارير يبان إن المحاولة المشفّرة نفسها انرفضت (مو بس العادية)
+      if (enc) err.code = `${code}·مشفّر`;
+      throw err;
     }
     return xml;
   }
