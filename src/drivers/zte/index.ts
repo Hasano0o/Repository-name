@@ -58,6 +58,11 @@ const DEFAULT_LTE = [1, 3, 7, 8, 20, 28, 40, 41];
 // كل ترددات 5G الشائعة في راوترات ZTE — كانت ٣ بس فكان «عرض الكل» يطلّع n40/n41/n78 فقط
 const DEFAULT_NR = [1, 3, 5, 7, 8, 20, 28, 38, 40, 41, 77, 78, 79];
 // لو الراوتر رفض القائمة الكاملة وقت فك التثبيت نرجع لهذي
+// إعداد المصنع الحقيقي لـ MU5001 (STC، قراءة حية ١٨ أكتوبر بعد ضبط المصنع):
+// nr5g_*_band_lock = 40,41,78 — و 4G = B1/3/7/8/20/28/40/41 (= DEFAULT_LTE)، والأقفال "" فاضية.
+// «فك التثبيت» يرجّع لهذي القائمة، **مو** لـ DEFAULT_NR (١٣ تردد أغلبها ما يدعمها الجهاز —
+// كتابتها تنحفظ وتبقى بعد إعادة التشغيل، والمشتبه الأول في «بدون خدمة لين ضبط المصنع»).
+// DEFAULT_NR يبقى للعرض بس (nrSupported)، وما ينكتب على الراوتر أبداً.
 const SAFE_NR = [40, 41, 78];
 // قائمة واسعة لفك التثبيت لو ما نعرف ترددات الراوتر الأصلية — تشمل ترددات الخليج (B38 وغيره)
 const WIDE_LTE = [1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 32, 34, 38, 39, 40, 41, 42, 43, 66, 71];
@@ -737,7 +742,7 @@ export class ZteDriver implements RouterDriver {
       if (ok.length > before) break;
     }
     // ٣. ترددات 5G
-    for (const nr of [this.baseNr(), DEFAULT_NR, SAFE_NR].filter((x): x is number[] => !!x && x.length > 0)) {
+    for (const nr of [this.baseNr(), SAFE_NR].filter((x): x is number[] => !!x && x.length > 0)) {
       const before = ok.length;
       await step('nr-bands', () => this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: nr.join(',') }));
       if (ok.length > before) break;
@@ -817,7 +822,7 @@ export class ZteDriver implements RouterDriver {
     if (!/success/i.test(out)) throw this.rejected('تثبيت الترددات', out);
   }
   private async setNrBands(nrBands: number[]): Promise<void> {
-    const nr = nrBands.length ? nrBands : (this.baseNr() ?? DEFAULT_NR);
+    const nr = nrBands.length ? nrBands : (this.baseNr() ?? SAFE_NR);
     const cur = (await this.readLocks()).nr;
     const same = cur.length === nr.length && nr.every(b => cur.includes(b));
     if (same) return;
