@@ -25,3 +25,21 @@ export async function getReleaseSnap(routerId: string): Promise<LockSnapshot | n
 export async function clearReleaseSnap(routerId: string): Promise<void> {
   try { await AsyncStorage.removeItem(key(routerId)); } catch {}
 }
+
+/**
+ * هل «رجّع الإشارة» على هذا الراوتر احتاج إعادة تشغيل آخر مرة؟
+ * بعض الموديلات (ZTE MU5001) ما تطلع من «بدون خدمة» بعد فك التثبيت إلا بإعادة تشغيل —
+ * لو تعلّمنا هذا، المرة الجاية ما نضيّع دقيقة ونص ننتظر على الفاضي.
+ */
+const bootKey = (routerId: string) => `release-needs-reboot:${routerId}`;
+
+export async function releaseNeedsReboot(routerId: string): Promise<boolean> {
+  try { return (await AsyncStorage.getItem(bootKey(routerId))) === '1'; } catch { return false; }
+}
+
+export async function setReleaseNeedsReboot(routerId: string, v: boolean): Promise<void> {
+  try {
+    if (v) await AsyncStorage.setItem(bootKey(routerId), '1');
+    else await AsyncStorage.removeItem(bootKey(routerId));
+  } catch {}
+}

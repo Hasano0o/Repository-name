@@ -12,7 +12,8 @@ import { isNoService } from './signal';
 import { progress, Tracker } from '../ui/Progress';
 import { runApply, trackWrites } from './applyGuard';
 import { LockSnapshot, mismatchOf, settleMsFor } from '../drivers/lockSnapshot';
-import { saveReleaseSnap, getReleaseSnap, clearReleaseSnap } from '../store/lockSnap';
+import { saveReleaseSnap, getReleaseSnap, clearReleaseSnap, releaseNeedsReboot, setReleaseNeedsReboot } from '../store/lockSnap';
+import type { BandConfig } from '../drivers/types';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 /** يرجّع undefined لو الخطوة طوّلت أكثر من المسموح (بدل ما يعلق المستخدم ٤٠ دقيقة) */
@@ -194,31 +195,43 @@ async function freeReleaseImpl(r: SavedRouter, say: (s: string) => void, keep?: 
   await rememberBeforeRelease(r, keep);
   say('نفك كل التثبيتات عشان الراوتر يلقط أقوى برج...');
   let released = false;
+  // «لا قفل = لا أمر»: الكتابة على راوتر نظيف (حتى بنفس القيم) ممكن تطيّحه «بدون خدمة» على ZTE —
+  // نكتب بس اللي فعلاً مقفول، ونعرف هل غيّرنا شي عشان نقرر كم ننتظر.
+  let wrote = false;
   for (let i = 0; i < 3 && !released; i++) {
     if (i) await sleep(8000);
     try {
       if (i) dropSession(r.id);
       await withSessionPatient(r, async d => {
         if (d.wakeRadio) { try { await d.wakeRadio(); } catch {} }
-        if (d.unlockCell) { try { await d.unlockCell(); } catch {} }
-        if (d.setBand) { try { await d.setBand([], []); } catch {} }
+        const cfg0 = d.getBandConfig ? await d.getBandConfig().catch(() => null) : null;
+        const cells = d.getCellLocks ? await d.getCellLocks().catch(() => null) : null;
+        const kinds = cfg0?.lockKinds;
+        const cellLocked = cells === null || cells.length > 0 || (!!kinds && (kinds.lte !== 'none' || kinds.nr !== 'none'));
+        if (d.unlockCell && cellLocked) {
+          try { await d.unlockCell(); wrote = true; } catch {}
+        }
+        if (d.setBand && (!cfg0 || bandLocked(cfg0))) {
+          try { await d.setBand([], []); wrote = true; } catch {}
+        }
+        diag(`[release] cell=${cellLocked ? 'locked' : 'clean'} bands=${!cfg0 ? '?' : bandLocked(cfg0) ? 'locked' : 'clean'}`);
         // عالق على 3G/2G (مثل LIMITED_SERVICE_WCDMA): الـ 3G شبه متوقفة عندنا —
         // نخلي الراوتر على 4G + 5G (أو 4G بس) عشان ما يرجع يعلق عليها
         try {
           const sig = d.getSignal ? await d.getSignal().catch(() => null) : null;
-          const cfg = d.getBandConfig ? await d.getBandConfig().catch(() => null) : null;
+          const cfg = wrote && d.getBandConfig ? await d.getBandConfig().catch(() => null) : cfg0;
           const modes = cfg?.modes ?? [];
           if (d.setNetworkMode && cfg?.mode === '08') {
             // «5G فقط (SA)» وبرجك ما يدعمه = بلا خدمة حتى لو فكّينا الترددات — نرجّعه تلقائي
             const pick = ['00', '0803'].find(m => modes.some(x => x.value === m));
-            if (pick) { say('الراوتر على «5G فقط» — نرجّعه تلقائي...'); await d.setNetworkMode(pick); }
+            if (pick) { say('الراوتر على «5G فقط» — نرجّعه تلقائي...'); await d.setNetworkMode(pick); wrote = true; }
           } else if (d.setNetworkMode && cfg?.mode && !['00', '0803', '03', '08'].includes(cfg.mode) && /WCDMA|GSM|UMTS/i.test(cfg.mode)) {
             // وضع شبكة 3G/2G فقط (مثلاً علق من تجربة سابقة) = بلا خدمة عندنا — حتى إعادة التشغيل ما تصلحه
             const pick = ['0803', '00', '03'].find(m => modes.some(x => x.value === m));
-            if (pick) { say('الراوتر على «3G فقط» — نرجّعه على 4G و 5G...'); await d.setNetworkMode(pick); }
+            if (pick) { say('الراوتر على «3G فقط» — نرجّعه على 4G و 5G...'); await d.setNetworkMode(pick); wrote = true; }
           } else if (d.setNetworkMode && /WCDMA|UMTS|GSM|HSPA|\b[23]G\b/i.test(sig?.network ?? '')) {
             const pick = ['0803', '03'].find(m => modes.some(x => x.value === m));
-            if (pick) { say('الراوتر عالق على 3G — نحوّله على 4G و 5G...'); await d.setNetworkMode(pick); }
+            if (pick) { say('الراوتر عالق على 3G — نحوّله على 4G و 5G...'); await d.setNetworkMode(pick); wrote = true; }
           }
         } catch {}
       }, 60_000);
@@ -227,10 +240,20 @@ async function freeReleaseImpl(r: SavedRouter, say: (s: string) => void, keep?: 
       if (await waitIfLocked(e, say)) i--;
     }
   }
+  const knownBoot = await releaseNeedsReboot(r.id);
   if (released) {
-    say('ننتظر الراوتر يلقط أقوى برج...');
-    // المودم ياخذ وقت يمسح الأبراج — نعطيه دقيقة ونص قبل ما نعيد التشغيل
-    if (await waitOnline(r, 90000, () => false)) return true;
+    // كم ننتظر قبل إعادة التشغيل (يرجع أول ما تعود الخدمة):
+    // - ما غيّرنا شي (الراوتر نظيف) ← ٢٠ ثانية بس: الانتظار ما بيغيّر شي، والإعادة هي الحل
+    // - تعلّمنا إن هالراوتر يحتاج إعادة ← ٣٥ ثانية
+    // - غير كذا ← دقيقة ونص عشان المودم يمسح الأبراج
+    const waitMs = !wrote ? 20_000 : knownBoot ? 35_000 : 90_000;
+    say(wrote ? 'ننتظر الراوتر يلقط أقوى برج...' : 'ما فيه تثبيت على الراوتر — نتأكد من الإشارة...');
+    diag(`[release] wrote=${wrote} knownBoot=${knownBoot} wait=${waitMs / 1000}s`);
+    if (await waitOnline(r, waitMs, () => false)) {
+      // رجع بدون إعادة تشغيل بعد ما غيّرنا = هالراوتر ما يحتاجها
+      if (wrote && knownBoot) await setReleaseNeedsReboot(r.id, false);
+      return true;
+    }
   }
   // التثبيتات انفكّت والراوتر بعده «بدون خدمة» — بعض الموديلات (ZTE MU5001) ما تطلع من هالحالة
   // إلا بإعادة تشغيل. الإعادة ما تغيّر أي إعداد (عكس «الإعدادات الأصلية» اللي تبقى زر يدوي).
@@ -246,7 +269,16 @@ async function freeReleaseImpl(r: SavedRouter, say: (s: string) => void, keep?: 
   }
   dropSession(r.id);
   await sleep(25000);
-  return waitOnline(r, 180000, () => false);
+  const back = await waitOnline(r, 180000, () => false);
+  // الإعادة هي اللي رجّعته ← المرة الجاية ما ننتظر دقيقة ونص قبلها
+  if (back && released && !knownBoot) await setReleaseNeedsReboot(r.id, true);
+  return back;
+}
+
+/** فيه تثبيت ترددات فعلاً؟ (نفس تعريف الدرايفر لـ «مو مقفول») */
+function bandLocked(c: BandConfig): boolean {
+  return c.locked.length > 0 || c.nrLocked.length > 0 || !!c.lteScell?.length || !!c.nrScell?.length
+    || (!!c.lockKinds && (c.lockKinds.lte === 'band' || c.lockKinds.lte === 'channel' || c.lockKinds.nr === 'band' || c.lockKinds.nr === 'channel'));
 }
 
 /** يربط رسائل العملية بنافذة التقدّم: رسائل معروفة تنقل الخطوة، والباقي يطلع كملاحظة */
@@ -296,7 +328,7 @@ export async function freeRelease(r: SavedRouter, say: (s: string) => void = () 
     const t = progress.start('نرجّع الإشارة', ['نفك تثبيت الأبراج والترددات', 'ننتظر الراوتر يلقط أقوى برج'], 100);
     try {
       return await freeReleaseImpl(r, tracked(t, say, [
-        [/نفك كل التثبيتات/, 0], [/يلقط أقوى برج\.\.\./, 1], [/نعيد تشغيل الراوتر/, 'نعيد تشغيل الراوتر'],
+        [/نفك كل التثبيتات/, 0], [/يلقط أقوى برج\.\.\.|نتأكد من الإشارة/, 1], [/نعيد تشغيل الراوتر/, 'نعيد تشغيل الراوتر'],
       ]), keep);
     } finally {
       t.end();
