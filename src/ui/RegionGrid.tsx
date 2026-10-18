@@ -9,7 +9,7 @@ import { C, isDark } from './theme';
 
 import { sheet } from '../i18n';
 const FLAG: Record<string, string> = {
-  ae: '🇦🇪', in: '🇮🇳', it: '🇮🇹', eu: '🇩🇪', fr: '🇫🇷', uk: '🇬🇧', se: '🇸🇪', sg: '🇸🇬', us: '🇺🇸', cf: '📍',
+  ae: '🇦🇪', in: '🇮🇳', it: '🇮🇹', eu: '🇩🇪', fr: '🇫🇷', uk: '🇬🇧', se: '🇸🇪', sg: '🇸🇬', kr: '🇰🇷', us: '🇺🇸', br: '🇧🇷', cf: '📍',
 };
 export const flagOf = (id: string) => FLAG[id] ?? '🌐';
 

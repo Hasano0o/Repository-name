@@ -36,7 +36,10 @@ export const REGIONS: GameRegion[] = [
   { id: 'uk', name: 'بريطانيا', hint: 'سيرفرات أوروبا (لندن)', url: 'https://dynamodb.eu-west-2.amazonaws.com/ping', alt: ['https://s3.eu-west-2.amazonaws.com/', 'https://ec2.eu-west-2.amazonaws.com/ping'] },
   { id: 'se', name: 'السويد', hint: 'سيرفرات شمال أوروبا (ستوكهولم)', url: 'https://dynamodb.eu-north-1.amazonaws.com/ping', alt: ['https://s3.eu-north-1.amazonaws.com/', 'https://ec2.eu-north-1.amazonaws.com/ping'] },
   { id: 'sg', name: 'سنغافورة', hint: 'سيرفرات آسيا', url: 'https://dynamodb.ap-southeast-1.amazonaws.com/ping', alt: ['https://s3.ap-southeast-1.amazonaws.com/', 'https://ec2.ap-southeast-1.amazonaws.com/ping'] },
+  // نفس مناطق «تغيير الخادم» في ببجي: الشرق الأوسط، أوروبا، آسيا، أمريكا الشمالية، أمريكا الجنوبية، كوريا واليابان
+  { id: 'kr', name: 'كوريا واليابان', hint: 'سيرفرات شرق آسيا (سيول)', url: 'https://dynamodb.ap-northeast-2.amazonaws.com/ping', alt: ['https://s3.ap-northeast-2.amazonaws.com/', 'https://dynamodb.ap-northeast-1.amazonaws.com/ping'] },
   { id: 'us', name: 'أمريكا', hint: 'سيرفرات أمريكا الشرقية (فرجينيا)', url: 'https://dynamodb.us-east-1.amazonaws.com/ping', alt: ['https://s3.us-east-1.amazonaws.com/', 'https://ec2.us-east-1.amazonaws.com/ping'] },
+  { id: 'br', name: 'أمريكا الجنوبية', hint: 'سيرفرات البرازيل (ساو باولو)', url: 'https://dynamodb.sa-east-1.amazonaws.com/ping', alt: ['https://s3.sa-east-1.amazonaws.com/', 'https://ec2.sa-east-1.amazonaws.com/ping'] },
   { id: 'cf', name: 'أقرب سيرفر', hint: 'Cloudflare — للمقارنة العامة', url: ENDPOINT, alt: ['https://www.cloudflare.com/cdn-cgi/trace', 'https://1.1.1.1/cdn-cgi/trace'] },
 ];
 
