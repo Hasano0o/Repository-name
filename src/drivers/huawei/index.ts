@@ -1,4 +1,5 @@
 import * as Crypto from 'expo-crypto';
+import { huaweiEncrypt } from './rsaEnc';
 import { sha256 } from '@noble/hashes/sha2';
 import { hmac } from '@noble/hashes/hmac';
 import { pbkdf2 } from '@noble/hashes/pbkdf2';
@@ -233,15 +234,32 @@ export class HuaweiDriver implements RouterDriver {
     }
     return xml;
   }
-  private async post(p: string, body: string, token?: string, retry = true): Promise<string> {
+  /** مفتاح التشفير العام للراوتر (للطلبات «;enc») */
+  private rsaKey: { n: string; e: string } | null = null;
+  private async encKey() {
+    if (this.rsaKey) return this.rsaKey;
+    const x = await this.get('webserver/publickey');
+    const n = tag(x, 'encpubkeyn') ?? '', e = tag(x, 'encpubkeye') ?? '';
+    if (!/^[0-9a-f]{128,}$/i.test(n) || !/^[0-9a-f]+$/i.test(e)) throw new HuaweiError('9003');
+    this.rsaKey = { n, e };
+    return this.rsaKey;
+  }
+  private async post(p: string, body: string, token?: string, retry = true, enc = false): Promise<string> {
     const tok = token ?? (this.queue.shift() || await this.freshToken());
+    const xmlBody = `<?xml version="1.0" encoding="UTF-8"?><request>${body}</request>`;
+    let payload = xmlBody;
+    if (enc) {
+      const k = await this.encKey();
+      payload = huaweiEncrypt(xmlBody, k.n, k.e, n => Crypto.getRandomBytes(n));
+    }
     const r = await this.http(this.url(p), {
       method: 'POST',
       headers: this.headers({
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        // «;enc» = نفس صفحة الراوتر لما تشفّر (إعدادات الواي فاي في الموديلات الجديدة)
+        'Content-Type': enc ? 'application/x-www-form-urlencoded; charset=UTF-8;enc' : 'application/x-www-form-urlencoded; charset=UTF-8',
         __RequestVerificationToken: tok,
       }),
-      body: `<?xml version="1.0" encoding="UTF-8"?><request>${body}</request>`,
+      body: payload,
     });
     this.captureTokens(r);
     const xml = await r.text();
@@ -250,7 +268,12 @@ export class HuaweiDriver implements RouterDriver {
       this.log('POST', p, 'error', code);
       if (retry && !token && (code === '125002' || code === '125003')) {
         this.queue = [];
-        return this.post(p, body, undefined, false);
+        return this.post(p, body, undefined, false, enc);
+      }
+      // الموديلات الجديدة (H158-381 / 5G CPE Pro 5) ترفض كتابة الواي فاي بدون تشفير: 9003 / 100005
+      if (!enc && /^wlan\//.test(p) && (code === '9003' || code === '100005')) {
+        this.log('POST', p, 'needs encryption — retrying with ;enc');
+        return this.post(p, body, undefined, true, true);
       }
       // POST: ما نعلّم الجلسة خربانة هنا — 100003 على أمر حفظ غالباً «غير مدعوم» (مثل net/lock-freq في H158)
       throw new HuaweiError(code);
