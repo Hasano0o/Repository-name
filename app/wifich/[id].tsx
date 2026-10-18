@@ -192,7 +192,14 @@ export default function WifiChannel() {
       for (let i = 0; i < list.length && !cancelled(); i++) {
         t.step(i + 1);
         t.note('نغيّر القناة — الواي فاي بينقطع ثواني');
-        await apply(r, b, list[i], cancelled);
+        try {
+          await apply(r, b, list[i], cancelled);
+        } catch (e: any) {
+          // الراوتر رفض هالقناة بالذات (مو مسموحة عنده) — نتخطاها ونكمّل الباقي بدل ما نوقف التجربة
+          if (!/9003|ما قبل/.test(String(e?.message ?? e))) throw e;
+          t.note(`قناة ${list[i]} مو مسموحة في راوترك — نتخطاها`);
+          continue;
+        }
         current = list[i];
         t.note('نقيس...');
         res.push({ ch: list[i], q: await measure(r, b, demoRef.current) });
