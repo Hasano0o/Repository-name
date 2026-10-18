@@ -38,25 +38,32 @@ const SECTIONS: Section[] = [
   {
     key: 'auto',
     icon: '🚀',
-    title: 'الأسرع تلقائياً',
-    subtitle: 'يختار الأفضل لك بدون تعب',
+    title: 'اختار لي الأفضل',
+    subtitle: 'وش يهمك أكثر؟ التطبيق يجرّب ويقيس ويثبّت الأفضل لحاله',
     items: [
       {
         key: 'speed',
         icon: 'spark',
         color: tFg('#7c5cff'),
         title: 'أسرع إنترنت',
-        sub: 'اختبار تلقائي شامل — يقفل ويقيس ويثبّت',
+        sub: 'يجرّب الترددات ويقيس السرعة والثبات، ويثبّت الأفضل',
         tag: 'موصى به',
         path: 'optimize',
+      },
+      {
+        key: 'game',
+        icon: 'game',
+        color: tFg('#ec4899'),
+        title: 'أقل بنق للألعاب',
+        sub: 'يقيس البنق لسيرفر لعبتك في كل تردد، ويثبّت الأقل',
+        path: 'ping',
       },
       {
         key: 'advisor',
         icon: 'bulb',
         color: tFg('#0ea5a4'),
-        title: 'المستشار الذكي',
-        sub: 'يقارن وضعك بالأبراج حولك، يجرّبها فعلياً ويقول الأفضل — ما يغيّر شي بدون إذنك',
-        tag: 'جديد',
+        title: 'أقوى برج وأثبت اتصال',
+        sub: 'يقارن برجك بالأبراج حولك ويجرّبها فعلياً — ما يغيّر شي بدون إذنك',
         path: 'advisor',
       },
     ],
@@ -75,6 +82,14 @@ const SECTIONS: Section[] = [
         sub: 'اختيار يدوي كامل + وضع الشبكة',
         path: 'bands',
       },
+    ],
+  },
+  {
+    key: 'ca',
+    icon: '🔗',
+    title: 'الدمج (متقدّم)',
+    subtitle: 'تجمع أكثر من تردد مع بعض لسرعة أعلى — لو برجك يدعمه',
+    items: [
       {
         key: 'ca',
         icon: 'layers',
@@ -134,7 +149,7 @@ export default function Finder() {
       >
         <View style={s.header}>
           <Text style={s.lead}>وش تبي تسوي؟</Text>
-          <Text style={s.sub}>أدوات الترددات والدمج</Text>
+          <Text style={s.sub}>اختر هدفك والتطبيق يكمّل، أو تحكّم بنفسك من تحت</Text>
         </View>
 
         {SECTIONS.map((sec) => (

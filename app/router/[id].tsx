@@ -881,7 +881,7 @@ export default function RouterDashboard() {
                 onPress={() => router.push(`/aim/${info.id}` as Href)} />
               <ToolTile wide icon="tower" color={tFg('#12b76a')} title="الأبراج" sub="النواقل والدمج"
                 onPress={() => router.push(`/towers/${info.id}` as Href)} />
-              <ToolTile wide icon="spark" color={tFg('#7c5cff')} title="أفضل تردد" sub="أسرع نت وأقل بنق"
+              <ToolTile wide icon="spark" color={tFg('#7c5cff')} title="اختار لي الأفضل" sub="سرعة · ألعاب · ثبات"
                 onPress={() => router.push(`/finder/${info.id}` as Href)} />
               <ToolTile wide icon="game" color={tFg('#ec4899')} title="مُحسّن الألعاب" sub="أقل بنق للعبتك"
                 onPress={() => router.push(`/ping/${info.id}` as Href)} />
