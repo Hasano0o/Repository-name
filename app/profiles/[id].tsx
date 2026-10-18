@@ -10,7 +10,8 @@ import { C } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { fmtTime } from '../../src/utils/format';
 
-import { sheet } from '../../src/i18n';
+import { sheet } from '../../src/i18n';import { HubLinks } from '../../src/ui/HubLinks';
+
 export default function ProfilesScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [info, setInfo] = useState<SavedRouter | null>(null);
@@ -119,6 +120,10 @@ export default function ProfilesScreen() {
 
   return (
     <ScrollView style={s.wrap} contentContainerStyle={s.content}>
+      <HubLinks links={[
+        { icon: 'spark', color: '#7c5cff', title: 'الوضع الذكي', sub: 'إعداد حسب الوقت', to: `/auto/${id}` },
+        { icon: 'clock', color: '#a16207', title: 'وش نجح عندي', sub: 'سجل تجاربك', to: `/trials/${id}` },
+      ]} />
       {!!error && <Text style={s.err}>{error}</Text>}
       {!!status && <Text style={s.status}>{status}</Text>}
 

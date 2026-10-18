@@ -18,7 +18,8 @@ import {
 
 import { tBg, tFg } from '../../src/ui/theme';
 import { hostLabel } from '../../src/drivers/device';
-import { sheet } from '../../src/i18n';
+import { sheet } from '../../src/i18n';import { HubLinks } from '../../src/ui/HubLinks';
+
 type Info = { label: string; value?: string; accent?: string };
 
 /** يعرض الخانات المتوفرة فقط — أول [max] خانات، والباقي خلف «عرض الكل» عشان الصفحة ما تزدحم */
@@ -109,6 +110,10 @@ export default function DetailsScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.blue} colors={[P.blue]} />}
       >
+        <HubLinks links={[
+          { icon: 'layers', color: '#0ea5a4', title: 'الناقلات النشطة', sub: 'الدمج الحين', to: `/carriers/${id}` },
+          { icon: 'share', color: '#64748b', title: 'شارك التقرير', sub: 'صورة لقراءاتك', to: `/report/${id}` },
+        ]} />
         {loading && (
           <View style={d.center}>
             <ActivityIndicator size="large" color={P.blue} />

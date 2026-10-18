@@ -890,7 +890,7 @@ export default function RouterDashboard() {
             <TileGrid>
               <ToolTile icon="speed" color={tFg('#12b76a')} title="السرعة" sub="تنزيل ورفع"
                 onPress={() => router.push(`/speed/${info.id}` as Href)} />
-              <ToolTile icon="chart" color={tFg('#0891b2')} title="التفاصيل" sub="كل الأرقام"
+              <ToolTile icon="chart" color={tFg('#0891b2')} title="التفاصيل" sub="الأرقام والدمج والتقرير"
                 onPress={() => router.push(`/details/${info.id}` as Href)} />
               <ToolTile icon="phone" color={tFg('#8b5cf6')} title="الأجهزة" sub="المتصلين"
                 onPress={() => router.push(`/device/${info.id}` as Href)} />
@@ -928,7 +928,7 @@ export default function RouterDashboard() {
                 </LinearGradient>
                 <View style={{ flex: 1, alignItems: 'flex-end', gap: 2 }}>
                   <Text style={s.moreBtnTitle}>أدوات أكثر</Text>
-                  <Text style={s.moreBtnSub} numberOfLines={1}>{moreOpen ? 'اضغط للإخفاء' : 'الأنتنا · الأماكن · التقرير · الإعدادات…'}</Text>
+                  <Text style={s.moreBtnSub} numberOfLines={1}>{moreOpen ? 'اضغط للإخفاء' : 'الأنتنا · الأماكن · ملفاتي · الإعدادات…'}</Text>
                 </View>
                 <View style={s.moreBtnChev}>
                   <View style={{ transform: [{ rotate: moreOpen ? '-90deg' : '90deg' }] }}>
@@ -950,12 +950,6 @@ export default function RouterDashboard() {
                   <Icon name="pin" size={18} color={tFg('#fff')} />
                 </View>
                 <Text style={s.moreLbl}>الأماكن</Text>
-              </Pressable>
-              <Pressable style={[s.moreTile, { backgroundColor: tBg('#64748b12'), borderColor: tBd('#64748b30') }]} onPress={() => router.push(`/report/${info.id}` as Href)}>
-                <View style={[s.moreIcon, { backgroundColor: tBg('#64748b') }]}>
-                  <Icon name="report" size={18} color={tFg('#fff')} />
-                </View>
-                <Text style={s.moreLbl}>التقرير</Text>
               </Pressable>
               {info.driverId !== 'device' && (
                 <Pressable style={[s.moreTile, { backgroundColor: tBg('#2f6bff12'), borderColor: tBd('#2f6bff30') }]} onPress={() => router.push(`/wifi/${info.id}` as Href)}>
@@ -985,18 +979,8 @@ export default function RouterDashboard() {
                 <View style={[s.moreIcon, { backgroundColor: tBg('#a16207') }]}>
                   <Icon name="folder" size={18} color={tFg('#fff')} />
                 </View>
-                <Text style={s.moreLbl}>الملفات</Text>
+                <Text style={s.moreLbl}>ملفاتي</Text>
               </Pressable>
-              {feat.bands && (
-                <>
-                <Pressable style={[s.moreTile, { backgroundColor: tBg('#7c5cff12'), borderColor: tBd('#7c5cff30') }]} onPress={() => router.push(`/auto/${info.id}` as Href)}>
-                  <View style={[s.moreIcon, { backgroundColor: tBg('#7c5cff') }]}>
-                    <Icon name="spark" size={18} color={tFg('#fff')} />
-                  </View>
-                  <Text style={s.moreLbl}>الوضع الذكي</Text>
-                </Pressable>
-                </>
-              )}
               <Pressable style={[s.moreTile, { backgroundColor: tBg('#f43f5e12'), borderColor: tBd('#f43f5e30') }]} onPress={() => router.push('/monitor' as Href)}>
                 <View style={[s.moreIcon, { backgroundColor: tBg('#f43f5e') }]}>
                   <Icon name="bell" size={18} color={tFg('#fff')} />
