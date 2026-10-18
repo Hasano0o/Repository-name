@@ -24,6 +24,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CFG = os.path.join(HERE, "help_group.json")
 GROUP_USERNAME = "BandlyHelp"  # القروب عام: نعرف رقمه من المعرّف (يتغير الرقم لما يصير سوبر قروب)
 DEFAULT_GROUP = -1003985239175  # صار سوبر قروب (الرقم القديم -5462203499)
+# قروبات إضافية ينزل فيها النشر المجدول بس (ميزة اليوم + بطاقة التحميل) — بدون الرد التلقائي.
+# لازم البوت يكون عضو فيها (ومشرف عشان يثبّت البطاقة). الإضافة: معرّف القروب بدون @
+EXTRA_GROUPS = ["waad055833"]
 COOLDOWN = 15 * 60            # نفس الحل ما يتكرر في القروب قبل ربع ساعة
 
 # ═══ الحلول ═══
@@ -320,7 +323,7 @@ def register(bot) -> None:
     @bot.message_handler(commands=["grouptip", "grouplinks"], func=lambda m: getattr(m.chat, "type", "") == "private" and _is_owner(m))
     def _test(m):
         ok = post_tip(bot) if m.text.startswith("/grouptip") else post_links(bot)
-        bot.reply_to(m, "✅ انرسل للقروب" if ok else "❌ ما انرسل — شوف السجل")
+        bot.reply_to(m, "✅ انرسل للقروبات" if ok else "❌ ما انرسل — شوف السجل")
 
 
 
@@ -405,11 +408,21 @@ def _dl_kb() -> types.InlineKeyboardMarkup:
     return kb
 
 
+def _targets() -> list:
+    """(مفتاح الحالة، الشات): قروب الدعم أول، وبعده القروبات الإضافية"""
+    return [("main", group_id())] + [(u, f"@{u}") for u in EXTRA_GROUPS]
+
+
 def post_links(bot) -> bool:
+    """بطاقة التحميل في كل القروبات — True لو نزلت في واحد على الأقل"""
+    return any([_post_links_to(bot, key, chat) for key, chat in _targets()])
+
+
+def _post_links_to(bot, key, gid) -> bool:
     """بطاقة التحميل: تنحذف القديمة وتنزل جديدة وتتثبّت"""
     st = _state()
-    gid = group_id()
-    old = st.get("links_msg")
+    msgs = st.setdefault("links_msgs", {})
+    old = msgs.get(key) or (st.get("links_msg") if key == "main" else None)
     if old:
         try:
             bot.delete_message(gid, old)
@@ -424,12 +437,15 @@ def post_links(bot) -> bool:
         try:
             bot.pin_chat_message(gid, m.message_id, disable_notification=True)
         except Exception as e:
-            print("[help] pin:", e)
-        st["links_msg"] = m.message_id
+            print(f"[help] pin {key}:", e)
+        st = _state()
+        st.setdefault("links_msgs", {})[key] = m.message_id
+        if key == "main":
+            st["links_msg"] = m.message_id
         _save_state(st)
         return True
     except Exception as e:
-        print("[help] links:", e)
+        print(f"[help] links {key}:", e)
         return False
 
 
@@ -438,23 +454,28 @@ def post_tip(bot) -> bool:
     st = _state()
     i = int(st.get("tip_i", 0)) % len(TIPS)
     title, body = TIPS[i]
-    try:
-        bot.send_message(group_id(),
-            f"💡 <b>ميزة اليوم: {title}</b>\n\n{body}\n\n<i>عندك سؤال عنها؟ اكتبه هنا 👇</i>",
-            parse_mode="HTML", reply_markup=_dl_kb(), disable_web_page_preview=True)
-        st["tip_i"] = i + 1
-        _save_state(st)
-        return True
-    except Exception as e:
-        print("[help] tip:", e)
-        return False
+    sent = False
+    for key, chat in _targets():
+        try:
+            bot.send_message(chat,
+                f"💡 <b>ميزة اليوم: {title}</b>\n\n{body}\n\n<i>عندك سؤال عنها؟ اكتبه هنا 👇</i>",
+                parse_mode="HTML", reply_markup=_dl_kb(), disable_web_page_preview=True)
+            sent = True
+        except Exception as e:
+            print(f"[help] tip {key}:", e)
+    if sent:
+        st = _state(); st["tip_i"] = i + 1; _save_state(st)
+    return sent
 
 
 def _group_scheduler(bot) -> None:
     time.sleep(60)
     # أول تشغيل: نثبّت بطاقة الروابط مرة وحدة
-    if not _state().get("links_msg"):
-        post_links(bot)
+    st0 = _state()
+    for key, chat in _targets():
+        have = st0.get("links_msgs", {}).get(key) or (st0.get("links_msg") if key == "main" else None)
+        if not have:
+            _post_links_to(bot, key, chat)
     while True:
         try:
             now = datetime.now(RIYADH)
