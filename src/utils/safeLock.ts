@@ -134,6 +134,8 @@ export async function waitOnline(r: SavedRouter, timeoutMs: number, isCancelled:
 
 /** الراوتر قفل الدخول بسبب محاولات كثيرة؟ ننتظر المدة اللي قالها (أو دقيقتين) بدل ما نزيد القفل */
 const LOCKED = /قفل تسجيل الدخول|محاولات كثيرة|108007|locked/i;
+/** الدخول فشل لأن الكلمة غلط (مو لأن الراوتر مشغول) — ما نعيد المحاولة */
+const WRONG_PW = /كلمة المرور (غلط|غالباً غلط)/;
 async function waitIfLocked(e: unknown, say: (s: string) => void): Promise<boolean> {
   const msg = String((e as any)?.message ?? e);
   if (!LOCKED.test(msg)) return false;
@@ -174,6 +176,8 @@ async function rescueRouterImpl(r: SavedRouter, say: (s: string) => void): Promi
     } catch (e) {
       lastErr = e;
       if (/ما يدعم/.test(String((e as any)?.message))) break;
+      // كلمة المرور غلط: إعادة المحاولة بس تحرق محاولات وتقفل الراوتر — نوقف ونقول للمستخدم
+      if (WRONG_PW.test(String((e as any)?.message))) break;
       if (await waitIfLocked(e, say)) i--; // القفل ما يحسب محاولة
     }
   }
@@ -237,6 +241,7 @@ async function freeReleaseImpl(r: SavedRouter, say: (s: string) => void, keep?: 
       }, 60_000);
       released = true;
     } catch (e) {
+      if (WRONG_PW.test(String((e as any)?.message))) throw e;
       if (await waitIfLocked(e, say)) i--;
     }
   }

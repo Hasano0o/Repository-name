@@ -7,6 +7,7 @@ import {
   SignalSnapshot, CellLockState, CellLockTarget, WifiRadio,
 } from '../types';
 import { http } from '../http';
+import { loadFormula, saveFormula } from './formulaStore';
 import { ZteIo, zteExtras, zteSetUpnp, zteSetDmz, zteSetLedNight, zteSetBandOn, zteSetGuest, zteSetUrlBlocks, zteRadios, zteSetChannel, zteSetAutoRecover, zteSetWifiSleep, zteSetWifiNames, zteFactoryReset } from './extras';
 import {
   parsePci, decodeBandMask, encodeBandMask, parseZteCa, bandLabel,
@@ -371,11 +372,24 @@ export class ZteDriver implements RouterDriver {
 
     let sawBusy = false;
 
-    // الصيغة اللي نجحت قبل تنجرب أول
-    const known = GOOD_FORMULA.get(host);
-    if (known) candidates.sort((a, b) => (a.name === known ? -1 : b.name === known ? 1 : 0));
+    // ═══ الصيغة اللي نجحت قبل (محفوظة على الجهاز) — لو نعرفها نجرّبها هي بس ═══
+    // لو فشلت والصيغة معروفة = كلمة المرور تغيّرت (مو الصيغة) — ما نرش باقي الصيغ ونحرق المحاولات.
+    const known = GOOD_FORMULA.get(host) ?? await loadFormula(host);
+    const list = known && candidates.some(c => c.name === known)
+      ? candidates.filter(c => c.name === known)
+      : candidates;
+    // نخلي محاولتين على الأقل للمستخدم (يدخل من المتصفح أو يصحّح الكلمة) — ما نوصل الراوتر للقفل
+    const KEEP = 2;
+    // بعض الفيرموير ما يقول كم باقي — وقتها ما نتعدى ٣ محاولات فاشلة
+    let blindFails = 0;
 
-    for (const c of candidates) {
+    for (const c of list) {
+      const leftNow = await this.attemptsLeft();
+      if (leftNow !== undefined && leftNow <= KEEP) {
+        const lock = await this.lockState();
+        throw new Error(lock ?? `تعذّر تسجيل الدخول — كلمة المرور غالباً غلط، ووقفنا قبل ما يقفل الراوتر الدخول (باقي ${leftNow} محاولات). تأكد منها من الإعدادات.`);
+      }
+      if (leftNow === undefined && blindFails >= 3) break;
       let out = '';
       try {
         out = await this.post({ goformId: 'LOGIN', password: c.val });
@@ -389,18 +403,17 @@ export class ZteDriver implements RouterDriver {
       if (isOk(out)) {
         this.log('login: ✓ ✓ ✓ نجح بـ', c.name);
         GOOD_FORMULA.set(host, c.name);
+        await saveFormula(host, c.name);
         await new Promise(r => setTimeout(r, 400));
         return;
       }
       // 2 = duplicateUser (مستخدم آخر داخل) — نتذكره ونكمل
       if (/"result"\s*:\s*"?2"?/.test(out)) { sawBusy = true; continue; }
-      // نوقف قبل ما يقفل الراوتر الدخول — نخلي محاولة احتياط
-      const left = await this.attemptsLeft();
-      if (left !== undefined && left <= 1) {
-        const lock = await this.lockState();
-        throw new Error(lock ?? 'تعذّر تسجيل الدخول — كلمة المرور غالباً غلط، والراوتر باقي له محاولة وحدة قبل ما يقفل الدخول. تأكد منها من الإعدادات.');
+      blindFails++;
+      // الصيغة المعروفة فشلت ← الكلمة نفسها تغيّرت
+      if (known && c.name === known) {
+        throw new Error('تعذّر تسجيل الدخول — كلمة المرور غلط (غالباً تغيّرت أو الراوتر انضبط مصنع). تأكد منها من الإعدادات.');
       }
-      // غير ذلك: نجرّب الصيغة التالية (1 أو 3 ما نوقف)
     }
 
     if (sawBusy) {
