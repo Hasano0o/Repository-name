@@ -8,7 +8,7 @@ import { withSession } from '../store/sessions';
 import { Carrier } from '../drivers/types';
 import { bandLabel, friendlyBand } from '../utils/bands';
 import { Icon } from './Icon';
-import { C, R, isDark, tBd, tBg } from './theme';
+import { C, R, tBd, tBg } from './theme';
 
 import { sheet } from '../i18n';
 /**
@@ -20,10 +20,11 @@ const GRAD = {
   LTE: ['#1f5eff', '#3b8bff'] as [string, string],
   NR: ['#5b3df5', '#9466ff'] as [string, string],
 };
-const SOFT = isDark
-  ? { LTE: '#22314f', NR: '#2c2850' }
-  : { LTE: '#eaf1ff', NR: '#f0ecff' };
-const INK = { LTE: '#1f5eff', NR: '#5b3df5' };
+/** الثانوي: نفس لون تقنيته بس أفتح شوي — واضح ومو باهت */
+const GRAD_SEC = {
+  LTE: ['#3b82f6', '#60a5fa'] as [string, string],
+  NR: ['#7c5cff', '#a78bfa'] as [string, string],
+};
 
 const mhzOf = (c: Carrier) => (typeof c.bandwidth === 'number' && c.bandwidth > 0 ? c.bandwidth : undefined);
 
@@ -105,12 +106,13 @@ export function ComboCard({ r }: { r: SavedRouter }) {
                 <Text style={s.emptySub}>يجي وقت التحميل</Text>
               </View>
             ) : scc.slice(0, 4).map((c, i) => (
-              <View key={i} style={[s.sec, { backgroundColor: SOFT[c.tech], borderColor: INK[c.tech] + '33' }, scc.length > 2 && s.secSmall]}>
+              <LinearGradient key={i} colors={GRAD_SEC[c.tech]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={[s.sec, scc.length > 2 && s.secSmall]}>
                 <View style={s.secTop}>
-                  <Text style={s.secLbl}>{i === 0 ? 'الثانوي' : `ثانوي ${i + 1}`}</Text>
-                  <View style={[s.dot, { backgroundColor: INK[c.tech] }]} />
+                  <View style={s.secPill}><Text style={s.secPillTxt}>{i === 0 ? 'الثانوي' : `ثانوي ${i + 1}`}</Text></View>
+                  <Text style={s.secTech}>{c.tech === 'NR' ? '5G' : '4G'}</Text>
                 </View>
-                <Text style={[s.secBand, { color: INK[c.tech] }, scc.length > 2 && { fontSize: 18 }]} numberOfLines={1} adjustsFontSizeToFit>
+                <Text style={[s.secBand, scc.length > 2 && { fontSize: 20 }]} numberOfLines={1} adjustsFontSizeToFit>
                   {bandLabel(c.tech, c.band)}
                 </Text>
                 {scc.length <= 2 && (
@@ -118,7 +120,7 @@ export function ComboCard({ r }: { r: SavedRouter }) {
                     {friendlyBand(c.tech, c.band)}{mhzOf(c) ? ` · ${mhzOf(c)}MHz` : ''}
                   </Text>
                 )}
-              </View>
+              </LinearGradient>
             ))}
           </View>
         </View>
@@ -167,14 +169,16 @@ const s = sheet({
   plusTxt: { color: '#ffffff', fontSize: 16, fontWeight: '900', marginTop: -2 },
 
   side: { flex: 1, gap: 6, flexDirection: 'row-reverse', flexWrap: 'wrap', alignContent: 'stretch' },
-  sec: { flexGrow: 1, flexBasis: '100%', borderRadius: 14, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 7, justifyContent: 'center' },
-  secSmall: { flexBasis: '45%', paddingVertical: 5 },
-  secEmpty: { backgroundColor: C.rowBg, borderColor: C.cardBorder, borderStyle: 'dashed', alignItems: 'flex-end' },
-  secTop: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5 },
+  sec: { flexGrow: 1, flexBasis: '100%', borderRadius: 18, padding: 11, justifyContent: 'space-between', minHeight: 104 },
+  secSmall: { flexBasis: '45%', minHeight: 49, padding: 8 },
+  secEmpty: { backgroundColor: C.rowBg, borderWidth: 1, borderColor: C.cardBorder, borderStyle: 'dashed', alignItems: 'flex-end', justifyContent: 'center' },
+  secTop: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
+  secPill: { borderRadius: 999, borderWidth: 1, borderColor: '#ffffff99', backgroundColor: '#ffffff26', paddingHorizontal: 8, paddingVertical: 1 },
+  secPillTxt: { color: '#ffffff', fontSize: 11, fontWeight: '900' },
+  secTech: { color: '#ffffffcc', fontSize: 11, fontWeight: '900' },
   secLbl: { color: C.sub, fontSize: 10.5, fontWeight: '800', textAlign: 'right' },
-  dot: { width: 6, height: 6, borderRadius: 3 },
-  secBand: { fontSize: 22, fontWeight: '900', textAlign: 'right' },
-  secNice: { color: C.sub, fontSize: 10, fontWeight: '700', textAlign: 'right' },
+  secBand: { color: '#ffffff', fontSize: 28, fontWeight: '900', textAlign: 'right' },
+  secNice: { color: '#ffffffe6', fontSize: 10.5, fontWeight: '700', textAlign: 'right' },
   emptyTxt: { color: C.text, fontSize: 15, fontWeight: '800' },
   emptySub: { color: C.muted, fontSize: 10 },
 
