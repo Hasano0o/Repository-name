@@ -112,7 +112,7 @@ export function ComboCard({ r }: { r: SavedRouter }) {
                   <View style={s.secPill}><Text style={s.secPillTxt}>{i === 0 ? 'الثانوي' : `ثانوي ${i + 1}`}</Text></View>
                   <Text style={s.secTech}>{c.tech === 'NR' ? '5G' : '4G'}</Text>
                 </View>
-                <Text style={[s.secBand, scc.length > 2 && { fontSize: 20 }]} numberOfLines={1} adjustsFontSizeToFit>
+                <Text style={[s.secBand, scc.length > 2 && { fontSize: 17 }]} numberOfLines={1} adjustsFontSizeToFit>
                   {bandLabel(c.tech, c.band)}
                 </Text>
                 {scc.length <= 2 && (
@@ -139,52 +139,52 @@ export function ComboCard({ r }: { r: SavedRouter }) {
 
 const s = sheet({
   card: {
-    backgroundColor: C.card, borderRadius: R.lg, padding: 14, gap: 14,
+    backgroundColor: C.card, borderRadius: R.lg, padding: 12, gap: 12,
     borderWidth: 1, borderColor: tBd('#ffffff'), marginBottom: 4,
     shadowColor: C.shadow, shadowOpacity: 0.07, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 2,
   },
   head: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
-  icon: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  title: { color: C.text, fontSize: 16, fontWeight: '900' },
-  sub: { color: C.sub, fontSize: 11.5, marginTop: 1, textAlign: 'right' },
+  icon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  title: { color: C.text, fontSize: 14.5, fontWeight: '900' },
+  sub: { color: C.sub, fontSize: 10.5, marginTop: 1, textAlign: 'right' },
   total: { alignItems: 'center', backgroundColor: tBg('#e8f8f0'), borderRadius: 12, paddingHorizontal: 9, paddingVertical: 4 },
-  totalNum: { color: '#12b76a', fontSize: 16, fontWeight: '900' },
+  totalNum: { color: '#12b76a', fontSize: 14, fontWeight: '900' },
   totalLbl: { color: '#12b76a', fontSize: 9, fontWeight: '800', marginTop: -2 },
 
   loadRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, paddingVertical: 10 },
   muted: { color: C.sub, fontSize: 12.5, textAlign: 'right' },
 
   chain: { flexDirection: 'row-reverse', alignItems: 'stretch' },
-  main: { width: '42%', borderRadius: 18, padding: 11, justifyContent: 'space-between', minHeight: 104 },
-  mainTop: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
+  main: { flex: 1, borderRadius: 16, padding: 9, justifyContent: 'space-between', alignItems: 'center', minHeight: 84 },
+  mainTop: { alignSelf: 'stretch', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
   mainPill: { borderRadius: 999, borderWidth: 1, borderColor: '#ffffff99', backgroundColor: '#ffffff26', paddingHorizontal: 8, paddingVertical: 1 },
-  mainPillTxt: { color: '#ffffff', fontSize: 11, fontWeight: '900' },
+  mainPillTxt: { color: '#ffffff', fontSize: 10, fontWeight: '900' },
   star: { fontSize: 14 },
-  mainBand: { color: '#ffffff', fontSize: 32, fontWeight: '900', letterSpacing: -0.5, textAlign: 'right' },
-  mainNice: { color: '#ffffffe6', fontSize: 10.5, fontWeight: '700', textAlign: 'right' },
+  mainBand: { color: '#ffffff', fontSize: 24, fontWeight: '900', letterSpacing: -0.5, textAlign: 'center' },
+  mainNice: { color: '#ffffffe6', fontSize: 9.5, fontWeight: '700', textAlign: 'center' },
 
-  link: { width: 30, alignItems: 'center', justifyContent: 'center' },
+  link: { width: 26, alignItems: 'center', justifyContent: 'center' },
   linkLine: { flex: 1, width: 2, backgroundColor: C.track, borderRadius: 1 },
-  plus: { width: 24, height: 24, borderRadius: 12, backgroundColor: C.blue, alignItems: 'center', justifyContent: 'center', marginVertical: 3 },
-  plusTxt: { color: '#ffffff', fontSize: 16, fontWeight: '900', marginTop: -2 },
+  plus: { width: 20, height: 20, borderRadius: 10, backgroundColor: C.blue, alignItems: 'center', justifyContent: 'center', marginVertical: 3 },
+  plusTxt: { color: '#ffffff', fontSize: 14, fontWeight: '900', marginTop: -2 },
 
   side: { flex: 1, gap: 6, flexDirection: 'row-reverse', flexWrap: 'wrap', alignContent: 'stretch' },
-  sec: { flexGrow: 1, flexBasis: '100%', borderRadius: 18, padding: 11, justifyContent: 'space-between', minHeight: 104 },
-  secSmall: { flexBasis: '45%', minHeight: 49, padding: 8 },
-  secEmpty: { backgroundColor: C.rowBg, borderWidth: 1, borderColor: C.cardBorder, borderStyle: 'dashed', alignItems: 'flex-end', justifyContent: 'center' },
-  secTop: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
+  sec: { flexGrow: 1, flexBasis: '100%', borderRadius: 16, padding: 9, justifyContent: 'space-between', alignItems: 'center', minHeight: 84 },
+  secSmall: { flexBasis: '45%', minHeight: 40, padding: 6 },
+  secEmpty: { backgroundColor: C.rowBg, borderWidth: 1, borderColor: C.cardBorder, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
+  secTop: { alignSelf: 'stretch', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
   secPill: { borderRadius: 999, borderWidth: 1, borderColor: '#ffffff99', backgroundColor: '#ffffff26', paddingHorizontal: 8, paddingVertical: 1 },
-  secPillTxt: { color: '#ffffff', fontSize: 11, fontWeight: '900' },
-  secTech: { color: '#ffffffcc', fontSize: 11, fontWeight: '900' },
+  secPillTxt: { color: '#ffffff', fontSize: 10, fontWeight: '900' },
+  secTech: { color: '#ffffffcc', fontSize: 10, fontWeight: '900' },
   secLbl: { color: C.sub, fontSize: 10.5, fontWeight: '800', textAlign: 'right' },
-  secBand: { color: '#ffffff', fontSize: 28, fontWeight: '900', textAlign: 'right' },
-  secNice: { color: '#ffffffe6', fontSize: 10.5, fontWeight: '700', textAlign: 'right' },
+  secBand: { color: '#ffffff', fontSize: 24, fontWeight: '900', textAlign: 'center' },
+  secNice: { color: '#ffffffe6', fontSize: 9.5, fontWeight: '700', textAlign: 'center' },
   emptyTxt: { color: C.text, fontSize: 15, fontWeight: '800' },
   emptySub: { color: C.muted, fontSize: 10 },
 
   btn: {
-    height: 46, borderRadius: 16,
+    height: 40, borderRadius: 14,
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6,
   },
-  btnTxt: { color: '#ffffff', fontSize: 14.5, fontWeight: '900' },
+  btnTxt: { color: '#ffffff', fontSize: 13.5, fontWeight: '900' },
 });
