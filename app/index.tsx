@@ -9,10 +9,10 @@ import { withSession } from '../src/store/sessions';
 import { Signal } from '../src/drivers/types';
 import { Icon, IconName } from '../src/ui/Icon';
 import { SkeletonRouterCard, EmptyState } from '../src/ui/States';
-import { overallLevel, parseBands, parseNrBands, rsrpLevel, rsrqLevel, sinrLevel, Level, isNoService, signalScore, scoreLevel, LEVEL_LABEL } from '../src/utils/signal';
+import { overallLevel, parseBands, parseNrBands, isNoService, signalScore, scoreLevel, LEVEL_LABEL } from '../src/utils/signal';
 import {
-  P, shadow, Chip, PrimaryBtn,
-  lvlColor, lvlSoft,
+  P, shadow, PrimaryBtn,
+  lvlColor,
 } from '../src/ui/Pro';
 
 import { tBd, tBg, tFg, isDark } from '../src/ui/theme';
@@ -233,137 +233,57 @@ export default function RoutersList() {
           const loading = !!st?.loading;
 
 
+          // بطاقة مختصرة: الترويسة فوق فيها الدرجة والترددات، وصفحة الراوتر فيها القراءات كاملة —
+          // هنا بس: مين الراوتر + حالته بسطر + الإعدادات. البطاقة كلها تنضغط وتفتح الراوتر.
+          const noService = !st?.error && !loading && isNoService(sig, st?.online, st?.mode);
+          const tone = loading && !sig ? P.sub : st?.error || noService ? P.red : sig ? color : P.sub;
+          const tech = noService ? undefined : hasNr ? '5G' : sig ? (sig.network?.match(/\b[2-5]G\b/)?.[0] ?? '4G') : undefined;
+          const line = st?.error ? 'تعذّر الوصول — تأكد إنك على واي فاي الراوتر'
+            : noService ? 'بلا شبكة — اضغط ورجّع الإشارة'
+            : sig ? ['متصل', tech, band.slice(0, 3).join(' + ')].filter(Boolean).join(' · ')
+            : loading ? 'نقرأ الإشارة…' : '—';
           return (
-            <View style={s.card}>
-              {/* ─── الرأس ─── */}
-              <Pressable onPress={() => open(item.id)} style={s.row}>
+            <Pressable onPress={() => (hasPw ? open(item.id) : edit(item.id))}
+              style={({ pressed }) => [s.card, s.cardSlim, pressed && { opacity: 0.9 }]}>
+              <View style={s.row}>
                 <LinearGradient
-                  colors={sig ? [color, color + 'AA'] : [P.heroA, P.heroB]}
+                  colors={sig && !noService ? [color, color + 'AA'] : noService || st?.error ? [P.red, P.red + 'AA'] : [P.heroA, P.heroB]}
                   start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                   style={s.avatar}
                 >
-                  <Icon name="wifi" size={22} color={tFg('#fff')} stroke={2.1} />
+                  {loading && !sig
+                    ? <ActivityIndicator size="small" color={tFg('#fff')} />
+                    : <Icon name="wifi" size={22} color={tFg('#fff')} stroke={2.1} />}
                 </LinearGradient>
-                <View style={{ flex: 1, alignItems: 'flex-end', gap: 5 }}>
+                <View style={{ flex: 1, alignItems: 'flex-end', gap: 4 }}>
                   <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
                     <Text style={s.name} numberOfLines={1}>{item.name}</Text>
                     {item.driverId === 'demo' && (
-                      <View style={s.demoTag}><Text style={s.demoTagTxt}>🧪 تجريبي · مو جهازك</Text></View>
+                      <View style={s.demoTag}><Text style={s.demoTagTxt}>🧪 تجريبي</Text></View>
                     )}
                   </View>
-                  <View style={s.metaRow}>
-                    <View style={s.meta}>
-                      <Text style={s.metaTxt}>{hostLabel(item.host)}</Text>
-                      <Icon name="wifi" size={12} color={P.sub} stroke={2.2} />
-                    </View>
-                    <View style={s.meta}>
-                      <Text style={s.metaTxt}>{item.username}</Text>
-                      <Icon name="user" size={12} color={P.sub} stroke={2.2} />
-                    </View>
-                    {!!st?.operator && (
-                      <View style={s.meta}>
-                        <Text style={s.metaTxt} numberOfLines={1}>{st.operator}</Text>
-                      </View>
-                    )}
+                  <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6 }}>
+                    <View style={[s.stateDot, { backgroundColor: tone }]} />
+                    <Text style={[s.slimLine, { color: tone }]} numberOfLines={1}>{line}</Text>
                   </View>
+                  <Text style={s.metaTxt} numberOfLines={1}>
+                    {[hostLabel(item.host), st?.operator].filter(Boolean).join('  ·  ')}
+                  </Text>
                 </View>
-                <View style={s.flip}><Icon name="chevron" size={18} color={P.faint} /></View>
-              </Pressable>
-
-              {/* ─── بطاقة الحالة: تعرف وضعك من أول نظرة (اضغطها للتحديث) ─── */}
-              {(() => {
-                const noService = !st?.error && !loading && isNoService(sig, st?.online, st?.mode);
-                const tone = loading && !sig ? P.sub : st?.error || noService ? P.red : sig ? color : P.sub;
-                const bg = loading && !sig ? P.soft : st?.error || noService ? P.redSoft : sig ? lvlSoft(level) : P.soft;
-                const title = st?.error ? 'تعذّر الوصول للراوتر'
-                  : noService ? 'الراوتر بلا شبكة'
-                  : sig ? 'متصل'
-                  : loading ? 'نقرأ الإشارة…' : '—';
-                const sub = st?.error ? 'تأكد إنك متصل بواي فاي الراوتر'
-                  : noService ? 'الأبراج منقطعة — اضغط هنا ورجّع الإشارة'
-                  : sig ? STATUS_SUB[level]
-                  : loading ? 'لحظات…' : '';
-                const tech = noService ? undefined : hasNr ? '5G' : sig ? (sig.network?.match(/\b[2-5]G\b/)?.[0] ?? '4G') : undefined;
-                return (
-                  <Pressable onPress={() => (noService ? open(item.id) : probe(item))} disabled={loading}
-                    style={({ pressed }) => [s.status, { backgroundColor: bg }, pressed && { opacity: 0.85 }]}>
-                    <View style={[s.statusIcon, { backgroundColor: tone }]}>
-                      {loading && !sig
-                        ? <ActivityIndicator size="small" color={tFg('#fff')} />
-                        : <Icon name="tower" size={20} color={tFg('#fff')} stroke={2.1} />}
-                    </View>
-                    <View style={{ flex: 1, alignItems: 'flex-end', gap: 2 }}>
-                      <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6 }}>
-                        <View style={[s.stateDot, { backgroundColor: tone }]} />
-                        <Text style={[s.statusTitle, { color: tone }]}>{title}</Text>
-                      </View>
-                      {!!sub && <Text style={s.statusSub} numberOfLines={1}>{sub}</Text>}
-                      {sig && !noService && band.length > 0 && (
-                        <View style={{ flexDirection: 'row-reverse', gap: 5, marginTop: 3 }}>
-                          {band.slice(0, 3).map(b => (
-                            <Chip key={b} text={b}
-                              color={b.startsWith('n') ? P.violet : P.blue}
-                              bg={b.startsWith('n') ? P.violetSoft : P.blueSoft} />
-                          ))}
-                        </View>
-                      )}
-                    </View>
-                    {tech && (
-                      <View style={[s.techBadge, { borderColor: tone }]}>
-                        <Text style={[s.techBadgeTxt, { color: tone }]}>{tech}</Text>
-                      </View>
-                    )}
+                <View style={{ gap: 6, alignItems: 'center' }}>
+                  <Pressable style={s.iconBtnSm} onPress={() => edit(item.id)} hitSlop={6}>
+                    <Icon name="settings" size={16} color={P.sub} />
                   </Pressable>
-                );
-              })()}
-
-              {/* ─── مربعات القراءات ─── */}
-              {sig && !isNoService(sig, st?.online, st?.mode) && (
-                <View style={s.tiles}>
-                  <ReadTile label="SINR" v={sig.sinr} unit="dB" level={sinrLevel(sig.sinr)} />
-                  <ReadTile label="RSRQ" v={sig.rsrq} unit="dB" level={rsrqLevel(sig.rsrq)} />
-                  <ReadTile label="RSRP" v={sig.rsrp} unit="dBm" level={rsrpLevel(sig.rsrp)} />
-                  <ReadTile label="PCI" text={sig.pci} />
+                  <Pressable style={[s.iconBtnSm, s.delBtn]} onPress={() => onDelete(item)} hitSlop={6}>
+                    <Icon name="trash" size={16} color={P.red} />
+                  </Pressable>
                 </View>
-              )}
-
-              {/* ─── كلمة المرور + الأزرار ─── */}
-              <View style={s.btnRow}>
-                <PrimaryBtn
-                  small
-                  style={{ flex: 1 }}
-                  text={hasPw ? (loading ? 'يتصل…' : 'دخول للراوتر') : 'إضافة بيانات الدخول'}
-                  icon={hasPw ? 'login' : 'lock'}
-                  busy={loading}
-                  disabled={loading}
-                  colors={hasPw ? [P.heroA, P.heroB] : [P.amber, tBg('#f97316')]}
-                  onPress={() => (hasPw ? open(item.id) : edit(item.id))}
-                />
-                <Pressable style={s.iconBtn} onPress={() => edit(item.id)} hitSlop={4}>
-                  <Icon name="settings" size={18} color={P.sub} />
-                </Pressable>
-                <Pressable style={[s.iconBtn, s.delBtn]} onPress={() => onDelete(item)} hitSlop={4}>
-                  <Icon name="trash" size={18} color={P.red} />
-                </Pressable>
               </View>
-              {(hasPw || !!st?.at) && (
-                <View style={s.pwRow}>
-                  {!!st?.at && !loading && (
-                    <>
-                      <Text style={s.pwTxt}>آخر تحديث: {agoText(st.at)}</Text>
-                      <Icon name="clock" size={11} color={P.faint} stroke={2.2} />
-                    </>
-                  )}
-                  {!!st?.at && !loading && hasPw && <Text style={s.pwTxt}>·</Text>}
-                  {hasPw && (
-                    <>
-                      <Text style={s.pwTxt}>كلمة المرور محفوظة على جهازك</Text>
-                      <Icon name="lock" size={11} color={P.faint} stroke={2.2} />
-                    </>
-                  )}
-                </View>
+              {!hasPw && (
+                <PrimaryBtn small text="إضافة بيانات الدخول" icon="lock"
+                  colors={[P.amber, tBg('#f97316')]} onPress={() => edit(item.id)} />
               )}
-            </View>
+            </Pressable>
           );
         }}
       />
@@ -371,37 +291,13 @@ export default function RoutersList() {
   );
 }
 
-const STATUS_SUB: Record<Level, string> = {
-  excellent: 'الشبكة قوية ومستقرة',
-  good: 'الشبكة جيدة',
-  fair: 'الشبكة متوسطة — جرّب توجيه الأنتنا',
-  poor: 'الإشارة ضعيفة — جرّب برج أو تردد ثاني',
-  unknown: 'متصل بالراوتر',
-};
 
-function agoText(at: number): string {
-  const m = Math.floor((Date.now() - at) / 60000);
-  if (m < 1) return 'الآن';
-  if (m < 60) return `قبل ${m} د`;
-  return `قبل ${Math.floor(m / 60)} س`;
-}
 
-/** مربع قراءة صغير: الاسم فوق والرقم ملوّن حسب تقييمه */
-function ReadTile({ label, v, unit, level = 'unknown', text }: {
-  label: string; v?: number; unit?: string; level?: Level; text?: string;
-}) {
-  const col = level === 'unknown' ? P.text : lvlColor(level);
-  const val = text ?? (v === undefined ? '—' : String(Math.round(v)));
-  return (
-    <View style={[s.tile, { backgroundColor: level === 'unknown' ? P.soft : lvlSoft(level) }]}>
-      <Text style={s.tileLbl}>{label}</Text>
-      <Text style={[s.tileVal, { color: col }]} numberOfLines={1} adjustsFontSizeToFit>{val}</Text>
-      <Text style={s.tileUnit}>{v === undefined || !unit ? ' ' : unit}</Text>
-    </View>
-  );
-}
 
 const s = sheet({
+  cardSlim: { paddingVertical: 14, gap: 10 },
+  slimLine: { fontSize: 13, fontWeight: '800', flexShrink: 1, textAlign: 'right' },
+  iconBtnSm: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: P.border, backgroundColor: P.soft },
   theme: {
     backgroundColor: P.card, borderColor: P.border, borderWidth: 1.5, borderRadius: 18,
     paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row-reverse', alignItems: 'center', gap: 12,
