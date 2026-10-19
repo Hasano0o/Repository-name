@@ -279,10 +279,15 @@ export default function RoutersList() {
                   </Pressable>
                 </View>
               </View>
-              {!hasPw && (
-                <PrimaryBtn small text="إضافة بيانات الدخول" icon="lock"
-                  colors={[P.amber, tBg('#f97316')]} onPress={() => edit(item.id)} />
-              )}
+              <PrimaryBtn
+                small
+                text={hasPw ? (loading ? 'يتصل…' : 'دخول للراوتر') : 'إضافة بيانات الدخول'}
+                icon={hasPw ? 'login' : 'lock'}
+                busy={loading}
+                disabled={loading}
+                colors={hasPw ? [P.heroA, P.heroB] : [P.amber, tBg('#f97316')]}
+                onPress={() => (hasPw ? open(item.id) : edit(item.id))}
+              />
             </Pressable>
           );
         }}
