@@ -48,6 +48,21 @@ export function ModeChips({ r, onApplied }: { r: SavedRouter; onApplied?: () => 
     ]);
   };
 
+  // ما فيه ولا وضع محفوظ: ثلاث مربعات «غير محفوظ» تاخذ مساحة بلا فايدة —
+  // نعرض سطر واحد صغير يودّي للملفات، والمربعات ترجع أول ما يحفظ وضع
+  if (!ROLES.some(m => roles[m.id])) {
+    return (
+      <Pressable style={s.slim} onPress={() => router.push(`/profiles/${r.id}` as Href)}>
+        <Text style={s.slimIcons}>{ROLES.map(m => m.icon).join(' ')}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={s.slimTitle}>الأوضاع بضغطة</Text>
+          <Text style={s.slimSub} numberOfLines={1}>احفظ إعدادك للألعاب والمشاهدة وطبّقه بضغطة</Text>
+        </View>
+        <Text style={s.slimArrow}>‹</Text>
+      </Pressable>
+    );
+  }
+
   return (
     <View style={s.wrap}>
       <Text style={s.title}>الأوضاع بضغطة</Text>
@@ -69,6 +84,11 @@ export function ModeChips({ r, onApplied }: { r: SavedRouter; onApplied?: () => 
 
 const s = sheet({
   wrap: { gap: 8 },
+  slim: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 16, backgroundColor: C.rowBg, borderWidth: 1, borderColor: C.cardBorder },
+  slimIcons: { fontSize: 16 },
+  slimTitle: { color: C.text, fontWeight: '800', fontSize: 13.5, textAlign: 'right' },
+  slimSub: { color: C.muted, fontSize: 11, textAlign: 'right' },
+  slimArrow: { color: C.muted, fontSize: 22, fontWeight: '700' },
   title: { color: C.text, fontWeight: '800', fontSize: 15, textAlign: 'right' },
   row: { flexDirection: 'row-reverse', gap: 8 },
   chip: { flex: 1, alignItems: 'center', gap: 2, paddingVertical: 10, paddingHorizontal: 6, borderRadius: 16, backgroundColor: C.rowBg, borderWidth: 1.5, borderColor: C.cardBorder, borderStyle: 'dashed' },
