@@ -18,7 +18,7 @@ import { ModeChips } from '../../src/ui/ModeChips';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { SignalRing } from '../../src/ui/SignalRing';
 import { ArcGauge } from '../../src/ui/ArcGauge';
-import { TechCards, techRows } from '../../src/ui/TechCards';
+import { TechCards, techRows, Bars } from '../../src/ui/TechCards';
 import { RadarPoint } from '../../src/ui/SignalRadar';
 import { MetricRings, RingSpec } from '../../src/ui/MetricRing';
 import { Icon, IconName } from '../../src/ui/Icon';
@@ -620,6 +620,7 @@ export default function RouterDashboard() {
   const disconnected = online === false && signal?.rsrp === undefined && signal?.nrRsrp === undefined;
   // الأبراج طايحة (خدمة محدودة/لا خدمة) — نعرض زر «رجّع الإشارة» الأحمر بدل النصيحة
   const noService = !error && isNoService(signal, online, mode);
+  const showCards = !noService && techRows(signal).some(r => r.rsrp !== undefined);
   // التنبيه يطلع بس لراوتر يدعم 5G ومقفول على 4G — راوتر 4G فقط ما نزعجه
   const fourGOnly = mode === '03' && has5g !== false;
 
@@ -783,11 +784,18 @@ export default function RouterDashboard() {
         )}
 
         {!loading && info && (
-          <LinearGradient colors={HERO_BG[noService ? 'poor' : level]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.heroX}>
-            {!noService && techRows(signal).some(r => r.rsrp !== undefined)
-              ? <TechCards signal={signal} />
+          <LinearGradient colors={HERO_BG[noService ? 'poor' : level]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.heroX, showCards && { paddingHorizontal: 10, paddingTop: 10 }]}>
+            {showCards
+              ? <TechCards signal={signal} onDetails={() => router.push(`/details/${info.id}` as Href)} />
               : <ArcGauge score={signalScore(primary)} label={LEVEL_LABEL[level]} color={LEVEL_COLOR[level]} size={172} />}
-            <Text style={s.heroLine}>{disconnected ? 'الراوتر غير متصل' : noService ? 'الراوتر بلا شبكة' : noNet ? `إشارتك ${LEVEL_LABEL[level]} · بدون إنترنت` : `اتصالك ${LEVEL_LABEL[level]}`}</Text>
+            {showCards && !noNet ? (
+              <View style={s.heroLineRow}>
+                <View style={s.heroLineRule} />
+                <Text style={s.heroLine}>اتصالك {LEVEL_LABEL[level]}</Text>
+                <Bars color={LEVEL_COLOR[level]} size={20} on={level === 'excellent' ? 4 : level === 'good' ? 3 : level === 'fair' ? 2 : 1} />
+                <View style={s.heroLineRule} />
+              </View>
+            ) : <Text style={s.heroLine}>{disconnected ? 'الراوتر غير متصل' : noService ? 'الراوتر بلا شبكة' : noNet ? `إشارتك ${LEVEL_LABEL[level]} · بدون إنترنت` : `اتصالك ${LEVEL_LABEL[level]}`}</Text>}
             {noService ? (
               <Text style={s.heroSub}>الأبراج طايحة — اضغط «رجّع الإشارة» تحت</Text>
             ) : (
@@ -1264,6 +1272,8 @@ const s = sheet({
   },
   fabDanger: { borderColor: C.cardBorder },
   fabText: { fontWeight: '800', fontSize: 15 },
+  heroLineRow: { flexDirection: 'row-reverse', alignItems: 'center', alignSelf: 'stretch', gap: 8, marginTop: 4 },
+  heroLineRule: { flex: 1, height: 1, backgroundColor: tBd('#c7d3ee') },
   heroLine: { color: C.text, fontSize: 18, fontWeight: '800', textAlign: 'center', marginTop: 4 },
   heroBox: { flexDirection: 'row-reverse', alignSelf: 'stretch', backgroundColor: tBg('#ffffffb3'), borderRadius: 18, borderWidth: 1, borderColor: tBd('#ffffff'), paddingVertical: 10, paddingHorizontal: 6, marginTop: 6 },
   heroCell: { flex: 1, alignItems: 'center', gap: 2, minWidth: 0 },
