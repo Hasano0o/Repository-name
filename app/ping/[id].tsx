@@ -24,6 +24,7 @@ import { C, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { RegionGrid, flagOf } from '../../src/ui/RegionGrid';
 import { GamePrepCard } from '../../src/ui/GamePrepCard';
+import { ModeChips } from '../../src/ui/ModeChips';
 
 import { sheet } from '../../src/i18n';
 type Tech = 'LTE' | 'NR';
@@ -517,6 +518,9 @@ export default function GameScreen() {
         )}
 
         {!loading && info && <GamePrepCard info={info} reg={reg} disabled={running || busy} />}
+
+        {/* الأوضاع بضغطة (ألعاب / مشاهدة / اجتماعات) — انتقلت هنا من صفحة الراوتر */}
+        {!loading && info && <ModeChips r={info} />}
 
         {!loading && (
           <GlassCard title="جاهز للعب؟" icon="🎮" tint={C.greenSoft} collapsible={false}>

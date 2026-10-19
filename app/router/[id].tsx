@@ -14,7 +14,6 @@ import {
 import { fmtRate, fmtDuration, fmtBytes } from '../../src/utils/format';
 import {addSample, stability } from '../../src/store/history';
 import { C, tBd, tBg, tFg } from '../../src/ui/theme';
-import { ModeChips } from '../../src/ui/ModeChips';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { SignalRing } from '../../src/ui/SignalRing';
 import { ArcGauge } from '../../src/ui/ArcGauge';
@@ -884,7 +883,6 @@ export default function RouterDashboard() {
 
         {!loading && info && (
           <>
-            {feat.bands && <ModeChips r={info} onApplied={() => loadAll(info)} />}
             {feat.bands && <ComboCard r={info} />}
             <GroupTitle title="حسّن اتصالك" color={tFg('#2f6bff')} />
             <TileGrid>
@@ -1130,8 +1128,9 @@ const s = sheet({
   demoBtnTxt: { color: '#fff', fontWeight: '800', fontSize: 13.5 },
   warnBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.goldSoft, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: 16, padding: 12 },
   warnText: { flex: 1, color: C.text, fontWeight: '700', textAlign: 'right', fontSize: 13 },
-  warnBtn: { backgroundColor: C.gold, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8 },
-  warnBtnText: { color: tFg('#fff'), fontWeight: '800', fontSize: 12 },
+  // زر واضح إنه ينضغط: برتقالي غامق + ظل (الذهبي الفاتح كان يوحي إنه معطّل)
+  warnBtn: { backgroundColor: '#f08c00', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 10, shadowColor: '#f08c00', shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
+  warnBtnText: { color: '#ffffff', fontWeight: '900', fontSize: 13 },
   rates: { flexDirection: 'row-reverse', gap: 8, marginTop: 10 },
   rate: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 7, borderRadius: 12, paddingVertical: 9 },
   rateArrow: { fontSize: 18, fontWeight: '800' },
