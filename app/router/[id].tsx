@@ -18,6 +18,7 @@ import { ModeChips } from '../../src/ui/ModeChips';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { SignalRing } from '../../src/ui/SignalRing';
 import { ArcGauge } from '../../src/ui/ArcGauge';
+import { TechCards, techRows } from '../../src/ui/TechCards';
 import { RadarPoint } from '../../src/ui/SignalRadar';
 import { MetricRings, RingSpec } from '../../src/ui/MetricRing';
 import { Icon, IconName } from '../../src/ui/Icon';
@@ -783,7 +784,9 @@ export default function RouterDashboard() {
 
         {!loading && info && (
           <LinearGradient colors={HERO_BG[noService ? 'poor' : level]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.heroX}>
-            <ArcGauge score={signalScore(primary)} label={LEVEL_LABEL[level]} color={LEVEL_COLOR[level]} size={172} />
+            {!noService && techRows(signal).some(r => r.rsrp !== undefined)
+              ? <TechCards signal={signal} />
+              : <ArcGauge score={signalScore(primary)} label={LEVEL_LABEL[level]} color={LEVEL_COLOR[level]} size={172} />}
             <Text style={s.heroLine}>{disconnected ? 'الراوتر غير متصل' : noService ? 'الراوتر بلا شبكة' : noNet ? `إشارتك ${LEVEL_LABEL[level]} · بدون إنترنت` : `اتصالك ${LEVEL_LABEL[level]}`}</Text>
             {noService ? (
               <Text style={s.heroSub}>الأبراج طايحة — اضغط «رجّع الإشارة» تحت</Text>
