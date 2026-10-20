@@ -6,7 +6,8 @@
 import { useCallback, useRef, useState } from 'react';
 import { View, Text } from '../i18n/rn';
 import { useFocusEffect } from 'expo-router';
-import Svg, { Rect, Circle } from 'react-native-svg';
+import Svg, { Rect, Circle, Path } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SavedRouter } from '../store/routers';
 import { withSession } from '../store/sessions';
 import type { DeviceTemp } from '../drivers/types';
@@ -22,18 +23,13 @@ const SOFT: Record<Lv, string> = isDark
   : { ok: '#e8f8f0', warm: '#fff6e8', hot: '#fff0e6', danger: '#ffeef0' };
 const WORD: Record<Lv, string> = { ok: 'طبيعي', warm: 'دافي', hot: 'حار', danger: 'حار جداً' };
 
-function Thermo({ c, color, small }: { c: number; color: string; small?: boolean }) {
-  // التعبئة من ٢٠° (فاضي) لـ ٩٠° (مليان)
-  const f = Math.max(0.08, Math.min(1, (c - 20) / 70));
-  const H = 46, top = 4, tube = 32;
-  const scale = small ? 0.62 : 1;
-  const fillH = tube * f;
+/** أيقونة مقياس حرارة بيضاء على خلفية حمراء */
+function ThermoIcon() {
   return (
-    <Svg width={22 * scale} height={H * scale} viewBox={`0 0 22 ${H}`}>
-      <Rect x={7} y={top} width={8} height={tube + 6} rx={4} fill={C.track} />
-      <Rect x={9} y={top + tube + 2 - fillH} width={4} height={fillH + 4} rx={2} fill={color} />
-      <Circle cx={11} cy={H - 7} r={6.5} fill={C.track} />
-      <Circle cx={11} cy={H - 7} r={4.6} fill={color} />
+    <Svg width={18} height={22} viewBox="0 0 18 22" fill="none">
+      <Path d="M9 2.2a2.6 2.6 0 0 0-2.6 2.6v8.1a4.4 4.4 0 1 0 5.2 0V4.8A2.6 2.6 0 0 0 9 2.2z" stroke="#ffffff" strokeWidth={1.7} />
+      <Circle cx={9} cy={16.4} r={2.3} fill="#ffffff" />
+      <Rect x={8.1} y={7.5} width={1.8} height={8} rx={0.9} fill="#ffffff" />
     </Svg>
   );
 }
@@ -62,12 +58,13 @@ export function TempCard({ r }: { r: SavedRouter }) {
     : 'الحرارة ممتازة';
 
   return (
-    <View style={s.card}>
+    <LinearGradient colors={isDark ? ['#3a2424', '#2c2230'] : ['#fff1ec', '#ffe4dc']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={s.card}>
       {/* سطر واحد: العنوان والحالة يمين، والقراءات جنبها — والنصيحة بس لو حار */}
       <View style={s.row}>
-        <View style={[s.icon, { backgroundColor: SOFT[lv] }]}>
-          <Thermo c={max} color={COL[lv]} small />
-        </View>
+        {/* مقياس حرارة أحمر ثابت — يعرّف البطاقة من أول نظرة */}
+        <LinearGradient colors={['#f43f5e', '#f97316']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.icon}>
+          <ThermoIcon />
+        </LinearGradient>
         <View style={s.headTxt}>
           <Text style={s.title} numberOfLines={1}>حرارة الراوتر</Text>
           <Text style={[s.word, { color: COL[lv] }]} numberOfLines={1}>{WORD[lv]}</Text>
@@ -76,7 +73,7 @@ export function TempCard({ r }: { r: SavedRouter }) {
           {shown.map(t => {
             const l = lvOf(t.c);
             return (
-              <View key={t.key} style={s.cell}>
+              <View key={t.key} style={[s.cell, { borderColor: COL[l] + '40' }]}>
                 <Text style={[s.val, { color: COL[l] }]}>{t.c}°</Text>
                 <Text style={s.lbl} numberOfLines={1}>{t.label}</Text>
               </View>
@@ -87,23 +84,23 @@ export function TempCard({ r }: { r: SavedRouter }) {
       {(lv === 'hot' || lv === 'danger') && (
         <Text style={[s.tip, { color: COL[lv], backgroundColor: SOFT[lv] }]}>{tip}</Text>
       )}
-    </View>
+    </LinearGradient>
   );
 }
 
 const s = sheet({
   card: {
-    backgroundColor: C.card, borderRadius: R.lg, paddingVertical: 10, paddingHorizontal: 12, gap: 8,
-    borderWidth: 1, borderColor: tBd('#ffffff'),
-    shadowColor: C.shadow, shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 1,
+    borderRadius: R.lg, paddingVertical: 10, paddingHorizontal: 12, gap: 8,
+    borderWidth: 1, borderColor: isDark ? '#5a3434' : '#fecdc3',
+    shadowColor: '#f43f5e', shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2,
   },
   row: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
-  icon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  headTxt: { alignItems: 'flex-end', minWidth: 78 },
+  icon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  headTxt: { alignItems: 'flex-end', minWidth: 74 },
   title: { color: C.text, fontSize: 13, fontWeight: '900' },
   word: { fontSize: 10.5, fontWeight: '800' },
-  vals: { flex: 1, flexDirection: 'row-reverse', justifyContent: 'space-around' },
-  cell: { alignItems: 'center' },
+  vals: { flex: 1, flexDirection: 'row-reverse', gap: 6 },
+  cell: { flex: 1, alignItems: 'center', backgroundColor: isDark ? '#ffffff12' : '#ffffffcc', borderRadius: 12, borderWidth: 1, paddingVertical: 4 },
   val: { fontSize: 15, lineHeight: 18, fontFamily: FONT.numHeavy, includeFontPadding: false },
   lbl: { color: C.sub, fontSize: 9, fontWeight: '700' },
   tip: { fontSize: 10.5, fontWeight: '700', textAlign: 'right', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, overflow: 'hidden' },
