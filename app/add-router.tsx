@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform, } from 'react-native';
 import { Pressable, ScrollView, Text, TextInput, View } from '../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -38,6 +38,8 @@ export default function AddRouterScreen() {
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
   const [passHelp, setPassHelp] = useState(false);
+  // الشرح مفتوح من البداية للجدد
+  const [guide, setGuide] = useState(true);
   const [showPass, setShowPass] = useState(false);
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState('');
@@ -308,6 +310,43 @@ export default function AddRouterScreen() {
               <Text style={styles.safeText}>{Platform.OS === 'web' ? 'كلمة المرور تنحفظ مشفّرة على جهازك فقط' : 'كلمة المرور تنحفظ مشفّرة على جوالك فقط'}</Text>
             </View>
           </LinearGradient>
+
+          {/* كيف أضيف راوتري؟ — أكبر عقبة عند الجدد (الإحصائيات: «ما عرف كيف يضيفه») */}
+          {!isEdit && (
+            <View style={styles.guide}>
+              <Pressable onPress={() => setGuide(v => !v)} style={styles.guideHead} hitSlop={6}>
+                <View style={styles.guideIcon}><Text style={{ fontSize: 17 }}>🧭</Text></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.guideTitle}>كيف أضيف راوتري؟</Text>
+                  <Text style={styles.guideSub}>٤ خطوات — أقل من دقيقة</Text>
+                </View>
+                <Text style={styles.guideArrow}>{guide ? '▲' : '▼'}</Text>
+              </Pressable>
+              {guide && (
+                <View style={{ gap: 10 }}>
+                  {[
+                    ['📶', 'اتصل بواي فاي الراوتر', 'جوالك لازم يكون على شبكة الراوتر نفسه. لو ما زبط، اطفِ بيانات الجوال مؤقتاً.'],
+                    ['🏷️', 'اقلب الراوتر وشوف الملصق', 'تحته أو خلفه: العنوان (غالباً 192.168.8.1 أو 192.168.0.1) وكلمة المرور (Password).'],
+                    ['📷', 'صوّر الملصق أو اكتب البيانات', 'زر «صوّره» يعبّي العنوان وكلمة المرور لحاله — أو اكتبها تحت.'],
+                    ['✅', 'اضغط «اتصل وأضف الراوتر»', 'التطبيق يتعرّف على نوع الراوتر ويدخل لحاله. كلمة المرور تبقى على جوالك بس.'],
+                  ].map(([ic, t, d], i) => (
+                    <View key={i} style={styles.guideRow}>
+                      <View style={styles.guideNum}><Text style={styles.guideNumTxt}>{i + 1}</Text></View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.guideRowTitle}>{ic} {t}</Text>
+                        <Text style={styles.guideRowDesc}>{d}</Text>
+                      </View>
+                    </View>
+                  ))}
+                  <Pressable onPress={() => Linking.openURL('https://t.me/hasa_n20').catch(() => {})}
+                    style={({ pressed }) => [styles.tgBtn, pressed && { opacity: 0.85 }]}>
+                    <Icon name="send" size={17} color="#ffffff" />
+                    <Text style={styles.tgTxt}>ما زبط؟ كلّم المبرمج في تيليجرام يشرح لك</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          )}
 
           {/* النموذج */}
           <View style={styles.card}>
@@ -632,6 +671,19 @@ const styles = sheet({
   },
   hostBrand: { fontSize: 15, fontWeight: '900' },
   hostIp: { fontSize: 11.5, fontWeight: '700', writingDirection: 'ltr' },
+  guide: { backgroundColor: C.card, borderRadius: R.lg, padding: 14, gap: 12, borderWidth: 1.5, borderColor: tBd('#c7d7ff') },
+  guideHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
+  guideIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: tBg('#eef3ff'), alignItems: 'center', justifyContent: 'center' },
+  guideTitle: { color: C.text, fontSize: 15.5, fontWeight: '900', textAlign: 'right' },
+  guideSub: { color: C.sub, fontSize: 11.5, textAlign: 'right' },
+  guideArrow: { color: C.blue, fontSize: 13, fontWeight: '800' },
+  guideRow: { flexDirection: 'row-reverse', gap: 10, alignItems: 'flex-start' },
+  guideNum: { width: 24, height: 24, borderRadius: 12, backgroundColor: C.blue, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  guideNumTxt: { color: '#ffffff', fontSize: 12, fontWeight: '900' },
+  guideRowTitle: { color: C.text, fontSize: 13.5, fontWeight: '800', textAlign: 'right' },
+  guideRowDesc: { color: C.sub, fontSize: 12, lineHeight: 18, textAlign: 'right', marginTop: 1 },
+  tgBtn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#229ED9', borderRadius: 14, paddingVertical: 11, marginTop: 2 },
+  tgTxt: { color: '#ffffff', fontSize: 13.5, fontWeight: '900' },
   helpToggle: { alignSelf: 'flex-end', paddingVertical: 4, marginTop: -4, marginBottom: S.sm },
   helpToggleTxt: { color: C.blue, fontSize: 13, fontWeight: '800' },
   helpBox: { backgroundColor: tBg('#ffffff'), borderRadius: 14, padding: S.md, gap: 10, marginBottom: S.md },
