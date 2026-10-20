@@ -6,7 +6,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { View, Text } from '../i18n/rn';
 import { useFocusEffect } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Rect, Circle } from 'react-native-svg';
 import { SavedRouter } from '../store/routers';
 import { withSession } from '../store/sessions';
@@ -23,13 +22,14 @@ const SOFT: Record<Lv, string> = isDark
   : { ok: '#e8f8f0', warm: '#fff6e8', hot: '#fff0e6', danger: '#ffeef0' };
 const WORD: Record<Lv, string> = { ok: 'طبيعي', warm: 'دافي', hot: 'حار', danger: 'حار جداً' };
 
-function Thermo({ c, color }: { c: number; color: string }) {
+function Thermo({ c, color, small }: { c: number; color: string; small?: boolean }) {
   // التعبئة من ٢٠° (فاضي) لـ ٩٠° (مليان)
   const f = Math.max(0.08, Math.min(1, (c - 20) / 70));
   const H = 46, top = 4, tube = 32;
+  const scale = small ? 0.62 : 1;
   const fillH = tube * f;
   return (
-    <Svg width={22} height={H} viewBox={`0 0 22 ${H}`}>
+    <Svg width={22 * scale} height={H * scale} viewBox={`0 0 22 ${H}`}>
       <Rect x={7} y={top} width={8} height={tube + 6} rx={4} fill={C.track} />
       <Rect x={9} y={top + tube + 2 - fillH} width={4} height={fillH + 4} rx={2} fill={color} />
       <Circle cx={11} cy={H - 7} r={6.5} fill={C.track} />
@@ -63,52 +63,48 @@ export function TempCard({ r }: { r: SavedRouter }) {
 
   return (
     <View style={s.card}>
-      <View style={s.head}>
-        <View style={[s.icon, { backgroundColor: SOFT[lv] }]}>
-          <Thermo c={max} color={COL[lv]} />
-        </View>
-        <View style={{ flex: 1, alignItems: 'flex-end' }}>
-          <Text style={s.title}>حرارة الراوتر</Text>
-          <Text style={[s.sub, { color: COL[lv] }]} numberOfLines={2}>{tip}</Text>
-        </View>
-        <View style={[s.badge, { backgroundColor: SOFT[lv] }]}>
-          <Text style={[s.badgeTxt, { color: COL[lv] }]}>{WORD[lv]}</Text>
-        </View>
-      </View>
-
-      <LinearGradient colors={['#34d399', '#f59e0b', '#f97316', '#e5484d']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 0 }} style={s.scale} />
-
+      {/* سطر واحد: العنوان والحالة يمين، والقراءات جنبها — والنصيحة بس لو حار */}
       <View style={s.row}>
-        {shown.map(t => {
-          const l = lvOf(t.c);
-          return (
-            <View key={t.key} style={s.cell}>
-              <Thermo c={t.c} color={COL[l]} />
-              <Text style={[s.val, { color: COL[l] }]}>{t.c}°</Text>
-              <Text style={s.lbl} numberOfLines={1}>{t.label}</Text>
-            </View>
-          );
-        })}
+        <View style={[s.icon, { backgroundColor: SOFT[lv] }]}>
+          <Thermo c={max} color={COL[lv]} small />
+        </View>
+        <View style={s.headTxt}>
+          <Text style={s.title} numberOfLines={1}>حرارة الراوتر</Text>
+          <Text style={[s.word, { color: COL[lv] }]} numberOfLines={1}>{WORD[lv]}</Text>
+        </View>
+        <View style={s.vals}>
+          {shown.map(t => {
+            const l = lvOf(t.c);
+            return (
+              <View key={t.key} style={s.cell}>
+                <Text style={[s.val, { color: COL[l] }]}>{t.c}°</Text>
+                <Text style={s.lbl} numberOfLines={1}>{t.label}</Text>
+              </View>
+            );
+          })}
+        </View>
       </View>
+      {(lv === 'hot' || lv === 'danger') && (
+        <Text style={[s.tip, { color: COL[lv], backgroundColor: SOFT[lv] }]}>{tip}</Text>
+      )}
     </View>
   );
 }
 
 const s = sheet({
   card: {
-    backgroundColor: C.card, borderRadius: R.lg, padding: 12, gap: 10,
+    backgroundColor: C.card, borderRadius: R.lg, paddingVertical: 10, paddingHorizontal: 12, gap: 8,
     borderWidth: 1, borderColor: tBd('#ffffff'),
-    shadowColor: C.shadow, shadowOpacity: 0.07, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 2,
+    shadowColor: C.shadow, shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 1,
   },
-  head: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
-  icon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  title: { color: C.text, fontSize: 14.5, fontWeight: '900' },
-  sub: { fontSize: 10.5, fontWeight: '700', marginTop: 1, textAlign: 'right' },
-  badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
-  badgeTxt: { fontSize: 11, fontWeight: '900' },
-  scale: { height: 5, borderRadius: 99 },
-  row: { flexDirection: 'row-reverse', justifyContent: 'space-around' },
-  cell: { alignItems: 'center', gap: 2, minWidth: 70 },
-  val: { fontSize: 18, lineHeight: 22, fontFamily: FONT.numHeavy, includeFontPadding: false },
-  lbl: { color: C.sub, fontSize: 10.5, fontWeight: '700' },
+  row: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
+  icon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  headTxt: { alignItems: 'flex-end', minWidth: 78 },
+  title: { color: C.text, fontSize: 13, fontWeight: '900' },
+  word: { fontSize: 10.5, fontWeight: '800' },
+  vals: { flex: 1, flexDirection: 'row-reverse', justifyContent: 'space-around' },
+  cell: { alignItems: 'center' },
+  val: { fontSize: 15, lineHeight: 18, fontFamily: FONT.numHeavy, includeFontPadding: false },
+  lbl: { color: C.sub, fontSize: 9, fontWeight: '700' },
+  tip: { fontSize: 10.5, fontWeight: '700', textAlign: 'right', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, overflow: 'hidden' },
 });
