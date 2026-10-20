@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SavedRouter } from '../store/routers';
 import { withSession } from '../store/sessions';
 import { Carrier } from '../drivers/types';
-import { bandLabel, friendlyBand } from '../utils/bands';
+import { bandLabel, friendlyBand, bandKindOf, bandMhz, BandKind } from '../utils/bands';
 import { Icon } from './Icon';
 import { C, R, tBd, tBg } from './theme';
 
@@ -21,11 +21,18 @@ const GRAD = {
   LTE: ['#1f5eff', '#3b8bff'] as [string, string],
   NR: ['#5b3df5', '#9466ff'] as [string, string],
 };
-/** الثانوي: نفس لون تقنيته بس أفتح شوي — واضح ومو باهت */
-const GRAD_SEC = {
-  LTE: ['#3b82f6', '#60a5fa'] as [string, string],
-  NR: ['#7c5cff', '#a78bfa'] as [string, string],
+/**
+ * الثانوي: لون مختلف عن الأساسي (الأزرق) — حسب نوع التردد عشان نفس النوع ياخذ نفس اللون:
+ * يوصل بعيد (تحت ١ جيجا) أخضر · متوازن (١٨٠٠/٢١٠٠) فيروزي · سريع (٢٣٠٠ وفوق) برتقالي · و5G بنفسجي
+ */
+const GRAD_KIND: Record<BandKind, [string, string]> = {
+  far: ['#059669', '#34d399'],
+  mid: ['#0891b2', '#22d3ee'],
+  fast: ['#ea580c', '#fb923c'],
 };
+const GRAD_NR_SEC: [string, string] = ['#7c3aed', '#a78bfa'];
+const secGrad = (c: Carrier): [string, string] =>
+  c.tech === 'NR' ? GRAD_NR_SEC : GRAD_KIND[bandKindOf(bandMhz('LTE', c.band))] ?? GRAD_KIND.mid;
 
 const mhzOf = (c: Carrier) => (typeof c.bandwidth === 'number' && c.bandwidth > 0 ? c.bandwidth : undefined);
 
@@ -107,11 +114,11 @@ export function ComboCard({ r }: { r: SavedRouter }) {
                 <Text style={s.emptySub}>يجي وقت التحميل</Text>
               </View>
             ) : scc.slice(0, 4).map((c, i) => (
-              <LinearGradient key={i} colors={GRAD_SEC[c.tech]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              <LinearGradient key={i} colors={secGrad(c)} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                 style={[s.sec, scc.length > 2 && s.secSmall]}>
                 <View style={s.secTop}>
-                  <View style={s.secPill}><Text style={s.secPillTxt}>{i === 0 ? 'الثانوي' : `ثانوي ${i + 1}`}</Text></View>
-                  <Text style={s.secTech}>{c.tech === 'NR' ? '5G' : '4G'}</Text>
+                  <View style={s.secPill}><Text style={s.secPillTxt} numberOfLines={1}>{scc.length > 2 ? `${i + 1}` : i === 0 ? 'الثانوي' : `ثانوي ${i + 1}`}</Text></View>
+                  {scc.length <= 2 && <Text style={s.secTech}>{c.tech === 'NR' ? '5G' : '4G'}</Text>}
                 </View>
                 <Text style={[s.secBand, scc.length > 2 && { fontSize: 18, lineHeight: 22 }]} numberOfLines={1} adjustsFontSizeToFit>
                   {bandLabel(c.tech, c.band)}
