@@ -15,7 +15,10 @@ import {
   IBMPlexSansArabic_600SemiBold,
   IBMPlexSansArabic_700Bold,
 } from '@expo-google-fonts/ibm-plex-sans-arabic';
-import { Rubik_600SemiBold, Rubik_700Bold, Rubik_800ExtraBold } from '@expo-google-fonts/rubik';
+// كل وزن من مساره — الاستيراد من الجذر يضم كل الأوزان (~٣ ميقا) في الحزمة
+import { Rubik_600SemiBold } from '@expo-google-fonts/rubik/600SemiBold';
+import { Rubik_700Bold } from '@expo-google-fonts/rubik/700Bold';
+import { Rubik_800ExtraBold } from '@expo-google-fonts/rubik/800ExtraBold';
 import { applyGlobalFont, FONT } from '../src/ui/fonts';
 import { C, isDark } from '../src/ui/theme';
 import { UpdateBanner } from '../src/ui/UpdateBanner';
