@@ -486,6 +486,8 @@ export const EN: Record<string, string> = {
   'شغّل المُحسِّن التلقائي': 'Run the auto optimizer',
   'افتح توجيه الأنتنا': 'Open Aim Antenna',
   'توجيه الأنتنا': 'Aim Antenna',
+  'قيّم Bandly': 'Rate Bandly',
+  'عجبك التطبيق؟ تقييمك في App Store يساعدنا نوصل لناس أكثر': 'Enjoying the app? A rating on the App Store helps more people find it',
   'الأنتنا أو الراوتر نفسه': 'Antenna or the router itself',
   'افتح توجيه الأنتنا ‹': 'Open Aim Antenna ›',
   'رجوع لتوجيه الأنتنا': 'Back to Aim Antenna',

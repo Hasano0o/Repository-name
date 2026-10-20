@@ -5,7 +5,7 @@
  *  ٣) الإعدادات: المظهر · اللغة · نسخة التطبيق (كلها في بطاقة وحدة)
  */
 import { ReactNode, useState } from 'react';
-import { ActivityIndicator, Linking, Alert } from 'react-native';
+import { ActivityIndicator, Linking, Alert, Platform } from 'react-native';
 import { View, Text, Pressable } from '../i18n/rn';
 import Svg, { Circle, Path } from 'react-native-svg';
 import * as Updates from 'expo-updates';
@@ -177,6 +177,8 @@ function VersionRow() {
   );
 }
 
+const APPSTORE_REVIEW = 'https://apps.apple.com/app/id6819877993?action=write-review';
+
 export function HomeFooter({ onExplore }: { onExplore: () => void }) {
   const themeLabel = THEMES.find(t => t.id === THEME_PREF)?.a11y ?? '';
   return (
@@ -190,6 +192,21 @@ export function HomeFooter({ onExplore }: { onExplore: () => void }) {
         <Tile title="ادعُ ربعك" sub="شارك الرابط" colors={['#f472b6', '#c0389b']}
           icon={<PeopleIcon c={tFg('#c0389b')} />} onPress={invite} />
       </View>
+
+      {/* تقييم في App Store — رابط صفحة الكتابة مباشرة (مسموح عند Apple، بدون فلترة ولا مكافأة) */}
+      {Platform.OS === 'ios' && (
+        <Pressable onPress={() => openWay(APPSTORE_REVIEW)}
+          style={({ pressed }) => [s.card, s.contact, pressed && s.pressed]}>
+          <View style={[s.way, { backgroundColor: '#f5a524' }]}>
+            <Text style={{ fontSize: 16 }}>⭐</Text>
+          </View>
+          <View style={s.rowTxt}>
+            <Text style={s.rowLabel}>قيّم Bandly</Text>
+            <Text style={s.rowValue}>عجبك التطبيق؟ تقييمك في App Store يساعدنا نوصل لناس أكثر</Text>
+          </View>
+          <View style={{ transform: [{ scaleX: -1 }] }}><Icon name="chevron" size={16} color={P.faint} /></View>
+        </Pressable>
+      )}
 
       <Pressable onPress={() => openWay('https://t.me/BandlyHelp')}
         style={({ pressed }) => [s.card, s.contact, pressed && s.pressed]}>
