@@ -378,14 +378,17 @@ export class ZteDriver implements RouterDriver {
     const list = known && candidates.some(c => c.name === known)
       ? candidates.filter(c => c.name === known)
       : candidates;
-    // نخلي محاولتين على الأقل للمستخدم (يدخل من المتصفح أو يصحّح الكلمة) — ما نوصل الراوتر للقفل
-    const KEEP = 2;
+    // حماية من القفل — بس بدون ما نقفل الباب على نفسنا:
+    // • أول محاولة (أو الصيغة المعروفة) تنجرّب طالما باقي ٢ أو أكثر — لو فشلت يبقى واحدة للمستخدم.
+    //   (قبل: كنا نوقف عند ٢ بدون ولا محاولة، والعدّاد ما يرجع إلا بدخول ناجح ← التطبيق ما يدخل أبداً)
+    // • باقي الصيغ (رش) بس لو باقي ٣ أو أكثر.
     // بعض الفيرموير ما يقول كم باقي — وقتها ما نتعدى ٣ محاولات فاشلة
     let blindFails = 0;
 
-    for (const c of list) {
+    for (const [idx, c] of list.entries()) {
       const leftNow = await this.attemptsLeft();
-      if (leftNow !== undefined && leftNow <= KEEP) {
+      const minLeft = known || idx === 0 ? 2 : 3;
+      if (leftNow !== undefined && leftNow < minLeft) {
         const lock = await this.lockState();
         throw new Error(lock ?? `تعذّر تسجيل الدخول — كلمة المرور غالباً غلط، ووقفنا قبل ما يقفل الراوتر الدخول (باقي ${leftNow} محاولات). تأكد منها من الإعدادات.`);
       }
