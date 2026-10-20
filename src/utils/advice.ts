@@ -49,7 +49,7 @@ export function buildAdvice(
   if (serving < -105) {
     return {
       sentence: `${parts.join(' ')}. الإشارة ضعيفة — مكان الراوتر هو الفرق الأكبر هنا.`,
-      action: { label: 'افتح مساعد التوجيه', route: 'aim' },
+      action: { label: 'افتح توجيه الأنتنا', route: 'aim' },
     };
   }
 

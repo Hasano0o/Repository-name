@@ -63,7 +63,7 @@ export function buildSummary(r: ReportInput): ReportSummary {
   }
 
   if ((r.signal?.sinr ?? 99) < 0) advice.push('نقاء الإشارة سالب — غالباً تداخل. جرّب تقفل على تردد ثاني أو غيّر مكان الراوتر.');
-  if ((r.signal?.rsrp ?? 0) < -105) advice.push('الإشارة ضعيفة — قرّب الراوتر من النافذة أو استخدم مساعد التوجيه.');
+  if ((r.signal?.rsrp ?? 0) < -105) advice.push('الإشارة ضعيفة — قرّب الراوتر من النافذة أو استخدم توجيه الأنتنا.');
   if (r.latency?.samples && gamingGrade(r.latency).score < 0.5) {
     advice.push('الاستجابة غير مناسبة للألعاب — جرّب شاشة الألعاب لمقارنة الترددات.');
   }

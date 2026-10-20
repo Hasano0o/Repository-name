@@ -267,7 +267,7 @@ export function diagnose(game: LatencyResult, wifi: LatencyResult | null, sinr?:
     return {
       light, score, title: 'الإشارة مشوشة',
       cause: `نقاء الإشارة ضعيف (SINR ${sinr.toFixed(1)}) فالبيانات تتعاد وتتأخر`,
-      fix: 'وجّه الأنتنا من مساعد التوجيه، أو شغّل مُحسّن اللعبة تحت',
+      fix: 'وجّه الأنتنا من توجيه الأنتنا، أو شغّل مُحسّن اللعبة تحت',
       action: 'aim',
     };
   }

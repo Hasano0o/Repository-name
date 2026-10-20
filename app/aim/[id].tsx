@@ -803,7 +803,7 @@ export default function AimScreen() {
             <Icon name="refresh" size={18} color={TEXT} />
           </Pressable>
           <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={a.headerTitle}>مساعد التوجيه</Text>
+            <Text style={a.headerTitle}>توجيه الأنتنا</Text>
             <Text style={a.headerSub}>اضبط اتجاه الهوائي للحصول على أفضل إشارة</Text>
           </View>
           <Pressable style={a.headerBtn} hitSlop={6} onPress={() => Alert.alert('مساعدة',

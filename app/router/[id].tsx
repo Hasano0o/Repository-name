@@ -886,7 +886,7 @@ export default function RouterDashboard() {
             {feat.bands && <ComboCard r={info} />}
             <GroupTitle title="حسّن اتصالك" color={tFg('#2f6bff')} />
             <TileGrid>
-              <ToolTile wide icon="aim" color={tFg('#2f6bff')} title="التوجيه" sub="لقّط أقوى إشارة"
+              <ToolTile wide icon="aim" color={tFg('#2f6bff')} title="توجيه الأنتنا" sub="الأنتنا أو الراوتر نفسه"
                 onPress={() => router.push(`/aim/${info.id}` as Href)} />
               <ToolTile wide icon="tower" color={tFg('#12b76a')} title="الأبراج" sub="النواقل والدمج"
                 onPress={() => router.push(`/towers/${info.id}` as Href)} />

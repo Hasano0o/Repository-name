@@ -1,7 +1,7 @@
 /**
  * لوحة الشبكة — بطاقة 4G وبطاقة 5G، كل وحدة فيها ٤ عدادات (PING · SINR · RSRQ · RSRP)
  * وخانات المعلومات (Cell ID · PCI · الباند · RSSI/ARFCN · EARFCN · BW).
- * تظهر في مساعد التوجيه تحت العدادين الأصليين.
+ * تظهر في توجيه الأنتنا تحت العدادين الأصليين.
  */
 import { StyleSheet } from 'react-native';
 import { View, Text } from '../i18n/rn';

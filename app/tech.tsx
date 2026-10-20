@@ -198,7 +198,7 @@ function TechScreen() {
           <Text style={s.heroTitle}>وضع الفني</Text>
           <Text style={s.heroSub}>شوف إشارة راوتر العميل حيّة ووجّهه وأنت في مكانك</Text>
         </Hero>
-        <Section title="كود العميل" sub="العميل يضغط «شارك مع فني» في مساعد التوجيه ويعطيك الكود" icon="aim">
+        <Section title="كود العميل" sub="العميل يضغط «شارك مع فني» في توجيه الأنتنا ويعطيك الكود" icon="aim">
           <TextInput value={code} onChangeText={t => setCode(t.replace(/\D/g, '').slice(0, 6))}
             keyboardType="number-pad" maxLength={6} placeholder="••••••" placeholderTextColor={P.faint}
             style={s.codeIn} />
@@ -213,7 +213,7 @@ function TechScreen() {
         </Section>
         <View style={s.howCard}>
           <Text style={s.howTitle}>كيف تشتغل؟</Text>
-          {['العميل يفتح Bandly ← مساعد التوجيه ← «شارك مع فني»',
+          {['العميل يفتح Bandly ← توجيه الأنتنا ← «شارك مع فني»',
             'يرسل لك الكود أو الرابط بالواتساب',
             'تشوف قراءته حيّة وتكلّمه صوت وصورة 📹 — تلمس الفيديو فيطلع له مؤشر',
             'تقدر تطلب تثبيت البرج — يتنفذ بعد موافقته'].map((t, i) => (

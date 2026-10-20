@@ -246,7 +246,7 @@ export default function LagScreen() {
 const FIX_ROUTE: Partial<Record<Cause, { route: string; label: string }>> = {
   handover: { route: 'towers', label: 'افتح الأبراج' },
   nr: { route: 'ping', label: 'افتح مُحسّن اللعبة' },
-  signal: { route: 'aim', label: 'افتح مساعد التوجيه' },
+  signal: { route: 'aim', label: 'افتح توجيه الأنتنا' },
   traffic: { route: 'device', label: 'افتح الأجهزة' },
   network: { route: 'ping', label: 'افتح مُحسّن اللعبة' },
 };

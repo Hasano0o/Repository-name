@@ -537,7 +537,7 @@ export default function GameScreen() {
                     {!!check.dx.fix && <Text style={s.verdictFix}>💡 {check.dx.fix}</Text>}
                     {!!check.dx.action && info && (
                       <Pressable onPress={() => router.push(`/${check.dx.action === 'devices' ? 'device' : 'aim'}/${info.id}` as Href)}>
-                        <Text style={s.verdictLink}>{check.dx.action === 'devices' ? 'افتح الأجهزة ‹' : 'افتح مساعد التوجيه ‹'}</Text>
+                        <Text style={s.verdictLink}>{check.dx.action === 'devices' ? 'افتح الأجهزة ‹' : 'افتح توجيه الأنتنا ‹'}</Text>
                       </Pressable>
                     )}
                   </View>

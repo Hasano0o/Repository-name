@@ -337,10 +337,10 @@ export default function HuntScreen() {
             <Text style={[s.body, { textAlign: 'center' }]}>
               {phase === 'nomod'
                 ? 'صيد الإشارة يستخدم بوصلة الجوال، وهي موجودة بس في النسخة الجديدة. حدّث Bandly من المتجر أو حمّل آخر APK وارجع هنا.'
-                : 'هالميزة تحتاج حسّاس البوصلة. تقدر تستخدم «مساعد التوجيه» العادي بالصوت والاهتزاز.'}
+                : 'هالميزة تحتاج حسّاس البوصلة. تقدر تستخدم «توجيه الأنتنا» العادي بالصوت والاهتزاز.'}
             </Text>
             <Pressable onPress={() => nav.back()} style={s.ghostBtn}>
-              <Text style={s.ghostTxt}>رجوع لمساعد التوجيه</Text>
+              <Text style={s.ghostTxt}>رجوع لتوجيه الأنتنا</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -562,7 +562,7 @@ function Header({ status, title }: { status: { t: string; dot: string; bg: strin
       </Pressable>
       <View style={{ flex: 1, alignItems: 'center', gap: 2 }}>
         <Text style={s.title}>{title}</Text>
-        <Text style={s.sub}>مساعد التوجيه · أنتينا خارجية</Text>
+        <Text style={s.sub}>توجيه الأنتنا · أنتينا خارجية</Text>
       </View>
       {status ? (
         <View style={[s.status, { backgroundColor: status.bg, borderColor: status.bd }]}>
