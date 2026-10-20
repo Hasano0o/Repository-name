@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SavedRouter } from '../store/routers';
 import { withSession } from '../store/sessions';
 import { Carrier } from '../drivers/types';
-import { bandLabel, friendlyBand, bandKindOf, bandMhz, BandKind } from '../utils/bands';
+import { bandLabel, friendlyBand } from '../utils/bands';
 import { Icon } from './Icon';
 import { C, R, tBd, tBg } from './theme';
 
@@ -22,17 +22,12 @@ const GRAD = {
   NR: ['#5b3df5', '#9466ff'] as [string, string],
 };
 /**
- * الثانوي: لون مختلف عن الأساسي (الأزرق) — حسب نوع التردد عشان نفس النوع ياخذ نفس اللون:
- * يوصل بعيد (تحت ١ جيجا) أخضر · متوازن (١٨٠٠/٢١٠٠) فيروزي · سريع (٢٣٠٠ وفوق) برتقالي · و5G بنفسجي
+ * ثلاث ألوان ثابتة في كل التطبيق (اختيار حسن): الأساسي أزرق · الثانوي 4G برتقالي · 5G بنفسجي
  */
-const GRAD_KIND: Record<BandKind, [string, string]> = {
-  far: ['#059669', '#34d399'],
-  mid: ['#0891b2', '#22d3ee'],
-  fast: ['#ea580c', '#fb923c'],
-};
+export const SEC_ORANGE = '#f97316';
+const GRAD_SEC_LTE: [string, string] = ['#ea580c', '#fb923c'];
 const GRAD_NR_SEC: [string, string] = ['#7c3aed', '#a78bfa'];
-const secGrad = (c: Carrier): [string, string] =>
-  c.tech === 'NR' ? GRAD_NR_SEC : GRAD_KIND[bandKindOf(bandMhz('LTE', c.band))] ?? GRAD_KIND.mid;
+const secGrad = (c: Carrier): [string, string] => (c.tech === 'NR' ? GRAD_NR_SEC : GRAD_SEC_LTE);
 
 const mhzOf = (c: Carrier) => (typeof c.bandwidth === 'number' && c.bandwidth > 0 ? c.bandwidth : undefined);
 

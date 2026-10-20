@@ -17,6 +17,7 @@ import { C } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 
 import { sheet } from '../../src/i18n';
+import { SEC_ORANGE } from '../../src/ui/ComboCard';
 const LTE_ONLY = '03';
 type NrPick = 'any' | 'none' | number;
 
@@ -410,8 +411,8 @@ export default function ComboScreen() {
               ) : (
                 carriers.map((c, i) => (
                   <View key={`${c.tech}${c.band}${i}`} style={s.carr}>
-                    <Text style={[s.carrRole, c.role === 'PCC' && { color: C.blue }]}>{c.role === 'PCC' ? '⭐ أساسي' : 'ثانوي'}</Text>
-                    <Text style={[s.carrName, c.tech === 'NR' && { color: C.violet }]}>
+                    <Text style={[s.carrRole, { color: c.role === 'PCC' ? C.blue : c.tech === 'NR' ? C.violet : SEC_ORANGE }]}>{c.role === 'PCC' ? '⭐ أساسي' : 'ثانوي'}</Text>
+                    <Text style={[s.carrName, { color: c.role === 'PCC' ? C.blue : c.tech === 'NR' ? C.violet : SEC_ORANGE }]}>
                       {bandLabel(c.tech, c.band)}{c.bandwidth ? ` · ${c.bandwidth} MHz` : ''}
                     </Text>
                     <Text style={[s.carrSig, { color: rsrpCol(c.rsrp) }]}>{c.rsrp ?? '—'}</Text>
@@ -443,7 +444,7 @@ export default function ComboScreen() {
               <View style={s.grid}>
                 {lteList.filter(b => b !== primary).map(b => (
                   <Tile key={b} label={bandLabel('LTE', b)} sub={freqLabel('LTE', b) || undefined} sig={lteSeen.get(b)} faint={!lteSeen.has(b)}
-                    color="#e08a00" on={extra.includes(b)}
+                    color={SEC_ORANGE} on={extra.includes(b)}
                     onPress={() => setExtra(x => (x.includes(b) ? x.filter(y => y !== b) : [...x, b]))} />
                 ))}
               </View>
