@@ -22,6 +22,7 @@ const ALERT_ROWS: AlertRow[] = [
   { key: 'nr5g', title: 'رجوع 5G', sub: 'لما يتصل بشبكة 5G', icon: 'spark', color: tFg('#7a51e0') },
   { key: 'disconnect', title: 'انقطاع الاتصال', sub: 'لما يفقد الراوتر الشبكة', icon: 'power', color: tFg('#d73722') },
   { key: 'dataPlan', title: 'استهلاك الباقة', sub: 'تنبيه عند 70٪ و90٪ و100٪', icon: 'chart', color: tFg('#f59e0b') },
+  { key: 'heat', title: 'حرارة الراوتر', sub: 'لما يوصل 75° (للراوترات اللي تعطي الحرارة)', icon: 'sun', color: tFg('#f97316') },
 ];
 
 export default function MonitorScreen() {

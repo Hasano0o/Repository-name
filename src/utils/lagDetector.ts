@@ -17,10 +17,12 @@ export interface RouterSample {
   wifiMs?: number | null;
   /** سرعة التنزيل الكلية على الراوتر (بايت/ثانية) */
   downBps?: number;
+  /** أعلى حرارة داخل الراوتر (°C) — لو يعطيها */
+  tempMax?: number;
 }
 export interface Gap { from: number; to: number }
 
-export type Cause = 'handover' | 'nr' | 'wifi' | 'signal' | 'traffic' | 'network';
+export type Cause = 'handover' | 'nr' | 'wifi' | 'signal' | 'traffic' | 'heat' | 'network';
 
 export const CAUSE_TEXT: Record<Cause, { title: string; fix: string; icon: string }> = {
   handover: { icon: '🗼', title: 'الراوتر نقل لبرج أو تردد ثاني', fix: 'ثبّت البرج من «الأبراج» أو ثبّت التردد الأفضل من مُحسّن اللعبة' },
@@ -28,6 +30,7 @@ export const CAUSE_TEXT: Record<Cause, { title: string; fix: string; icon: strin
   wifi: { icon: '📶', title: 'الواي فاي بين الجهاز والراوتر', fix: 'قرّب من الراوتر، استخدم شبكة 5GHz، أو وصّل كيبل' },
   signal: { icon: '📉', title: 'إشارة الراوتر نزلت', fix: 'وجّه الأنتنا من توجيه الأنتنا، أو غيّر مكان الراوتر' },
   traffic: { icon: '📥', title: 'جهاز ثاني كان يحمّل', fix: 'افصل الأجهزة اللي تحمّل وقت اللعب من «الأجهزة»' },
+  heat: { icon: '🌡️', title: 'الراوتر حار', fix: 'بعّده عن الشمس والأجهزة الحارة وخلّ حوله تهوية — الحر يخلّيه يخفّض السرعة لحاله' },
   network: { icon: '🌐', title: 'زحمة البرج أو الطريق للسيرفر', fix: 'شوف «أفضل وقت للعب»، أو جرّب تردد ثاني من مُحسّن اللعبة' },
 };
 
@@ -73,6 +76,9 @@ export function baseline(pings: PingSample[]): number {
 
 export const isSpike = (ms: number | null, base: number) => ms === null || (base > 0 && ms > Math.max(base * 1.8, base + 40));
 
+/** من هالحرارة وفوق نعتبرها سبب محتمل للاق */
+export const HOT_C = 72;
+
 function causeOf(inc: { from: number; to: number }, routers: RouterSample[], base: number): { cause: Cause; detail?: string } {
   const win = routers.filter(r => r.t >= inc.from - 10000 && r.t <= inc.to + 8000);
   const before = routers.filter(r => r.t < inc.from - 10000).slice(-6);
@@ -105,6 +111,9 @@ function causeOf(inc: { from: number; to: number }, routers: RouterSample[], bas
   if (maxDown > 1.5 * 1024 * 1024) {
     return { cause: 'traffic', detail: `${(maxDown / 1048576).toFixed(1)} ميقابايت/ث` };
   }
+  // ٦) الحرارة: الراوتر الحار يخفّض قدرته لحاله (تقطيع وبنق عالي بدون سبب ظاهر)
+  const hot = Math.max(0, ...win.map(r => r.tempMax ?? 0));
+  if (hot >= HOT_C) return { cause: 'heat', detail: `${hot}°` };
   void base;
   return { cause: 'network' };
 }

@@ -7,6 +7,7 @@ export interface MonitorAlerts {
   nr5g: boolean;          // رجعت 5G
   disconnect: boolean;    // انقطع الاتصال
   dataPlan: boolean;      // استهلاك الباقة
+  heat?: boolean;         // الراوتر حار (فوق ٧٥°)
 }
 
 export interface MonitorSettings {
@@ -24,6 +25,7 @@ export const DEFAULT_ALERTS: MonitorAlerts = {
   nr5g: true,
   disconnect: true,
   dataPlan: true,
+  heat: true,
 };
 
 export const DEFAULT_SETTINGS: MonitorSettings = {
@@ -65,6 +67,8 @@ export interface RouterMonState {
   operator?: string;
   /** آخر مرة فشل الدخول للراوتر — لتجنّب محاولات متكررة في الخلفية */
   authFailedAt?: number;
+  /** آخر مرة نبّهنا إن الراوتر حار — مرة كل ٦ ساعات بالكثير */
+  heatAlertAt?: number;
 }
 type StateMap = Record<string, RouterMonState>;
 

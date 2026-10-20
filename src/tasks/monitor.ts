@@ -102,6 +102,17 @@ export async function runMonitorCheck(): Promise<boolean> {
         }
       }
 
+      // الحرارة: فوق ٧٥° ننبّه — مرة كل ٦ ساعات بالكثير (ما نزعج كل فحص في الظهر)
+      if (a.heat !== false && online) {
+        const temps = await withSession(r, async d => (d.getTemps ? d.getTemps() : [])).catch(() => []);
+        const max = temps.length ? Math.max(...temps.map(x => x.c)) : 0;
+        if (max >= 75 && (!prev.heatAlertAt || Date.now() - prev.heatAlertAt > 6 * 3600_000)) {
+          notify('الراوتر حار 🌡️', `${r.name}: وصل ${max}° — بعّده عن الشمس وخلّ حوله تهوية، الحر يخفّض السرعة.`, r.id);
+          next.heatAlertAt = Date.now();
+          fired = true;
+        }
+      }
+
       // استهلاك الباقة
       if (a.dataPlan && plan && plan.limitBytes > 0 && usage) {
         const used = (usage.downloadBytes ?? 0) + (usage.uploadBytes ?? 0);

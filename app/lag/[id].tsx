@@ -65,8 +65,16 @@ export default function LagScreen() {
     return () => { alive = false; };
   }, [id]));
 
+  const lastTemp = useRef<{ at: number; c?: number }>({ at: 0 });
   const pollRouter = async (r: SavedRouter) => {
     const t = Date.now();
+    // الحرارة ما تتغير بسرعة — كل ٣٠ ثانية تكفي (طلب زيادة على الراوتر)
+    if (t - lastTemp.current.at > 30_000) {
+      lastTemp.current.at = t;
+      withSession(r, async d => (d.getTemps ? d.getTemps() : []))
+        .then(l => { lastTemp.current.c = l.length ? Math.max(...l.map(x => x.c)) : undefined; })
+        .catch(() => {});
+    }
     const [res, wifi] = await Promise.all([
       withSession(r, async d => Promise.all([
         d.getSignal ? d.getSignal().catch(() => null) : Promise.resolve(null),
@@ -85,6 +93,7 @@ export default function LagScreen() {
       rsrp: sig?.rsrp,
       wifiMs: wifi,
       downBps: tr?.downBytesPerSec,
+      tempMax: lastTemp.current.c,
     };
     routers.current.push(s);
     return s;
