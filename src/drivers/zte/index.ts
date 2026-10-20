@@ -889,6 +889,8 @@ export class ZteDriver implements RouterDriver {
       'nr5g_band', 'nr5g_sa_band', 'nr5g_sa_pci', 'nr5g_dlEarfcn',
       'nr5g_dl_earfcn', 'nr5g_sa_arfcn', 'nr5g_rsrp', 'nr5g_sinr',
       'nr5g_rsrq', 'nr5g_dlbandwidth', 'nr5g_sa_bandwidth',
+      // عرض 5G — كل فيرموير يسميه باسم (تطبيقات ثانية تعرضه، فالراوتر يعطيه)
+      'nr5g_dl_bandwidth', 'nr_ca_pcell_bandwidth', 'nr5g_ca_pcell_bandwidth',
     ]);
     const out: Carrier[] = [];
     const earfcn = num(r.wan_active_channel);
@@ -919,7 +921,7 @@ export class ZteDriver implements RouterDriver {
         tech: 'NR', role: out.length ? 'SCC' : 'PCC', band: nb,
         arfcn: pick(r, 'Z5g_dlEarfcn', 'nr5g_action_channel', 'nr5g_dlEarfcn', 'nr5g_sa_arfcn') || undefined,
         pci: pciDec(pick(r, 'nr5g_pci', 'nr5g_sa_pci')),
-        bandwidth: num(pick(r, 'nr5g_bandwidth', 'nr5g_dlbandwidth', 'nr5g_sa_bandwidth')),
+        bandwidth: num(pick(r, 'nr5g_bandwidth', 'nr5g_dlbandwidth', 'nr5g_sa_bandwidth', 'nr5g_dl_bandwidth', 'nr_ca_pcell_bandwidth', 'nr5g_ca_pcell_bandwidth')),
         rsrp: num(nrRsrpV),
         rsrq: num(pick(r, 'Z5g_rsrq', 'nr5g_rsrq')),
         sinr: num(pick(r, 'Z5g_SINR', 'nr5g_sinr')),

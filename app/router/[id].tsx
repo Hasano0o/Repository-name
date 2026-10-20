@@ -836,7 +836,7 @@ export default function RouterDashboard() {
             {!!traffic && traffic.connectedSecs > 0 && (
               <View style={s.sinceRow}>
                 <SyncIcon active={syncing} />
-                <Text style={s.sinceText}>متصل منذ {fmtDuration(traffic.connectedSecs)}</Text>
+                <Text style={s.sinceText}>متصل منذ {fmtDuration(traffic.connectedSecs)}{details?.wanIp ? `  ·  الآي بي ${details.wanIp}` : ''}</Text>
               </View>
             )}
           </LinearGradient>

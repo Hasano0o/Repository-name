@@ -8,7 +8,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, Easing } from 'react-native';
 import { View, Text, Pressable } from '../i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path, Rect, Circle } from 'react-native-svg';
+import Svg, { Path, Rect, Circle, Polyline } from 'react-native-svg';
 import type { Signal } from '../drivers/types';
 import { LEVEL_COLOR, LEVEL_SOFT, Level, rsrpLevel, rsrqLevel, signalScore, parseBands, parseNrBands } from '../utils/signal';
 import { friendlyBand } from '../utils/bands';
@@ -17,7 +17,9 @@ import { sheet } from '../i18n';
 import { FONT } from './fonts';
 
 type Tech = 'LTE' | 'NR';
-interface Row { tech: Tech; band?: string; rsrp?: number; sinr?: number; rsrq?: number; pci?: string }
+interface Row { tech: Tech; band?: string; rsrp?: number; sinr?: number; rsrq?: number; pci?: string; arfcn?: string; bw?: string }
+type Hist = { rsrp: number[]; sinr: number[]; rsrq: number[] };
+const HIST_N = 30; // آخر ٣٠ قراءة (تقريباً دقيقة)
 
 const TECH_TINT: Record<Tech, [string, string]> = {
   LTE: ['#1f5eff', '#3b8bff'],
@@ -46,11 +48,11 @@ export function techRows(sig?: Signal | null): Row[] {
   const out: Row[] = [];
   const lteBand = parseBands(sig.band).find(b => !b.startsWith('n'));
   if (sig.rsrp !== undefined || lteBand) {
-    out.push({ tech: 'LTE', band: lteBand, rsrp: sig.rsrp, sinr: sig.sinr, rsrq: sig.rsrq, pci: sig.pci });
+    out.push({ tech: 'LTE', band: lteBand, rsrp: sig.rsrp, sinr: sig.sinr, rsrq: sig.rsrq, pci: sig.pci, arfcn: sig.earfcn, bw: sig.dlBandwidth });
   }
   const nrBand = parseNrBands(sig.nrBand)[0];
   if (sig.nrRsrp !== undefined || nrBand) {
-    out.push({ tech: 'NR', band: nrBand, rsrp: sig.nrRsrp, sinr: sig.nrSinr, rsrq: sig.nrRsrq, pci: sig.nrPci });
+    out.push({ tech: 'NR', band: nrBand, rsrp: sig.nrRsrp, sinr: sig.nrSinr, rsrq: sig.nrRsrq, pci: sig.nrPci, arfcn: sig.nrArfcn, bw: sig.nrDlBandwidth });
   }
   return out;
 }
@@ -102,6 +104,24 @@ function Sheen() {
   );
 }
 
+/** خط صغير لآخر القراءات — يبيّن هل الإشارة ثابتة ولا تتذبذب */
+function Spark({ data, color, w = 64, h = 14 }: { data: number[]; color: string; w?: number; h?: number }) {
+  if (data.length < 2) return <View style={{ width: w, height: h }} />;
+  const lo = Math.min(...data), hi = Math.max(...data);
+  const span = Math.max(hi - lo, 3); // تذبذب بسيط ما يطلع كأنه جبال
+  const mid = (hi + lo) / 2;
+  const pts = data.map((v, i) => {
+    const x = (i / (HIST_N - 1)) * w + (w - ((data.length - 1) / (HIST_N - 1)) * w);
+    const y = h / 2 - ((v - mid) / span) * (h - 3);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return (
+    <Svg width={w} height={h}>
+      <Polyline points={pts} fill="none" stroke={color} strokeWidth={1.8} strokeLinejoin="round" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 function QualityBar({ score }: { score: number }) {
   const w = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -116,8 +136,8 @@ function QualityBar({ score }: { score: number }) {
   );
 }
 
-function Stat({ icon, label, value, color, bg, onPress }: {
-  icon: React.ReactNode; label: string; value: string; color: string; bg: string; onPress?: () => void;
+function Stat({ icon, label, value, color, bg, onPress, spark }: {
+  icon: React.ReactNode; label: string; value: string; color: string; bg: string; onPress?: () => void; spark?: number[];
 }) {
   return (
     <Pressable style={[s.stat, { backgroundColor: bg }]} onPress={onPress} disabled={!onPress}>
@@ -125,13 +145,14 @@ function Stat({ icon, label, value, color, bg, onPress }: {
       <View style={s.statTxt}>
         <Text style={s.statLbl} numberOfLines={1} adjustsFontSizeToFit>{label}</Text>
         <Text style={[s.statVal, { color }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+        {!!spark && <Spark data={spark} color={color} w={44} h={10} />}
       </View>
       {icon}
     </Pressable>
   );
 }
 
-function TechRow({ r, onDetails }: { r: Row; onDetails?: () => void }) {
+function TechRow({ r, onDetails, hist }: { r: Row; onDetails?: () => void; hist?: Hist }) {
   const b = num(r.band);
   const code = r.band ? (r.tech === 'NR' ? `n${b ?? ''}` : `B${b ?? ''}`) : r.tech === 'NR' ? '5G' : '4G';
   const nice = b ? friendlyBand(r.tech, b) : '';
@@ -140,7 +161,11 @@ function TechRow({ r, onDetails }: { r: Row; onDetails?: () => void }) {
   const score = signalScore({ rsrp: r.rsrp, sinr: r.sinr, rsrq: r.rsrq });
   const barsOn = lv === 'excellent' ? 4 : lv === 'good' ? 3 : lv === 'fair' ? 2 : 1;
   const accent = TECH_ACCENT[r.tech];
+  // السطر الفني: رقم البرج · القناة · العرض (للفنيين ومن يبي يثبّت برج)
+  const bwN = num(r.bw);
+  const meta = [r.pci && `PCI ${r.pci}`, r.arfcn && `قناة ${r.arfcn}`, bwN && `${bwN}MHz`].filter(Boolean).join('  ·  ');
   return (
+    <View style={s.rowWrap}>
     <View style={s.row}>
       {/* ١. شارة التردد */}
       <LinearGradient colors={TECH_TINT[r.tech]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.chip}>
@@ -163,6 +188,7 @@ function TechRow({ r, onDetails }: { r: Row; onDetails?: () => void }) {
           <Text style={[s.rsrp, { color: LEVEL_COLOR[lv] }]} numberOfLines={1} adjustsFontSizeToFit>{fmt(r.rsrp)}</Text>
           <Text style={s.unit}>dBm</Text>
         </View>
+        {!!hist && hist.rsrp.length > 1 && <Spark data={hist.rsrp} color={LEVEL_COLOR[lv]} w={96} h={14} />}
         <QualityBar score={score} />
         <View style={[s.status, { backgroundColor: LEVEL_SOFT[lv] }]}>
           <Text style={[s.statusTxt, { color: LEVEL_COLOR[lv] }]} numberOfLines={1} adjustsFontSizeToFit>{STATUS[lv]}</Text>
@@ -175,32 +201,47 @@ function TechRow({ r, onDetails }: { r: Row; onDetails?: () => void }) {
       {/* ٣. النقاء والجودة */}
       <View style={s.stats}>
         <Stat icon={<Bars color={accent} size={20} />} label="النقاء SINR" value={fmt(r.sinr, 1)}
-          color={accent} bg={TECH_SOFT[r.tech]} onPress={onDetails} />
+          color={accent} bg={TECH_SOFT[r.tech]} onPress={onDetails} spark={hist?.sinr} />
         <Stat icon={<Antenna color={LEVEL_COLOR[qlv]} />} label="الجودة RSRQ" value={fmt(r.rsrq, 1)}
-          color={LEVEL_COLOR[qlv]} bg={LEVEL_SOFT[qlv]} onPress={onDetails} />
+          color={LEVEL_COLOR[qlv]} bg={LEVEL_SOFT[qlv]} onPress={onDetails} spark={hist?.rsrq} />
       </View>
+    </View>
+    {!!meta && <Text style={s.meta} numberOfLines={1}>{meta}</Text>}
     </View>
   );
 }
 
 export function TechCards({ signal, onDetails }: { signal?: Signal | null; onDetails?: () => void }) {
   const rows = techRows(signal);
+  // تاريخ القراءات لكل تقنية — يتجدد مع كل قراءة جديدة للراوتر
+  const hist = useRef<Record<Tech, Hist>>({ LTE: { rsrp: [], sinr: [], rsrq: [] }, NR: { rsrp: [], sinr: [], rsrq: [] } });
+  const lastSig = useRef<Signal | null | undefined>(undefined);
+  if (signal && signal !== lastSig.current) {
+    lastSig.current = signal;
+    for (const r of rows) {
+      const h = hist.current[r.tech];
+      const push = (arr: number[], v?: number) => { if (v !== undefined) { arr.push(v); if (arr.length > HIST_N) arr.shift(); } };
+      push(h.rsrp, r.rsrp); push(h.sinr, r.sinr); push(h.rsrq, r.rsrq);
+    }
+  }
   if (!rows.length) return null;
   return (
     <View style={s.wrap}>
-      {rows.map(r => <TechRow key={r.tech} r={r} onDetails={onDetails} />)}
+      {rows.map(r => <TechRow key={r.tech} r={r} onDetails={onDetails} hist={hist.current[r.tech]} />)}
     </View>
   );
 }
 
 const s = sheet({
   wrap: { alignSelf: 'stretch', gap: 8 },
-  row: {
-    flexDirection: 'row-reverse', alignItems: 'stretch', gap: 8,
+  rowWrap: {
+    gap: 6,
     backgroundColor: tBg('#ffffffe6'), borderRadius: 22, borderWidth: 1, borderColor: tBd('#ffffff'),
     padding: 7,
     shadowColor: C.shadow, shadowOpacity: 0.07, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 2,
   },
+  row: { flexDirection: 'row-reverse', alignItems: 'stretch', gap: 8 },
+  meta: { color: C.sub, fontSize: 10, fontFamily: FONT.numSemi, textAlign: 'center' },
   // ١. الشارة
   chip: { width: 78, borderRadius: 16, padding: 8, justifyContent: 'space-between', alignItems: 'center', overflow: 'hidden' },
   chipTop: { alignSelf: 'stretch', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },

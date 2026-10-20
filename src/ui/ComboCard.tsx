@@ -129,6 +129,30 @@ export function ComboCard({ r }: { r: SavedRouter }) {
         </View>
       )}
 
+      {/* توزيع عرض النطاق: مين شايل السرعة — بنفس الألوان (أساسي أزرق · ثانوي برتقالي · 5G بنفسجي) */}
+      {(() => {
+        const parts = [pcc, ...scc].filter((c): c is Carrier => !!c && !!mhzOf(c));
+        if (parts.length < 2 || total <= 0) return null;
+        const colOf = (c: Carrier) => (c.role === 'PCC' ? C.blue : c.tech === 'NR' ? '#7c3aed' : SEC_ORANGE);
+        return (
+          <View style={{ gap: 5 }}>
+            <View style={s.share}>
+              {parts.map((c, i) => (
+                <View key={i} style={{ flex: mhzOf(c)!, backgroundColor: colOf(c) }} />
+              ))}
+            </View>
+            <View style={s.shareLbls}>
+              {parts.map((c, i) => (
+                <View key={i} style={s.shareLbl}>
+                  <View style={[s.shareDot, { backgroundColor: colOf(c) }]} />
+                  <Text style={s.shareTxt}>{bandLabel(c.tech, c.band)} {mhzOf(c)}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        );
+      })()}
+
       {/* الزر */}
       <LinearGradient colors={['#2f6bff', '#6a4cff']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 0 }} style={s.btn}>
         <Text style={s.btnTxt}>غيّر الأساسي والثانوي</Text>
@@ -185,6 +209,11 @@ const s = sheet({
   emptyTxt: { color: C.text, fontSize: 15, fontWeight: '800' },
   emptySub: { color: C.muted, fontSize: 10 },
 
+  share: { flexDirection: 'row-reverse', height: 8, borderRadius: 99, overflow: 'hidden', gap: 2, backgroundColor: C.track },
+  shareLbls: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10, justifyContent: 'center' },
+  shareLbl: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4 },
+  shareDot: { width: 7, height: 7, borderRadius: 4 },
+  shareTxt: { color: C.sub, fontSize: 10, fontFamily: FONT.numSemi },
   btn: {
     height: 40, borderRadius: 14,
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6,
