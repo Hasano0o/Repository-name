@@ -11,6 +11,7 @@ import { Icon } from './Icon';
 import { C, R, tBd, tBg } from './theme';
 
 import { sheet } from '../i18n';
+import { FONT } from './fonts';
 /**
  * بطاقة «الأساسي والثانوي» في صفحة الراوتر — بنفس روح بطاقات الإشارة:
  * شارة كبيرة للأساسي (متدرّجة) + علامة ربط + شارات الثانوي، ومجموع عرض النطاق.
@@ -112,7 +113,7 @@ export function ComboCard({ r }: { r: SavedRouter }) {
                   <View style={s.secPill}><Text style={s.secPillTxt}>{i === 0 ? 'الثانوي' : `ثانوي ${i + 1}`}</Text></View>
                   <Text style={s.secTech}>{c.tech === 'NR' ? '5G' : '4G'}</Text>
                 </View>
-                <Text style={[s.secBand, scc.length > 2 && { fontSize: 17 }]} numberOfLines={1} adjustsFontSizeToFit>
+                <Text style={[s.secBand, scc.length > 2 && { fontSize: 18, lineHeight: 22 }]} numberOfLines={1} adjustsFontSizeToFit>
                   {bandLabel(c.tech, c.band)}
                 </Text>
                 {scc.length <= 2 && (
@@ -148,8 +149,8 @@ const s = sheet({
   title: { color: C.text, fontSize: 14.5, fontWeight: '900' },
   sub: { color: C.sub, fontSize: 10.5, marginTop: 1, textAlign: 'right' },
   total: { alignItems: 'center', backgroundColor: tBg('#e8f8f0'), borderRadius: 12, paddingHorizontal: 9, paddingVertical: 4 },
-  totalNum: { color: '#12b76a', fontSize: 14, fontWeight: '900' },
-  totalLbl: { color: '#12b76a', fontSize: 9, fontWeight: '800', marginTop: -2 },
+  totalNum: { color: '#12b76a', fontSize: 15, fontFamily: FONT.numHeavy },
+  totalLbl: { color: '#12b76a', fontSize: 9, fontFamily: FONT.numSemi, marginTop: -2 },
 
   loadRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, paddingVertical: 10 },
   muted: { color: C.sub, fontSize: 12.5, textAlign: 'right' },
@@ -160,7 +161,7 @@ const s = sheet({
   mainPill: { borderRadius: 999, borderWidth: 1, borderColor: '#ffffff99', backgroundColor: '#ffffff26', paddingHorizontal: 8, paddingVertical: 1 },
   mainPillTxt: { color: '#ffffff', fontSize: 10, fontWeight: '900' },
   star: { fontSize: 14 },
-  mainBand: { color: '#ffffff', fontSize: 24, fontWeight: '900', letterSpacing: -0.5, textAlign: 'center' },
+  mainBand: { color: '#ffffff', fontSize: 26, lineHeight: 30, fontFamily: FONT.numHeavy, textAlign: 'center', includeFontPadding: false },
   mainNice: { color: '#ffffffe6', fontSize: 9.5, fontWeight: '700', textAlign: 'center' },
 
   link: { width: 26, alignItems: 'center', justifyContent: 'center' },
@@ -175,9 +176,9 @@ const s = sheet({
   secTop: { alignSelf: 'stretch', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
   secPill: { borderRadius: 999, borderWidth: 1, borderColor: '#ffffff99', backgroundColor: '#ffffff26', paddingHorizontal: 8, paddingVertical: 1 },
   secPillTxt: { color: '#ffffff', fontSize: 10, fontWeight: '900' },
-  secTech: { color: '#ffffffcc', fontSize: 10, fontWeight: '900' },
+  secTech: { color: '#ffffffcc', fontSize: 11, fontFamily: FONT.num },
   secLbl: { color: C.sub, fontSize: 10.5, fontWeight: '800', textAlign: 'right' },
-  secBand: { color: '#ffffff', fontSize: 24, fontWeight: '900', textAlign: 'center' },
+  secBand: { color: '#ffffff', fontSize: 26, lineHeight: 30, fontFamily: FONT.numHeavy, textAlign: 'center', includeFontPadding: false },
   secNice: { color: '#ffffffe6', fontSize: 9.5, fontWeight: '700', textAlign: 'center' },
   emptyTxt: { color: C.text, fontSize: 15, fontWeight: '800' },
   emptySub: { color: C.muted, fontSize: 10 },

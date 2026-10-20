@@ -15,6 +15,7 @@ import {
   IBMPlexSansArabic_600SemiBold,
   IBMPlexSansArabic_700Bold,
 } from '@expo-google-fonts/ibm-plex-sans-arabic';
+import { Rubik_600SemiBold, Rubik_700Bold, Rubik_800ExtraBold } from '@expo-google-fonts/rubik';
 import { applyGlobalFont, FONT } from '../src/ui/fonts';
 import { C, isDark } from '../src/ui/theme';
 import { UpdateBanner } from '../src/ui/UpdateBanner';
@@ -81,6 +82,10 @@ export default function RootLayout() {
     IBMPlexSansArabic_500Medium,
     IBMPlexSansArabic_600SemiBold,
     IBMPlexSansArabic_700Bold,
+    // أرقام البطاقات (قوة الإشارة، الترددات) — أوضح من خط العربي في الأرقام الكبيرة
+    Rubik_600SemiBold,
+    Rubik_700Bold,
+    Rubik_800ExtraBold,
   });
 
   const path = usePathname();

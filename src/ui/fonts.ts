@@ -6,6 +6,10 @@ export const FONT = {
   medium: 'IBMPlexSansArabic_500Medium',
   semibold: 'IBMPlexSansArabic_600SemiBold',
   bold: 'IBMPlexSansArabic_700Bold',
+  /** للأرقام والرموز (‎-84، B3، n78) — Rubik أوضح وأنظف من خط العربي في الأحجام الكبيرة */
+  num: 'Rubik_700Bold',
+  numHeavy: 'Rubik_800ExtraBold',
+  numSemi: 'Rubik_600SemiBold',
 };
 
 const familyFor = (weight?: string | number): string => {

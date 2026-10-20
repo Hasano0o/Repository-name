@@ -14,6 +14,7 @@ import { LEVEL_COLOR, LEVEL_SOFT, Level, rsrpLevel, rsrqLevel, signalScore, pars
 import { friendlyBand } from '../utils/bands';
 import { C, isDark, tBd, tBg } from './theme';
 import { sheet } from '../i18n';
+import { FONT } from './fonts';
 
 type Tech = 'LTE' | 'NR';
 interface Row { tech: Tech; band?: string; rsrp?: number; sinr?: number; rsrq?: number; pci?: string }
@@ -204,16 +205,16 @@ const s = sheet({
   chip: { width: 78, borderRadius: 16, padding: 8, justifyContent: 'space-between', alignItems: 'center', overflow: 'hidden' },
   chipTop: { alignSelf: 'stretch', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
   techPill: { borderRadius: 999, borderWidth: 1, borderColor: '#ffffff99', backgroundColor: '#ffffff26', paddingHorizontal: 7, paddingVertical: 1 },
-  techPillTxt: { color: '#ffffff', fontSize: 10.5, fontWeight: '900' },
-  chipBand: { color: '#ffffff', fontSize: 24, fontWeight: '900', letterSpacing: -0.5, textAlign: 'center', marginTop: 2 },
+  techPillTxt: { color: '#ffffff', fontSize: 11, fontFamily: FONT.num },
+  chipBand: { color: '#ffffff', fontSize: 26, lineHeight: 30, fontFamily: FONT.numHeavy, textAlign: 'center', marginTop: 2, includeFontPadding: false },
   chipNice: { color: '#ffffffeb', fontSize: 9, fontWeight: '700', textAlign: 'center' },
   // ٢. الوسط
   mid: { flex: 1, gap: 3, justifyContent: 'center', alignItems: 'center', paddingVertical: 2 },
   midHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 3 },
   midLbl: { color: C.text, fontSize: 11.5, fontWeight: '800', flexShrink: 1 },
-  rsrpLine: { flexDirection: 'row-reverse', alignItems: 'baseline', gap: 3 },
-  rsrp: { fontSize: 26, fontWeight: '900', letterSpacing: -1, flexShrink: 1 },
-  unit: { color: C.sub, fontSize: 10, fontWeight: '700' },
+  rsrpLine: { flexDirection: 'row-reverse', alignItems: 'flex-end', gap: 4, marginVertical: 2 },
+  rsrp: { fontSize: 28, lineHeight: 32, fontFamily: FONT.numHeavy, includeFontPadding: false },
+  unit: { color: C.sub, fontSize: 11, lineHeight: 14, marginBottom: 4, fontFamily: FONT.numSemi },
   track: { alignSelf: 'stretch', height: 6, borderRadius: 99, backgroundColor: C.track, overflow: 'hidden', flexDirection: 'row' },
   fillWrap: { height: '100%' },
   fill: { flex: 1, borderRadius: 99 },
@@ -226,5 +227,5 @@ const s = sheet({
   stat: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', borderRadius: 12, paddingHorizontal: 5, paddingVertical: 4, gap: 3 },
   statTxt: { alignItems: 'center' },
   statLbl: { color: C.text, fontSize: 8.5, fontWeight: '800' },
-  statVal: { fontSize: 15, fontWeight: '900' },
+  statVal: { fontSize: 17, lineHeight: 21, fontFamily: FONT.numHeavy, includeFontPadding: false },
 });
