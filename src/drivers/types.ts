@@ -32,6 +32,8 @@ export interface NetworkInfo {
   /** true = الراوتر يدعم 5G، false = 4G فقط (مؤكد)، undefined = ما نعرف */
   supports5g?: boolean;
 }
+/** قراءة حرارة وحدة: key ثابت للتخزين، label للعرض */
+export interface DeviceTemp { key: string; label: string; c: number }
 export interface Traffic { downBytesPerSec: number; upBytesPerSec: number; connectedSecs: number; }
 /** راديو واي فاي واحد (2.4 أو 5) وقناته الحالية — '0' = تلقائي */
 export interface WifiRadio {
@@ -253,6 +255,8 @@ export interface RouterDriver {
   getCells?(): Promise<CellTower[]>;
   isConnected?(): Promise<boolean>;
   getTraffic?(): Promise<Traffic>;
+  /** حرارة القطع داخل الراوتر (°C) — فاضية لو الراوتر ما يعطيها */
+  getTemps?(): Promise<DeviceTemp[]>;
   getDevices?(): Promise<ConnectedDevice[]>;
   getBlockedDevices?(): Promise<ConnectedDevice[]>;
   blockDevice?(mac: string, block: boolean, name?: string): Promise<void>;

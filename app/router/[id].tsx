@@ -33,6 +33,7 @@ import { SyncIcon } from '../../src/ui/SyncIcon';
 import { StoreAd } from '../../src/ui/StoreAd';
 import { TechStrip } from '../../src/ui/TechStrip';
 import { ComboCard } from '../../src/ui/ComboCard';
+import { TempCard } from '../../src/ui/TempCard';
 import { canRescue, rescueRouter, freeRelease, restoreSavedSettings } from '../../src/utils/safeLock';
 import { getReleaseSnap, clearReleaseSnap } from '../../src/store/lockSnap';
 import type { LockSnapshot } from '../../src/drivers/lockSnapshot';
@@ -884,6 +885,7 @@ export default function RouterDashboard() {
         {!loading && info && (
           <>
             {feat.bands && <ComboCard r={info} />}
+            <TempCard r={info} />
             <GroupTitle title="حسّن اتصالك" color={tFg('#2f6bff')} />
             <TileGrid>
               <ToolTile wide icon="aim" color={tFg('#2f6bff')} title="توجيه الأنتنا" sub="الأنتنا أو الراوتر نفسه"

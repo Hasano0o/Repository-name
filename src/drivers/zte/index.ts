@@ -4,7 +4,7 @@ import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import {
   RouterDriver, Capability, Signal, NetworkInfo, Traffic, ConnectedDevice,
   Usage, DeviceDetails, CellTower, BandConfig, ActiveLock, Carrier,
-  SignalSnapshot, CellLockState, CellLockTarget, WifiRadio,
+  SignalSnapshot, CellLockState, CellLockTarget, WifiRadio, DeviceTemp,
 } from '../types';
 import { http } from '../http';
 import { loadFormula, saveFormula } from './formulaStore';
@@ -597,6 +597,32 @@ export class ZteDriver implements RouterDriver {
       operator: pick(r, 'network_provider'),
       simStatus: pick(r, 'modem_main_state'),
     };
+  }
+
+  /**
+   * حرارة القطع (ZTE 5G: MU5001 / MC801A / MC888...). الأسماء تختلف بين الفيرموير — نقرأ المعروفة ونعرض اللي رجع.
+   * القيم بالدرجة المئوية؛ بعض الأجهزة ترجعها ×١٠ أو ×١٠٠٠ فنصحّحها، واللي برا ٠–١٣٠ نتجاهله.
+   */
+  async getTemps(): Promise<DeviceTemp[]> {
+    await this.ensure();
+    const F: [string, string][] = [
+      ['pm_sensor_pa1', 'المرسل'],
+      ['pm_sensor_mdm', 'المودم'],
+      ['pm_modem_5g', 'مودم 5G'],
+      ['pm_sensor_5g', 'شريحة 5G'],
+      ['pm_sensor_ambient', 'داخل الجهاز'],
+      ['wifi_chip_temp', 'الواي فاي'],
+    ];
+    const r = await this.get(F.map(f => f[0])).catch(() => ({} as Record<string, string>));
+    const out: DeviceTemp[] = [];
+    for (const [k, label] of F) {
+      let v = parseFloat((r[k] ?? '').toString());
+      if (!Number.isFinite(v)) continue;
+      if (v > 1000) v = v / 1000; else if (v > 150) v = v / 10;
+      if (v <= 0 || v > 130) continue;
+      out.push({ key: k, label, c: Math.round(v) });
+    }
+    return out;
   }
 
   async getTraffic(): Promise<Traffic> {
