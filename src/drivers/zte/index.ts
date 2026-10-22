@@ -836,7 +836,9 @@ export class ZteDriver implements RouterDriver {
         ];
       }
     } catch {}
-    return { supported, locked, nrSupported, nrLocked, mode, modes };
+    // اللي نجرّبه تلقائياً: إعداد الراوتر الأصلي (أو المصنع) + المكتوب حالياً — مو DEFAULT_NR (أغلبها يرفضها الفيرموير)
+    const nrPreferred = [...new Set([...(bn ?? SAFE_NR), ...nr])].sort((a, b) => a - b);
+    return { supported, locked, nrSupported, nrLocked, nrPreferred, mode, modes };
   }
 
   /** وضع الشبكة: 00 تلقائي، 0803 = 4G+5G، 03 = 4G فقط، 08 = 5G فقط (SA) — أو القيمة الأصلية كما هي */

@@ -78,7 +78,7 @@ export default function OptimizeScreen() {
     setCfg(c);
     const fromCells: OptTarget[] = [];
     for (const x of cells) if (x.band) fromCells.push({ tech: x.tech, band: x.band });
-    setCands(buildCandidates(fromCells, c?.supported ?? [], c?.nrSupported ?? [], 6));
+    setCands(buildCandidates(fromCells, c?.supported ?? [], c?.nrPreferred ?? c?.nrSupported ?? [], 6));
   }, []);
 
   useFocusEffect(useCallback(() => {
@@ -126,10 +126,13 @@ export default function OptimizeScreen() {
       if (mounted.current) setRows([...list]);
     };
 
+    let nrRejects = 0;
     try {
       for (let i = 0; i < list.length; i++) {
         if (cancel.current) break;
         const { tech, band } = list[i];
+        // الراوتر رفض ترددين 5G ورا بعض = ما يسمح بقفل 5G على هالترددات — لا نقطع الاتصال على الفاضي
+        if (tech === 'NR' && nrRejects >= 2) { upd(i, { status: 'failed', note: 'تخطيناه — راوترك ما يسمح بتثبيت هذا التردد' }); continue; }
         upd(i, { status: 'testing', note: 'نقفل التردد...' });
         try {
           await withSession(info, d => (
@@ -161,7 +164,13 @@ export default function OptimizeScreen() {
             upd(i, { ...res, note: 'فشل القياس' });
           }
         } catch (e: any) {
-          upd(i, { status: 'failed', note: e?.message ?? 'خطأ' });
+          const msg = String(e?.message ?? '');
+          if (/رفض/.test(msg)) {
+            if (tech === 'NR') nrRejects++;
+            upd(i, { status: 'failed', note: 'راوترك ما يقبل هذا التردد (ما تغيّر شي)' });
+          } else {
+            upd(i, { status: 'failed', note: msg || 'خطأ' });
+          }
         }
       }
     } finally {
