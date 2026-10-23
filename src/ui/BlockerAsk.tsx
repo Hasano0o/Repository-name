@@ -23,7 +23,7 @@ const OPTS: { id: Blocker; text: string }[] = [
   { id: 'browsing', text: 'أتفرج بس' },
 ];
 
-export function BlockerAsk({ onAdd, onExplore }: { onAdd: () => void; onExplore: () => void }) {
+export function BlockerAsk({ onAdd, onExplore, onHelp }: { onAdd: () => void; onExplore: () => void; onHelp?: () => void }) {
   const [state, setState] = useState<'loading' | 'ask' | 'note' | 'done' | 'hidden'>('loading');
   const [pick, setPick] = useState<Blocker | null>(null);
   const [note, setNote] = useState('');
@@ -42,6 +42,8 @@ export function BlockerAsk({ onAdd, onExplore }: { onAdd: () => void; onExplore:
     if (b === 'unsupported') { setState('note'); return; }
     save(b);
     setState('done');
+    // «ما عرفت كيف أضيفه» ← المساعد يدخّله على طول (نحفظ الجواب للإحصائية قبل)
+    if (b === 'howto' && onHelp) onHelp();
   };
 
   if (state === 'loading' || state === 'hidden') return null;
@@ -99,7 +101,7 @@ export function BlockerAsk({ onAdd, onExplore }: { onAdd: () => void; onExplore:
             <>
               <Text style={s.sub}>أسهل طريقة: اضغط «إضافة راوتر» ثم «امسح ملصق الراوتر» وصوّر الملصق اللي تحته — نعبّي البيانات لحالها. تأكد إن جوالك متصل بواي فاي الراوتر.</Text>
               <View style={s.row}>
-                <Pressable style={s.btn} onPress={onAdd}><Text style={s.btnTxt}>إضافة راوتر</Text></Pressable>
+                <Pressable style={s.btn} onPress={onHelp ?? onAdd}><Text style={s.btnTxt}>{onHelp ? 'خلّ المساعد يدخّلك' : 'إضافة راوتر'}</Text></Pressable>
                 <Pressable onPress={() => Linking.openURL('https://t.me/NetGuide1_bot?start=fix_add').catch(() => {})} hitSlop={8}>
                   <Text style={[s.skip, { color: P.blue }]}>الخطوات في تليجرام</Text>
                 </Pressable>

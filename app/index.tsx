@@ -107,6 +107,7 @@ export default function RoutersList() {
   // المستخدم الجديد: نفتح الكاميرا على الملصق ونسجّل الدخول عنه
   const canScanLabel = Platform.OS !== 'web' && !desktop;
   const addByLabel = () => router.push('/add-router?scan=1' as Href);
+  const guided = () => router.push('/setup' as Href);
   const explore = () => router.push('/probe' as Href);
   const demo = async () => {
     const id = await addDemoRouter();
@@ -163,6 +164,12 @@ export default function RoutersList() {
             : 'خلنا نوصل راوترك بخطوتين:\n١) اتصل بواي فاي الراوتر\n٢) صوّر الملصق اللي تحت الراوتر — ونسجّل الدخول عنك'}
       >
         <LangAsk />
+        {/* أسهل شي للي ما يعرف: المساعد يدوّر على الراوتر ويطلب كلمة المرور بس */}
+        <Pressable onPress={guided} accessibilityRole="button"
+          style={({ pressed }) => [s.helpBtn, pressed && { opacity: 0.8 }]}>
+          <Text style={s.helpTitle}>🙋 ما أعرف أستخدم التطبيق</Text>
+          <Text style={s.helpSub}>المساعد يلقى راوترك ويطلب كلمة المرور بس — ويدخّلك</Text>
+        </Pressable>
         {canScanLabel ? (
           <>
             <PrimaryBtn text={Platform.OS === 'ios' ? 'صوّر رمز الملصق' : 'صوّر ملصق الراوتر'} icon="camera" onPress={addByLabel} style={{ alignSelf: 'stretch' }} />
@@ -183,7 +190,7 @@ export default function RoutersList() {
           <Icon name="compass" size={16} color={P.violet} />
           <Text style={s.linkTxt}>استكشاف جهاز غير مدعوم</Text>
         </Pressable>
-        <BlockerAsk onAdd={add} onExplore={explore} />
+        <BlockerAsk onAdd={add} onExplore={explore} onHelp={guided} />
         {desktop?.openTech && (
           // الويندوز: الفني غالباً ما عنده راوتر مضاف — نعطيه وضع الفني من البداية
           <Pressable style={s.link} onPress={() => desktop?.openTech?.()}>
@@ -408,6 +415,12 @@ const s = sheet({
   linkTxt: { color: P.violet, fontWeight: '700', fontSize: 13 },
   demoTag: { backgroundColor: tBg('#f3edff'), borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   demoTagTxt: { color: tFg('#5b34c9'), fontSize: 11, fontWeight: '800' },
+  helpBtn: {
+    alignSelf: 'stretch', alignItems: 'center', marginBottom: 10, paddingVertical: 14, paddingHorizontal: 12, borderRadius: 16,
+    borderWidth: 1.5, borderColor: tBd('#12b76a66'), backgroundColor: tBg('#12b76a14'),
+  },
+  helpTitle: { color: tFg('#0f9a5f'), fontWeight: '900', fontSize: 16, textAlign: 'center' },
+  helpSub: { color: P.sub, fontSize: 12.5, marginTop: 3, textAlign: 'center' },
   demoBtn: {
     alignSelf: 'stretch', alignItems: 'center', marginTop: 10, paddingVertical: 12, borderRadius: 16,
     borderWidth: 1.5, borderColor: P.border, backgroundColor: P.card,

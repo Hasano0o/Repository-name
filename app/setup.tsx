@@ -1,0 +1,251 @@
+/**
+ * «ما أعرف أستخدم التطبيق» — المساعد يدخّلك راوترك خطوة بخطوة:
+ *  ١) يتأكد إنك على واي فاي الراوتر  ٢) يدوّر على الراوتر لحاله (العناوين المشهورة)
+ *  ٣) يطلب كلمة المرور بس  ٤) يسجّل الدخول ويحفظ الراوتر  ٥) يفتح لك صفحة الراوتر + «كيف تبدأ»
+ * • نفس حماية شاشة الإضافة: عنوان محلي بس، محاولة دخول وحدة، و«المحاولة الأخيرة» لو باقي وحدة.
+ * • كلمة المرور تنحفظ مشفّرة على الجهاز (saveRouter) — ما تطلع لأي مكان.
+ */
+import { useEffect, useRef, useState, ReactNode } from 'react';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, TextInput, Pressable } from '../src/i18n/rn';
+import { router, Href } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { detectDriver } from '../src/drivers/registry';
+import type { RouterDriver } from '../src/drivers/types';
+import { listRouters, saveRouter, updateRouter, SavedRouter } from '../src/store/routers';
+import { dropSession } from '../src/store/sessions';
+import { addDemoRouter } from '../src/drivers/demo';
+import { Icon, IconName } from '../src/ui/Icon';
+import { C, R, S, tBg, tBd, tFg } from '../src/ui/theme';
+import { sheet } from '../src/i18n';
+
+/** العناوين المشهورة: هواوي · ZTE/تي بي لينك · أغلب الراوترات · بعض ZTE وزين · شاومي */
+const HOSTS = ['192.168.8.1', '192.168.0.1', '192.168.1.1', '192.168.100.1', '192.168.31.1', '192.168.3.1'];
+
+type Step = 'wifi' | 'search' | 'notfound' | 'password' | 'login' | 'done';
+
+/** فيه جهاز يرد على هالعنوان؟ (أي رد HTTP يكفي) — سريع، عشان ما ننتظر مهلة كل نوع راوتر على عنوان ميت */
+async function answers(host: string, ms = 2000): Promise<boolean> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try { await fetch(`http://${host}/`, { signal: ctrl.signal }); return true; } catch { return false; } finally { clearTimeout(t); }
+}
+
+function Bubble({ children, tone }: { children: ReactNode; tone?: 'ok' | 'warn' }) {
+  return (
+    <View style={[s.bubble, tone === 'ok' && s.ok, tone === 'warn' && s.warn]}>
+      {children}
+    </View>
+  );
+}
+
+function Big({ icon, color, title, sub, onPress, disabled }: { icon: IconName; color: string; title: string; sub?: string; onPress: () => void; disabled?: boolean }) {
+  return (
+    <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button"
+      style={({ pressed }) => [s.big, { borderColor: tBd(color + '55'), backgroundColor: tBg(color + '10') }, (pressed || disabled) && { opacity: 0.6 }]}>
+      <View style={[s.bigIcon, { backgroundColor: tBg(color + '22') }]}><Icon name={icon} size={20} color={tFg(color)} stroke={2.2} /></View>
+      <View style={{ flex: 1 }}>
+        <Text style={[s.bigTitle, { color: tFg(color) }]}>{title}</Text>
+        {!!sub && <Text style={s.bigSub}>{sub}</Text>}
+      </View>
+    </Pressable>
+  );
+}
+
+export default function SetupScreen() {
+  const insets = useSafeAreaInsets();
+  const [step, setStep] = useState<Step>('wifi');
+  const [status, setStatus] = useState('');
+  const [found, setFound] = useState<{ host: string; d: RouterDriver } | null>(null);
+  const [pw, setPw] = useState('');
+  const [show, setShow] = useState(false);
+  const [err, setErr] = useState('');
+  const alive = useRef(true);
+  useEffect(() => () => { alive.current = false; }, []);
+
+  // ═══ ٢) ندوّر على الراوتر ═══
+  const search = async () => {
+    setStep('search'); setErr('');
+    setStatus('أدوّر على راوترك…');
+    // كل العناوين مع بعض (ثانيتين) ← بعدها نتعرّف على النوع بس في اللي ردّ
+    const alive2 = (await Promise.all(HOSTS.map(async h => ((await answers(h)) ? h : null)))).filter(Boolean) as string[];
+    let unsupported = false;
+    for (const h of alive2) {
+      if (!alive.current) return;
+      setStatus(`لقيت جهاز على ${h} — أتعرّف عليه…`);
+      try {
+        const d = await detectDriver(h);
+        if (d && (d as any).id !== 'unknown') { if (alive.current) { setFound({ host: h, d }); setStep('password'); } return; }
+        if (d) unsupported = true;
+      } catch {}
+    }
+    if (!alive.current) return;
+    setErr(unsupported ? 'لقيت راوتر، بس نوعه للحين مو مدعوم بالكامل — جرّب «راوتري مو مدعوم؟» تحت ونضيفه.' : '');
+    setStep('notfound');
+  };
+
+  // ═══ ٤) الدخول والحفظ ═══
+  const login = async (lastTry = false) => {
+    if (!found || !pw) return;
+    setStep('login'); setErr('');
+    const { host, d } = found;
+    const user = 'admin';
+    try {
+      setStatus('أسجّل الدخول عنك…');
+      await d.login(host, user, pw, lastTry ? { lastTry: true } : undefined);
+    } catch (e: any) {
+      if (!alive.current) return;
+      const msg = String(e?.message ?? e);
+      if (e?.code === 'LAST_TRY' && !lastTry) {
+        Alert.alert(e?.left === 1 ? 'باقي محاولة أخيرة' : 'نجرّب الدخول؟',
+          `${e?.left === 1 ? 'الراوتر يسمح بمحاولة دخول وحدة قبل ما يقفل.' : msg}\n\nتأكد إن الكلمة صحيحة حرف حرف. لو طلعت غلط، الراوتر يقفل الدخول دقايق وبعدها يرجع طبيعي.`,
+          [
+            { text: 'أراجع الكلمة', style: 'cancel', onPress: () => setStep('password') },
+            { text: 'جرّب الحين', onPress: () => login(true) },
+          ]);
+        return;
+      }
+      setErr(/كلمة المرور|108006|108002|غلط/.test(msg)
+        ? 'كلمة المرور ما ضبطت. تأكد منها من الملصق (حروف كبيرة وصغيرة تفرق، و0 غير O).'
+        : msg);
+      setStep('password');
+      return;
+    }
+    try {
+      setStatus('أحفظ راوترك…');
+      const dAny = d as unknown as { id?: string; name?: string };
+      const payload = { name: dAny.name || 'راوتري', host, username: user, driverId: dAny.id ?? 'unknown', driverName: dAny.name ?? 'راوتر' };
+      const all = await listRouters().catch(() => [] as SavedRouter[]);
+      const norm = (x: string) => x.trim().toLowerCase();
+      const dup = all.find(x => x.driverId === payload.driverId && norm(x.host) === norm(host));
+      let saved: SavedRouter | null;
+      if (dup) { dropSession(dup.id); saved = (await updateRouter(dup.id, payload, pw)) ?? (await saveRouter(payload, pw)); }
+      else saved = await saveRouter(payload, pw);
+      if (!alive.current) return;
+      setStep('done');
+      setTimeout(() => router.replace({ pathname: '/router/[id]', params: { id: saved!.id, welcome: '1' } }), 700);
+    } catch (e: any) {
+      if (alive.current) { setErr(String(e?.message ?? e)); setStep('password'); }
+    }
+  };
+
+  const demo = async () => {
+    const id = await addDemoRouter();
+    router.replace({ pathname: '/router/[id]', params: { id } });
+  };
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: C.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+      <ScrollView contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 40 }]} keyboardShouldPersistTaps="handled">
+        <View style={s.hero}>
+          <View style={s.heroIcon}><Icon name="spark" size={30} color={tFg('#2f6bff')} /></View>
+          <Text style={s.heroTitle}>أنا أدخّلك راوترك 👋</Text>
+          <Text style={s.heroSub}>ثلاث خطوات بسيطة — وأنا أسوي الباقي</Text>
+        </View>
+
+        {/* الخطوات بالأرقام — اللي خلص أخضر */}
+        <View style={s.steps}>
+          {[
+            { n: '١', t: 'الواي فاي', on: step !== 'wifi' },
+            { n: '٢', t: 'الراوتر', on: !!found },
+            { n: '٣', t: 'كلمة المرور', on: step === 'done' },
+          ].map(x => (
+            <View key={x.n} style={s.stepItem}>
+              <View style={[s.stepDot, x.on && s.stepOn]}>
+                {x.on ? <Icon name="check" size={14} color={C.onAccent} stroke={3} /> : <Text style={s.stepN}>{x.n}</Text>}
+              </View>
+              <Text style={[s.stepT, x.on && { color: C.text }]}>{x.t}</Text>
+            </View>
+          ))}
+        </View>
+
+        {step === 'wifi' && (
+          <>
+            <Bubble><Text style={s.txt}>أول شي: جوالك لازم يكون متصل بـ<Text style={s.bold}>واي فاي الراوتر</Text> (مو بيانات الجوال).</Text></Bubble>
+            <Big icon="wifi" color="#12b76a" title="إيه، متصل" sub="أدوّر على الراوتر لحالي" onPress={search} />
+            <Big icon="phone" color="#2f6bff" title="لا، كيف أتصل؟" sub="أشرح لك"
+              onPress={() => Alert.alert('اتصل بواي فاي الراوتر',
+                '١) افتح «الإعدادات» في جوالك ← «واي فاي».\n٢) اختر اسم شبكة راوترك — مكتوب على الملصق تحت الراوتر (جنب SSID أو WLAN).\n٣) اكتب كلمة سر الواي فاي اللي على الملصق.\n٤) ارجع لـ Bandly واضغط «إيه، متصل».')} />
+          </>
+        )}
+
+        {(step === 'search' || step === 'login') && (
+          <Bubble>
+            <View style={s.row}><ActivityIndicator color={C.blue} /><Text style={s.txt}>{status}</Text></View>
+          </Bubble>
+        )}
+
+        {step === 'notfound' && (
+          <>
+            {!!err && <Bubble tone="warn"><Text style={s.txt}>{err}</Text></Bubble>}
+            <Bubble tone="warn">
+              <Text style={s.txt}>ما لقيت راوتر مدعوم على الشبكة اللي أنت عليها.{'\n\n'}تأكد إنك متصل بواي فاي الراوتر نفسه (مو بيانات الجوال ولا شبكة ثانية)، وبعدها جرّب مرة ثانية.</Text>
+            </Bubble>
+            <Big icon="refresh" color="#2f6bff" title="جرّب مرة ثانية" onPress={search} />
+            <Big icon="settings" color="#7c5cff" title="أدخل البيانات بنفسي" sub="لو عنوان راوترك غير المعتاد" onPress={() => router.replace('/add-router' as Href)} />
+            <Big icon="compass" color="#64748b" title="راوتري مو مدعوم؟" sub="استكشاف جهاز" onPress={() => router.replace('/probe' as Href)} />
+            <Pressable onPress={demo} style={s.link}><Text style={s.linkTxt}>جرّب بدون راوتر · Demo</Text></Pressable>
+          </>
+        )}
+
+        {step === 'password' && found && (
+          <>
+            <Bubble tone="ok"><Text style={s.txt}>✓ لقيت راوترك: <Text style={s.bold}>{(found.d as any).name ?? 'راوتر'}</Text></Text></Bubble>
+            <Bubble>
+              <Text style={s.txt}>الحين اكتب <Text style={s.bold}>كلمة مرور الراوتر</Text>.{'\n'}تلقاها على الملصق تحت الراوتر — جنب كلمة <Text style={s.bold}>Password</Text> أو «كلمة المرور» (مو كلمة الواي فاي إلا لو ما فيه غيرها).</Text>
+            </Bubble>
+            {!!err && <Bubble tone="warn"><Text style={s.txt}>{err}</Text></Bubble>}
+            <View style={s.pwRow}>
+              <TextInput
+                value={pw} onChangeText={t => { setPw(t); setErr(''); }}
+                placeholder="كلمة مرور الراوتر" placeholderTextColor={C.muted}
+                secureTextEntry={!show} autoCapitalize="none" autoCorrect={false}
+                style={s.pw} returnKeyType="go" onSubmitEditing={() => login()} autoFocus
+              />
+              <Pressable onPress={() => setShow(v => !v)} style={s.eye} accessibilityLabel={show ? 'إخفاء' : 'إظهار'}>
+                <Icon name={show ? 'eye-off' : 'eye'} size={20} color={C.sub} />
+              </Pressable>
+            </View>
+            <Big icon="login" color="#2f6bff" title="دخّلني" onPress={() => login()} disabled={!pw} />
+            {Platform.OS !== 'web' && (
+              <Big icon="camera" color="#12b76a" title="صوّر الملصق بدالي" sub="أقرأ الكلمة من الصورة" onPress={() => router.replace('/add-router?scan=1' as Href)} />
+            )}
+          </>
+        )}
+
+        {step === 'done' && (
+          <Bubble tone="ok"><Text style={[s.txt, s.bold]}>✓ دخلت! أفتح لك راوترك…</Text></Bubble>
+        )}
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+const s = sheet({
+  page: { padding: S.lg, gap: 12 },
+  hero: { alignItems: 'center', gap: 6, paddingVertical: 8 },
+  heroIcon: { width: 64, height: 64, borderRadius: 22, backgroundColor: tBg('#2f6bff1a'), alignItems: 'center', justifyContent: 'center' },
+  heroTitle: { color: C.text, fontSize: 22, fontWeight: '900', textAlign: 'center' },
+  heroSub: { color: C.sub, fontSize: 14, textAlign: 'center' },
+  steps: { flexDirection: 'row-reverse', justifyContent: 'center', gap: 22, paddingVertical: 4 },
+  stepItem: { alignItems: 'center', gap: 4 },
+  stepDot: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.track, alignItems: 'center', justifyContent: 'center' },
+  stepOn: { backgroundColor: '#12b76a' },
+  stepN: { color: C.sub, fontWeight: '900', fontSize: 14 },
+  stepT: { color: C.muted, fontSize: 12, fontWeight: '700' },
+  bubble: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1, borderRadius: R.md, padding: 14 },
+  ok: { borderColor: '#12b76a66', backgroundColor: tBg('#12b76a10') },
+  warn: { borderColor: C.gold, backgroundColor: C.goldSoft },
+  txt: { color: C.text, fontSize: 15, lineHeight: 24, textAlign: 'right' },
+  bold: { fontWeight: '900' },
+  row: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
+  big: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, borderWidth: 1.5, borderRadius: R.md, padding: 14 },
+  bigIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  bigTitle: { fontSize: 16, fontWeight: '900', textAlign: 'right' },
+  bigSub: { color: C.sub, fontSize: 12.5, textAlign: 'right', marginTop: 2 },
+  pwRow: { flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: C.card, borderColor: C.blue, borderWidth: 1.5, borderRadius: R.md, paddingHorizontal: 12 },
+  pw: { flex: 1, color: C.text, fontSize: 18, paddingVertical: 14, textAlign: 'left', fontWeight: '700' },
+  eye: { padding: 8 },
+  link: { alignItems: 'center', paddingVertical: 10 },
+  linkTxt: { color: C.blue, fontWeight: '800', fontSize: 14 },
+});
