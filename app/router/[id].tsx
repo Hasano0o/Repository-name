@@ -128,7 +128,7 @@ function Acc({ title, children }: { title: string; children: ReactNode }) {
 
 export default function RouterDashboard() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  // مساعد Bandly — مخفي عن الكل لين ينفتح بالمفتاح المخفي (اضغط «نسخة التطبيق» ٥ مرات)
+  // مساعد Bandly — ظاهر للكل (٥ ضغطات على «نسخة التطبيق» تخفيه على نفس الجهاز)
   const assistantOn = useAssistantUnlocked();
   const insets = useSafeAreaInsets();
   const [info, setInfo] = useState<SavedRouter | null>(null);
@@ -900,7 +900,7 @@ export default function RouterDashboard() {
               <ToolTile wide icon="game" color={tFg('#ec4899')} title="مُحسّن الألعاب" sub="أقل بنق للعبتك"
                 onPress={() => router.push(`/ping/${info.id}` as Href)} />
               {assistantOn && (
-                <ToolTile wide icon="spark" color={tFg('#0e7d93')} title="مساعد Bandly" sub="تجريبي · اسأله بكلامك"
+                <ToolTile wide icon="spark" color={tFg('#0e7d93')} title="مساعد Bandly" sub="جديد · اسأله بكلامك"
                   onPress={() => router.push(`/assistant/${info.id}` as Href)} />
               )}
             </TileGrid>

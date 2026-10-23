@@ -130,7 +130,7 @@ function VersionRow() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [ready, setReady] = useState(false);
-  // مفتاح مخفي للتجربة: ٥ ضغطات على «نسخة التطبيق» خلال ٤ ثواني ← يظهر/يختفي «مساعد Bandly» في صفحة الراوتر
+  // ٥ ضغطات على «نسخة التطبيق» خلال ٤ ثواني ← يخفي/يظهر «مساعد Bandly» في صفحة الراوتر (على نفس الجهاز)
   const taps = useRef<number[]>([]);
   const secretTap = async () => {
     const now = Date.now();
@@ -139,7 +139,7 @@ function VersionRow() {
     taps.current = [];
     const on = !(await isUnlocked());
     await setUnlocked(on);
-    Alert.alert(on ? 'مساعد Bandly ظهر 🧪' : 'مساعد Bandly اختفى', on ? 'تلقاه في صفحة الراوتر تحت «حسّن اتصالك». تجريبي — يظهر عندك بس.' : 'رجع مخفي. اضغط ٥ مرات مرة ثانية لو تبيه.');
+    Alert.alert(on ? 'مساعد Bandly ظهر 🧪' : 'مساعد Bandly اختفى', on ? 'تلقاه في صفحة الراوتر تحت «حسّن اتصالك».' : 'رجع مخفي. اضغط ٥ مرات مرة ثانية لو تبيه.');
   };
 
   if (desktop) {

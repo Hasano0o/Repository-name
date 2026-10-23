@@ -1,6 +1,6 @@
 /**
  * تخزين المساعد على الجهاز فقط (AsyncStorage) — ما يطلع شي للسيرفر:
- *  • هل المساعد ظاهر (مفتاح مخفي للتجربة — مقفّل افتراضياً عند كل المستخدمين)
+ *  • هل المساعد ظاهر (ظاهر للكل افتراضياً — ٥ ضغطات على «نسخة التطبيق» تخفيه/تظهره على نفس الجهاز)
  *  • حالته: شغّال / موقف مؤقتاً / موقف بالكامل
  *  • اسم المستخدم (لو وافق يحفظه)
  * منفصل تماماً عن بيانات الراوتر — حذف أي شي هنا ما يلمس الراوتر.
@@ -10,22 +10,22 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from 'expo-router';
 import { AssistantState, DEFAULT_STATE, effectiveMode, parseState } from './core';
 
-const K_UNLOCK = 'bandly.assistant.unlocked';
+const K_HIDDEN = 'bandly.assistant.hidden';
 const K_STATE = 'bandly.assistant.state';
 const K_NAME = 'bandly.assistant.name';
 /** سألناه عن اسمه قبل؟ (عشان ما نعيد السؤال لو تخطاه) */
 const K_ASKED = 'bandly.assistant.asked';
 
-// ═══ المفتاح المخفي ═══
+// ═══ الظهور: ظاهر للكل، إلا لو المستخدم أخفاه بنفسه ═══
 export async function isUnlocked(): Promise<boolean> {
-  try { return (await AsyncStorage.getItem(K_UNLOCK)) === '1'; } catch { return false; }
+  try { return (await AsyncStorage.getItem(K_HIDDEN)) !== '1'; } catch { return true; }
 }
 export async function setUnlocked(on: boolean): Promise<void> {
-  try { on ? await AsyncStorage.setItem(K_UNLOCK, '1') : await AsyncStorage.removeItem(K_UNLOCK); } catch {}
+  try { on ? await AsyncStorage.removeItem(K_HIDDEN) : await AsyncStorage.setItem(K_HIDDEN, '1'); } catch {}
 }
 /** للشاشات: يتحدّث كل ما ترجع للشاشة */
 export function useAssistantUnlocked(): boolean {
-  const [on, setOn] = useState(false);
+  const [on, setOn] = useState(true);
   useFocusEffect(useCallback(() => {
     let alive = true;
     isUnlocked().then(v => { if (alive) setOn(v); });
