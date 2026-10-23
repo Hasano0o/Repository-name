@@ -41,6 +41,7 @@ import { hostLabel } from '../../src/drivers/device';
 import { rememberOperator, learnOperatorBands } from '../../src/store/operator';
 import { hasInternet } from '../../src/utils/internet';
 import { reportOutage } from '../../src/services/community';
+import { useAssistantUnlocked } from '../../src/assistant/store';
 
 import { sheet, tr } from '../../src/i18n';import { LabelCard } from '../../src/ui/LabelCard';
 
@@ -127,6 +128,8 @@ function Acc({ title, children }: { title: string; children: ReactNode }) {
 
 export default function RouterDashboard() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  // مساعد Bandly — مخفي عن الكل لين ينفتح بالمفتاح المخفي (اضغط «نسخة التطبيق» ٥ مرات)
+  const assistantOn = useAssistantUnlocked();
   const insets = useSafeAreaInsets();
   const [info, setInfo] = useState<SavedRouter | null>(null);
   const [feat, setFeat] = useState<Features>(NO_FEATURES);
@@ -896,6 +899,10 @@ export default function RouterDashboard() {
                 onPress={() => router.push(`/finder/${info.id}` as Href)} />
               <ToolTile wide icon="game" color={tFg('#ec4899')} title="مُحسّن الألعاب" sub="أقل بنق للعبتك"
                 onPress={() => router.push(`/ping/${info.id}` as Href)} />
+              {assistantOn && (
+                <ToolTile wide icon="spark" color={tFg('#0e7d93')} title="مساعد Bandly" sub="تجريبي · اسأله بكلامك"
+                  onPress={() => router.push(`/assistant/${info.id}` as Href)} />
+              )}
             </TileGrid>
             <GroupTitle title="قِس وتابع" color={tFg('#12b76a')} />
             <TileGrid>

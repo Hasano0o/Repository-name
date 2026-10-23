@@ -22,6 +22,7 @@ const files = [
   'src/drivers/huawei/lockState.ts',
   'src/drivers/zte/lockState.ts',
   'src/store/routerLockCore.ts',
+  'src/assistant/core.ts',
   ...fs.readdirSync(path.join(root, 'tests')).filter(f => f.endsWith('.test.ts')).map(f => `tests/${f}`),
 ];
 

@@ -4,7 +4,7 @@
  *  ٢) تواصل مع المطوّر: سطر واحد بأربع أيقونات
  *  ٣) الإعدادات: المظهر · اللغة · نسخة التطبيق (كلها في بطاقة وحدة)
  */
-import { ReactNode, useState } from 'react';
+import { ReactNode, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Alert, Platform } from 'react-native';
 import { View, Text, Pressable } from '../i18n/rn';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -17,6 +17,7 @@ import { desktop } from '../desktop/bridge';
 import { invite } from './InviteCard';
 import { sheet, LANG, Lang, setLang, EN_MODE } from '../i18n';
 import { diagText, sendSupportReport } from '../services/errors';
+import { isUnlocked, setUnlocked } from '../assistant/store';
 
 // ═══ ١) المربعات ═══
 function PeopleIcon({ c = '#ffffff' }: { c?: string }) {
@@ -56,16 +57,16 @@ const openWay = (url: string) =>
   Linking.openURL(url).catch(() => Alert.alert('ما قدرنا نفتحه', `تواصل معنا على ${PHONE} أو ${EMAIL}`));
 
 // ═══ ٣) الإعدادات ═══
-function Row({ icon, tint, label, value, children }: {
-  icon: IconName; tint: string; label: string; value: string; children: ReactNode;
+function Row({ icon, tint, label, value, children, onLabelPress }: {
+  icon: IconName; tint: string; label: string; value: string; children: ReactNode; onLabelPress?: () => void;
 }) {
   return (
     <View style={s.row}>
       <View style={[s.rowIcon, { backgroundColor: tBg(tint + '22') }]}><Icon name={icon} size={17} color={tint} stroke={2.2} /></View>
-      <View style={s.rowTxt}>
+      <Pressable style={s.rowTxt} onPress={onLabelPress} disabled={!onLabelPress} accessible={!!onLabelPress}>
         <Text style={s.rowLabel}>{label}</Text>
         <Text style={s.rowValue} numberOfLines={1}>{value}</Text>
-      </View>
+      </Pressable>
       {children}
     </View>
   );
@@ -129,6 +130,17 @@ function VersionRow() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [ready, setReady] = useState(false);
+  // مفتاح مخفي للتجربة: ٥ ضغطات على «نسخة التطبيق» خلال ٤ ثواني ← يظهر/يختفي «مساعد Bandly» في صفحة الراوتر
+  const taps = useRef<number[]>([]);
+  const secretTap = async () => {
+    const now = Date.now();
+    taps.current = [...taps.current.filter(t => now - t < 4000), now];
+    if (taps.current.length < 5) return;
+    taps.current = [];
+    const on = !(await isUnlocked());
+    await setUnlocked(on);
+    Alert.alert(on ? 'مساعد Bandly ظهر 🧪' : 'مساعد Bandly اختفى', on ? 'تلقاه في صفحة الراوتر تحت «حسّن اتصالك». تجريبي — يظهر عندك بس.' : 'رجع مخفي. اضغط ٥ مرات مرة ثانية لو تبيه.');
+  };
 
   if (desktop) {
     return (
@@ -159,7 +171,7 @@ function VersionRow() {
 
   return (
     <>
-      <Row icon="refresh" tint="#12a07a" label="نسخة التطبيق" value={msg || version}>
+      <Row icon="refresh" tint="#12a07a" label="نسخة التطبيق" value={msg || version} onLabelPress={secretTap}>
         {ready ? (
           <Pressable style={[s.mini, s.miniOn]} onPress={() => Updates.reloadAsync().catch(() => {})}>
             <Text style={[s.miniTxt, { color: '#fff' }]}>أعد التشغيل</Text>
