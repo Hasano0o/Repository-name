@@ -63,7 +63,7 @@ export function pauseLeft(s: AssistantState, now = Date.now()): string {
 export type Risk = 'none' | 'read' | 'write' | 'danger';
 
 export type ActionId =
-  | 'help' | 'check_signal' | 'ping_now'
+  | 'help' | 'check_signal' | 'ping_now' | 'best_band' | 'best_tower'
   | 'open_ping' | 'open_finder' | 'open_aim' | 'open_towers' | 'open_speed' | 'open_devices'
   | 'open_newip' | 'open_wifich' | 'open_control' | 'open_details' | 'open_bands'
   | 'reboot' | 'factory_reset' | 'power_off';
@@ -81,17 +81,21 @@ export interface ActionDef {
   route?: string;
   /** اسم الشاشة كما يشوفه المستخدم */
   screen?: string;
+  /** الشاشة تبدأ المطلوب لحالها لما تنفتح (?auto=1) — اللي يقطع النت يعرض تأكيده أول */
+  auto?: boolean;
 }
 
 export const ACTIONS: Record<ActionId, ActionDef> = {
   help: { id: 'help', label: 'وش تقدر تسوي؟', risk: 'none' },
   check_signal: { id: 'check_signal', label: 'افحص إشارتي', risk: 'read' },
   ping_now: { id: 'ping_now', label: 'كم البنق عندي؟', risk: 'read' },
-  open_ping: { id: 'open_ping', label: 'أبي أقل بنق', risk: 'none', route: 'ping', screen: 'مُحسّن الألعاب' },
+  best_band: { id: 'best_band', label: 'اختار لي أفضل تردد', risk: 'write', route: 'optimize', screen: 'المُحسِّن التلقائي', auto: true },
+  best_tower: { id: 'best_tower', label: 'أفضل برج', risk: 'write', route: 'towers', screen: 'الأبراج', auto: true },
+  open_ping: { id: 'open_ping', label: 'أبي أقل بنق', risk: 'write', route: 'ping', screen: 'مُحسّن الألعاب', auto: true },
   open_finder: { id: 'open_finder', label: 'اختار لي الأفضل', risk: 'none', route: 'finder', screen: 'اختار لي الأفضل' },
   open_aim: { id: 'open_aim', label: 'وجّه الأنتنا', risk: 'none', route: 'aim', screen: 'توجيه الأنتنا' },
   open_towers: { id: 'open_towers', label: 'الأبراج', risk: 'none', route: 'towers', screen: 'الأبراج' },
-  open_speed: { id: 'open_speed', label: 'اختبر السرعة', risk: 'none', route: 'speed', screen: 'اختبار السرعة' },
+  open_speed: { id: 'open_speed', label: 'اختبر السرعة', risk: 'read', route: 'speed', screen: 'اختبار السرعة', auto: true },
   open_devices: { id: 'open_devices', label: 'الأجهزة المتصلة', risk: 'none', route: 'device', screen: 'الأجهزة' },
   open_newip: { id: 'open_newip', label: 'آي بي جديد', risk: 'none', route: 'newip', screen: 'آي بي جديد' },
   open_wifich: { id: 'open_wifich', label: 'قناة الواي فاي', risk: 'none', route: 'wifich', screen: 'قناة الواي فاي' },
@@ -104,7 +108,7 @@ export const ACTIONS: Record<ActionId, ActionDef> = {
 };
 
 /** أزرار البداية — أكثر شي يحتاجه المبتدئ */
-export const QUICK: ActionId[] = ['check_signal', 'open_ping', 'open_finder', 'open_aim', 'open_speed', 'reboot'];
+export const QUICK: ActionId[] = ['check_signal', 'best_band', 'best_tower', 'open_ping', 'open_speed', 'open_aim'];
 
 // ═══ فهم الكلام ═══
 /** توحيد الكتابة: بدون تشكيل ولا تطويل، أ/إ/آ ← ا، ة ← ه، ى ← ي، أرقام هندية ← عربية */
@@ -128,6 +132,8 @@ const WORDS: [ActionId, string[]][] = [
   ['factory_reset', ['ضبط المصنع', 'اعدادات المصنع', 'فورمات', 'factory reset', 'فرمته', 'فرمت', 'ريسيت كامل', 'امسح كل شي', 'امسح الاعدادات']],
   ['reboot', ['اعد تشغيل', 'اعاده تشغيل', 'اعيد تشغيل', 'ريستارت', 'restart', 'reboot', 'ريبوت', 'شغله من جديد', 'طفيه وشغله', 'طفه وشغله']],
   ['power_off', ['طفي الراوتر', 'اطفي الراوتر', 'طف الراوتر', 'سكر الراوتر', 'قفل الراوتر', 'اطفاء الراوتر', 'شيل الكهربا', 'power off']],
+  ['best_band', ['افضل تردد', 'احسن تردد', 'اقوى تردد', 'التردد الافضل', 'اختار لي تردد', 'اختر لي تردد', 'اختار تردد', 'افضل باند', 'جرب الترددات', 'المحسن التلقائي']],
+  ['best_tower', ['افضل برج', 'احسن برج', 'اقوى برج', 'البرج الافضل', 'اختار لي برج', 'اختر لي برج', 'اختار برج', 'جرب الابراج', 'بنق الابراج']],
   ['ping_now', ['كم البنق', 'كم بنقي', 'قيس البنق', 'افحص البنق', 'وش البنق', 'البنق كم', 'ping test', 'كم الping']],
   ['open_ping', ['بنق', 'ping', 'لاق', 'لاك', 'lag', 'تقطيع باللعب', 'العب', 'لعب', 'العاب', 'قيمنق', 'gaming', 'ببجي', 'pubg', 'فورت', 'كود', 'فيفا', 'فالو', 'روكيت']],
   ['check_signal', ['افحص اشارتي', 'افحص الاشاره', 'اشارتي', 'الاشاره', 'اشاره', 'قوه الاشاره', 'افحص', 'فحص', 'وش وضعي', 'وش حالتي', 'كيف الاتصال', 'الاتصال']],

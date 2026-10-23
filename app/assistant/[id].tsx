@@ -1,16 +1,17 @@
 /**
- * مساعد Bandly — محادثة بالكتابة + أزرار جاهزة (المرحلة ٢).
- * • ما يغيّر أي إعداد في الراوتر: يقرأ ويشرح ويفتح الشاشة المناسبة.
+ * مساعد Bandly — بالصوت (المايك) أو الكتابة أو الأزرار.
+ * • يفهم الطلب ويفتح الشاشة المطلوبة على طول، والشاشة تبدأ المطلوب لحالها (?auto=1).
+ *   اللي يقطع النت (الترددات/الأبراج/الألعاب) يعرض تأكيده المعتاد أول — والمساعد نفسه ما يكتب على الراوتر.
  * • حالته (شغّال / موقف مؤقتاً / موقف بالكامل) محفوظة على الجهاز ومنفصلة عن الراوتر.
  *   «موقف بالكامل» ما يرجع إلا لما يضغط المستخدم «شغّل المساعد» — حتى بعد إغلاق التطبيق.
- * • ما فيه ميكروفون في هالمرحلة.
+ * • المايك يظهر بس في النسخ اللي فيها مكتبة السماع (البناء الجديد) — الصوت ما يتسجل ولا يطلع من الجوال.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { ScrollView, View, Text, TextInput, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router, Href } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { Icon, IconName } from '../../src/ui/Icon';
 import { C, R, S, tBg, tBd, tFg } from '../../src/ui/theme';
@@ -20,6 +21,7 @@ import {
 } from '../../src/assistant/core';
 import { useAssistantState, loadName, saveName } from '../../src/assistant/store';
 import { runAction, Reply } from '../../src/assistant/run';
+import { voiceAvailable, startListening, stopListening, abortListening, speak, stopSpeaking } from '../../src/assistant/voice';
 
 type Msg =
   | { id: number; from: 'me'; text: string }
@@ -50,11 +52,24 @@ export default function AssistantScreen() {
   /** ننتظر اسمه؟ (أول مرة بس) */
   const [askName, setAskName] = useState(false);
   const [showPause, setShowPause] = useState(false);
+  /** المايك: idle / يسمع (ومعه النص المؤقت) */
+  const [listening, setListening] = useState(false);
+  const [heard, setHeard] = useState('');
+  const hasVoice = voiceAvailable();
   const scroll = useRef<ScrollView>(null);
   const alive = useRef(true);
   const started = useRef(false);
 
-  useEffect(() => () => { alive.current = false; }, []);
+  useEffect(() => () => { alive.current = false; abortListening(); stopSpeaking(); }, []);
+
+  // طلع من الشاشة (فتح أداة) ← نوقف السماع
+  // (الكلام نخليه يكمّل — «أفتح لك…» تنقال وهو يفتح الشاشة)
+  useFocusEffect(useCallback(() => () => { abortListening(); setListening(false); setHeard(''); }, []));
+
+  // وقف المساعد (مؤقت/كامل) ← المايك يتقفل فوراً
+  useEffect(() => {
+    if (mode && mode !== 'enabled') { abortListening(); stopSpeaking(); setListening(false); setHeard(''); }
+  }, [mode]);
 
   const bot = useCallback((r: Reply) => setMsgs(m => [...m, { id: nid(), from: 'bot', ...r }]), []);
 
@@ -104,14 +119,27 @@ export default function AssistantScreen() {
   ]);
 
   // ═══ تنفيذ إجراء ═══
-  const run = async (aid: ActionId, said?: string) => {
+  const open = (route: string, auto?: boolean) => {
+    if (!info) return;
+    if (route === 'router') { router.canGoBack() ? router.back() : router.replace(`/router/${info.id}` as Href); return; }
+    router.push(`/${route}/${info.id}${auto ? '?auto=1' : ''}` as Href);
+  };
+
+  const run = async (aid: ActionId, said?: string, voice = false) => {
     if (busy || mode !== 'enabled') return;
     setMsgs(m => [...m, { id: nid(), from: 'me', text: said ?? ACTIONS[aid].label }]);
     if (!info) { bot({ text: 'ما لقيت بيانات الراوتر — ارجع واختره من الرئيسية.', tone: 'warn' }); return; }
     setBusy(true);
     try {
       const r = await runAction(aid, info);
-      if (alive.current) bot(r);
+      if (!alive.current) return;
+      bot(r);
+      if (voice) speak(r.text);
+      // الطلب يفتح شاشة ← نفتحها على طول (والشاشة تبدأ لحالها لو auto)
+      if (r.go && r.open) {
+        const { route, auto } = r.open;
+        setTimeout(() => { if (alive.current) open(route, auto); }, voice ? 900 : 450);
+      }
     } catch (e: any) {
       if (alive.current) bot({ text: `صار خطأ وما كمّلت: ${String(e?.message ?? e).slice(0, 120)}`, tone: 'warn' });
     } finally {
@@ -119,10 +147,10 @@ export default function AssistantScreen() {
     }
   };
 
-  const send = () => {
-    const t = input.trim();
+  /** نفس المسار للكتابة والصوت */
+  const handle = (raw: string, voice = false) => {
+    const t = raw.trim();
     if (!t || busy || mode !== 'enabled') return;
-    setInput('');
     if (askName) { setMsgs(m => [...m, { id: nid(), from: 'me', text: t }]); takeName(t); return; }
     // «اسمي …» تغيّر الاسم — «أنا …» لا (عشان «أنا أبي أقل بنق» ما تنحسب اسم)
     const n = /^(اسمي|إسمي|سمني|ناديني|نادني)\s/.test(t) ? extractName(t) : null;
@@ -130,16 +158,31 @@ export default function AssistantScreen() {
     const hit = matchIntent(t);
     if (!hit) {
       setMsgs(m => [...m, { id: nid(), from: 'me', text: t }]);
-      bot({ text: 'ما فهمت عليك تماماً. وش أقرب شي لطلبك؟', chips: ['check_signal', 'open_ping', 'open_finder', 'open_speed', 'help'] });
+      const r: Reply = { text: 'ما فهمت عليك تماماً. قل مثلاً: «أفضل تردد» أو «أفضل برج» أو «افحص إشارتي».', chips: ['check_signal', 'best_band', 'best_tower', 'open_ping', 'help'] };
+      bot(r);
+      if (voice) speak(r.text);
       return;
     }
-    run(hit.action, t);
+    run(hit.action, t, voice);
   };
+  const handleRef = useRef(handle);
+  handleRef.current = handle;
 
-  const open = (route: string) => {
-    if (!info) return;
-    if (route === 'router') { router.canGoBack() ? router.back() : router.replace(`/router/${info.id}` as Href); return; }
-    router.push(`/${route}/${info.id}` as Href);
+  const send = () => { const t = input; setInput(''); handle(t); };
+
+  // ═══ المايك ═══
+  const mic = async () => {
+    if (mode !== 'enabled' || busy) return;
+    if (listening) { stopListening(); return; }
+    setHeard('');
+    setListening(true);
+    const ok = await startListening({
+      onPartial: t => alive.current && setHeard(t),
+      onFinal: t => { if (!alive.current) return; setHeard(''); setListening(false); handleRef.current(t, true); },
+      onError: msg => { if (alive.current) bot({ text: msg, tone: 'warn' }); },
+      onEnd: () => { if (alive.current) { setListening(false); setHeard(''); } },
+    });
+    if (!ok && alive.current) setListening(false);
   };
 
   // ═══ التحكم بالحالة ═══
@@ -237,7 +280,7 @@ export default function AssistantScreen() {
                     <Text style={s.botTxt}>{m.text}</Text>
                   </View>
                   {m.open && (
-                    <Pressable style={s.openBtn} onPress={() => open(m.open!.route)} accessibilityRole="button">
+                    <Pressable style={s.openBtn} onPress={() => open(m.open!.route, m.open!.auto)} accessibilityRole="button">
                       <Text style={s.openTxt}>افتح «{m.open.screen}»</Text>
                       <Icon name="chevron" size={15} color={C.blue} />
                     </Pressable>
@@ -253,6 +296,11 @@ export default function AssistantScreen() {
                   )}
                 </View>
               ))}
+              {listening && (
+                <View style={[s.bubble, s.me, s.heard]}>
+                  <Text style={s.meTxt}>{heard || 'أسمعك… تكلّم'}</Text>
+                </View>
+              )}
               {busy && (
                 <View style={[s.bubble, s.bot, s.typing]}>
                   <ActivityIndicator size="small" color={C.blue} />
@@ -271,17 +319,24 @@ export default function AssistantScreen() {
                 style={s.input}
                 value={input}
                 onChangeText={setInput}
-                placeholder={askName ? 'اكتب اسمك' : 'اكتب طلبك… مثل: النت بطيء'}
+                placeholder={askName ? 'اكتب اسمك' : hasVoice ? 'تكلّم بالمايك أو اكتب…' : 'اكتب طلبك… مثل: أفضل تردد'}
                 placeholderTextColor={C.muted}
                 onSubmitEditing={send}
                 returnKeyType="send"
                 editable={!busy}
                 maxLength={askName ? 24 : 200}
               />
-              <Pressable style={[s.send, (!input.trim() || busy) && { opacity: 0.4 }]} onPress={send} disabled={!input.trim() || busy}
-                accessibilityRole="button" accessibilityLabel="أرسل">
-                <Icon name="send" size={18} color={C.onAccent} />
-              </Pressable>
+              {hasVoice && !askName && !input.trim() ? (
+                <Pressable style={[s.send, listening && s.micOn, busy && { opacity: 0.4 }]} onPress={mic} disabled={busy}
+                  accessibilityRole="button" accessibilityLabel={listening ? 'وقّف السماع' : 'تكلّم'}>
+                  <Icon name={listening ? 'mic-off' : 'mic'} size={20} color={C.onAccent} />
+                </Pressable>
+              ) : (
+                <Pressable style={[s.send, (!input.trim() || busy) && { opacity: 0.4 }]} onPress={send} disabled={!input.trim() || busy}
+                  accessibilityRole="button" accessibilityLabel="أرسل">
+                  <Icon name="send" size={18} color={C.onAccent} />
+                </Pressable>
+              )}
             </View>
           </>
         )}
@@ -323,6 +378,8 @@ const s = sheet({
   bar: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, paddingHorizontal: S.md, paddingTop: 10, borderTopWidth: 1, borderColor: C.lineSoft, backgroundColor: C.card },
   input: { flex: 1, minHeight: 44, borderRadius: 22, paddingHorizontal: 16, backgroundColor: C.rowBg, color: C.text, fontSize: 15, textAlign: 'right' },
   send: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.blue, alignItems: 'center', justifyContent: 'center' },
+  micOn: { backgroundColor: C.red },
+  heard: { opacity: 0.75 },
   skip: { paddingHorizontal: 10, paddingVertical: 8 },
   skipTxt: { color: C.sub, fontWeight: '700', fontSize: 13 },
 });

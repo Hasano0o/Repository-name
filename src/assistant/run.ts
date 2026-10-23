@@ -14,8 +14,10 @@ import { ACTIONS, ActionId, QUICK } from './core';
 
 export interface Reply {
   text: string;
-  /** زر يفتح شاشة (المستخدم يضغطه بنفسه) */
-  open?: { route: string; screen: string };
+  /** زر يفتح شاشة (يرجع له المستخدم لو احتاج) */
+  open?: { route: string; screen: string; auto?: boolean };
+  /** نفتح الشاشة على طول بدون ما ينتظر ضغطة */
+  go?: boolean;
   /** أزرار اقتراحات بعد الرد */
   chips?: ActionId[];
   tone?: 'ok' | 'warn' | 'danger';
@@ -111,7 +113,19 @@ export async function runAction(id: ActionId, r: SavedRouter): Promise<Reply> {
       return { text: 'ما أقدر أطفّي الراوتر من التطبيق — ما فيه أمر إطفاء في الراوترات. افصل الكهرباء بنفسك. لو تبي تريّحه، «إعادة التشغيل» أفضل.', chips: ['reboot'] };
 
     default:
-      if (a.route) return { text: `أفتح لك «${a.screen}».`, open: { route: a.route, screen: a.screen ?? a.label } };
+      if (a.route) {
+        const what: Partial<Record<ActionId, string>> = {
+          best_band: 'وأجرّب الترددات وأختار لك الأفضل — النت بينقطع شوي وأسألك قبل أبدأ.',
+          best_tower: 'وأجرّب الأبراج حولك وأقيس البنق — النت بينقطع شوي وأسألك قبل أبدأ.',
+          open_ping: 'وأدوّر لك أقل بنق لسيرفر لعبتك — أسألك قبل أي تغيير.',
+          open_speed: 'وأبدأ الاختبار على طول.',
+        };
+        return {
+          text: `أفتح لك «${a.screen}»${what[id] ? ` ${what[id]}` : '.'}`,
+          open: { route: a.route, screen: a.screen ?? a.label, auto: a.auto },
+          go: true,
+        };
+      }
       return { text: 'ما عرفت أنفّذ هذا للحين.', tone: 'warn' };
   }
 }

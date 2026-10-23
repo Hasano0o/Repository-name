@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, } from 'react-native';
 import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router';
+import { useAutoStart } from '../../src/assistant/auto';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { safeApply, trialMessage } from '../../src/utils/safeLock';
@@ -238,6 +239,13 @@ export default function OptimizeScreen() {
     }
     });
   };
+
+  // فتحها المساعد («اختار لي أفضل تردد») ← نعرض التأكيد مباشرة: التجربة تقطع النت
+  useAutoStart(!loading && !!cfg && cands.length > 0 && !running, () => Alert.alert(
+    'أجرّب الترددات؟',
+    `بجرّب ${cands.length} ترددات وأقيس كل واحد. النت بينقطع شوي مع كل تردد (تقريباً ${cands.length * 2} دقايق).\n\nلو ما لقينا أفضل من إعدادك، نرجّعه زي ما كان.`,
+    [{ text: 'لا', style: 'cancel' }, { text: 'ابدأ', onPress: () => { run(); } }],
+  ));
 
   if (loading) return <View style={s.center}><ActivityIndicator color={C.blue} /></View>;
 

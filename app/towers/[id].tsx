@@ -4,6 +4,7 @@ import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router';
+import { useAutoStart } from '../../src/assistant/auto';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession, routerWrite } from '../../src/store/sessions';
 import { CellTower, CellLockState, BandConfig } from '../../src/drivers/types';
@@ -602,6 +603,23 @@ export default function TowersScreen() {
   const lowCand = !!bestOther && isLowBand(bestOther.best);
   const canPin = canLock || !!bandCfg;
   const isPinned = (g: TowerGroup) => !!lockOf(g);
+
+  // فتحها المساعد («أفضل برج») ← نفس تأكيد زر «قيس بنق الأبراج»، أو نوضح ليش ما يصير
+  const scanCands = others.filter(g => g.pci && g.cells.some(c => c.arfcn)).slice(0, 5);
+  useAutoStart(!loading && !busy, () => {
+    if (!canLock) {
+      Alert.alert('أفضل برج', lockRisk || 'راوترك ما يسمح بالتثبيت على برج من التطبيق. تقدر تشوف الأبراج وقوتها هنا، أو جرّب «اختار لي الأفضل».');
+      return;
+    }
+    if (!scanCands.length) {
+      Alert.alert('أفضل برج', 'ما ظهر لنا أبراج ثانية حولك نقدر نجربها — برجك الحالي هو المتاح. اسحب لتحت للتحديث بعد شوي.');
+      return;
+    }
+    Alert.alert('أدوّر لك أفضل برج؟', `بجرّب ${scanCands.length} أبراج وأقيس البنق لكل واحد، تقريباً ${scanCands.length * 2} دقايق. النت بينقطع أثناءها، وممكن الراوتر يعيد التشغيل. وبعدها نرجّع إعدادك ونوريك الأفضل.`, [
+      { text: 'لا', style: 'cancel' },
+      { text: 'ابدأ', onPress: () => scanPings(scanCands) },
+    ]);
+  });
 
   return (
     <LinearGradient colors={[C.bgTop, C.bgBottom]} style={{ flex: 1 }}>

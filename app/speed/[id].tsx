@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, } from 'react-native';
 import { View, Text, Pressable } from '../../src/i18n/rn';
 import { useLocalSearchParams } from 'expo-router';
+import { useAutoStart } from '../../src/assistant/auto';
 import Svg, { Circle } from 'react-native-svg';
 import { runSpeedTest, SpeedResult } from '../../src/utils/speedtest';
 import { Icon, IconName } from '../../src/ui/Icon';
@@ -56,6 +57,9 @@ export default function SpeedScreen() {
     loop.start();
     return () => loop.stop();
   }, [phase, spin]);
+
+  // فتحها المساعد ← نبدأ الاختبار على طول (قراءة فقط)
+  useAutoStart(true, () => { if (phase !== 'running') run(); });
 
   const run = async () => {
     setPhase('running'); setErr(''); setRes(null);

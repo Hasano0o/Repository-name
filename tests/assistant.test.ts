@@ -24,6 +24,11 @@ test('فهم الطلبات الأساسية', () => {
   assert.equal(act('مين متصل على الشبكة'), 'open_devices');
   assert.equal(act('أبي أغيّر اسم الواي فاي'), 'open_control');
   assert.equal(act('وش تقدر تسوي'), 'help');
+  assert.equal(act('اختار لي أفضل تردد'), 'best_band');
+  assert.equal(act('أفضل برج'), 'best_tower');
+  assert.equal(act('ابي اقوى برج حولي'), 'best_tower');
+  assert.equal(act('الترددات'), 'open_bands');
+  assert.equal(ACTIONS.best_band.auto, true);
 });
 
 test('الأوامر الخطرة ما تختلط بالعادية', () => {

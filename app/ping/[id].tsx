@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router';
+import { useAutoStart } from '../../src/assistant/auto';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { runRouterOp } from '../../src/utils/routerOp';
@@ -489,6 +490,13 @@ export default function GameScreen() {
 
   const changing = picked.filter(k => k !== 'base').length;
   const mins = Math.max(1, Math.ceil((changing * 60 + 20) / 60));
+
+  // فتحها المساعد («أبي أقل بنق») ← تأكيد مباشر بنفس الخيارات المختارة تلقائياً
+  useAutoStart(!loading && !!info && !!cfg && picked.length > 0 && !busy && !running, () => Alert.alert(
+    'أدوّر لك أقل بنق؟',
+    `بقيس البنق لسيرفرات ${reg.name} على إعدادك الحالي${changing ? ` و${changing} إعدادات ثانية` : ''} (تقريباً ${mins} دقيقة).${changing ? ' النت بينقطع شوي مع كل تغيير، وبعدها نرجّع إعدادك.' : ''}`,
+    [{ text: 'لا', style: 'cancel' }, { text: 'ابدأ', onPress: () => { run(); } }],
+  ));
   const sortedRegions = REGIONS.filter(r => regionRes[r.id]).sort((a, b) => {
     const x = regionRes[a.id], y = regionRes[b.id];
     if (!x.samples) return 1;
