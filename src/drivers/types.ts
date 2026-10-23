@@ -254,8 +254,10 @@ export interface RouterDriver {
   /**
    * lastTry: المستخدم ضغط «جرّب» بنفسه بعد ما عرف إن باقي محاولة وحدة — نسمح بمحاولة وحدة أخيرة
    * (لو غلطت الراوتر يقفل الدخول دقايق وبعدها العدّاد يرجع). المهام الخلفية ما تمرّرها أبداً.
+   * fresh: المستخدم كتب كلمة مرور بنفسه (إضافة/تعديل راوتر) — لازم نتحقق منها فعلاً.
+   * بدونها: لو الجوال داخل الراوتر أصلاً (جلسة قديمة)، الدخول «ينجح» بأي كلمة وتنحفظ الغلط.
    */
-  login(host: string, username: string, password: string, opts?: { lastTry?: boolean }): Promise<void>;
+  login(host: string, username: string, password: string, opts?: { lastTry?: boolean; fresh?: boolean }): Promise<void>;
   logout(): Promise<void>;
   getSignal?(): Promise<Signal>;
   getSnapshot?(): Promise<SignalSnapshot>;

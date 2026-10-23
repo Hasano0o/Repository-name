@@ -234,7 +234,7 @@ export default function AddRouterScreen() {
 
       setStep('نسجّل الدخول...');
       try {
-        await driver.login(h, u, password);
+        await driver.login(h, u, password, { fresh: true });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         // ZTE: باقي محاولة/محاولتين — قبل كنا نوقف للأبد (والحل الوحيد ضبط المصنع). الحين نخيّر المستخدم.
@@ -251,7 +251,7 @@ export default function AddRouterScreen() {
           if (!go) return;
           setStep('المحاولة الأخيرة...');
           try {
-            await driver.login(h, u, password, { lastTry: true });
+            await driver.login(h, u, password, { lastTry: true, fresh: true });
           } catch (e2) {
             Alert.alert('فشل الدخول', e2 instanceof Error ? e2.message : String(e2));
             return;

@@ -335,21 +335,22 @@ export class ZteDriver implements RouterDriver {
    * ٩ محاولات (وكل وحدة LOGOUT) خلال ثانية → الراوتر يقفل الدخول ٥ دقايق.
    */
   private loginP: Promise<void> | null = null;
-  login(host: string, username: string, password: string, opts?: { lastTry?: boolean }): Promise<void> {
-    if (this.loginP && !opts?.lastTry) return this.loginP;
-    this.loginP = this.loginOnce(host, username, password, !!opts?.lastTry).finally(() => {
+  login(host: string, username: string, password: string, opts?: { lastTry?: boolean; fresh?: boolean }): Promise<void> {
+    if (this.loginP && !opts?.lastTry && !opts?.fresh) return this.loginP;
+    this.loginP = this.loginOnce(host, username, password, !!opts?.lastTry, !!opts?.fresh).finally(() => {
       // نخلي النتيجة صالحة ثانيتين — الطلبات اللي وصلت متأخرة ما تفتح دخول جديد
       setTimeout(() => { this.loginP = null; }, 2000);
     });
     return this.loginP;
   }
 
-  private async loginOnce(host: string, _username: string, password: string, lastTry = false): Promise<void> {
+  private async loginOnce(host: string, _username: string, password: string, lastTry = false, fresh = false): Promise<void> {
     this.host = host;
     this.password = password;
 
     // ═══ لو جلستنا شغالة أصلاً ما نصرف أي محاولة ═══
-    if (await this.verifyLogin()) { this.log('login: already ok'); return; }
+    // إلا لو المستخدم كتب الكلمة بنفسه (fresh): وقتها «داخل» ما تثبت إن الكلمة صح — لازم نجرّبها
+    if (!fresh && !lastTry && await this.verifyLogin()) { this.log('login: already ok'); return; }
 
     // ═══ هل الراوتر قافل الدخول بسبب محاولات غلط؟ ═══
     const lockMsg = await this.lockState();

@@ -92,7 +92,7 @@ export default function SetupScreen() {
     const user = 'admin';
     try {
       setStatus('أسجّل الدخول عنك…');
-      await d.login(host, user, pw, lastTry ? { lastTry: true } : undefined);
+      await d.login(host, user, pw, { fresh: true, lastTry });
     } catch (e: any) {
       if (!alive.current) return;
       const msg = String(e?.message ?? e);

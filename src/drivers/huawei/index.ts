@@ -287,7 +287,7 @@ export class HuaweiDriver implements RouterDriver {
     const r = await rawHttp(`http://${host}/api/webserver/SesTokInfo`, {}, 3000);
     return (await r.text()).includes('<TokInfo>');
   }
-  async login(host: string, username: string, password: string): Promise<void> {
+  async login(host: string, username: string, password: string, opts?: { lastTry?: boolean; fresh?: boolean }): Promise<void> {
     this.host = host;
     this.queue = [];
     try { await this.http(`http://${host}/html/home.html`, { headers: this.headers() }); } catch {}
@@ -297,8 +297,9 @@ export class HuaweiDriver implements RouterDriver {
     if (tag(state, 'State') === '0') {
       // بعض الموديلات (H155) بعد تغيير الإعدادات: state-login يقول «داخل» والأوامر ترد 100003 —
       // كنا نصدّقه ونعلق بحلقة طرد. الحين: لو انطردنا، نطلع ونفتح جلسة جديدة فعلاً
-      if (!this.stale) return;
-      this.log('stale session — forcing fresh login');
+      // fresh: المستخدم كتب كلمة بنفسه ← ما نصدّق الجلسة القديمة، نطلع وندخل بالكلمة عشان نتحقق منها
+      if (!this.stale && !opts?.fresh) return;
+      this.log(opts?.fresh ? 'fresh login requested — verifying password' : 'stale session — forcing fresh login');
       try { await this.post('user/logout', '<Logout>1</Logout>'); } catch {}
       this.queue = [];
       try { await this.http(`http://${host}/html/home.html`, { headers: this.headers() }); } catch {}
