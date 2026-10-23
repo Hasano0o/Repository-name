@@ -29,6 +29,12 @@ test('فهم الطلبات الأساسية', () => {
   assert.equal(act('ابي اقوى برج حولي'), 'best_tower');
   assert.equal(act('الترددات'), 'open_bands');
   assert.equal(ACTIONS.best_band.auto, true);
+  assert.equal(act('اختار أفضل قناة'), 'best_channel');
+  assert.equal(act('وش ترددي الحالي'), 'my_band');
+  assert.equal(act('حرارة جهازي'), 'temp');
+  assert.equal(act('الراوتر حار'), 'temp');
+  assert.equal(act('محسن الالعاب'), 'open_ping');
+  assert.equal(act('اطفي الراوتر'), 'power_off');
 });
 
 test('الأوامر الخطرة ما تختلط بالعادية', () => {

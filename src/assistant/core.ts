@@ -63,7 +63,7 @@ export function pauseLeft(s: AssistantState, now = Date.now()): string {
 export type Risk = 'none' | 'read' | 'write' | 'danger';
 
 export type ActionId =
-  | 'help' | 'check_signal' | 'ping_now' | 'best_band' | 'best_tower'
+  | 'help' | 'check_signal' | 'ping_now' | 'best_band' | 'best_tower' | 'best_channel' | 'my_band' | 'temp'
   | 'open_ping' | 'open_finder' | 'open_aim' | 'open_towers' | 'open_speed' | 'open_devices'
   | 'open_newip' | 'open_wifich' | 'open_control' | 'open_details' | 'open_bands'
   | 'reboot' | 'reboot_now' | 'factory_reset' | 'power_off' | 'power_on';
@@ -91,7 +91,10 @@ export const ACTIONS: Record<ActionId, ActionDef> = {
   ping_now: { id: 'ping_now', label: 'كم البنق عندي؟', risk: 'read' },
   best_band: { id: 'best_band', label: 'اختار لي أفضل تردد', risk: 'write', route: 'optimize', screen: 'المُحسِّن التلقائي', auto: true },
   best_tower: { id: 'best_tower', label: 'أفضل برج', risk: 'write', route: 'towers', screen: 'الأبراج', auto: true },
-  open_ping: { id: 'open_ping', label: 'أبي أقل بنق', risk: 'write', route: 'ping', screen: 'مُحسّن الألعاب', auto: true },
+  best_channel: { id: 'best_channel', label: 'أفضل قناة واي فاي', risk: 'write', route: 'wifich', screen: 'قناة الواي فاي', auto: true },
+  my_band: { id: 'my_band', label: 'ترددي الحالي', risk: 'read' },
+  temp: { id: 'temp', label: 'حرارة الراوتر', risk: 'read' },
+  open_ping: { id: 'open_ping', label: 'مُحسّن الألعاب', risk: 'write', route: 'ping', screen: 'مُحسّن الألعاب', auto: true },
   open_finder: { id: 'open_finder', label: 'اختار لي الأفضل', risk: 'none', route: 'finder', screen: 'اختار لي الأفضل' },
   open_aim: { id: 'open_aim', label: 'وجّه الأنتنا', risk: 'none', route: 'aim', screen: 'توجيه الأنتنا' },
   open_towers: { id: 'open_towers', label: 'الأبراج', risk: 'none', route: 'towers', screen: 'الأبراج' },
@@ -112,6 +115,13 @@ export const ACTIONS: Record<ActionId, ActionDef> = {
 
 /** أزرار البداية — أكثر شي يحتاجه المبتدئ */
 export const QUICK: ActionId[] = ['check_signal', 'best_band', 'best_tower', 'open_ping', 'open_speed', 'open_aim'];
+
+/** شبكة الأزرار الملوّنة في شاشة المساعد — مرتّبة: اعرف وضعك ← حسّنه ← الراوتر */
+export const GRID: { title: string; items: ActionId[] }[] = [
+  { title: 'اعرف وضعك', items: ['check_signal', 'my_band', 'temp', 'open_speed'] },
+  { title: 'حسّن اتصالك', items: ['best_band', 'best_tower', 'best_channel', 'open_ping'] },
+  { title: 'الراوتر', items: ['reboot', 'power_off'] },
+];
 
 // ═══ فهم الكلام ═══
 /** توحيد الكتابة: بدون تشكيل ولا تطويل، أ/إ/آ ← ا، ة ← ه، ى ← ي، أرقام هندية ← عربية */
@@ -138,8 +148,11 @@ const WORDS: [ActionId, string[]][] = [
   ['power_off', ['طفي الراوتر', 'اطفي الراوتر', 'طف الراوتر', 'سكر الراوتر', 'قفل الراوتر', 'اطفاء الراوتر', 'شيل الكهربا', 'power off']],
   ['best_band', ['افضل تردد', 'احسن تردد', 'اقوى تردد', 'التردد الافضل', 'اختار لي تردد', 'اختر لي تردد', 'اختار تردد', 'افضل باند', 'جرب الترددات', 'المحسن التلقائي']],
   ['best_tower', ['افضل برج', 'احسن برج', 'اقوى برج', 'البرج الافضل', 'اختار لي برج', 'اختر لي برج', 'اختار برج', 'جرب الابراج', 'بنق الابراج']],
+  ['best_channel', ['افضل قناه', 'احسن قناه', 'انظف قناه', 'قناه الواي فاي', 'غير القناه', 'اختار قناه', 'اختار لي قناه']],
+  ['my_band', ['ترددي', 'ترددي الحالي', 'وش ترددي', 'على اي تردد', 'وش التردد', 'التردد الحالي', 'اي باند', 'وش الباند']],
+  ['temp', ['حراره', 'الحراره', 'حار', 'سخن', 'حراره الراوتر', 'حراره جهازي', 'درجه الحراره', 'حرارته']],
   ['ping_now', ['كم البنق', 'كم بنقي', 'قيس البنق', 'افحص البنق', 'وش البنق', 'البنق كم', 'ping test', 'كم الping']],
-  ['open_ping', ['بنق', 'ping', 'لاق', 'لاك', 'lag', 'تقطيع باللعب', 'العب', 'لعب', 'العاب', 'قيمنق', 'gaming', 'ببجي', 'pubg', 'فورت', 'كود', 'فيفا', 'فالو', 'روكيت']],
+  ['open_ping', ['محسن الالعاب', 'بنق', 'ping', 'لاق', 'لاك', 'lag', 'تقطيع باللعب', 'العب', 'لعب', 'العاب', 'قيمنق', 'gaming', 'ببجي', 'pubg', 'فورت', 'كود', 'فيفا', 'فالو', 'روكيت']],
   ['check_signal', ['افحص اشارتي', 'افحص الاشاره', 'اشارتي', 'الاشاره', 'اشاره', 'قوه الاشاره', 'افحص', 'فحص', 'وش وضعي', 'وش حالتي', 'كيف الاتصال', 'الاتصال']],
   ['open_finder', ['الافضل', 'افضل', 'حسن', 'تحسين', 'سرعني', 'النت بطيء', 'بطيء', 'ثقيل', 'ضعيف', 'رجع النت قوي', 'best']],
   ['open_aim', ['انتنا', 'انتينا', 'انتين', 'هوائي', 'وجه', 'توجيه', 'اتجاه', 'مكان الراوتر', 'وين احط', 'antenna']],
@@ -148,7 +161,7 @@ const WORDS: [ActionId, string[]][] = [
   ['open_speed', ['سرعه', 'السرعه', 'اختبار السرعه', 'سبيد', 'speed', 'كم سرعتي', 'كم النت']],
   ['open_devices', ['اجهزه', 'الاجهزه', 'المتصلين', 'مين متصل', 'مين داخل', 'احظر', 'حظر']],
   ['open_newip', ['اي بي', 'ايبي', 'ip جديد', 'ip', 'اي بي جديد', 'عنوان جديد']],
-  ['open_wifich', ['قناه', 'قناه الواي فاي', 'channel', 'تداخل']],
+  ['open_wifich', ['channel', 'تداخل']],
   ['open_control', ['اسم الواي فاي', 'كلمه الواي فاي', 'باسورد الواي فاي', 'رمز الواي فاي', 'واي فاي الضيوف', 'upnp', 'dmz', 'نور', 'انوار', 'الاضاءه', 'ليد', 'مركز التحكم', 'حجب', 'nat']],
   ['open_details', ['تفاصيل', 'الارقام', 'sinr', 'rsrp', 'rsrq', 'pci']],
   ['help', ['مساعده', 'ساعدني', 'وش تقدر', 'وش تسوي', 'help', 'كيف استخدم', 'وش اسوي']],

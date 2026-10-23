@@ -10,6 +10,7 @@ import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
+import { useAutoStart } from '../../src/assistant/auto';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { reportError, sendSupportReport, DEV_TELEGRAM } from '../../src/services/errors';
 import { withSession } from '../../src/store/sessions';
@@ -281,6 +282,13 @@ export default function WifiChannel() {
 
   const best = tried.filter(x => x.q).reduce<Tried | null>((a, x) => (!a || x.q!.score < a.q!.score ? x : a), null);
   const worst = Math.max(1, ...tried.map(x => x.q?.score ?? 0));
+
+  // فتحها المساعد («أفضل قناة») ← نفس تأكيد «دوّر على أنظف قناة»، أو نوضح ليش ما يصير
+  useAutoStart(!loading && !!info && radios !== null && !busy, () => {
+    if (!radio) { Alert.alert('أفضل قناة', 'ما قدرنا نقرأ قنوات الواي فاي من راوترك.'); return; }
+    if (!radio.writable) { Alert.alert('أفضل قناة', 'راوترك ما يسمح بتغيير قناة الواي فاي من التطبيق — تقدر تشوف القناة الحالية هنا.'); return; }
+    smart();
+  });
 
   return (
     <LinearGradient colors={[C.bgTop, C.bgBottom]} style={{ flex: 1 }}>

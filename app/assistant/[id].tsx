@@ -17,7 +17,7 @@ import { Icon, IconName } from '../../src/ui/Icon';
 import { C, R, S, tBg, tBd, tFg } from '../../src/ui/theme';
 import { sheet } from '../../src/i18n';
 import {
-  ACTIONS, ActionId, AssistantMode, MODE_LABEL, QUICK, cleanName, extractName, matchIntent, pauseFor, pauseLeft,
+  ACTIONS, ActionId, AssistantMode, GRID, MODE_LABEL, cleanName, extractName, matchIntent, pauseFor, pauseLeft,
 } from '../../src/assistant/core';
 import { useAssistantState, loadName, saveName } from '../../src/assistant/store';
 import { runAction, Reply } from '../../src/assistant/run';
@@ -36,6 +36,21 @@ const PAUSES: { label: string; mins: number | null }[] = [
   { label: 'ساعة', mins: 60 },
   { label: 'لين أرجّعه', mins: null },
 ];
+
+/** لون وأيقونة كل زر — ألوان Bandly: أزرق أساسي، بنفسجي 5G/ذكي، أخضر قياس، وردي ألعاب، برتقالي تحذير */
+const LOOK: Partial<Record<ActionId, { icon: IconName; color: string; sub: string }>> = {
+  check_signal: { icon: 'antenna', color: '#2f6bff', sub: 'قوة وصفاء' },
+  my_band: { icon: 'bands', color: '#7c5cff', sub: 'الأساسي والثانوي' },
+  temp: { icon: 'sun', color: '#f97316', sub: 'هل هو حار؟' },
+  open_speed: { icon: 'speed', color: '#12b76a', sub: 'تنزيل ورفع' },
+  best_band: { icon: 'spark', color: '#7c5cff', sub: 'يجرّب ويختار' },
+  best_tower: { icon: 'tower', color: '#12b76a', sub: 'أقل بنق' },
+  best_channel: { icon: 'wifi', color: '#0891b2', sub: 'أنظف قناة' },
+  open_ping: { icon: 'game', color: '#ec4899', sub: 'أقل بنق للعبتك' },
+  reboot: { icon: 'refresh', color: '#d97706', sub: 'يرجع خلال دقيقتين' },
+  power_off: { icon: 'power', color: '#e5484d', sub: 'كيف أطفيه؟' },
+};
+const lookOf = (a: ActionId) => LOOK[a] ?? { icon: 'chevron' as IconName, color: '#2f6bff', sub: '' };
 
 let seq = 0;
 const nid = () => ++seq;
@@ -86,11 +101,10 @@ export default function AssistantScreen() {
     loadName().then(({ name: n, asked }) => {
       if (!alive.current) return;
       setName(n);
-      if (n) bot({ text: `هلا ${n} 👋 وش تبي نسوي اليوم؟`, chips: QUICK });
-      else if (!asked) {
+      if (!n && !asked) {
         setAskName(true);
         bot({ text: 'أهلاً بك في Bandly! وش اسمك؟ خلّني أساعدك تضبط اتصالك.\n(الاسم ينحفظ على جوالك بس — وتقدر تتخطى)' });
-      } else bot({ text: 'هلا! وش تبي نسوي اليوم؟', chips: QUICK });
+      }
     });
   }, [mode, bot]);
 
@@ -109,7 +123,7 @@ export default function AssistantScreen() {
       bot({ text: 'ما قدرت أحفظ الاسم على الجهاز — عادي، نكمّل بدونه.', tone: 'warn' });
     }
     setName(n);
-    bot({ text: n ? `تشرفنا يا ${n}! وش تبي نسوي؟` : 'تمام، نكمّل بدون اسم. وش تبي نسوي؟', chips: QUICK });
+    bot({ text: n ? `تشرفنا يا ${n}! اختر من الأزرار فوق أو قل طلبك.` : 'تمام، نكمّل بدون اسم. اختر من الأزرار فوق أو قل طلبك.' });
   };
 
   const forgetName = () => Alert.alert('اسمك', name ? `محفوظ: ${name}` : 'ما فيه اسم محفوظ', [
@@ -136,7 +150,7 @@ export default function AssistantScreen() {
       const r = await runAction(aid, info, t => { if (alive.current) setProgress(t); });
       if (!alive.current) return;
       bot(r);
-      if (voice) speak(r.text);
+      if (voice) speak(r.card ? `${r.card.title}. ${r.text}` : r.text);
       // يحتاج موافقة (إعادة التشغيل) ← نافذة تأكيد، وما ننفّذ إلا لو ضغط نعم
       if (r.confirm) {
         const c = r.confirm;
@@ -220,39 +234,32 @@ export default function AssistantScreen() {
   return (
     <LinearGradient colors={[C.bgTop, C.bgBottom]} style={{ flex: 1 }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-        {/* ═══ الترويسة: الحالة بنص وأيقونة (مو لون بس) ═══ */}
+        {/* ═══ الترويسة (العنوان فوق في شريط التطبيق): الحالة بنص وأيقونة — مو لون بس ═══ */}
         <View style={s.head}>
           <View style={s.headRow}>
-            <View style={[s.avatar, { backgroundColor: tBg('#2f6bff1f'), borderColor: tBd('#2f6bff40') }]}>
-              <Icon name="spark" size={20} color={tFg('#2f6bff')} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.title}>مساعد Bandly</Text>
-              <View style={[s.status, { backgroundColor: tBg(MODE_COLOR[mode] + '1a') }]} accessibilityLabel={`حالة المساعد: ${MODE_LABEL[mode]}`}>
-                <Icon name={MODE_ICON[mode]} size={13} color={tFg(MODE_COLOR[mode])} stroke={2.4} />
-                <Text style={[s.statusTxt, { color: tFg(MODE_COLOR[mode]) }]}>
-                  {MODE_LABEL[mode]}{mode === 'paused' ? ` · ${pauseLeft(state, now)}` : ''}
-                </Text>
-              </View>
+            <View style={[s.status, { backgroundColor: tBg(MODE_COLOR[mode] + '1a'), borderColor: tBd(MODE_COLOR[mode] + '40') }]} accessibilityLabel={`حالة المساعد: ${MODE_LABEL[mode]}`}>
+              <Icon name={MODE_ICON[mode]} size={13} color={tFg(MODE_COLOR[mode])} stroke={2.4} />
+              <Text style={[s.statusTxt, { color: tFg(MODE_COLOR[mode]) }]}>
+                {MODE_LABEL[mode]}{mode === 'paused' ? ` · ${pauseLeft(state, now)}` : ''}
+              </Text>
             </View>
             {mode === 'enabled' && (
-              <Pressable onPress={forgetName} style={s.iconBtn} accessibilityRole="button" accessibilityLabel="اسمك">
-                <Icon name="user" size={18} color={C.sub} />
-              </Pressable>
+              <>
+                <Pressable style={s.pill} onPress={() => setShowPause(v => !v)} accessibilityRole="button" accessibilityLabel="إيقاف مؤقت">
+                  <Icon name="clock" size={14} color={C.sub} /><Text style={s.pillTxt}>مؤقت</Text>
+                </Pressable>
+                <Pressable style={[s.pill, { borderColor: tBd('#e5484d40') }]} onPress={stopAll} accessibilityRole="button" accessibilityLabel="إيقاف كامل">
+                  <Icon name="power" size={14} color={C.red} /><Text style={[s.pillTxt, { color: C.red }]}>إيقاف</Text>
+                </Pressable>
+                <Pressable onPress={forgetName} style={s.pill} accessibilityRole="button" accessibilityLabel="اسمك">
+                  <Icon name="user" size={14} color={C.sub} />
+                </Pressable>
+              </>
             )}
           </View>
 
           <View style={s.ctrlRow}>
-            {mode === 'enabled' ? (
-              <>
-                <Pressable style={s.ctrl} onPress={() => setShowPause(v => !v)} accessibilityRole="button">
-                  <Icon name="clock" size={15} color={C.text} /><Text style={s.ctrlTxt}>إيقاف مؤقت</Text>
-                </Pressable>
-                <Pressable style={s.ctrl} onPress={stopAll} accessibilityRole="button">
-                  <Icon name="power" size={15} color={C.red} /><Text style={[s.ctrlTxt, { color: C.red }]}>إيقاف كامل</Text>
-                </Pressable>
-              </>
-            ) : (
+            {mode === 'enabled' ? null : (
               <Pressable style={[s.ctrl, s.ctrlOn]} onPress={() => setMode({ mode: 'enabled', pausedUntil: null }, 'شغّلته')} accessibilityRole="button">
                 <Icon name="power" size={15} color={C.onAccent} />
                 <Text style={[s.ctrlTxt, { color: C.onAccent }]}>{mode === 'paused' ? 'كمّل الحين' : 'شغّل المساعد'}</Text>
@@ -284,13 +291,59 @@ export default function AssistantScreen() {
         ) : (
           <>
             <ScrollView ref={scroll} contentContainerStyle={s.list} keyboardShouldPersistTaps="handled">
+              {/* ═══ الترحيب ═══ */}
+              <View style={s.hero}>
+                <Text style={s.heroTitle}>{name ? `هلا ${name} 👋` : 'هلا 👋'}</Text>
+                <Text style={s.heroSub}>{hasVoice ? 'اضغط زر أو المايك وقل طلبك' : 'اضغط زر أو اكتب طلبك تحت'}</Text>
+              </View>
+
+              {/* ═══ الأزرار: اعرف وضعك ← حسّنه ← الراوتر ═══ */}
+              {GRID.map(g => (
+                <View key={g.title} style={s.group}>
+                  <Text style={s.groupTitle}>{g.title}</Text>
+                  <View style={s.grid}>
+                    {g.items.map(a => {
+                      const l = lookOf(a);
+                      return (
+                        <Pressable key={a} onPress={() => run(a)} disabled={busy} accessibilityRole="button"
+                          style={({ pressed }) => [s.tile, { borderColor: tBd(l.color + '38') }, (pressed || busy) && { opacity: pressed ? 0.75 : 0.55 }]}>
+                          <View style={[s.tileIcon, { backgroundColor: tBg(l.color + '1c') }]}>
+                            <Icon name={l.icon} size={21} color={tFg(l.color)} stroke={2.2} />
+                          </View>
+                          <Text style={s.tileTitle} numberOfLines={1}>{ACTIONS[a].label}</Text>
+                          {!!l.sub && <Text style={[s.tileSub, { color: tFg(l.color) }]} numberOfLines={1}>{l.sub}</Text>}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
+
+              {msgs.length > 0 && <View style={s.divider} />}
+
               {msgs.map(m => m.from === 'me' ? (
                 <View key={m.id} style={[s.bubble, s.me]}><Text style={s.meTxt}>{m.text}</Text></View>
               ) : (
                 <View key={m.id} style={{ gap: 8 }}>
-                  <View style={[s.bubble, s.bot, m.tone === 'warn' && s.warn, m.tone === 'danger' && s.danger]}>
-                    <Text style={s.botTxt}>{m.text}</Text>
-                  </View>
+                  {m.card && (
+                    <View style={[s.card, { borderColor: tBd(m.card.color + '55') }]}>
+                      <View style={[s.cardHead, { backgroundColor: tBg(m.card.color + '1a') }]}>
+                        <Text style={[s.cardTitle, { color: tFg(m.card.color) }]}>{m.card.title}</Text>
+                      </View>
+                      {m.card.rows.map((row, i) => (
+                        <View key={row.label + i} style={[s.cardRow, i > 0 && s.cardRowLine]}>
+                          <View style={[s.dot, { backgroundColor: row.color ?? m.card!.color }]} />
+                          <Text style={s.cardLabel}>{row.label}</Text>
+                          <Text style={[s.cardValue, { color: row.color ? tFg(row.color) : C.text }]}>{row.value}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                  {!!m.text && (
+                    <View style={[s.bubble, s.bot, m.tone === 'warn' && s.warn, m.tone === 'danger' && s.danger]}>
+                      <Text style={s.botTxt}>{m.text}</Text>
+                    </View>
+                  )}
                   {m.open && (
                     <Pressable style={s.openBtn} onPress={() => open(m.open!.route, m.open!.auto)} accessibilityRole="button">
                       <Text style={s.openTxt}>افتح «{m.open.screen}»</Text>
@@ -300,8 +353,9 @@ export default function AssistantScreen() {
                   {!!m.chips?.length && (
                     <View style={s.chips}>
                       {m.chips.map(c => (
-                        <Pressable key={c} style={s.chip} onPress={() => run(c)} disabled={busy}>
-                          <Text style={s.chipTxt}>{ACTIONS[c].label}</Text>
+                        <Pressable key={c} style={[s.chip, { borderColor: tBd(lookOf(c).color + '45') }]} onPress={() => run(c)} disabled={busy}>
+                          <Icon name={lookOf(c).icon} size={14} color={tFg(lookOf(c).color)} />
+                          <Text style={[s.chipTxt, { color: tFg(lookOf(c).color) }]}>{ACTIONS[c].label}</Text>
                         </Pressable>
                       ))}
                     </View>
@@ -358,14 +412,32 @@ export default function AssistantScreen() {
 }
 
 const s = sheet({
-  head: { padding: S.lg, paddingBottom: S.md, gap: S.md, borderBottomWidth: 1, borderColor: C.lineSoft },
-  headRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
-  avatar: { width: 44, height: 44, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  title: { color: C.text, fontWeight: '800', fontSize: 17, textAlign: 'right' },
-  status: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, alignSelf: 'flex-end', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, marginTop: 4 },
-  statusTxt: { fontWeight: '700', fontSize: 12 },
-  iconBtn: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: C.rowBg },
+  head: { paddingHorizontal: S.lg, paddingVertical: S.sm, gap: S.sm, borderBottomWidth: 1, borderColor: C.lineSoft },
+  headRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, flexWrap: 'wrap' },
+  status: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, borderRadius: 999, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 6 },
+  statusTxt: { fontWeight: '800', fontSize: 12.5 },
+  pill: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, borderRadius: 999, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.card, paddingHorizontal: 11, paddingVertical: 6 },
+  pillTxt: { color: C.sub, fontWeight: '700', fontSize: 12.5 },
   ctrlRow: { flexDirection: 'row-reverse', gap: 8 },
+  hero: { alignItems: 'center', gap: 4, paddingTop: 4, paddingBottom: 2 },
+  heroTitle: { color: C.text, fontSize: 22, fontWeight: '900', textAlign: 'center' },
+  heroSub: { color: C.sub, fontSize: 13.5, textAlign: 'center' },
+  group: { gap: 8 },
+  groupTitle: { color: C.sub, fontSize: 12.5, fontWeight: '800', textAlign: 'center' },
+  grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'center', gap: 10 },
+  tile: { flexBasis: '47%', flexGrow: 1, maxWidth: '49%', alignItems: 'center', gap: 5, backgroundColor: C.card, borderWidth: 1.5, borderRadius: R.md, paddingVertical: 14, paddingHorizontal: 8 },
+  tileIcon: { width: 46, height: 46, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  tileTitle: { color: C.text, fontWeight: '800', fontSize: 14, textAlign: 'center' },
+  tileSub: { fontSize: 11.5, fontWeight: '700', textAlign: 'center' },
+  divider: { height: 1, backgroundColor: C.lineSoft, marginVertical: 4 },
+  card: { alignSelf: 'stretch', backgroundColor: C.card, borderWidth: 1.5, borderRadius: R.md, overflow: 'hidden' },
+  cardHead: { paddingVertical: 10, paddingHorizontal: 14, alignItems: 'center' },
+  cardTitle: { fontSize: 16, fontWeight: '900', textAlign: 'center' },
+  cardRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 14 },
+  cardRowLine: { borderTopWidth: 1, borderColor: C.lineSoft },
+  dot: { width: 10, height: 10, borderRadius: 5 },
+  cardLabel: { flex: 1, color: C.sub, fontSize: 13.5, fontWeight: '700', textAlign: 'right' },
+  cardValue: { fontSize: 15, fontWeight: '900', textAlign: 'left' },
   ctrl: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1, borderRadius: R.sm, paddingVertical: 10 },
   ctrlOn: { backgroundColor: C.blue, borderColor: C.blue },
   ctrlTxt: { color: C.text, fontWeight: '700', fontSize: 13 },
@@ -373,7 +445,7 @@ const s = sheet({
   offBox: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: S.xl, gap: 10 },
   offTitle: { color: C.text, fontWeight: '800', fontSize: 16, textAlign: 'center' },
   offBody: { color: C.sub, fontSize: 13.5, lineHeight: 22, textAlign: 'center' },
-  list: { padding: S.lg, gap: 12 },
+  list: { padding: S.lg, gap: 14, paddingBottom: S.xl },
   bubble: { maxWidth: '88%', borderRadius: R.md, paddingHorizontal: 14, paddingVertical: 10 },
   me: { alignSelf: 'flex-start', backgroundColor: C.blue, borderBottomLeftRadius: 6 },
   meTxt: { color: C.onAccent, fontSize: 14.5, lineHeight: 22, textAlign: 'right' },
@@ -384,8 +456,8 @@ const s = sheet({
   typing: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   openBtn: { alignSelf: 'flex-end', flexDirection: 'row-reverse', alignItems: 'center', gap: 6, backgroundColor: C.blueSoft, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
   openTxt: { color: C.blue, fontWeight: '800', fontSize: 13 },
-  chips: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-start' },
-  chip: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 8 },
+  chips: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
+  chip: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 8 },
   chipTxt: { color: C.text, fontWeight: '700', fontSize: 13 },
   bar: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, paddingHorizontal: S.md, paddingTop: 10, borderTopWidth: 1, borderColor: C.lineSoft, backgroundColor: C.card },
   input: { flex: 1, minHeight: 44, borderRadius: 22, paddingHorizontal: 16, backgroundColor: C.rowBg, color: C.text, fontSize: 15, textAlign: 'right' },

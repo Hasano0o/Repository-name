@@ -9,7 +9,9 @@ import { SavedRouter } from '../store/routers';
 import { withSession, routerWrite, dropSession, isRouterBusyError } from '../store/sessions';
 import { waitOnline } from '../utils/safeLock';
 import { driverById } from '../drivers/registry';
-import { overallLevel, LEVEL_LABEL } from '../utils/signal';
+import { overallLevel, LEVEL_LABEL, LEVEL_COLOR, rsrpLevel, sinrLevel, parseBands, parseNrBands } from '../utils/signal';
+import { friendlyBand } from '../utils/bands';
+import type { Carrier, DeviceTemp } from '../drivers/types';
 import { buildAdvice, ActionRoute } from '../utils/advice';
 import { measureLatency, selectedRegion, gameScore, scoreWord } from '../utils/latency';
 import { ACTIONS, ActionId, QUICK } from './core';
@@ -20,6 +22,8 @@ export interface Reply {
   open?: { route: string; screen: string; auto?: boolean };
   /** نفتح الشاشة على طول بدون ما ينتظر ضغطة */
   go?: boolean;
+  /** بطاقة ملوّنة بالأرقام (الإشارة، التردد، الحرارة، البنق) */
+  card?: { title: string; color: string; rows: { label: string; value: string; color?: string }[] };
   /** يحتاج موافقة قبل التنفيذ — الشاشة تعرض نافذة، ولو وافق ينفّذ action */
   confirm?: { title: string; body: string; yes: string; action: ActionId };
   /** أزرار اقتراحات بعد الرد */
@@ -36,6 +40,12 @@ const fmt = (v: number | undefined, unit: string) => (v === undefined || !Number
 const errText = (e: unknown) => String((e as any)?.message ?? e ?? '').slice(0, 120);
 
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+/** ألوان Bandly الثابتة: الأساسي أزرق · الثانوي 4G برتقالي · 5G بنفسجي */
+const ROLE_COLOR = { primary: '#2f6bff', lte2: '#f97316', nr: '#7c5cff' };
+const tempColor = (c: number) => (c >= 80 ? '#e5484d' : c >= 70 ? '#f97316' : c >= 58 ? '#f59e0b' : '#12b76a');
+const tempWord = (c: number) => (c >= 80 ? 'حار جداً' : c >= 70 ? 'حار' : c >= 58 ? 'دافي' : 'طبيعي');
+const bandText = (tech: 'LTE' | 'NR', b: number) => `${tech === 'NR' ? 'n' : 'B'}${b} · ${friendlyBand(tech, b)}`;
 
 export async function runAction(id: ActionId, r: SavedRouter, say: (s: string) => void = () => {}): Promise<Reply> {
   const a = ACTIONS[id];
@@ -59,15 +69,16 @@ export async function runAction(id: ActionId, r: SavedRouter, say: (s: string) =
         return { text: 'الراوتر ما أعطاني أرقام الإشارة الحين. افتح «التفاصيل» وشوف وش يظهر، أو جرّب بعد شوي.', open: { route: 'details', screen: 'التفاصيل' }, tone: 'warn' };
       }
       const lvl = LEVEL_LABEL[overallLevel(sig)];
-      const lines = [`إشارتك: ${lvl}.`];
-      if (sig.rsrp !== undefined) lines.push(`• 4G: القوة ${fmt(sig.rsrp, '')} · الصفاء ${fmt(sig.sinr, '')}`);
-      if (sig.nrRsrp !== undefined) lines.push(`• 5G: القوة ${fmt(sig.nrRsrp, '')} · الصفاء ${fmt(sig.nrSinr, '')}`);
-      else if (sig.rsrp !== undefined) lines.push('• 5G: مو متصل الحين');
       const adv = buildAdvice(sig, [], {});
-      lines.push('', adv.sentence);
-      lines.push('', 'ملاحظة: القوة غير السرعة والبنق — للتأكد اختبر السرعة أو قِس البنق.');
+      const lv = overallLevel(sig);
+      const rows: { label: string; value: string; color?: string }[] = [];
+      if (sig.rsrp !== undefined) rows.push({ label: '4G القوة', value: fmt(sig.rsrp, ' dBm'), color: LEVEL_COLOR[rsrpLevel(sig.rsrp)] });
+      if (sig.sinr !== undefined) rows.push({ label: '4G الصفاء', value: fmt(sig.sinr, ' dB'), color: LEVEL_COLOR[sinrLevel(sig.sinr)] });
+      if (sig.nrRsrp !== undefined) rows.push({ label: '5G القوة', value: fmt(sig.nrRsrp, ' dBm'), color: LEVEL_COLOR[rsrpLevel(sig.nrRsrp)] });
+      if (sig.nrSinr !== undefined) rows.push({ label: '5G الصفاء', value: fmt(sig.nrSinr, ' dB'), color: LEVEL_COLOR[sinrLevel(sig.nrSinr)] });
       return {
-        text: lines.join('\n'),
+        text: `${adv.sentence}\n\nالقوة غير السرعة والبنق — للتأكد اختبر السرعة أو قِس البنق.`,
+        card: { title: `إشارتك ${lvl}`, color: LEVEL_COLOR[lv], rows },
         open: adv.action ? { route: adv.action.route, screen: ADVICE_SCREEN[adv.action.route] } : undefined,
         chips: ['ping_now', 'open_speed'],
         tone: lvl === 'ضعيف' ? 'warn' : 'ok',
@@ -86,16 +97,79 @@ export async function runAction(id: ActionId, r: SavedRouter, say: (s: string) =
         return { text: `ما وصلت لسيرفرات ${reg.name}${res.error ? ` (${res.error})` : ''}. تأكد إن النت شغّال.`, tone: 'warn' };
       }
       const sc = gameScore(res);
+      const scColor = sc >= 70 ? '#12b76a' : sc >= 45 ? '#f79009' : '#e5484d';
       return {
+        card: {
+          title: `${scoreWord(sc)} · ${reg.name}`, color: scColor,
+          rows: [
+            { label: 'البنق', value: `${Math.round(res.median)} ms`, color: res.median < 60 ? '#12b76a' : res.median < 120 ? '#f79009' : '#e5484d' },
+            { label: 'التذبذب', value: `${Math.round(res.jitter)} ms`, color: res.jitter < 10 ? '#12b76a' : res.jitter < 30 ? '#f79009' : '#e5484d' },
+            { label: 'الفقد', value: `${Math.round(res.lossPct)}%`, color: res.lossPct < 1 ? '#12b76a' : res.lossPct < 5 ? '#f79009' : '#e5484d' },
+          ],
+        },
         text: [
-          `البنق لسيرفرات ${reg.name}: ${Math.round(res.median)}ms`,
-          `التذبذب: ${Math.round(res.jitter)}ms · الفقد: ${Math.round(res.lossPct)}%`,
-          `التقييم: ${scoreWord(sc)}`,
-          '',
           'الرقم يتأثر بالسيرفر والزحمة والتغطية، وما أقدر أضمن رقم معيّن. لو تبي أقل بنق، «مُحسّن الألعاب» يجرّب ويقارن ويرجّع إعدادك لو ما تحسّن.',
         ].join('\n'),
         open: { route: 'ping', screen: 'مُحسّن الألعاب' },
         tone: sc >= 70 ? 'ok' : 'warn',
+      };
+    }
+
+    case 'my_band': {
+      let carriers: Carrier[] = [];
+      let sig;
+      try {
+        [carriers, sig] = await withSession(r, async d => Promise.all([
+          d.getCarriers ? d.getCarriers().catch(() => [] as Carrier[]) : Promise.resolve([] as Carrier[]),
+          d.getSignal ? d.getSignal().catch(() => null) : Promise.resolve(null),
+        ]), false);
+      } catch (e) {
+        return { text: `ما قدرت أقرأ من الراوتر:\n${errText(e)}`, tone: 'warn' };
+      }
+      const rows: { label: string; value: string; color?: string }[] = [];
+      if (carriers.length) {
+        for (const c of carriers) {
+          const role = c.role === 'PCC' ? (c.tech === 'NR' ? '5G الأساسي' : 'الأساسي') : c.tech === 'NR' ? '5G' : 'الثانوي 4G';
+          const color = c.tech === 'NR' ? ROLE_COLOR.nr : c.role === 'PCC' ? ROLE_COLOR.primary : ROLE_COLOR.lte2;
+          rows.push({ label: role, value: bandText(c.tech, c.band) + (c.bandwidth ? ` · ${c.bandwidth}MHz` : ''), color });
+        }
+      } else if (sig) {
+        const lte = parseBands(sig.band).map(x => parseInt(x.replace(/\D/g, ''), 10)).filter(Boolean);
+        const nr = parseNrBands(sig.nrBand).map(x => parseInt(x.replace(/\D/g, ''), 10)).filter(Boolean);
+        lte.forEach((b, i) => rows.push({ label: i === 0 ? 'الأساسي' : 'الثانوي 4G', value: bandText('LTE', b), color: i === 0 ? ROLE_COLOR.primary : ROLE_COLOR.lte2 }));
+        nr.forEach(b => rows.push({ label: '5G', value: bandText('NR', b), color: ROLE_COLOR.nr }));
+      }
+      if (!rows.length) return { text: 'الراوتر ما أعطاني الترددات الحين — افتح «الترددات» تشوف التفاصيل.', open: { route: 'bands', screen: 'الترددات' }, tone: 'warn' };
+      const has5g = rows.some(x => x.color === ROLE_COLOR.nr);
+      return {
+        card: { title: rows.length > 1 ? `متصل على ${rows.length} ترددات مدموجة` : 'متصل على تردد واحد', color: has5g ? ROLE_COLOR.nr : ROLE_COLOR.primary, rows },
+        text: has5g ? 'عندك 5G شغّال ✓' : 'ما فيه 5G الحين — لو منطقتك فيها 5G جرّب «أفضل تردد».',
+        open: { route: 'bands', screen: 'الترددات' },
+        chips: ['best_band', 'best_tower'],
+      };
+    }
+
+    case 'temp': {
+      let temps: DeviceTemp[] = [];
+      let tempC: number | undefined;
+      try {
+        [temps, tempC] = await withSession(r, async d => Promise.all([
+          d.getTemps ? d.getTemps().catch(() => [] as DeviceTemp[]) : Promise.resolve([] as DeviceTemp[]),
+          d.getExtras ? d.getExtras().then(x => x.health?.tempC).catch(() => undefined) : Promise.resolve(undefined),
+        ]), false);
+      } catch (e) {
+        return { text: `ما قدرت أقرأ من الراوتر:\n${errText(e)}`, tone: 'warn' };
+      }
+      const list = temps.length ? temps : tempC !== undefined ? [{ key: 'dev', label: 'الجهاز', c: tempC }] : [];
+      if (!list.length) return { text: 'راوترك ما يعطي قراءة الحرارة للتطبيق. حط يدك عليه: لو حار مرة، بعّده عن الشمس وخلّ حوله تهوية.', tone: 'warn' };
+      const max = Math.max(...list.map(x => x.c));
+      const tips = max >= 80 ? 'حار جداً — بعّده عن الشمس والأجهزة الحارة فوراً، وخلّ حوله تهوية. الحرارة تقطّع النت وتقصّر عمره.'
+        : max >= 70 ? 'حار — ممكن يخفّف سرعته لحاله. بعّده عن الشمس المباشرة.'
+        : max >= 58 ? 'دافي وطبيعي وقت التحميل.' : 'الحرارة ممتازة ✓';
+      return {
+        card: { title: `${tempWord(max)} · ${Math.round(max)}°`, color: tempColor(max), rows: list.slice(0, 4).map(x => ({ label: x.label, value: `${Math.round(x.c)}°م`, color: tempColor(x.c) })) },
+        text: tips,
+        tone: max >= 70 ? 'warn' : 'ok',
       };
     }
 
@@ -161,6 +235,7 @@ export async function runAction(id: ActionId, r: SavedRouter, say: (s: string) =
           best_tower: 'وأجرّب الأبراج حولك وأقيس البنق — النت بينقطع شوي وأسألك قبل أبدأ.',
           open_ping: 'وأدوّر لك أقل بنق لسيرفر لعبتك — أسألك قبل أي تغيير.',
           open_speed: 'وأبدأ الاختبار على طول.',
+          best_channel: 'وأجرّب قنوات الواي فاي وأثبّت الأنظف — الواي فاي بينقطع ثواني وأسألك قبل أبدأ.',
         };
         return {
           text: `أفتح لك «${a.screen}»${what[id] ? ` ${what[id]}` : '.'}`,
