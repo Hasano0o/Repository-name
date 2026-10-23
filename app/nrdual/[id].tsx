@@ -185,7 +185,9 @@ export default function NrDual() {
   const dupBand = (nowNr ?? []).map(c => c.band).find((b, i, arr) => arr.indexOf(b) !== i);
   const nowDual = dupBand !== undefined;
 
-  const apply = () => {
+  /** يثبّت الخيار اللي اختاره المستخدم (افتراضياً الأوسع) — كل خيار مدعوم له زر */
+  const apply = (pickRow: typeof best = best) => {
+    const best = pickRow;
     if (!info || !cfg || !best) return;
     const label = `دمج ${G} مزدوج ${P}${best.band}+${P}${best.band}`;
     Alert.alert('ثبّت ' + label, 'نثبّته بأمان: نقيس قبل وبعد، ولو ما صار أفضل نرجّع إعدادك.', [
@@ -391,6 +393,11 @@ export default function NrDual() {
                 </Text>
               )}
               {!!r.note && <Text style={s.rowNote}>{r.note}</Text>}
+              {ok && finished && (
+                <Pressable style={[s.pinBtn, running && { opacity: 0.5 }]} onPress={() => apply(r)} disabled={running} accessibilityRole="button">
+                  <Text style={s.pinTxt}>📌 ثبّت {P}{r.band}+{P}{r.band}</Text>
+                </Pressable>
+              )}
             </View>
           );
         })}
@@ -400,11 +407,21 @@ export default function NrDual() {
             {best ? (
               <>
                 <Text style={[s.verdict, { color: tFg('#0f7a52') }]}>
-                  🎉 برجك يدعم {P}{best.band}+{P}{best.band}{best.bw ? ` (${Math.round(best.bw)} MHz)` : ''}
+                  {dual.length > 1
+                    ? `🎉 برجك يدعم ${dual.length} خيارات — اختر اللي تبيه:`
+                    : `🎉 برجك يدعم ${P}${best.band}+${P}${best.band}${best.bw ? ` (${Math.round(best.bw)} MHz)` : ''}`}
                 </Text>
-                <Pressable style={[s.btn, { backgroundColor: tFg('#12a07a') }]} onPress={apply} disabled={running}>
-                  <Text style={s.btnText}>ثبّته بأمان</Text>
-                </Pressable>
+                {dual.map((d, i) => (
+                  <Pressable key={d.band} style={[s.btn, { backgroundColor: i === 0 ? tFg('#12a07a') : tFg('#2f6bff') }, running && { opacity: 0.5 }]}
+                    onPress={() => apply(d)} disabled={running} accessibilityRole="button">
+                    <Text style={s.btnText}>
+                      {i === 0 && dual.length > 1 ? '⭐ ' : ''}ثبّت {P}{d.band}+{P}{d.band}{d.bw ? ` · ${Math.round(d.bw)} MHz` : ''}{d.snap?.sinr !== undefined ? ` · SINR ${Math.round(d.snap.sinr)}` : ''}
+                    </Text>
+                  </Pressable>
+                ))}
+                {dual.length > 1 && (
+                  <Text style={s.note}>⭐ = الأوسع (سرعة أعلى غالباً). الأعلى SINR أثبت وأقل تقطيع. كل تثبيت نقيس قبل وبعد، ولو ما صار أفضل نرجّع إعدادك — فتقدر تجرّب الاثنين وتقارن.</Text>
+                )}
                 <Text style={s.note}>ينحفظ في «الملفات» عشان ترجع له بضغطة.</Text>
               </>
             ) : (
@@ -424,6 +441,8 @@ export default function NrDual() {
 }
 
 const s = sheet({
+  pinBtn: { alignSelf: 'flex-end', marginTop: 8, backgroundColor: tBg('#12a07a1a'), borderColor: tBd('#12a07a66'), borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7 },
+  pinTxt: { color: tFg('#0f7a52'), fontWeight: '800', fontSize: 13 },
   page: { padding: S.lg, gap: S.md },
   card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: R.lg, padding: S.lg, gap: S.sm },
   title: { color: C.text, fontWeight: '800', fontSize: 17, textAlign: 'right' },
