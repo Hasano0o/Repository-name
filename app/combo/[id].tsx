@@ -19,7 +19,9 @@ import { GlassCard } from '../../src/ui/GlassCard';
 import { sheet } from '../../src/i18n';
 import { SEC_ORANGE } from '../../src/ui/ComboCard';
 const LTE_ONLY = '03';
-type NrPick = 'any' | 'none' | number;
+/** 'any' = البرج يختار · 'none' = 4G فقط · قائمة = نسمح بهالترددات بس (وحدة أو أكثر) */
+type NrPick = 'any' | 'none' | number[];
+const nrHas = (p: NrPick, b: number) => Array.isArray(p) && p.includes(b);
 
 /** أقوى قراءة لكل تردد من الأبراج المرصودة */
 function bestBySeen(cells: CellTower[], tech: 'LTE' | 'NR') {
@@ -81,7 +83,8 @@ export default function ComboScreen() {
           setExtra(c.locked.filter(b => b !== p0));
         }
         if (c.mode === LTE_ONLY) setNr('none');
-        else if (c.nrLocked.length === 1) setNr(c.nrLocked[0]);
+        // مقفل على بعض ترددات 5G (مو كلها) ← نعرضها مختارة. كلها = عملياً «أي 5G»
+        else if (c.nrLocked.length && c.nrLocked.length < (c.nrPreferred ?? c.nrSupported).length) setNr([...c.nrLocked]);
       }
     } catch (e: any) {
       if (mounted.current) setError(e?.message ?? String(e));
@@ -132,11 +135,11 @@ export default function ComboScreen() {
   const apply = () => {
     if (!info || !cfg || primary === null) return;
     const lte = [primary, ...extra.filter(b => b !== primary)];
-    const nrBands = typeof nr === 'number' ? [nr] : [];
+    const nrBands = Array.isArray(nr) ? nr : [];
     // الراوترات اللي تدعم الأدوار (هواوي lock-freq): الإضافية «ثانوي بس» — ما يختارها أساسي بدل اللي اخترته
     const roles = cfg.bandRoles ? { lteScell: lte.filter(b => b !== primary) } : undefined;
     const origRoles = cfg.bandRoles ? { lteScell: cfg.lteScell ?? [], nrScell: cfg.nrScell ?? [] } : undefined;
-    const label = `${lte.map(b => bandLabel('LTE', b)).join(' + ')}${nr === 'none' ? ' · بدون 5G' : typeof nr === 'number' ? ` + ${bandLabel('NR', nr)}` : ' + أي 5G'}`;
+    const label = `${lte.map(b => bandLabel('LTE', b)).join(' + ')}${nr === 'none' ? ' · بدون 5G' : Array.isArray(nr) ? ` + ${nr.map(b => bandLabel('NR', b)).join(' + ')}` : ' + أي 5G'}`;
     const orig = cfg;
     Alert.alert('طبّق الأساسي والثانوي', `${label}\n\nنقيس قبل وبعد، ولو صار أسوأ أو انقطع النت نرجّع إعدادك لحاله.`, [
       { text: 'إلغاء', style: 'cancel' },
@@ -148,7 +151,7 @@ export default function ComboScreen() {
           try {
             const res = await safeApply({
               r: info,
-              key: `combo:${lte.join('+')}:${String(nr)}`,
+              key: `combo:${lte.join('+')}:${Array.isArray(nr) ? nr.join('+') : nr}`,
               label,
               withNr: nr !== 'none',
               onStatus: t => mounted.current && setStatus(t),
@@ -178,7 +181,8 @@ export default function ComboScreen() {
             if (!mounted.current) return;
             setCarriers(list);
             const pcc = list.find(c => c.role === 'PCC' && c.tech === 'LTE');
-            const hasNr = list.some(c => c.tech === 'NR' && (typeof nr !== 'number' || c.band === nr));
+            const hasNr = list.some(c => c.tech === 'NR' && (!Array.isArray(nr) || nr.includes(c.band)));
+            const nrOn = [...new Set(list.filter(c => c.tech === 'NR').map(c => c.band))];
             const pOk = !pcc || pcc.band === primary;
             const nOk = nr === 'none' ? !list.some(c => c.tech === 'NR') : hasNr;
             const extraOn = list.filter(c => c.tech === 'LTE' && c.role === 'SCC').map(c => c.band);
@@ -186,7 +190,9 @@ export default function ComboScreen() {
               ok: pOk && nOk,
               text: [
                 pcc ? (pOk ? `✓ الأساسي ${bandLabel('LTE', pcc.band)}` : `✗ الأساسي طلع ${bandLabel('LTE', pcc.band)} بدل ${bandLabel('LTE', primary)}`) : '• ما قدرنا نقرأ الأساسي',
-                nr === 'none' ? (nOk ? '✓ بدون 5G' : '✗ الـ 5G للحين شغال') : nOk ? '✓ الـ 5G مدموج' : '✗ البرج ما شغّل الـ 5G — غالباً ما يدمجه مع هالأساسي',
+                nr === 'none' ? (nOk ? '✓ بدون 5G' : '✗ الـ 5G للحين شغال')
+                  : nOk ? `✓ الـ 5G مدموج: ${nrOn.map(b => bandLabel('NR', b)).join(' + ')}${Array.isArray(nr) && nr.length > 1 && nrOn.length < 2 ? ' (البرج دمج واحد بس من اللي اخترتها — عادي في NSA)' : ''}`
+                  : '✗ البرج ما شغّل الـ 5G — غالباً ما يدمجه مع هالأساسي',
                 extra.length ? (extraOn.length ? `✓ دمج 4G: ${extraOn.map(b => bandLabel('LTE', b)).join(' + ')}` : '✗ البرج ما دمج ترددات 4G الإضافية') : '',
               ].filter(Boolean).join('\n'),
             });
@@ -233,7 +239,7 @@ export default function ComboScreen() {
   const keepLte = (b: number) => !op || allBands || op.bands.lte.includes(b) || lteSeen.has(b) ||
     primary === b || extra.includes(b) || !!cfg?.locked.includes(b);
   const keepNr = (b: number) => !op || allBands || op.bands.nr.includes(b) || nrSeen.has(b) ||
-    nr === b || !!cfg?.nrLocked.includes(b);
+    nrHas(nr, b) || !!cfg?.nrLocked.includes(b);
   const lteAll = cfg ? sortBands(cfg.supported, lteSeen) : [];
   const nrAll = cfg ? sortBands(cfg.nrSupported, nrSeen) : [];
   const lteList = lteAll.filter(keepLte);
@@ -426,6 +432,7 @@ export default function ComboScreen() {
 
             <GlassCard title="١. الأساسي (4G)" icon="⭐" tint={C.blueSoft} collapsible={false}>
               <Text style={s.hint}>التردد اللي يمسك الاتصال. القوة تحت كل تردد من الأبراج اللي يشوفها راوترك الحين</Text>
+              <Text style={s.hint}>💡 أساسي واحد بس (هذا من الشبكة). ولو برجك فيه قناتين على نفس التردد (مثل B1 + B1)، الراوتر يدمجها لحاله — جرّبها من «دمج 4G المزدوج».</Text>
               <View style={s.grid}>
                 {lteList.map(b => (
                   <Tile key={b} label={bandLabel('LTE', b)} sub={freqLabel('LTE', b) || undefined} sig={lteSeen.get(b)} faint={!lteSeen.has(b)}
@@ -451,17 +458,25 @@ export default function ComboScreen() {
             </GlassCard>
 
             <GlassCard title="٣. الثانوي (5G)" icon="⚡" tint={C.violetSoft} collapsible={false}>
-              <Text style={s.hint}>التردد اللي ينضاف للسرعة. البرج هو اللي يقرر يشغّله — نقدر نسمح أو نمنع بس</Text>
+              <Text style={s.hint}>التردد اللي ينضاف للسرعة. تقدر تختار أكثر من واحد — البرج هو اللي يقرر يشغّل أي واحد ويدمج كم</Text>
               <View style={s.grid}>
                 <Tile label="أي 5G" sub="تلقائي" color={C.violet} on={nr === 'any'} onPress={() => setNr('any')} />
                 {nrList.map(b => (
                   <Tile key={b} label={bandLabel('NR', b)} sub={freqLabel('NR', b) || undefined} sig={nrSeen.get(b)} faint={!nrSeen.has(b)}
-                    color={C.violet} on={nr === b} onPress={() => setNr(b)} />
+                    color={C.violet} on={nrHas(nr, b)}
+                    onPress={() => setNr(p => {
+                      if (!Array.isArray(p)) return [b];
+                      if (p.includes(b)) return p.length === 1 ? 'any' : p.filter(x => x !== b);
+                      return [...p, b];
+                    })} />
                 ))}
                 {nrModes && (
                   <Tile label="بدون 5G" sub="4G فقط" color={C.sub} on={nr === 'none'} onPress={() => setNr('none')} />
                 )}
               </View>
+              {Array.isArray(nr) && nr.length > 1 && (
+                <Text style={s.hint}>✓ اخترت {nr.length} ترددات 5G — الراوتر يستخدم الأقوى منها. دمجها مع بعض يعتمد على الشركة والبرج (غالباً في وضع SA)، وبعد التطبيق نقولك وش اشتغل فعلاً.</Text>
+              )}
               {cfg?.nrLockable === false && (
                 <Text style={s.hint}>⚡ راوترك ما يقبل تثبيت تردد 5G معيّن — يا تخليه «أي 5G» (البرج يختار) يا «بدون 5G».</Text>
               )}
