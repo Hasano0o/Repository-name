@@ -251,7 +251,11 @@ export interface RouterDriver {
   readonly name: string;
   readonly capabilities: Capability[];
   detect(host: string): Promise<boolean>;
-  login(host: string, username: string, password: string): Promise<void>;
+  /**
+   * lastTry: المستخدم ضغط «جرّب» بنفسه بعد ما عرف إن باقي محاولة وحدة — نسمح بمحاولة وحدة أخيرة
+   * (لو غلطت الراوتر يقفل الدخول دقايق وبعدها العدّاد يرجع). المهام الخلفية ما تمرّرها أبداً.
+   */
+  login(host: string, username: string, password: string, opts?: { lastTry?: boolean }): Promise<void>;
   logout(): Promise<void>;
   getSignal?(): Promise<Signal>;
   getSnapshot?(): Promise<SignalSnapshot>;

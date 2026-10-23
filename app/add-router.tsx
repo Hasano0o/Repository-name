@@ -235,8 +235,29 @@ export default function AddRouterScreen() {
         await driver.login(h, u, password);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        Alert.alert('فشل الدخول', msg || 'تحقق من اسم المستخدم وكلمة المرور');
-        return;
+        // ZTE: باقي محاولة/محاولتين — قبل كنا نوقف للأبد (والحل الوحيد ضبط المصنع). الحين نخيّر المستخدم.
+        if ((e as any)?.code === 'LAST_TRY') {
+          const left = (e as any)?.left as number | undefined;
+          const go = await new Promise<boolean>(res => Alert.alert(
+            left === 1 ? 'باقي محاولة أخيرة' : 'نجرّب الدخول؟',
+            `${left === 1 ? 'الراوتر يسمح بمحاولة دخول وحدة قبل ما يقفل.' : msg}\n\nتأكد إن كلمة المرور صحيحة (الملصق تحت الراوتر، أو اللي غيّرتها أنت).\n\nلو طلعت غلط: الراوتر ممكن يقفل الدخول دقايق وبعدها يرجع طبيعي — ما يحتاج ضبط مصنع.`,
+            [
+              { text: 'أراجع الكلمة', style: 'cancel', onPress: () => res(false) },
+              { text: 'جرّب الحين', onPress: () => res(true) },
+            ],
+          ));
+          if (!go) return;
+          setStep('المحاولة الأخيرة...');
+          try {
+            await driver.login(h, u, password, { lastTry: true });
+          } catch (e2) {
+            Alert.alert('فشل الدخول', e2 instanceof Error ? e2.message : String(e2));
+            return;
+          }
+        } else {
+          Alert.alert('فشل الدخول', msg || 'تحقق من اسم المستخدم وكلمة المرور');
+          return;
+        }
       }
 
       const dAny = driver as unknown as { id?: string; name?: string };

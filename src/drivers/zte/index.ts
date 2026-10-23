@@ -7,7 +7,7 @@ import {
   SignalSnapshot, CellLockState, CellLockTarget, WifiRadio, DeviceTemp, SmsMessage,
 } from '../types';
 import { http } from '../http';
-import { loadFormula, saveFormula } from './formulaStore';
+import { loadFormula, saveFormula, isBadPassword, markBadPassword } from './formulaStore';
 import { ZteIo, zteExtras, zteSetUpnp, zteSetDmz, zteSetLedNight, zteSetBandOn, zteSetGuest, zteSetUrlBlocks, zteRadios, zteSetChannel, zteSetAutoRecover, zteSetWifiSleep, zteSetWifiNames, zteFactoryReset } from './extras';
 import {
   parsePci, decodeBandMask, encodeBandMask, parseZteCa, bandLabel,
@@ -335,16 +335,16 @@ export class ZteDriver implements RouterDriver {
    * ٩ محاولات (وكل وحدة LOGOUT) خلال ثانية → الراوتر يقفل الدخول ٥ دقايق.
    */
   private loginP: Promise<void> | null = null;
-  login(host: string, username: string, password: string): Promise<void> {
-    if (this.loginP) return this.loginP;
-    this.loginP = this.loginOnce(host, username, password).finally(() => {
+  login(host: string, username: string, password: string, opts?: { lastTry?: boolean }): Promise<void> {
+    if (this.loginP && !opts?.lastTry) return this.loginP;
+    this.loginP = this.loginOnce(host, username, password, !!opts?.lastTry).finally(() => {
       // نخلي النتيجة صالحة ثانيتين — الطلبات اللي وصلت متأخرة ما تفتح دخول جديد
       setTimeout(() => { this.loginP = null; }, 2000);
     });
     return this.loginP;
   }
 
-  private async loginOnce(host: string, _username: string, password: string): Promise<void> {
+  private async loginOnce(host: string, _username: string, password: string, lastTry = false): Promise<void> {
     this.host = host;
     this.password = password;
 
@@ -354,6 +354,16 @@ export class ZteDriver implements RouterDriver {
     // ═══ هل الراوتر قافل الدخول بسبب محاولات غلط؟ ═══
     const lockMsg = await this.lockState();
     if (lockMsg) throw new Error(lockMsg);
+
+    // ═══ نفس الكلمة انرفضت قبل؟ ما نحرق محاولة ثانية عليها (إلا لو المستخدم طلب بنفسه) ═══
+    const fp = sha256Hex('bandly:' + password);
+    if (!lastTry && await isBadPassword(host, fp)) {
+      const left = await this.attemptsLeft();
+      const err = new Error('كلمة المرور المحفوظة رفضها الراوتر قبل — ما جرّبناها مرة ثانية عشان ما نقفل الدخول. حدّثها من إعدادات الراوتر، أو جرّبها بنفسك لو متأكد منها.');
+      (err as any).code = 'LAST_TRY';
+      (err as any).left = left;
+      throw err;
+    }
 
     // ═══ نفكّ أي جلسة عالقة أول (MU5001 يقبل مستخدم واحد فقط) ═══
     try { await this.post({ goformId: 'LOGOUT' }); } catch {}
@@ -409,9 +419,11 @@ export class ZteDriver implements RouterDriver {
     // ═══ الصيغة اللي نجحت قبل (محفوظة على الجهاز) — لو نعرفها نجرّبها هي بس ═══
     // لو فشلت والصيغة معروفة = كلمة المرور تغيّرت (مو الصيغة) — ما نرش باقي الصيغ ونحرق المحاولات.
     const known = GOOD_FORMULA.get(host) ?? await loadFormula(host);
-    const list = known && candidates.some(c => c.name === known)
+    const list0 = known && candidates.some(c => c.name === known)
       ? candidates.filter(c => c.name === known)
       : candidates;
+    // المحاولة الأخيرة (بطلب المستخدم): صيغة وحدة بس — المعروفة أو الأشهر
+    const list = lastTry ? list0.slice(0, 1) : list0;
     // حماية من القفل — بس بدون ما نقفل الباب على نفسنا:
     // • أول محاولة (أو الصيغة المعروفة) تنجرّب طالما باقي ٢ أو أكثر — لو فشلت يبقى واحدة للمستخدم.
     //   (قبل: كنا نوقف عند ٢ بدون ولا محاولة، والعدّاد ما يرجع إلا بدخول ناجح ← التطبيق ما يدخل أبداً)
@@ -421,10 +433,17 @@ export class ZteDriver implements RouterDriver {
 
     for (const [idx, c] of list.entries()) {
       const leftNow = await this.attemptsLeft();
-      const minLeft = known || idx === 0 ? 2 : 3;
+      // lastTry: الراوتر مو مقفول (تأكدنا فوق) والمستخدم وافق ← نجرّب حتى لو باقي وحدة
+      const minLeft = lastTry ? 0 : known || idx === 0 ? 2 : 3;
       if (leftNow !== undefined && leftNow < minLeft) {
         const lock = await this.lockState();
-        throw new Error(lock ?? `تعذّر تسجيل الدخول — كلمة المرور غالباً غلط، ووقفنا قبل ما يقفل الراوتر الدخول (باقي ${leftNow} محاولات). تأكد منها من الإعدادات.`);
+        if (lock) throw new Error(lock);
+        // العدّاد ما يرجع إلا بدخول ناجح أو بعد قفل — فلو وقفنا هنا للأبد، الحل الوحيد كان ضبط المصنع.
+        // الشاشة تعرض للمستخدم خيار «المحاولة الأخيرة» (lastTry) بدل كذا.
+        const err = new Error(`باقي ${leftNow} ${leftNow === 1 ? 'محاولة وحدة' : 'محاولات'} قبل ما يقفل الراوتر الدخول — ما جرّبنا عشان ما نقفله عليك. تأكد من كلمة المرور وجرّب «المحاولة الأخيرة».`);
+        (err as any).code = 'LAST_TRY';
+        (err as any).left = leftNow;
+        throw err;
       }
       if (leftNow === undefined && blindFails >= 3) break;
       let out = '';
@@ -441,12 +460,21 @@ export class ZteDriver implements RouterDriver {
         this.log('login: ✓ ✓ ✓ نجح بـ', c.name);
         GOOD_FORMULA.set(host, c.name);
         await saveFormula(host, c.name);
+        await markBadPassword(host, null);
         await new Promise(r => setTimeout(r, 400));
         return;
       }
       // 2 = duplicateUser (مستخدم آخر داخل) — نتذكره ونكمل
       if (/"result"\s*:\s*"?2"?/.test(out)) { sawBusy = true; continue; }
       blindFails++;
+      // انرفضت بالصيغة الأكيدة (المعروفة، أو المحاولة الأخيرة) = الكلمة نفسها غلط ← نتذكرها
+      if ((known && c.name === known) || lastTry) await markBadPassword(host, fp);
+      if (lastTry) {
+        const lock = await this.lockState();
+        throw new Error(lock
+          ? `كلمة المرور غلط، والراوتر قفل الدخول مؤقتاً. ${lock.replace(/^.*?—\s*/, '')} — بعدها يرجع طبيعي (ما يحتاج ضبط مصنع). تأكد من الكلمة قبل.`
+          : 'كلمة المرور غلط. تأكد منها (الملصق تحت الراوتر أو اللي غيّرتها أنت) وجرّب بعد شوي.');
+      }
       // الصيغة المعروفة فشلت ← الكلمة نفسها تغيّرت
       if (known && c.name === known) {
         throw new Error('تعذّر تسجيل الدخول — كلمة المرور غلط (غالباً تغيّرت أو الراوتر انضبط مصنع). تأكد منها من الإعدادات.');
