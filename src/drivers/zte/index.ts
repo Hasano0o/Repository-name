@@ -4,7 +4,7 @@ import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import {
   RouterDriver, Capability, Signal, NetworkInfo, Traffic, ConnectedDevice,
   Usage, DeviceDetails, CellTower, BandConfig, ActiveLock, Carrier,
-  SignalSnapshot, CellLockState, CellLockTarget, WifiRadio, DeviceTemp,
+  SignalSnapshot, CellLockState, CellLockTarget, WifiRadio, DeviceTemp, SmsMessage,
 } from '../types';
 import { http } from '../http';
 import { loadFormula, saveFormula } from './formulaStore';
@@ -87,6 +87,40 @@ const pick = (o: Record<string, string>, ...keys: string[]): string | undefined 
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+// ═══ الرسائل في ZTE: النص يجي ويروح UTF-16BE بصيغة hex (4 خانات لكل حرف) ═══
+// المرجع: github.com/teixeluis/zte-lte-modem (Apache-2.0) — sms_data_total / SET_MSG_READ / SEND_SMS
+const ucs2Hex = (t: string): string => {
+  let out = '';
+  for (let i = 0; i < t.length; i++) out += t.charCodeAt(i).toString(16).padStart(4, '0');
+  return out.toUpperCase();
+};
+const fromUcs2Hex = (h: string): string => {
+  if (!h || h.length % 4 !== 0 || !/^[0-9a-fA-F]+$/.test(h)) return h ?? '';
+  let out = '';
+  for (let i = 0; i < h.length; i += 4) out += String.fromCharCode(parseInt(h.slice(i, i + 4), 16));
+  return out;
+};
+/** "24,10,23,21,50,12,+12" ← تاريخ الراوتر → "2024-10-23 21:50" */
+const zteSmsDate = (d: string): string => {
+  const f = (d ?? '').split(',').map(x => x.trim());
+  if (f.length < 5) return d ?? '';
+  const p = (x: string) => x.padStart(2, '0');
+  return `20${p(f[0])}-${p(f[1])}-${p(f[2])} ${p(f[3])}:${p(f[4])}`;
+};
+/** وقت الإرسال بصيغة ZTE: yy;MM;dd;HH;mm;ss;+3 */
+const zteSmsNow = (): string => {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  const tz = -d.getTimezoneOffset() / 60;
+  return [p(d.getFullYear() % 100), p(d.getMonth() + 1), p(d.getDate()), p(d.getHours()), p(d.getMinutes()), p(d.getSeconds())]
+    .join(';') + ';' + (tz >= 0 ? '+' : '') + tz;
+};
+/** رقم داخل مدى مقبول — غيره نعتبره غير متوفر (حقول غير موثقة تختلف بين الفيرموير) */
+const inRange = (v: string | undefined, lo: number, hi: number): number | undefined => {
+  const n = num(v);
+  return n !== undefined && Number.isInteger(n) && n >= lo && n <= hi ? n : undefined;
+};
+
 /** صيغة كلمة المرور اللي نجحت مع كل راوتر — عشان المرة الجاية نحاول مرة وحدة بس
  *  (كل محاولة غلط تنقص عداد الراوتر، وبعد ٥ غلطات يقفل الدخول دقائق) */
 const GOOD_FORMULA = new Map<string, string>();
@@ -134,7 +168,7 @@ function caBandString(r: Record<string, string>): string | undefined {
 export class ZteDriver implements RouterDriver {
   id = 'zte';
   name = 'ZTE';
-  capabilities: Capability[] = ['signal', 'devices', 'traffic', 'usage', 'reboot', 'cells', 'bandLock'];
+  capabilities: Capability[] = ['signal', 'devices', 'traffic', 'usage', 'reboot', 'cells', 'bandLock', 'sms'];
   // تجربة حقيقية (MU5001، ٤ أكتوبر ٢٠٢٦): التثبيت على برج ما يمسكه يطيّح الخدمة (LIMITED_SERVICE)
   // بس الراوتر يبقى حي، وفك التثبيت + إعادة التشغيل يرجّعه — فالميزة شغالة مع الإرجاع التلقائي.
   // ١٨ أكتوبر (MU5001 حي): الفك بالفاضي يرد failure وما يفك، و0/0 + إعادة التشغيل علّق الراوتر «بدون خدمة»
@@ -520,6 +554,9 @@ export class ZteDriver implements RouterDriver {
       'nr5g_dlEarfcn', 'nr5g_dl_earfcn', 'nr5g_sa_arfcn', 'nr5g_arfcn',
       'nr5g_sa_cell_id', 'nr_cell_id',
       'nr5g_dlbandwidth', 'nr5g_bandwidth', 'nr5g_sa_bandwidth', 'nr5g_dl_bandwidth',
+      // صحة الوصلة (CQI / MCS) — أسماء مرشحة غير موثقة لكل الفيرموير؛ نعرض بس اللي يرجع بقيمة منطقية
+      'lte_cqi', 'cqi', 'lte_dl_mcs', 'lte_mcs', 'dl_mcs', 'lte_ul_mcs', 'ul_mcs',
+      'nr5g_cqi', 'nr_cqi', 'Z5g_dl_mcs', 'nr5g_dl_mcs', 'nr5g_mcs', 'nr_mcs',
     ]);
     // نأخذ أول قيمة غير فاضية من قائمة بدائل (5G SA يسمي الحقول بشكل مختلف)
     const pickAny = (...keys: string[]): string | undefined => pick(r, ...keys);
@@ -552,6 +589,11 @@ export class ZteDriver implements RouterDriver {
       nrRsrp: num(nrRsrpVal),
       nrRsrq: num(nrRsrqVal),
       nrSinr: num(nrSinrVal),
+      cqi: inRange(pick(r, 'lte_cqi', 'cqi'), 1, 15),
+      dlMcs: inRange(pick(r, 'lte_dl_mcs', 'lte_mcs', 'dl_mcs'), 0, 31),
+      ulMcs: inRange(pick(r, 'lte_ul_mcs', 'ul_mcs'), 0, 31),
+      nrCqi: nrOn ? inRange(pick(r, 'Z5g_CQI', 'nr5g_cqi', 'nr_cqi'), 1, 15) : undefined,
+      nrDlMcs: nrOn ? inRange(pick(r, 'Z5g_dl_mcs', 'nr5g_dl_mcs', 'nr5g_mcs', 'nr_mcs'), 0, 31) : undefined,
     };
   }
 
@@ -1267,6 +1309,51 @@ export class ZteDriver implements RouterDriver {
   async setWifiNames(names: { index: string; name: string }[], password?: string) { await this.ensure(); return zteSetWifiNames(this.io(), names, password); }
   async factoryReset() { await this.ensure(); return zteFactoryReset(this.io()); }
   async setWifiSleep(mins: number) { await this.ensure(); return zteSetWifiSleep(this.io(), mins); }
+
+  // ═══ الرسائل SMS ═══
+  // tag: 0 = مقروءة، 1 = جديدة (موثّق)، 2/3 = مرسلة (حسب واجهة ZTE — يحتاج تأكيد على كل فيرموير)
+  async listSms(box: 'inbox' | 'sent' = 'inbox'): Promise<SmsMessage[]> {
+    await this.ensure();
+    const url = this.base() + '/goform/goform_get_cmd_process?isTest=false&cmd=sms_data_total' +
+      '&page=0&data_per_page=200&mem_store=1&tags=10&order_by=order+by+id+desc&_=' + Date.now();
+    const res = await http(url, { headers: this.headers() });
+    let j: { messages?: Record<string, string>[] } | null = null;
+    try { j = JSON.parse(await res.text()); } catch { throw new Error('رد غير مفهوم من الراوتر'); }
+    const msgs = Array.isArray(j?.messages) ? j!.messages! : [];
+    const want = box === 'inbox' ? ['0', '1'] : ['2', '3'];
+    return msgs
+      .filter(m => want.includes(String(m.tag)))
+      .map(m => ({
+        index: String(m.id ?? ''),
+        phone: String(m.number ?? ''),
+        content: fromUcs2Hex(String(m.content ?? '')),
+        date: zteSmsDate(String(m.date ?? '')),
+        unread: String(m.tag) === '1',
+      }))
+      .filter(m => m.index);
+  }
+
+  async markSmsRead(index: string): Promise<void> {
+    await this.ensure();
+    const out = await this.act({ goformId: 'SET_MSG_READ', msg_id: index + ';', tag: '0' });
+    if (!/success/i.test(out)) throw this.rejected('تعليم الرسالة كمقروءة', out);
+  }
+
+  async deleteSms(index: string): Promise<void> {
+    await this.ensure();
+    const out = await this.act({ goformId: 'DELETE_SMS', msg_id: index + ';', notCallback: 'true' });
+    if (!/success/i.test(out)) throw this.rejected('حذف الرسالة', out);
+  }
+
+  /** بدون إعادة محاولة تلقائية — عشان ما تنرسل الرسالة مرتين */
+  async sendSms(phone: string, text: string): Promise<void> {
+    await this.ensure();
+    const out = await this.post({
+      goformId: 'SEND_SMS', notCallback: 'true', Number: phone.trim(), sms_time: zteSmsNow(),
+      MessageBody: ucs2Hex(text), ID: '-1', encode_type: 'UNICODE',
+    });
+    if (!/success/i.test(out)) throw this.rejected('إرسال الرسالة', out);
+  }
 
   async wifiDebug(): Promise<string> {
     await this.ensure();

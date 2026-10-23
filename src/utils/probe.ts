@@ -149,6 +149,8 @@ export const ZTE_CANDIDATES: string[] = [
   'Z5g_rsrp','Z5g_rsrq','Z5g_SINR','Z5g_snr','Z5g_dlEarfcn','Z5g_CELL_ID','Z5g_state',
   'nr5g_pci','nr5g_action_band','nr5g_action_channel','nr5g_cell_id','nr_rsrp','nr_sinr',
   'nr5g_sa_band_lock','lte_band_lock','wan_lte_band_lock','pcimode','lock_band','RD','AD',
+  'lte_cqi','cqi','lte_dl_mcs','lte_mcs','dl_mcs','lte_ul_mcs','ul_mcs','Z5g_CQI',
+  'nr5g_cqi','nr_cqi','Z5g_dl_mcs','nr5g_dl_mcs','nr5g_mcs','nr_mcs','sms_unread_num','sms_nv_total',
 ];
 
 export interface FieldHit { key: string; value: string }
