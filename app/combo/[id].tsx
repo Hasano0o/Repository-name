@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, } from 'react-native';
 import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession, routerWrite } from '../../src/store/sessions';
 import { BandConfig, Carrier, CellTower } from '../../src/drivers/types';
@@ -448,6 +448,16 @@ export default function ComboScreen() {
                   ? 'ترددات 4G ثانية يُسمح للبرج يدمجها مع الأساسي — تنضاف «ثانوي بس»، فالراوتر ما يختار واحد منها أساسي بدل اللي اخترته'
                   : 'ترددات 4G ثانية يُسمح للبرج يدمجها مع الأساسي. ⚠️ لما تسمح بأكثر من تردد، ممكن الراوتر يختار واحد منها كأساسي بدل اللي اخترته'}
               </Text>
+              {/* نفس التردد مع نفسه: ما يحتاج اختيار — تثبيت B3 يسمح لحاله بـ B3 + B3 لو البرج فيه قناتين */}
+              {primary !== null && (
+                <Pressable onPress={() => router.push(`/nrdual/${id}?t=lte` as Href)} accessibilityRole="button"
+                  style={({ pressed }) => [s.sameBand, pressed && { opacity: 0.8 }]}>
+                  <Text style={s.sameTitle}>✓ {bandLabel('LTE', primary)} + {bandLabel('LTE', primary)} مسموح تلقائياً</Text>
+                  <Text style={s.sameSub}>
+                    تبي {bandLabel('LTE', primary)} مع نفسه بس؟ اختر {bandLabel('LTE', primary)} أساسي وخلّ هالقسم فاضي — لو البرج فيه قناتين على {bandLabel('LTE', primary)} يدمجها لحاله. اضغط هنا نفحص هل برجك يدعمها ←
+                  </Text>
+                </Pressable>
+              )}
               <View style={s.grid}>
                 {lteList.filter(b => b !== primary).map(b => (
                   <Tile key={b} label={bandLabel('LTE', b)} sub={freqLabel('LTE', b) || undefined} sig={lteSeen.get(b)} faint={!lteSeen.has(b)}
@@ -515,6 +525,9 @@ export default function ComboScreen() {
 }
 
 const s = sheet({
+  sameBand: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: SEC_ORANGE + '88', backgroundColor: SEC_ORANGE + '12', borderRadius: 14, padding: 12, gap: 4, marginBottom: 4 },
+  sameTitle: { color: SEC_ORANGE, fontWeight: '900', fontSize: 14.5, textAlign: 'right' },
+  sameSub: { color: C.sub, fontSize: 12.5, lineHeight: 19, textAlign: 'right' },
   page: { padding: 16, gap: 14 },
   center: { alignItems: 'center', paddingVertical: 40 },
   hint: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 19 },
