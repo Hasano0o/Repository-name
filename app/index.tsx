@@ -163,9 +163,10 @@ export default function RoutersList() {
         {canScanLabel ? (
           <>
             <PrimaryBtn text="صوّر ملصق الراوتر" icon="camera" onPress={addByLabel} style={{ alignSelf: 'stretch' }} />
-            <Pressable style={s.link} onPress={add}>
-              <Icon name="plus" size={16} color={P.blue} />
-              <Text style={[s.linkTxt, { color: P.blue }]}>أكتب البيانات بنفسي</Text>
+            {/* بديل التصوير — بطاقة واضحة بنفس شكل «جرّب بدون راوتر» عشان ما تنفهم غلط */}
+            <Pressable style={s.demoBtn} onPress={add} accessibilityRole="button">
+              <Text style={s.demoTxt}>✍️ أدخل كلمة المرور بنفسك</Text>
+              <Text style={s.demoSub}>ما فيه ملصق أو الكاميرا ما قرأته؟ اكتب عنوان الراوتر وكلمة المرور يدوياً</Text>
             </Pressable>
           </>
         ) : (
