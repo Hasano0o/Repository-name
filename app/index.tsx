@@ -155,14 +155,17 @@ export default function RoutersList() {
       <EmptyState
         icon="tower"
         title="أهلاً بك في Bandly 👋"
-        text={canScanLabel
-          ? 'خلنا نوصل راوترك بخطوتين:\n١) اتصل بواي فاي الراوتر\n٢) صوّر الملصق اللي تحت الراوتر — ونسجّل الدخول عنك'
-          : 'خلّ التطبيق يتصل براوترك ويعرض لك الإشارة والسرعة والأبراج والترددات مباشرة.'}
+        text={!canScanLabel
+          ? 'خلّ التطبيق يتصل براوترك ويعرض لك الإشارة والسرعة والأبراج والترددات مباشرة.'
+          // الآيفون يقرأ رمز QR بس (قراءة النص أندرويد فقط) — ما نوعده إننا نعبّي كلمة الإدارة
+          : Platform.OS === 'ios'
+            ? 'خلنا نوصل راوترك بثلاث خطوات:\n١) اتصل بواي فاي الراوتر\n٢) صوّر رمز QR اللي على الملصق\n٣) اكتب كلمة مرور الإدارة المكتوبة على الملصق'
+            : 'خلنا نوصل راوترك بخطوتين:\n١) اتصل بواي فاي الراوتر\n٢) صوّر الملصق اللي تحت الراوتر — ونسجّل الدخول عنك'}
       >
         <LangAsk />
         {canScanLabel ? (
           <>
-            <PrimaryBtn text="صوّر ملصق الراوتر" icon="camera" onPress={addByLabel} style={{ alignSelf: 'stretch' }} />
+            <PrimaryBtn text={Platform.OS === 'ios' ? 'صوّر رمز الملصق' : 'صوّر ملصق الراوتر'} icon="camera" onPress={addByLabel} style={{ alignSelf: 'stretch' }} />
             {/* بديل التصوير — بطاقة واضحة بنفس شكل «جرّب بدون راوتر» عشان ما تنفهم غلط */}
             <Pressable style={s.demoBtn} onPress={add} accessibilityRole="button">
               <Text style={s.demoTxt}>✍️ أدخل كلمة المرور بنفسك</Text>
