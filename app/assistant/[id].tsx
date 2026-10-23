@@ -48,6 +48,8 @@ export default function AssistantScreen() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  /** وش يسوي الحين (لعمليات طويلة مثل إعادة التشغيل) */
+  const [progress, setProgress] = useState('');
   const [name, setName] = useState<string | null>(null);
   /** ننتظر اسمه؟ (أول مرة بس) */
   const [askName, setAskName] = useState(false);
@@ -131,10 +133,18 @@ export default function AssistantScreen() {
     if (!info) { bot({ text: 'ما لقيت بيانات الراوتر — ارجع واختره من الرئيسية.', tone: 'warn' }); return; }
     setBusy(true);
     try {
-      const r = await runAction(aid, info);
+      const r = await runAction(aid, info, t => { if (alive.current) setProgress(t); });
       if (!alive.current) return;
       bot(r);
       if (voice) speak(r.text);
+      // يحتاج موافقة (إعادة التشغيل) ← نافذة تأكيد، وما ننفّذ إلا لو ضغط نعم
+      if (r.confirm) {
+        const c = r.confirm;
+        Alert.alert(c.title, c.body, [
+          { text: 'لا', style: 'cancel', onPress: () => bot({ text: 'تمام، ما سويت شي.' }) },
+          { text: c.yes, style: 'destructive', onPress: () => { runRef.current(c.action, undefined, voice); } },
+        ]);
+      }
       // الطلب يفتح شاشة ← نفتحها على طول (والشاشة تبدأ لحالها لو auto)
       if (r.go && r.open) {
         const { route, auto } = r.open;
@@ -143,9 +153,11 @@ export default function AssistantScreen() {
     } catch (e: any) {
       if (alive.current) bot({ text: `صار خطأ وما كمّلت: ${String(e?.message ?? e).slice(0, 120)}`, tone: 'warn' });
     } finally {
-      if (alive.current) setBusy(false);
+      if (alive.current) { setBusy(false); setProgress(''); }
     }
   };
+  const runRef = useRef(run);
+  runRef.current = run;
 
   /** نفس المسار للكتابة والصوت */
   const handle = (raw: string, voice = false) => {
@@ -304,7 +316,7 @@ export default function AssistantScreen() {
               {busy && (
                 <View style={[s.bubble, s.bot, s.typing]}>
                   <ActivityIndicator size="small" color={C.blue} />
-                  <Text style={s.botTxt}>أشيك...</Text>
+                  <Text style={s.botTxt}>{progress || 'أشيك...'}</Text>
                 </View>
               )}
             </ScrollView>

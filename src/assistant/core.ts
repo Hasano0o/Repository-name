@@ -66,7 +66,7 @@ export type ActionId =
   | 'help' | 'check_signal' | 'ping_now' | 'best_band' | 'best_tower'
   | 'open_ping' | 'open_finder' | 'open_aim' | 'open_towers' | 'open_speed' | 'open_devices'
   | 'open_newip' | 'open_wifich' | 'open_control' | 'open_details' | 'open_bands'
-  | 'reboot' | 'factory_reset' | 'power_off';
+  | 'reboot' | 'reboot_now' | 'factory_reset' | 'power_off' | 'power_on';
 
 export interface ActionDef {
   id: ActionId;
@@ -102,9 +102,12 @@ export const ACTIONS: Record<ActionId, ActionDef> = {
   open_control: { id: 'open_control', label: 'مركز التحكم', risk: 'none', route: 'control', screen: 'مركز التحكم' },
   open_details: { id: 'open_details', label: 'التفاصيل', risk: 'none', route: 'details', screen: 'التفاصيل' },
   open_bands: { id: 'open_bands', label: 'الترددات', risk: 'none', route: 'bands', screen: 'الترددات' },
-  reboot: { id: 'reboot', label: 'أعد تشغيل الراوتر', risk: 'write', route: 'router', screen: 'صفحة الراوتر' },
+  reboot: { id: 'reboot', label: 'أعد تشغيل الراوتر', risk: 'write' },
+  /** داخلي: ينفّذ بعد ما يأكد المستخدم — ما له كلمات */
+  reboot_now: { id: 'reboot_now', label: 'إيه، أعد التشغيل', risk: 'write' },
   factory_reset: { id: 'factory_reset', label: 'ضبط المصنع', risk: 'danger', route: 'control', screen: 'مركز التحكم' },
   power_off: { id: 'power_off', label: 'طفّي الراوتر', risk: 'none' },
+  power_on: { id: 'power_on', label: 'شغّل الراوتر', risk: 'none' },
 };
 
 /** أزرار البداية — أكثر شي يحتاجه المبتدئ */
@@ -130,7 +133,8 @@ export function normalize(text: string): string {
 /** كلمات كل إجراء (مكتوبة بعد التوحيد). الأطول يكسب عند التعادل عشان «اعاده تشغيل» تغلب «تشغيل». */
 const WORDS: [ActionId, string[]][] = [
   ['factory_reset', ['ضبط المصنع', 'اعدادات المصنع', 'فورمات', 'factory reset', 'فرمته', 'فرمت', 'ريسيت كامل', 'امسح كل شي', 'امسح الاعدادات']],
-  ['reboot', ['اعد تشغيل', 'اعاده تشغيل', 'اعيد تشغيل', 'ريستارت', 'restart', 'reboot', 'ريبوت', 'شغله من جديد', 'طفيه وشغله', 'طفه وشغله']],
+  ['reboot', ['اعد تشغيل الراوتر', 'اعاده تشغيل الراوتر', 'اعد تشغيل', 'اعاده تشغيل', 'اعيد تشغيل', 'ريستارت', 'restart', 'reboot', 'ريبوت', 'شغله من جديد', 'طفيه وشغله', 'طفه وشغله']],
+  ['power_on', ['شغل الراوتر', 'ولع الراوتر', 'الراوتر طافي', 'الراوتر مطفي', 'الراوتر مقفل', 'افتح الراوتر']],
   ['power_off', ['طفي الراوتر', 'اطفي الراوتر', 'طف الراوتر', 'سكر الراوتر', 'قفل الراوتر', 'اطفاء الراوتر', 'شيل الكهربا', 'power off']],
   ['best_band', ['افضل تردد', 'احسن تردد', 'اقوى تردد', 'التردد الافضل', 'اختار لي تردد', 'اختر لي تردد', 'اختار تردد', 'افضل باند', 'جرب الترددات', 'المحسن التلقائي']],
   ['best_tower', ['افضل برج', 'احسن برج', 'اقوى برج', 'البرج الافضل', 'اختار لي برج', 'اختر لي برج', 'اختار برج', 'جرب الابراج', 'بنق الابراج']],

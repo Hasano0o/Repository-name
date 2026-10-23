@@ -36,6 +36,11 @@ test('الأوامر الخطرة ما تختلط بالعادية', () => {
   assert.equal(act('اطفي الراوتر'), 'power_off');
   // «أعد تشغيل» أطول من أي كلمة ثانية ← إعادة تشغيل، مو ضبط مصنع
   assert.equal(act('اعادة تشغيل الراوتر بس'), 'reboot');
+  assert.equal(act('أعد تشغيل الراوتر'), 'reboot');
+  assert.equal(act('شغّل الراوتر'), 'power_on');
+  assert.equal(act('طفّي الراوتر'), 'power_off');
+  // reboot_now داخلي — ما ينطلب بالكلام أبداً (لازم يمر على التأكيد)
+  assert.ok(act('إيه، أعد التشغيل') !== 'reboot_now');
   assert.equal(ACTIONS.factory_reset.risk, 'danger');
   assert.equal(ACTIONS.reboot.risk, 'write');
   // ولا إجراء خطر في أزرار البداية

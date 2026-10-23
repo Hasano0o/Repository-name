@@ -26,6 +26,7 @@ import { HomeHeader, HeaderChip, HeaderTone } from '../src/ui/HomeHeader';
 import { hostLabel } from '../src/drivers/device';
 import { addDemoRouter } from '../src/drivers/demo';
 import { sheet } from '../src/i18n';
+import { Platform } from 'react-native';
 interface Status {
   loading: boolean;
   online?: boolean;
@@ -103,6 +104,9 @@ export default function RoutersList() {
   }, [loadAll]);
 
   const add = () => router.push('/add-router' as Href);
+  // المستخدم الجديد: نفتح الكاميرا على الملصق ونسجّل الدخول عنه
+  const canScanLabel = Platform.OS !== 'web' && !desktop;
+  const addByLabel = () => router.push('/add-router?scan=1' as Href);
   const explore = () => router.push('/probe' as Href);
   const demo = async () => {
     const id = await addDemoRouter();
@@ -150,11 +154,23 @@ export default function RoutersList() {
     return (
       <EmptyState
         icon="tower"
-        title="أضف أول راوتر"
-        text="خلّ التطبيق يتصل براوترك ويعرض لك الإشارة والسرعة والأبراج والترددات مباشرة."
+        title="أهلاً بك في Bandly 👋"
+        text={canScanLabel
+          ? 'خلنا نوصل راوترك بخطوتين:\n١) اتصل بواي فاي الراوتر\n٢) صوّر الملصق اللي تحت الراوتر — ونسجّل الدخول عنك'
+          : 'خلّ التطبيق يتصل براوترك ويعرض لك الإشارة والسرعة والأبراج والترددات مباشرة.'}
       >
         <LangAsk />
-        <PrimaryBtn text="إضافة راوتر" icon="plus" onPress={add} style={{ alignSelf: 'stretch' }} />
+        {canScanLabel ? (
+          <>
+            <PrimaryBtn text="صوّر ملصق الراوتر" icon="camera" onPress={addByLabel} style={{ alignSelf: 'stretch' }} />
+            <Pressable style={s.link} onPress={add}>
+              <Icon name="plus" size={16} color={P.blue} />
+              <Text style={[s.linkTxt, { color: P.blue }]}>أكتب البيانات بنفسي</Text>
+            </Pressable>
+          </>
+        ) : (
+          <PrimaryBtn text="إضافة راوتر" icon="plus" onPress={add} style={{ alignSelf: 'stretch' }} />
+        )}
         <Pressable style={s.demoBtn} onPress={demo}>
           <Text style={s.demoTxt}>جرّب بدون راوتر · Demo</Text>
           <Text style={s.demoSub}>راوتر تجريبي تشوف فيه كل المزايا · Try without a router</Text>

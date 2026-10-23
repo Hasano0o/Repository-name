@@ -29,14 +29,16 @@ const COMMON_HOSTS: { host: string; hint: string; color: string }[] = [
 
 export default function AddRouterScreen() {
   const nav = useRouter();
-  const params = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string; scan?: string }>();
+  /** جاي من ترحيب المستخدم الجديد: نفتح الكاميرا على طول، ونسجّل الدخول لحالنا بعد التصوير */
+  const welcomeScan = params.scan === '1' && !params.id;
   const editId =
     typeof params.id === 'string' && params.id.length > 0 ? params.id : undefined;
 
   const [name, setName] = useState('');
   const [host, setHost] = useState('192.168.8.1');
   const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('');
+  const [passwordState, setPassword] = useState('');
   const [passHelp, setPassHelp] = useState(false);
   // الشرح مفتوح من البداية للجدد
   const [guide, setGuide] = useState(true);
@@ -62,6 +64,15 @@ export default function AddRouterScreen() {
     const gw = net.diag?.gateway;
     if (gw && !editId && !hostTouched.current && !net.diag?.noAddress) setHost(gw);
   }, [net.diag, editId]);
+
+  // الترحيب ← الكاميرا تنفتح على طول (مرة وحدة)
+  const autoScanned = useRef(false);
+  useEffect(() => {
+    if (!welcomeScan || autoScanned.current) return;
+    autoScanned.current = true;
+    const t = setTimeout(() => { if (ensureScanner()) setScanning(true); }, 400);
+    return () => clearTimeout(t);
+  }, [welcomeScan]);
 
   useEffect(() => {
     let alive = true;
@@ -151,12 +162,28 @@ export default function AddRouterScreen() {
       if (!name.trim()) setName(d.wifi.ssid);
     }
     setScanMsg(got.length ? `✓ عبّينا: ${got.join('، ')}` : '');
+    // لقينا كلمة الإدارة ← ندخل عنه على طول (المستخدم شاف البيانات وأكدها في الماسح)
+    if (d.adminPassword && !editId) {
+      setScanMsg(`✓ عبّينا: ${got.join('، ')} — ندخل للراوتر عنك...`);
+      setTimeout(() => {
+        onSave({
+          host: d.host, username: d.username, password: d.adminPassword, findHost: !d.host,
+          wifi: d.wifi?.ssid ? { ssid: d.wifi.ssid, password: d.wifi.password ?? '' } : undefined,
+          name: d.wifi?.ssid,
+        });
+      }, 300);
+      return;
+    }
     if (!d.adminPassword && d.wifi?.password) {
       Alert.alert('كلمة مرور الإدارة', 'ما لقينا كلمة مرور الإدارة على الملصق. بعض الرواترات تستخدم نفس كلمة سر الواي فاي أو «admin» — جرّبها.');
     }
   }
 
-  async function onSave() {
+  /**
+   * over: قيم من الماسح (حالة React ما تتحدّث فوراً) — findHost: العنوان مو على الملصق،
+   * فلو ما رد العنوان الحالي نجرّب العناوين المشهورة (هواوي/ZTE/غيرها) قبل ما نستسلم.
+   */
+  async function onSave(over?: { host?: string; username?: string; password?: string; findHost?: boolean; wifi?: SavedWifi; name?: string }) {
     if (isDevice && editId) {
       setBusy(true);
       try {
@@ -173,8 +200,11 @@ export default function AddRouterScreen() {
       }
       return;
     }
-    const h = host.trim();
-    const u = username.trim() || 'admin';
+    let h = (over?.host ?? host).trim();
+    const u = (over?.username ?? username).trim() || 'admin';
+    const password = over?.password ?? passwordState;
+    const wifiNow = over?.wifi ?? wifi;
+    const nameNow = (name.trim() || over?.name || '').trim();
     if (!isLanHost(h)) {
       Alert.alert('عنوان غير صالح', 'أدخل عنواناً محلياً، مثال: 192.168.8.1');
       return;
@@ -186,7 +216,14 @@ export default function AddRouterScreen() {
     setBusy(true);
     try {
       setStep('نتعرّف على نوع الراوتر...');
-      const driver = await detectDriver(h);
+      let driver = await detectDriver(h);
+      if (!driver && over?.findHost) {
+        for (const alt of ['192.168.8.1', '192.168.0.1', '192.168.1.1', '192.168.100.1'].filter(x => x !== h)) {
+          setStep(`ندوّر على الراوتر (${alt})...`);
+          driver = await detectDriver(alt);
+          if (driver) { h = alt; setHost(alt); break; }
+        }
+      }
       if (!driver) {
         if (await explainDetectFailure(h, net, pickHost)) return;
         Alert.alert('تعذّر التعرف', 'ما تعرفنا على نوع الراوتر على هذا العنوان. تأكد إنك متصل بشبكة الراوتر.');
@@ -207,7 +244,7 @@ export default function AddRouterScreen() {
       const dName = dAny.name ?? dId;
 
       const payload = {
-        name: name.trim() || dName || 'راوتر',
+        name: nameNow || dName || 'راوتر',
         host: h,
         username: u,
         driverId: dId,
@@ -215,6 +252,8 @@ export default function AddRouterScreen() {
       };
 
       setStep('نحفظ...');
+      // أول راوتر؟ ← بعد الحفظ نعرض «كيف تبدأ»
+      const first = !editId && (await listRouters().catch(() => [] as SavedRouter[])).length === 0;
       let saved: SavedRouter | null;
       if (editId) {
         dropSession(editId);
@@ -235,12 +274,12 @@ export default function AddRouterScreen() {
           saved = await saveRouter(payload, password);
         }
       }
-      if (wifi?.ssid) { try { await setWifi(saved.id, wifi); } catch {} }
+      if (wifiNow?.ssid) { try { await setWifi(saved.id, wifiNow); } catch {} }
       // بيانات الملصق: لو صوّر الملصق نحفظها لحالها (منفصلة عن الكلمة الحالية) — تنفع بعد ضبط المصنع
       if (scannedLabel.current) {
         try { await setLabel(saved.id, { ...(await getLabel(saved.id)), ...scannedLabel.current }); } catch {}
       }
-      nav.replace({ pathname: '/router/[id]', params: { id: saved.id } });
+      nav.replace({ pathname: '/router/[id]', params: first ? { id: saved.id, welcome: '1' } : { id: saved.id } });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       Alert.alert('خطأ', msg);
@@ -393,7 +432,7 @@ export default function AddRouterScreen() {
               <Field label="كلمة المرور" icon="lock" color={tFg('#f97316')} focused={focus === 'pass'}>
                 <View style={styles.passwordRow}>
                   <TextInput
-                    value={password}
+                    value={passwordState}
                     onChangeText={setPassword}
                     onFocus={() => setFocus('pass')}
                     onBlur={() => setFocus(null)}
@@ -406,7 +445,7 @@ export default function AddRouterScreen() {
                     autoComplete="password"
                     textContentType="password"
                     returnKeyType="done"
-                    onSubmitEditing={onSave}
+                    onSubmitEditing={() => onSave()}
                   />
                   <Pressable
                     onPress={() => setShowPass((v) => !v)}
@@ -503,7 +542,7 @@ export default function AddRouterScreen() {
 
 
             <Pressable
-              onPress={onSave}
+              onPress={() => onSave()}
               disabled={busy}
               style={({ pressed }) => [styles.primaryWrap, (busy || pressed) && { opacity: 0.85 }]}
             >

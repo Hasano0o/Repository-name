@@ -42,6 +42,7 @@ import { rememberOperator, learnOperatorBands } from '../../src/store/operator';
 import { hasInternet } from '../../src/utils/internet';
 import { reportOutage } from '../../src/services/community';
 import { useAssistantUnlocked } from '../../src/assistant/store';
+import { WelcomeTour } from '../../src/ui/WelcomeTour';
 
 import { sheet, tr } from '../../src/i18n';import { LabelCard } from '../../src/ui/LabelCard';
 
@@ -127,7 +128,10 @@ function Acc({ title, children }: { title: string; children: ReactNode }) {
 
 
 export default function RouterDashboard() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, welcome } = useLocalSearchParams<{ id: string; welcome?: string }>();
+  // أول راوتر للمستخدم ← «كيف تبدأ» مرة وحدة (نشيل welcome من الرابط عشان الرجوع ما يعيدها)
+  const [tour, setTour] = useState(welcome === '1');
+  const closeTour = () => { setTour(false); try { router.setParams({ welcome: undefined }); } catch {} };
   // مساعد Bandly — ظاهر للكل (٥ ضغطات على «نسخة التطبيق» تخفيه على نفس الجهاز)
   const assistantOn = useAssistantUnlocked();
   const insets = useSafeAreaInsets();
@@ -1040,6 +1044,7 @@ export default function RouterDashboard() {
         <TechStrip />
       </ScrollView>
 
+      {!!id && <WelcomeTour visible={tour} routerId={id} onClose={closeTour} />}
     </LinearGradient>
   );
 }

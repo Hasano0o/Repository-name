@@ -1,11 +1,13 @@
 /**
- * تنفيذ إجراءات المساعد — عبر دوال Bandly الموجودة فقط، وكلها (في هالمرحلة) قراءة أو فتح شاشة:
- *  • ما فيه أي كتابة على الراوتر هنا. التغييرات تصير من شاشاتها المجربة (فيها التأكيد والرجوع التلقائي).
+ * تنفيذ إجراءات المساعد — عبر دوال Bandly الموجودة فقط:
+ *  • الكتابة الوحيدة هنا: إعادة التشغيل (reboot_now) — وما توصل لها إلا بعد تأكيد المستخدم في الشاشة.
+ *  • باقي التغييرات تصير من شاشاتها المجربة (فيها التأكيد والرجوع التلقائي).
  *  • النتيجة نص مبني على قراءة حقيقية — لو القراءة فشلت نقول فشلت، ما ندّعي شي.
  *  • ما نرسل كلمات مرور ولا أي بيانات لأي مكان: القراءة من الراوتر على الشبكة المحلية بس.
  */
 import { SavedRouter } from '../store/routers';
-import { withSession } from '../store/sessions';
+import { withSession, routerWrite, dropSession, isRouterBusyError } from '../store/sessions';
+import { waitOnline } from '../utils/safeLock';
 import { driverById } from '../drivers/registry';
 import { overallLevel, LEVEL_LABEL } from '../utils/signal';
 import { buildAdvice, ActionRoute } from '../utils/advice';
@@ -18,6 +20,8 @@ export interface Reply {
   open?: { route: string; screen: string; auto?: boolean };
   /** نفتح الشاشة على طول بدون ما ينتظر ضغطة */
   go?: boolean;
+  /** يحتاج موافقة قبل التنفيذ — الشاشة تعرض نافذة، ولو وافق ينفّذ action */
+  confirm?: { title: string; body: string; yes: string; action: ActionId };
   /** أزرار اقتراحات بعد الرد */
   chips?: ActionId[];
   tone?: 'ok' | 'warn' | 'danger';
@@ -31,7 +35,9 @@ const ADVICE_SCREEN: Record<ActionRoute, string> = {
 const fmt = (v: number | undefined, unit: string) => (v === undefined || !Number.isFinite(v) ? '—' : `${Math.round(v)}${unit}`);
 const errText = (e: unknown) => String((e as any)?.message ?? e ?? '').slice(0, 120);
 
-export async function runAction(id: ActionId, r: SavedRouter): Promise<Reply> {
+const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+export async function runAction(id: ActionId, r: SavedRouter, say: (s: string) => void = () => {}): Promise<Reply> {
   const a = ACTIONS[id];
   const proto = driverById(r.driverId);
 
@@ -96,9 +102,45 @@ export async function runAction(id: ActionId, r: SavedRouter): Promise<Reply> {
     case 'reboot':
       if (!proto?.reboot) return { text: 'نوع الراوتر هذا ما يدعم إعادة التشغيل من التطبيق. افصل الكهرباء عنه ١٠ ثواني ورجّعها.', tone: 'warn' };
       return {
-        text: 'إعادة التشغيل تقطع النت عن كل الأجهزة دقيقتين تقريباً.\nحالياً تسويها من زر «إعادة تشغيل» في صفحة الراوتر (فيه تأكيد قبلها). تنفيذها مني مباشرة يجي بالمرحلة الجاية بعد ما نجربه.',
-        open: { route: 'router', screen: 'صفحة الراوتر' },
+        text: 'أعيد تشغيل الراوتر؟ النت بينقطع عن كل الأجهزة دقيقتين تقريباً.',
+        confirm: {
+          title: 'إعادة تشغيل الراوتر',
+          body: 'النت بينقطع عن كل الأجهزة المتصلة دقيقتين تقريباً، وبعدها يرجع لحاله.',
+          yes: 'أعد التشغيل',
+          action: 'reboot_now',
+        },
         tone: 'warn',
+      };
+
+    case 'reboot_now': {
+      if (!proto?.reboot) return { text: 'نوع الراوتر هذا ما يدعم إعادة التشغيل من التطبيق.', tone: 'warn' };
+      say('أرسل أمر إعادة التشغيل...');
+      try {
+        await routerWrite(r, d => d.reboot!(), { label: 'إعادة تشغيل' });
+      } catch (e) {
+        if (isRouterBusyError(e)) return { text: `الراوتر مشغول بعملية ثانية الحين — ${errText(e)}`, tone: 'warn' };
+        // بعض الراوترات تقفل الاتصال وهي تطفي — الرد يضيع بس الأمر وصل. نتأكد بالانتظار تحت.
+        if (!/timeout|network|fetch|abort|ما رد|ما قدرنا نوصل/i.test(errText(e))) {
+          return { text: `ما قدرت أعيد التشغيل:\n${errText(e)}`, tone: 'warn' };
+        }
+      }
+      dropSession(r.id);
+      // نعطيه وقت يطفي فعلاً قبل ما نسأل — وإلا ممكن نلحقه قبل ما يطفي ونقول «رجع» غلط
+      say('الراوتر يعيد التشغيل... انتظر شوي');
+      await sleep(25_000);
+      say('ننتظر الراوتر يرجع (دقيقتين تقريباً)...');
+      const back = await waitOnline(r, 180_000, () => false);
+      if (back) return { text: '✓ الراوتر رجع واشتغل، والإشارة رجعت. تبي أفحصها لك؟', chips: ['check_signal', 'open_speed'], tone: 'ok' };
+      return {
+        text: 'أرسلت أمر إعادة التشغيل، بس الراوتر ما رجع خلال ٣ دقايق.\nتأكد إن جوالك رجع اتصل بواي فاي الراوتر، وإن أنواره شغالة. لو طوّل، افصل الكهرباء ١٠ ثواني ورجّعها.',
+        tone: 'warn',
+      };
+    }
+
+    case 'power_on':
+      return {
+        text: 'لو الراوتر طافي ما أقدر أوصله من التطبيق — شغّله من زر التشغيل أو وصّله بالكهرباء، وانتظر دقيقتين لين تثبت الأنوار. بعدها افتح Bandly وأفحص لك الإشارة.',
+        chips: ['check_signal'],
       };
 
     case 'factory_reset':
@@ -110,7 +152,7 @@ export async function runAction(id: ActionId, r: SavedRouter): Promise<Reply> {
       };
 
     case 'power_off':
-      return { text: 'ما أقدر أطفّي الراوتر من التطبيق — ما فيه أمر إطفاء في الراوترات. افصل الكهرباء بنفسك. لو تبي تريّحه، «إعادة التشغيل» أفضل.', chips: ['reboot'] };
+      return { text: 'الراوترات ما فيها أمر إطفاء من التطبيق — ولو طفّيته ما نقدر نرجّعه من الجوال. لو تبي تطفيه، افصل الكهرباء أو اضغط زر التشغيل. ولو تبي تريّحه وتصلّح التعليق، «إعادة التشغيل» أفضل وأسويها لك.', chips: ['reboot'] };
 
     default:
       if (a.route) {
