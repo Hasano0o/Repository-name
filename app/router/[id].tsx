@@ -894,33 +894,33 @@ export default function RouterDashboard() {
             {feat.bands && <ComboCard r={info} />}
             <TempCard r={info} />
             {/* الذكي فوق: المساعد يسوي كل شي عنك — وبعدها الأدوات اليدوية */}
-            <GroupTitle title="✨ خلّ Bandly يسويها عنك" color={tFg('#7c5cff')} />
+            <GroupTitle title="خلّ Bandly يسويها عنك" color={tFg('#7c5cff')} />
             <TileGrid>
-              <ToolTile wide icon="spark" color={tFg('#7c5cff')} title="🤖 اضبط لي كل شي" sub="يختار أفضل تردد وبرج وقناة — بنفسه"
+              <ToolTile wide icon="spark" color={tFg('#7c5cff')} title="اضبط لي كل شي" sub="تردد · برج · قناة"
                 onPress={() => router.push(`/autopilot/${info.id}` as Href)} />
               {assistantOn && (
-                <ToolTile wide icon="mic" color={tFg('#0e7d93')} title="💬 مساعد Bandly" sub="اسأله بكلامك أو بصوتك"
+                <ToolTile wide icon="mic" color={tFg('#0e7d93')} title="المساعد" sub="اسأله بكلامك"
                   onPress={() => router.push(`/assistant/${info.id}` as Href)} />
               )}
             </TileGrid>
             <GroupTitle title="حسّن اتصالك" color={tFg('#2f6bff')} />
             <TileGrid>
-              <ToolTile wide icon="aim" color={tFg('#2f6bff')} title="📡 توجيه الأنتنا" sub="الأنتنا أو الراوتر نفسه"
+              <ToolTile wide icon="aim" color={tFg('#2f6bff')} title="توجيه الأنتنا" sub="الأنتنا أو الراوتر نفسه"
                 onPress={() => router.push(`/aim/${info.id}` as Href)} />
-              <ToolTile wide icon="tower" color={tFg('#12b76a')} title="🗼 الأبراج" sub="النواقل والدمج"
+              <ToolTile wide icon="tower" color={tFg('#12b76a')} title="الأبراج" sub="النواقل والدمج"
                 onPress={() => router.push(`/towers/${info.id}` as Href)} />
-              <ToolTile wide icon="spark" color={tFg('#f97316')} title="⭐ اختار لي الأفضل" sub="سرعة · ألعاب · ثبات"
+              <ToolTile wide icon="spark" color={tFg('#f97316')} title="اختار الأفضل" sub="سرعة · ألعاب · ثبات"
                 onPress={() => router.push(`/finder/${info.id}` as Href)} />
-              <ToolTile wide icon="game" color={tFg('#ec4899')} title="🎮 مُحسّن الألعاب" sub="أقل بنق للعبتك"
+              <ToolTile wide icon="game" color={tFg('#ec4899')} title="مُحسّن الألعاب" sub="أقل بنق للعبتك"
                 onPress={() => router.push(`/ping/${info.id}` as Href)} />
             </TileGrid>
             <GroupTitle title="قِس وتابع" color={tFg('#12b76a')} />
             <TileGrid>
-              <ToolTile icon="speed" color={tFg('#12b76a')} title="⚡ السرعة" sub="تنزيل ورفع"
+              <ToolTile icon="speed" color={tFg('#12b76a')} title="السرعة" sub="تنزيل ورفع"
                 onPress={() => router.push(`/speed/${info.id}` as Href)} />
-              <ToolTile icon="chart" color={tFg('#0891b2')} title="📊 التفاصيل" sub="الأرقام والدمج والتقرير"
+              <ToolTile icon="chart" color={tFg('#0891b2')} title="التفاصيل" sub="الأرقام والدمج والتقرير"
                 onPress={() => router.push(`/details/${info.id}` as Href)} />
-              <ToolTile icon="phone" color={tFg('#8b5cf6')} title="📱 الأجهزة" sub="المتصلين"
+              <ToolTile icon="phone" color={tFg('#8b5cf6')} title="الأجهزة" sub="المتصلين"
                 onPress={() => router.push(`/device/${info.id}` as Href)} />
             </TileGrid>
           </>
