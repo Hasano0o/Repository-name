@@ -163,7 +163,9 @@ function TechRow({ r, onDetails, hist }: { r: Row; onDetails?: () => void; hist?
   const accent = TECH_ACCENT[r.tech];
   // السطر الفني: رقم البرج · القناة · العرض (للفنيين ومن يبي يثبّت برج)
   const bwN = num(r.bw);
-  const meta = [r.pci && `PCI ${r.pci}`, r.arfcn && `قناة ${r.arfcn}`, bwN && `${bwN}MHz`].filter(Boolean).join('  ·  ');
+  // كل جزء معزول (FSI…PDI) — بدونها «20MHz» و«قناة 1450» يتلخبطون بالعربي ويطلع «1450 قناةMHz»
+  const iso = (x: string) => '\u2068' + x + '\u2069';
+  const meta = [r.pci && `PCI ${r.pci}`, r.arfcn && `قناة ${r.arfcn}`, bwN && `${bwN} MHz`].filter(Boolean).map(x => iso(String(x))).join('  ·  ');
   return (
     <View style={s.rowWrap}>
     <View style={s.row}>
