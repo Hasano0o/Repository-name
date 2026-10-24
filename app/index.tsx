@@ -156,23 +156,21 @@ export default function RoutersList() {
       <EmptyState
         icon="tower"
         title="أهلاً بك في Bandly 👋"
-        text={!canScanLabel
-          ? 'خلّ التطبيق يتصل براوترك ويعرض لك الإشارة والسرعة والأبراج والترددات مباشرة.'
-          // الآيفون يقرأ رمز QR بس (قراءة النص أندرويد فقط) — ما نوعده إننا نعبّي كلمة الإدارة
-          : Platform.OS === 'ios'
-            ? 'خلنا نوصل راوترك بثلاث خطوات:\n١) اتصل بواي فاي الراوتر\n٢) صوّر رمز QR اللي على الملصق\n٣) اكتب كلمة مرور الإدارة المكتوبة على الملصق'
-            : 'خلنا نوصل راوترك بخطوتين:\n١) اتصل بواي فاي الراوتر\n٢) صوّر الملصق اللي تحت الراوتر — ونسجّل الدخول عنك'}
+        text="اتصل بواي فاي الراوتر واضغط «ابدأ» — نلقى راوترك لحالنا، وتقدر تختبر السرعة والبنق على طول."
       >
         <LangAsk />
         {/* أسهل شي للي ما يعرف: المساعد يدوّر على الراوتر ويطلب كلمة المرور بس */}
         <Pressable onPress={guided} accessibilityRole="button"
           style={({ pressed }) => [s.helpBtn, pressed && { opacity: 0.8 }]}>
-          <Text style={s.helpTitle}>🙋 ما أعرف أستخدم التطبيق</Text>
-          <Text style={s.helpSub}>المساعد يلقى راوترك ويطلب كلمة المرور بس — ويدخّلك</Text>
+          <Text style={s.helpTitle}>🚀 ابدأ</Text>
+          <Text style={s.helpSub}>اتصل بواي فاي الراوتر وبس — بدون كلمة مرور</Text>
         </Pressable>
         {canScanLabel ? (
           <>
-            <PrimaryBtn text={Platform.OS === 'ios' ? 'صوّر رمز الملصق' : 'صوّر ملصق الراوتر'} icon="camera" onPress={addByLabel} style={{ alignSelf: 'stretch' }} />
+            <Pressable style={s.demoBtn} onPress={addByLabel} accessibilityRole="button">
+              <Text style={s.demoTxt}>📷 {Platform.OS === 'ios' ? 'صوّر رمز الملصق' : 'صوّر ملصق الراوتر'}</Text>
+              <Text style={s.demoSub}>{Platform.OS === 'ios' ? 'نقرأ الواي فاي من الرمز' : 'نقرأ العنوان وكلمة المرور ونسجّل الدخول عنك'}</Text>
+            </Pressable>
             {/* بديل التصوير — بطاقة واضحة بنفس شكل «جرّب بدون راوتر» عشان ما تنفهم غلط */}
             <Pressable style={s.demoBtn} onPress={add} accessibilityRole="button">
               <Text style={s.demoTxt}>✍️ أدخل كلمة المرور بنفسك</Text>

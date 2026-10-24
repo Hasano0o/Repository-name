@@ -1,5 +1,9 @@
 /**
- * «ما أعرف أستخدم التطبيق» — المساعد يدخّلك راوترك خطوة بخطوة:
+ * الدخول بالواي فاي بس — بدون كلمة مرور عند الباب:
+ *  • أول ما تنفتح: يدوّر على الراوتر لحاله. مو متصل؟ «أنت مو متصل بواي فاي الراوتر» ويعيد الفحص كل ٥ ثواني.
+ *  • لقاه ← «متصل ✓» وأدوات ما تحتاج الراوتر (السرعة، البنق) تشتغل على طول.
+ *  • كلمة المرور تنطلب بس لما يبي يشوف الإشارة/الأبراج/الترددات — مرة وحدة وتنحفظ.
+ * (الخطوات القديمة تحت باقية:)
  *  ١) يتأكد إنك على واي فاي الراوتر  ٢) يدوّر على الراوتر لحاله (العناوين المشهورة)
  *  ٣) يطلب كلمة المرور بس  ٤) يسجّل الدخول ويحفظ الراوتر  ٥) يفتح لك صفحة الراوتر + «كيف تبدأ»
  * • نفس حماية شاشة الإضافة: عنوان محلي بس، محاولة دخول وحدة، و«المحاولة الأخيرة» لو باقي وحدة.
@@ -15,6 +19,7 @@ import type { RouterDriver } from '../src/drivers/types';
 import { listRouters, saveRouter, updateRouter, SavedRouter } from '../src/store/routers';
 import { dropSession } from '../src/store/sessions';
 import { addDemoRouter } from '../src/drivers/demo';
+import { measureLatency, gameScore, scoreWord, selectedRegion } from '../src/utils/latency';
 import { Icon, IconName } from '../src/ui/Icon';
 import { C, R, S, tBg, tBd, tFg } from '../src/ui/theme';
 import { sheet } from '../src/i18n';
@@ -22,7 +27,7 @@ import { sheet } from '../src/i18n';
 /** العناوين المشهورة: هواوي · ZTE/تي بي لينك · أغلب الراوترات · بعض ZTE وزين · شاومي */
 const HOSTS = ['192.168.8.1', '192.168.0.1', '192.168.1.1', '192.168.100.1', '192.168.31.1', '192.168.3.1'];
 
-type Step = 'wifi' | 'search' | 'notfound' | 'password' | 'login' | 'done';
+type Step = 'wifi' | 'search' | 'notfound' | 'hub' | 'password' | 'login' | 'done';
 
 /** فيه جهاز يرد على هالعنوان؟ (أي رد HTTP يكفي) — سريع، عشان ما ننتظر مهلة كل نوع راوتر على عنوان ميت */
 async function answers(host: string, ms = 2000): Promise<boolean> {
@@ -54,7 +59,9 @@ function Big({ icon, color, title, sub, onPress, disabled }: { icon: IconName; c
 
 export default function SetupScreen() {
   const insets = useSafeAreaInsets();
-  const [step, setStep] = useState<Step>('wifi');
+  const [step, setStep] = useState<Step>('search');
+  const [ping, setPing] = useState<{ ms: number; word: string; region: string } | null>(null);
+  const [pinging, setPinging] = useState(false);
   const [status, setStatus] = useState('');
   const [found, setFound] = useState<{ host: string; d: RouterDriver } | null>(null);
   const [pw, setPw] = useState('');
@@ -75,7 +82,7 @@ export default function SetupScreen() {
       setStatus(`لقيت جهاز على ${h} — أتعرّف عليه…`);
       try {
         const d = await detectDriver(h);
-        if (d && (d as any).id !== 'unknown') { if (alive.current) { setFound({ host: h, d }); setStep('password'); } return; }
+        if (d && (d as any).id !== 'unknown') { if (alive.current) { setFound({ host: h, d }); setStep('hub'); } return; }
         if (d) unsupported = true;
       } catch {}
     }
@@ -129,6 +136,27 @@ export default function SetupScreen() {
     }
   };
 
+  // أول ما تنفتح: ندوّر لحالنا
+  useEffect(() => { search(); /* eslint-disable-next-line */ }, []);
+  // مو متصل؟ نعيد الفحص كل ٥ ثواني — أول ما يتصل بالواي فاي يكمّل لحاله
+  useEffect(() => {
+    if (step !== 'notfound') return;
+    const t = setInterval(async () => {
+      const any = (await Promise.all(HOSTS.map(h => answers(h, 1500)))).some(Boolean);
+      if (any && alive.current) search();
+    }, 5000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line
+  }, [step]);
+
+  const quickPing = async () => {
+    setPinging(true);
+    try {
+      const [r, reg] = await Promise.all([measureLatency(8), selectedRegion()]);
+      if (alive.current) setPing(r.samples ? { ms: Math.round(r.median), word: scoreWord(gameScore(r)), region: reg.name } : { ms: 0, word: 'ما وصلنا للسيرفر — النت شغّال؟', region: reg.name });
+    } finally { if (alive.current) setPinging(false); }
+  };
+
   const demo = async () => {
     const id = await addDemoRouter();
     router.replace({ pathname: '/router/[id]', params: { id } });
@@ -139,16 +167,16 @@ export default function SetupScreen() {
       <ScrollView contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 40 }]} keyboardShouldPersistTaps="handled">
         <View style={s.hero}>
           <View style={s.heroIcon}><Icon name="spark" size={30} color={tFg('#2f6bff')} /></View>
-          <Text style={s.heroTitle}>أنا أدخّلك راوترك 👋</Text>
-          <Text style={s.heroSub}>ثلاث خطوات بسيطة — وأنا أسوي الباقي</Text>
+          <Text style={s.heroTitle}>أهلاً بك في Bandly 👋</Text>
+          <Text style={s.heroSub}>اتصل بواي فاي الراوتر — وبس</Text>
         </View>
 
         {/* الخطوات بالأرقام — اللي خلص أخضر */}
         <View style={s.steps}>
           {[
-            { n: '١', t: 'الواي فاي', on: step !== 'wifi' },
-            { n: '٢', t: 'الراوتر', on: !!found },
-            { n: '٣', t: 'كلمة المرور', on: step === 'done' },
+            { n: '١', t: 'الواي فاي', on: !!found },
+            { n: '٢', t: 'جاهز', on: !!found },
+            { n: '٣', t: 'الأرقام (اختياري)', on: step === 'done' },
           ].map(x => (
             <View key={x.n} style={s.stepItem}>
               <View style={[s.stepDot, x.on && s.stepOn]}>
@@ -178,21 +206,45 @@ export default function SetupScreen() {
         {step === 'notfound' && (
           <>
             {!!err && <Bubble tone="warn"><Text style={s.txt}>{err}</Text></Bubble>}
-            <Bubble tone="warn">
-              <Text style={s.txt}>ما لقيت راوتر مدعوم على الشبكة اللي أنت عليها.{'\n\n'}تأكد إنك متصل بواي فاي الراوتر نفسه (مو بيانات الجوال ولا شبكة ثانية)، وبعدها جرّب مرة ثانية.</Text>
-            </Bubble>
-            <Big icon="refresh" color="#2f6bff" title="جرّب مرة ثانية" onPress={search} />
+            <View style={s.offline}>
+              <Icon name="wifi" size={34} color={C.red} />
+              <Text style={s.offTitle}>أنت مو متصل بواي فاي الراوتر</Text>
+              <Text style={s.offSub}>اتصل بشبكة راوترك من إعدادات الجوال — وأنا أكمّل لحالي أول ما تتصل</Text>
+              <View style={s.row}><ActivityIndicator size="small" color={C.sub} /><Text style={s.offWait}>أنتظرك…</Text></View>
+            </View>
+            <Big icon="phone" color="#12b76a" title="كيف أتصل بالواي فاي؟" sub="خطوة بخطوة"
+              onPress={() => Alert.alert('اتصل بواي فاي الراوتر',
+                '١) افتح «الإعدادات» في جوالك ← «واي فاي».\n٢) اختر اسم شبكة راوترك — مكتوب على الملصق تحت الراوتر (جنب SSID أو WLAN).\n٣) اكتب كلمة سر الواي فاي اللي على الملصق.\n٤) ارجع لـ Bandly — أكمّل لحالي.')} />
+            <Big icon="refresh" color="#2f6bff" title="جرّب الحين" onPress={search} />
             <Big icon="settings" color="#7c5cff" title="أدخل البيانات بنفسي" sub="لو عنوان راوترك غير المعتاد" onPress={() => router.replace('/add-router' as Href)} />
             <Big icon="compass" color="#64748b" title="راوتري مو مدعوم؟" sub="استكشاف جهاز" onPress={() => router.replace('/probe' as Href)} />
             <Pressable onPress={demo} style={s.link}><Text style={s.linkTxt}>جرّب بدون راوتر · Demo</Text></Pressable>
           </>
         )}
 
+        {step === 'hub' && found && (
+          <>
+            <View style={s.online}>
+              <Icon name="check" size={30} color={tFg('#12b76a')} stroke={3} />
+              <Text style={s.onTitle}>متصل براوترك ✓</Text>
+              <Text style={s.offSub}>{(found.d as any).name ?? 'راوتر'} · {found.host}</Text>
+            </View>
+
+            <Text style={s.section}>تقدر تبدأ على طول</Text>
+            <Big icon="speed" color="#12b76a" title="اختبر السرعة" sub="تنزيل ورفع وبنق" onPress={() => router.push('/speed/guest' as Href)} />
+            <Big icon="game" color="#ec4899" title={pinging ? 'أقيس…' : 'كم البنق للألعاب؟'} sub={ping ? `${ping.ms ? `${ping.ms}ms لسيرفرات ${ping.region} · ` : ''}${ping.word}` : 'قياس سريع'} onPress={quickPing} disabled={pinging} />
+
+            <Text style={s.section}>تبي تشوف إشارتك وأبراجك وترددك؟</Text>
+            <Big icon="antenna" color="#2f6bff" title="افتح كل الأدوات" sub="الراوتر يطلب كلمة المرور مرة وحدة بس — بعدها ما نسألك" onPress={() => setStep('password')} />
+            <Pressable onPress={demo} style={s.link}><Text style={s.linkTxt}>أشوف الأدوات بالتجريبي أول</Text></Pressable>
+          </>
+        )}
+
         {step === 'password' && found && (
           <>
-            <Bubble tone="ok"><Text style={s.txt}>✓ لقيت راوترك: <Text style={s.bold}>{(found.d as any).name ?? 'راوتر'}</Text></Text></Bubble>
+            <Bubble tone="ok"><Text style={s.txt}>✓ متصل براوترك: <Text style={s.bold}>{(found.d as any).name ?? 'راوتر'}</Text></Text></Bubble>
             <Bubble>
-              <Text style={s.txt}>الحين اكتب <Text style={s.bold}>كلمة مرور الراوتر</Text>.{'\n'}تلقاها على الملصق تحت الراوتر — جنب كلمة <Text style={s.bold}>Password</Text> أو «كلمة المرور» (مو كلمة الواي فاي إلا لو ما فيه غيرها).</Text>
+              <Text style={s.txt}>راوترك يحمي الأرقام بكلمة مرور — اكتبها <Text style={s.bold}>مرة وحدة بس</Text> وتنحفظ على جوالك.{'\n'}{'\n'}تلقاها على الملصق تحت الراوتر — جنب كلمة <Text style={s.bold}>Password</Text> أو «كلمة المرور» (مو كلمة الواي فاي إلا لو ما فيه غيرها).</Text>
             </Bubble>
             {!!err && <Bubble tone="warn"><Text style={s.txt}>{err}</Text></Bubble>}
             <View style={s.pwRow}>
@@ -247,5 +299,12 @@ const s = sheet({
   pw: { flex: 1, color: C.text, fontSize: 18, paddingVertical: 14, textAlign: 'left', fontWeight: '700' },
   eye: { padding: 8 },
   link: { alignItems: 'center', paddingVertical: 10 },
+  offline: { alignItems: 'center', gap: 6, paddingVertical: 18, paddingHorizontal: 12, borderRadius: R.lg, borderWidth: 1.5, borderColor: tBd('#e5484d55'), backgroundColor: tBg('#e5484d0f') },
+  online: { alignItems: 'center', gap: 6, paddingVertical: 18, borderRadius: R.lg, borderWidth: 1.5, borderColor: tBd('#12b76a66'), backgroundColor: tBg('#12b76a12') },
+  offTitle: { color: C.red, fontSize: 18, fontWeight: '900', textAlign: 'center' },
+  onTitle: { color: tFg('#0f9a5f'), fontSize: 19, fontWeight: '900', textAlign: 'center' },
+  offSub: { color: C.sub, fontSize: 13.5, textAlign: 'center', lineHeight: 21 },
+  offWait: { color: C.sub, fontSize: 12.5 },
+  section: { color: C.sub, fontSize: 13, fontWeight: '800', textAlign: 'center', marginTop: 6 },
   linkTxt: { color: C.blue, fontWeight: '800', fontSize: 14 },
 });
