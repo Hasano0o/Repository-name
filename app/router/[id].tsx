@@ -13,7 +13,7 @@ import {
   rsrpLevel, rsrqLevel, sinrLevel, rssiLevel, isNoService } from '../../src/utils/signal';
 import { fmtRate, fmtDuration, fmtBytes } from '../../src/utils/format';
 import {addSample, stability } from '../../src/store/history';
-import { C, tBd, tBg, tFg } from '../../src/ui/theme';
+import { C, tBd, tBg, tFg, isDark } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { SignalRing } from '../../src/ui/SignalRing';
 import { ArcGauge } from '../../src/ui/ArcGauge';
@@ -960,7 +960,7 @@ export default function RouterDashboard() {
                 </View>
                 <View style={s.moreBtnChev}>
                   <View style={{ transform: [{ rotate: moreOpen ? '-90deg' : '90deg' }] }}>
-                    <Icon name="chevron" size={16} color={tFg('#c2410c')} stroke={2.6} />
+                    <Icon name="chevron" size={16} color={isDark ? '#fdba74' : '#c2410c'} stroke={2.6} />
                   </View>
                 </View>
               </LinearGradient>
@@ -1259,8 +1259,9 @@ const s = sheet({
     borderWidth: 1, borderColor: tBd('#fdc68f'),
   },
   moreBtnIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  moreBtnTitle: { color: tFg('#9a3412'), fontSize: 15, fontWeight: '900' },
-  moreBtnSub: { color: tFg('#c2410c'), fontSize: 11.5, fontWeight: '700', opacity: 0.85 },
+  // بالوضع الليلي البرتقالي الغامق يختفي على الخلفية — نستخدم برتقالي فاتح
+  moreBtnTitle: { color: isDark ? '#fdba74' : '#9a3412', fontSize: 15, fontWeight: '900' },
+  moreBtnSub: { color: isDark ? '#fed7aa' : '#c2410c', fontSize: 11.5, fontWeight: '700', opacity: 0.9 },
   moreBtnChev: {
     width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center',
     backgroundColor: tBg('#ffffffb3'), borderWidth: 1, borderColor: tBd('#fdc68f'),
