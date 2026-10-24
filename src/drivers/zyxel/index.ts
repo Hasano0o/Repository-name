@@ -11,7 +11,8 @@
 import * as Crypto from 'expo-crypto';
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
-import { RouterDriver, Capability, Signal, Carrier, Usage, NetworkInfo, SignalSnapshot, CellTower, BandConfig, ConnectedDevice } from '../types';
+import { RouterDriver, Capability, Signal, Carrier, Usage, NetworkInfo, SignalSnapshot, CellTower, BandConfig, ConnectedDevice, ActiveLock } from '../types';
+import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { noChange } from '../noChange';
 import { http } from '../http';
 import { buildSnapshot } from '../../utils/snapshot';
@@ -32,7 +33,7 @@ const bandOf = (v: unknown) => { const m = str(v).match(/(\d+)\s*$/); return m ?
 export class ZyxelDriver implements RouterDriver {
   id = 'zyxel';
   name = 'Zyxel';
-  capabilities: Capability[] = ['signal', 'reboot', 'usage', 'devices'];
+  capabilities: Capability[] = ['signal', 'reboot', 'usage', 'devices', 'bandLock'];
 
   private host = '';
   private user = 'admin';
@@ -250,35 +251,125 @@ export class ZyxelDriver implements RouterDriver {
     return out.filter(d => (seen.has(d.mac) ? false : (seen.add(d.mac), true)));
   }
 
-  // ─── الترددات ───
-  // أمر التثبيت يختلف بين فيرموير زيكسل وما عندنا مرجع مؤكد له — نعرض الترددات المدعومة من الراوتر،
-  // ولو المستخدم حاول يثبّت: ما نكتب شي، ونرسل للمطوّر (مرة وحدة) أسماء إعدادات الشبكة الخلوية
-  // اللي يقبلها راوتره — بدون أي رقم شريحة/جهاز/واي فاي — عشان نبني التثبيت الصح.
-  async getBandConfig(): Promise<BandConfig> {
-    const c = (await this.dal('cellwan_status')) ?? {};
+  // ─── الترددات ووضع الشبكة (cellwan_band — من تقرير FWA505) ───
+  //   INTF_Supported_Bands / INTF_Preferred_Bands = "B1,B3,…,n78" · INTF_Preferred_Access_Technology = Auto | NR5G-SA | NR5G-NSA | LTE
+  //   الكتابة: PUT على نفس الـ DAL بنفس التشفير، وبعدها نقرأ ونتأكد إنها انحفظت.
+
+  private async dalPut(oid: string, obj: Record<string, unknown>): Promise<void> {
+    if (!this.sessionkey) await this.login(this.host, this.user, this.password);
+    const send = async () => {
+      const pem = await this.rsaKey();
+      const r = await http(`${this.base()}/cgi-bin/DAL?oid=${oid}&sessionkey=${this.sessionkey}`, {
+        method: 'PUT',
+        headers: this.hdr({ 'Content-Type': 'application/json', Origin: this.base() }),
+        body: pem ? this.encrypt(obj) : JSON.stringify(obj),
+      }, 15000);
+      let j: any = null;
+      try { j = this.decrypt(await r.json()); } catch {}
+      return { status: r.status, j };
+    };
+    let { status, j } = await send();
+    if (status === 401) { this.sessionkey = ''; await this.login(this.host, this.user, this.password); ({ status, j } = await send()); }
+    if (j?.result !== 'ZCFG_SUCCESS') throw new Error(`الراوتر رفض الإعداد (${String(j?.result ?? j?.ReplyMsg ?? status).slice(0, 60)})`);
+  }
+
+  private async bandObj(): Promise<Record<string, any>> {
+    const o = await this.dal('cellwan_band');
+    if (!o) throw new Error('راوترك ما يعطي إعدادات الترددات');
+    return o;
+  }
+  private static split(v: unknown) {
     const lte: number[] = [], nr: number[] = [];
-    for (const t of str(c.INTF_Supported_Bands).split(',')) {
-      const b = bandOf(t); if (!b) continue;
-      (/^NR|^N\d/i.test(t.trim()) ? nr : lte).push(b);
+    for (const t of str(v).split(',').map(x => x.trim()).filter(Boolean)) {
+      const n = parseInt(t.replace(/\D/g, ''), 10);
+      if (!n) continue;
+      (/^n/i.test(t) ? nr : lte).push(n);
     }
+    return { lte: [...new Set(lte)], nr: [...new Set(nr)] };
+  }
+  private static join(lte: number[], nr: number[]) {
+    return [...[...new Set(lte)].sort((a, b) => a - b).map(b => 'B' + b), ...[...new Set(nr)].sort((a, b) => a - b).map(b => 'n' + b)].join(',');
+  }
+  private static TECH_TO_CODE: Record<string, string> = { Auto: '00', 'NR5G-NSA': '0803', LTE: '03', 'NR5G-SA': '08' };
+  private static CODE_TO_TECH: Record<string, string> = { '00': 'Auto', '0803': 'NR5G-NSA', '03': 'LTE', '08': 'NR5G-SA' };
+
+  async getBandConfig(): Promise<BandConfig> {
+    const o = await this.bandObj();
+    const sup = ZyxelDriver.split(o.INTF_Supported_Bands);
+    const pref = ZyxelDriver.split(o.INTF_Preferred_Bands);
+    const all = (a: number[], b: number[]) => b.every(x => a.includes(x));
+    const techs = str(o.INTF_Supported_Access_Technologies).split(',').map(x => x.trim()).filter(Boolean);
+    const LABEL: Record<string, string> = { Auto: 'تلقائي', 'NR5G-NSA': '4G + 5G', LTE: '4G فقط', 'NR5G-SA': '5G فقط (SA)' };
     return {
-      supported: [...new Set(lte)].sort((a, b) => a - b),
-      locked: [],
-      nrSupported: [],
-      nrLocked: [],
-      nrLockable: false,
-      mode: '00',
-      modes: [],
+      supported: sup.lte.sort((a, b) => a - b),
+      locked: all(pref.lte, sup.lte) ? [] : pref.lte,
+      nrSupported: sup.nr.sort((a, b) => a - b),
+      nrLocked: all(pref.nr, sup.nr) ? [] : pref.nr,
+      nrLockable: sup.nr.length > 0,
+      nrPreferred: sup.nr,
+      mode: ZyxelDriver.TECH_TO_CODE[str(o.INTF_Preferred_Access_Technology)] ?? str(o.INTF_Preferred_Access_Technology),
+      modes: techs.filter(t => ZyxelDriver.TECH_TO_CODE[t]).map(t => ({ value: ZyxelDriver.TECH_TO_CODE[t], label: LABEL[t] ?? t })),
     };
   }
 
-  private dumped = false;
-  async setBand(): Promise<void> {
-    if (!this.dumped) {
-      this.dumped = true;
-      this.cellwanDump().then(t => import('../../services/errors').then(m => m.sendSupportReport('zyxel-bands', t))).catch(() => {});
-    }
-    throw noChange('تثبيت الترددات لراوترك زيكسل لسا ما جهز — ما غيّرنا أي شي. أرسلنا للمطوّر أسماء إعدادات راوترك (بدون أي بيانات شخصية) عشان يضيفه قريب.');
+  async setBand(bands: number[] | 'keep', nrBands?: number[]): Promise<void> {
+    const o = await this.bandObj();
+    const sup = ZyxelDriver.split(o.INTF_Supported_Bands);
+    const cur = ZyxelDriver.split(o.INTF_Preferred_Bands);
+    const lte = bands === 'keep' ? cur.lte : (bands.length ? bands.filter(b => sup.lte.includes(b)) : sup.lte);
+    const nr = nrBands === undefined ? cur.nr : (nrBands.length ? nrBands.filter(b => sup.nr.includes(b)) : sup.nr);
+    if (!lte.length && !nr.length) throw noChange('ما فيه تردد يدعمه راوترك في الاختيار — ما غيّرنا شي.');
+    const want = ZyxelDriver.join(lte, nr);
+    if (want === ZyxelDriver.join(cur.lte, cur.nr)) return;
+    await this.dalPut('cellwan_band', { INTF_Preferred_Bands: want });
+    await new Promise(r => setTimeout(r, 1500));
+    const after = ZyxelDriver.split((await this.bandObj()).INTF_Preferred_Bands);
+    if (ZyxelDriver.join(after.lte, after.nr) !== want) throw new Error('الراوتر قبل الطلب بس الترددات ما تغيّرت');
+  }
+
+  async setNetworkMode(mode: string): Promise<void> {
+    const tech = ZyxelDriver.CODE_TO_TECH[mode] ?? mode;
+    await this.dalPut('cellwan_band', { INTF_Preferred_Access_Technology: tech });
+  }
+
+  async getActiveLock(): Promise<ActiveLock | null> {
+    const c = await this.getBandConfig();
+    return c.locked.length || c.nrLocked.length ? { bands: c.locked, nrBands: c.nrLocked } : null;
+  }
+
+  // لقطة قبل أي تجربة + إرجاع متحقق منه (نفس حماية هواوي و ZTE)
+  async readLockState(): Promise<LockSnapshot> {
+    const o = await this.bandObj();
+    const bands = str(o.INTF_Preferred_Bands), tech = str(o.INTF_Preferred_Access_Technology);
+    const p = ZyxelDriver.split(bands), sp = ZyxelDriver.split(o.INTF_Supported_Bands);
+    const lAll = sp.lte.every(x => p.lte.includes(x)), nAll = sp.nr.every(x => p.nr.includes(x));
+    const summary = `4G: ${lAll ? 'تلقائي' : p.lte.map(b => 'B' + b).join('+')} · 5G: ${nAll ? 'تلقائي' : p.nr.map(b => 'n' + b).join('+')} · ${tech || '—'}`;
+    return { driver: this.id, at: Date.now(), summary, data: { bands, tech } };
+  }
+  async restoreLockState(snap: LockSnapshot): Promise<void> {
+    if (snap.driver !== this.id) throw new Error('اللقطة من نوع راوتر ثاني');
+    const want = snap.data as { bands: string; tech: string };
+    const o = await this.bandObj();
+    const patch: Record<string, unknown> = {};
+    const norm = (v: unknown) => { const x = ZyxelDriver.split(v); return ZyxelDriver.join(x.lte, x.nr); };
+    if (want.bands && norm(o.INTF_Preferred_Bands) !== norm(want.bands)) patch.INTF_Preferred_Bands = want.bands;
+    if (want.tech && str(o.INTF_Preferred_Access_Technology) !== want.tech) patch.INTF_Preferred_Access_Technology = want.tech;
+    if (Object.keys(patch).length) await this.dalPut('cellwan_band', patch);
+    await new Promise(r => setTimeout(r, 1500));
+    const a = await this.bandObj();
+    const miss: string[] = [];
+    if (want.bands && norm(a.INTF_Preferred_Bands) !== norm(want.bands)) miss.push('الترددات');
+    if (want.tech && str(a.INTF_Preferred_Access_Technology) !== want.tech) miss.push('وضع الشبكة');
+    if (miss.length) throw restoreMismatch(miss);
+  }
+
+  /** إنقاذ: كل الترددات + تلقائي */
+  async restoreAll(): Promise<void> {
+    try {
+      const o = await this.bandObj();
+      await this.dalPut('cellwan_band', { INTF_Preferred_Bands: str(o.INTF_Supported_Bands), INTF_Preferred_Access_Technology: 'Auto' });
+    } catch {}
+    try { await this.reboot(); } catch {}
   }
 
   /** أسماء إعدادات الشبكة الخلوية اللي يقبلها الراوتر — بدون الأرقام الحساسة */

@@ -572,7 +572,9 @@ export class ZteDriver implements RouterDriver {
     out = await this.post(body);
     if (/success/i.test(out)) return out;
     // نفس الرفض بعد الدخول = غالباً صيغة AD (مرة وحدة لكل راوتر — بعدها نعرف الصح)
-    if (!this.adTried && !(await this.identify())?.pinned) {
+    const prof = await this.identify();
+    if (prof?.write === 'ubus') throw this.g5Error();
+    if (!this.adTried && !prof?.pinned) {
       this.adTried = true;
       const alt = await this.retryWithOtherAd(body);
       if (alt) return alt;
@@ -580,6 +582,17 @@ export class ZteDriver implements RouterDriver {
     return out;
   }
   private adTried = false;
+  /** أجهزة G5: الصفحة تقرا بالطريقة القديمة (goform) بس ترفض أي تغيير فيها — تقرير MC801A: ٨ صيغ توقيع كلها انرفضت */
+  private g5Error(): Error {
+    const e = new Error('هالخاصية لسا ما تشتغل على راوترك (من عائلة ZTE G5 — التغيير فيه بطريقة ثانية). الترددات ووضع الشبكة وإعادة التشغيل شغالة.');
+    (e as any).unsupported = true;
+    return e;
+  }
+  /** قبل أوامر ما لها بديل ubus: نوقف على طول بدل ما نجرّب ونفشل */
+  private async g5Guard(_what: string): Promise<void> {
+    if ((await this.identify())?.write === 'ubus' && !(await this.ngWriter())) return; // ما فيه ubus أصلاً ← نجرّب الطريقة العادية
+    if ((await this.identify())?.write === 'ubus') throw this.g5Error();
+  }
 
   private rejected(what: string, out: string): Error {
     const raw = (out || '').replace(/\s+/g, ' ').slice(0, 80);
@@ -1306,10 +1319,14 @@ export class ZteDriver implements RouterDriver {
 
   async reboot(): Promise<void> {
     await this.ensure();
+    // أجهزة G5 (MC801A Pro…): التغييرات كلها عبر ubus
+    const ng = await this.ubusFirst();
+    if (ng) { try { await ng.reboot(); return; } catch (e) { this.log('ubus reboot failed → goform', (e as any)?.message); } }
     await this.post({ goformId: 'REBOOT_DEVICE' });
   }
   async reconnectData(opts?: { holdSecs?: number }): Promise<void> {
     await this.ensure();
+    await this.g5Guard('آي بي جديد');
     const off = await this.act({ goformId: 'DISCONNECT_NETWORK' });
     if (!/success/i.test(off)) throw this.rejected('قطع الاتصال', off);
     // ننتظر الجلسة تنقطع فعلاً، ونخليها مقطوعة شوي عشان الشركة تفك الآي بي
