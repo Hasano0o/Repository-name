@@ -1,9 +1,8 @@
 /**
  * «راوترك مو مدعوم؟ نضيفه لك» — طلب بسيط يوصل للمبرمج (بوت التطبيق) عشان يتواصل مع المستخدم ويدعم جهازه.
- * • الموديل + الشركة + المدينة + طريقة التواصل (تليجرام أو رقم) — بموافقة صريحة.
+ * • الموديل + الشركة + المدينة + يوزر تليجرام (اختياري) — بموافقة صريحة. ما نطلب رقم جوال (ما نحتاج إفصاح جديد في أبل).
  * • فحص تلقائي للراوتر (اختياري) ينرفق مع الطلب — نفس «استكشاف جهاز» بدون كلمات مرور ولا MAC.
  * • ما فيه أيقونة جديدة: يفتح من «جهاز جديد · غير مدعوم؟» و«راوتري مو موجود» و«راوتري مو مدعوم؟».
- * • الرقم ما ينحفظ في التطبيق — ينرسل مع الطلب بس.
  */
 import { useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, Switch } from 'react-native';
@@ -25,23 +24,19 @@ async function answers(host: string, ms = 2000): Promise<boolean> {
   const t = setTimeout(() => ctrl.abort(), ms);
   try { await fetch(`http://${host}/`, { signal: ctrl.signal }); return true; } catch { return false; } finally { clearTimeout(t); }
 }
-const cleanPhone = (v: string) => v.replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[^\d+]/g, '');
-const phoneOk = (v: string) => /^(05\d{8}|\+?9665\d{8}|\+?\d{9,15})$/.test(cleanPhone(v));
 
 export default function NewDeviceScreen() {
   const insets = useSafeAreaInsets();
   const [model, setModel] = useState('');
   const [op, setOp] = useState('');
   const [city, setCity] = useState('');
-  const [via, setVia] = useState<'telegram' | 'phone'>('telegram');
-  const [phone, setPhone] = useState('');
   const [tg, setTg] = useState('');
   const [scan, setScan] = useState(true);
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState('');
   const [sent, setSent] = useState(false);
 
-  const canSend = !!model.trim() && agree && !busy && (via === 'telegram' ? true : phoneOk(phone));
+  const canSend = !!model.trim() && agree && !busy;
 
   const send = async () => {
     if (!canSend) return;
@@ -58,7 +53,7 @@ export default function NewDeviceScreen() {
       } else probe = '(ما لقينا راوتر على الشبكة — المستخدم مو متصل بواي فاي الراوتر)';
     }
     setBusy('أرسل الطلب…');
-    const contact = via === 'phone' ? `📞 جوال/واتساب: ${cleanPhone(phone)}` : `💬 تليجرام: ${tg.trim() ? '@' + tg.trim().replace(/^@/, '') : 'بيتواصل بنفسه على @hasa_n20'}`;
+    const contact = `💬 تليجرام: ${tg.trim() ? '@' + tg.trim().replace(/^@/, '') : 'بيتواصل بنفسه على @hasa_n20'}`;
     const text = [
       '🆕 طلب إضافة جهاز جديد',
       `• الموديل: ${model.trim()}`,
@@ -82,7 +77,7 @@ export default function NewDeviceScreen() {
       <View style={[s.page, s.center, { flex: 1, backgroundColor: C.bg }]}>
         <View style={[s.doneIcon]}><Icon name="check" size={34} color={tFg('#12b76a')} stroke={3} /></View>
         <Text style={s.title}>وصل طلبك ✓</Text>
-        <Text style={s.sub}>{via === 'phone' ? 'المبرمج بيتواصل معك على رقمك.' : 'كلّمنا على تليجرام عشان نكمّل معك أسرع.'}{'\n'}وأول ما ندعم راوترك يوصلك تحديث للتطبيق.</Text>
+        <Text style={s.sub}>{tg.trim() ? 'المبرمج بيتواصل معك على تليجرام.' : 'كلّمنا على تليجرام عشان نكمّل معك أسرع.'}{'\n'}وأول ما ندعم راوترك يوصلك تحديث للتطبيق.</Text>
         <Pressable style={[s.btn, { backgroundColor: '#2a9fd8' }]} onPress={() => Linking.openURL(TELEGRAM).catch(() => {})}>
           <Icon name="send" size={17} color={C.onAccent} /><Text style={s.btnTxt}>كلّمنا على تليجرام</Text>
         </Pressable>
@@ -118,23 +113,9 @@ export default function NewDeviceScreen() {
         </View>
 
         <View style={s.card}>
-          <Text style={s.lbl}>كيف نتواصل معك؟</Text>
-          <View style={s.seg}>
-            <Pressable onPress={() => setVia('telegram')} style={[s.segBtn, via === 'telegram' && s.segOn]}>
-              <Icon name="send" size={16} color={via === 'telegram' ? C.onAccent : C.sub} /><Text style={[s.segTxt, via === 'telegram' && { color: C.onAccent }]}>تليجرام</Text>
-            </Pressable>
-            <Pressable onPress={() => setVia('phone')} style={[s.segBtn, via === 'phone' && s.segOn]}>
-              <Icon name="call" size={16} color={via === 'phone' ? C.onAccent : C.sub} /><Text style={[s.segTxt, via === 'phone' && { color: C.onAccent }]}>جوال / واتساب</Text>
-            </Pressable>
-          </View>
-          {via === 'phone' ? (
-            <>
-              <TextInput style={[s.input, { textAlign: 'left' }]} value={phone} onChangeText={setPhone} placeholder="05xxxxxxxx" placeholderTextColor={C.muted} keyboardType="phone-pad" maxLength={16} />
-              {!!phone && !phoneOk(phone) && <Text style={s.warn}>الرقم مو كامل — مثل 05xxxxxxxx</Text>}
-            </>
-          ) : (
-            <TextInput style={[s.input, { textAlign: 'left' }]} value={tg} onChangeText={setTg} placeholder="@اسمك (اختياري)" placeholderTextColor={C.muted} autoCapitalize="none" maxLength={40} />
-          )}
+          <Text style={s.lbl}>يوزرك في تليجرام (اختياري)</Text>
+          <TextInput style={[s.input, { textAlign: 'left' }]} value={tg} onChangeText={setTg} placeholder="@username" placeholderTextColor={C.muted} autoCapitalize="none" maxLength={40} />
+          <Text style={s.rowSub}>عشان المبرمج يكلّمك — أو تكلّمه أنت بعد الإرسال.</Text>
         </View>
 
         <View style={s.card}>
@@ -147,7 +128,7 @@ export default function NewDeviceScreen() {
           </View>
           <View style={[s.row, s.rowLine]}>
             <Switch value={agree} onValueChange={setAgree} trackColor={{ true: C.violet, false: C.track }} thumbColor={C.onAccent} />
-            <Text style={[s.rowSub, { flex: 1 }]}>موافق أرسل هالبيانات للمبرمج عشان يتواصل معي — {via === 'phone' ? 'رقمي يوصله بس ' : ''}وما تنحفظ في التطبيق.</Text>
+            <Text style={[s.rowSub, { flex: 1 }]}>موافق أرسل هالبيانات للمبرمج عشان يتواصل معي — وما تنحفظ في التطبيق.</Text>
           </View>
         </View>
 
@@ -182,11 +163,6 @@ const s = sheet({
   chip: { borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.card, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
   chipOn: { backgroundColor: '#6a45ec', borderColor: '#6a45ec' },
   chipTxt: { color: C.text, fontWeight: '700', fontSize: 13.5 },
-  seg: { flexDirection: 'row-reverse', gap: 8 },
-  segBtn: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderColor: C.cardBorder, borderRadius: 14, paddingVertical: 11 },
-  segOn: { backgroundColor: '#2a9fd8', borderColor: '#2a9fd8' },
-  segTxt: { color: C.sub, fontWeight: '800', fontSize: 14 },
-  warn: { color: C.red, fontSize: 12, textAlign: 'right' },
   row: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   rowLine: { borderTopWidth: 1, borderColor: C.lineSoft, paddingTop: 10 },
   rowTitle: { color: C.text, fontWeight: '800', fontSize: 14, textAlign: 'right' },
