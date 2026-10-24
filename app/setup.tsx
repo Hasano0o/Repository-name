@@ -9,6 +9,7 @@
  * • نفس حماية شاشة الإضافة: عنوان محلي بس، محاولة دخول وحدة، و«المحاولة الأخيرة» لو باقي وحدة.
  * • كلمة المرور تنحفظ مشفّرة على الجهاز (saveRouter) — ما تطلع لأي مكان.
  */
+import { ROUTER_HOSTS } from '../src/utils/routerHosts';
 import { useEffect, useRef, useState, ReactNode } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { View, Text, TextInput, Pressable } from '../src/i18n/rn';
@@ -25,7 +26,7 @@ import { C, R, S, tBg, tBd, tFg } from '../src/ui/theme';
 import { sheet } from '../src/i18n';
 
 /** العناوين المشهورة: هواوي · ZTE/تي بي لينك · أغلب الراوترات · بعض ZTE وزين · شاومي */
-const HOSTS = ['192.168.8.1', '192.168.0.1', '192.168.1.1', '192.168.100.1', '192.168.31.1', '192.168.3.1', '192.168.192.1', '192.168.254.1'];
+const HOSTS = ROUTER_HOSTS;
 
 type Step = 'wifi' | 'search' | 'notfound' | 'hub' | 'password' | 'login' | 'done';
 

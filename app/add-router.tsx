@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { ROUTER_HOSTS } from '../src/utils/routerHosts';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform, } from 'react-native';
 import { Pressable, ScrollView, Text, TextInput, View } from '../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -77,7 +78,7 @@ export default function AddRouterScreen() {
     if (editId || welcomeScan) { setModel({ state: 'none' }); return; }
     let alive = true;
     (async () => {
-      const HOSTS = ['192.168.8.1', '192.168.0.1', '192.168.1.1', '192.168.31.1', '192.168.100.1', '192.168.3.1', '192.168.192.1', '192.168.254.1'];
+      const HOSTS = ROUTER_HOSTS;
       const ping = async (h: string) => {
         const c = new AbortController(); const t = setTimeout(() => c.abort(), 1800);
         try { await fetch(`http://${h}/`, { signal: c.signal }); return true; } catch { return false; } finally { clearTimeout(t); }
@@ -265,7 +266,14 @@ export default function AddRouterScreen() {
       setStep('نتعرّف على نوع الراوتر...');
       let driver = await detectDriver(h);
       if (!driver && over?.findHost) {
-        for (const alt of ['192.168.8.1', '192.168.0.1', '192.168.1.1', '192.168.100.1', '192.168.192.1', '192.168.254.1'].filter(x => x !== h)) {
+        setStep('ندوّر على الراوتر...');
+        // كل العناوين مع بعض (ثانيتين) ← نتعرّف بس على اللي ردّ
+        const ping = async (x: string) => {
+          const c = new AbortController(); const t = setTimeout(() => c.abort(), 1800);
+          try { await fetch(`http://${x}/`, { signal: c.signal }); return true; } catch { return false; } finally { clearTimeout(t); }
+        };
+        const answered = (await Promise.all(ROUTER_HOSTS.filter(x => x !== h).map(async x => ((await ping(x)) ? x : null)))).filter(Boolean) as string[];
+        for (const alt of answered) {
           setStep(`ندوّر على الراوتر (${alt})...`);
           driver = await detectDriver(alt);
           if (driver) { h = alt; setHost(alt); break; }
