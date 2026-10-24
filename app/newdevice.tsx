@@ -10,6 +10,7 @@ import { View, Text, TextInput, Pressable } from '../src/i18n/rn';
 import { router, Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { runProbe, reportText } from '../src/utils/probe';
+import { detectDriver } from '../src/drivers/registry';
 import { sendSupportReport } from '../src/services/errors';
 import { Icon } from '../src/ui/Icon';
 import { C, R, S, tBg, tBd, tFg } from '../src/ui/theme';
@@ -45,6 +46,22 @@ export default function NewDeviceScreen() {
       setBusy('أدوّر على راوترك…');
       const found = (await Promise.all(HOSTS.map(async h => ((await answers(h)) ? h : null)))).find(Boolean) as string | undefined;
       if (found) {
+        // الراوتر مدعوم أصلاً؟ (المستخدم ما عرف يضيفه) — نقوله بدل ما يرسل طلب على الفاضي
+        setBusy('أتعرّف على راوترك…');
+        const d = await detectDriver(found).catch(() => null);
+        const known = d && (d as any).id !== 'unknown' ? (d as any).name as string : null;
+        if (known) {
+          setBusy('');
+          const go = await new Promise<'setup' | 'send' | 'cancel'>(res => Alert.alert('راوترك مدعوم أصلاً ✓',
+            `الراوتر اللي متصل فيه (${known}) يشتغل مع Bandly — ما يحتاج طلب.\n\nلو تقصد راوتر ثاني، اتصل بواي فايه أول وارجع هنا.`,
+            [
+              { text: 'رجوع', style: 'cancel', onPress: () => res('cancel') },
+              { text: 'أرسل على كل حال', onPress: () => res('send') },
+              { text: 'دخّلني الحين', onPress: () => res('setup') },
+            ]));
+          if (go === 'setup') { router.replace('/setup' as Href); return; }
+          if (go === 'cancel') return;
+        }
         setBusy('أفحص الراوتر (دقيقة تقريباً)…');
         try {
           const rep = await runProbe(found, (d, t) => setBusy(`أفحص الراوتر… ${d}/${t}`));
