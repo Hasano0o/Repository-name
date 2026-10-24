@@ -271,6 +271,13 @@ export class HuaweiDriver implements RouterDriver {
         this.queue = [];
         return this.post(p, body, undefined, false, enc);
       }
+      // المحاولة الثانية بعد بعد رفض الرمز: بعد ما الراوتر يعيد الاتصال (تغيير الترددات) webserver/token
+      // يعطي رمز قديم — نجيبه من SesTokInfo (نفس اللي يسويه الدخول) ونجرّب مرة أخيرة
+      if (!retry && !token && (code === '125002' || code === '125003')) {
+        this.queue = [];
+        await new Promise(r => setTimeout(r, 1200));
+        return this.post(p, body, await this.freshToken(true), false, enc);
+      }
       // الموديلات الجديدة (H158-381 / 5G CPE Pro 5) ترفض كتابة الواي فاي بدون تشفير: 9003 / 100005
       if (!enc && /^wlan\//.test(p) && (code === '9003' || code === '100005')) {
         this.log('POST', p, 'needs encryption — retrying with ;enc');

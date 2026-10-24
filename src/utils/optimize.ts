@@ -61,7 +61,8 @@ export function buildCandidates(
   nrSupported: number[],
   max = 6,
 ): OptTarget[] {
-  const nrOk = (b: number) => !nrSupported.length || nrSupported.includes(b);
+  // 5G بس من قائمة الراوتر — لو فاضية (مثل H158: ما يقبل تثبيت 5G) ما نجرّب 5G أبد
+  const nrOk = (b: number) => nrSupported.includes(b);
   const nrCells = cellBands.filter(c => c.tech === 'NR' && nrOk(c.band)).map(c => c.band);
   const nr = [...new Set([...nrCells, ...[...nrSupported].sort(byPri(NR_PRI))])].slice(0, Math.min(3, Math.max(1, max - 3)));
   const lteCells = cellBands.filter(c => c.tech === 'LTE').map(c => c.band);
