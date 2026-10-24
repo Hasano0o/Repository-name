@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Modal } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { AppState, Modal } from 'react-native';
 import { View, Text, Pressable } from '../i18n/rn';
 import * as Updates from 'expo-updates';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -27,6 +27,33 @@ export function UpdateBanner() {
     }
   }, [isUpdateAvailable, isUpdatePending, isDownloading]);
 
+  // نشيك على تحديث جديد كل ما رجع المستخدم للتطبيق (مو بس عند الفتح من الصفر)،
+  // وكل ١٠ دقايق وهو مفتوح — عشان يوصل التحديث بدون ما يقفل ويفتح مرتين.
+  const lastCheck = useRef(Date.now());
+  const leftAt = useRef(0);
+  const pendingRef = useRef({ pending: false, silent: false });
+  useEffect(() => {
+    if (!Updates.isEnabled || __DEV__) return;
+    const check = (minGap: number) => {
+      if (Date.now() - lastCheck.current < minGap) return;
+      lastCheck.current = Date.now();
+      Updates.checkForUpdateAsync().catch(() => {});
+    };
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st === 'background') { leftAt.current = Date.now(); return; }
+      if (st !== 'active') return;
+      const away = leftAt.current ? Date.now() - leftAt.current : 0;
+      // تحديث صامت نازل وجاهز والمستخدم كان برا ٣٠ ث+ ← نطبّقه على طول (ما فيه عملية شغالة)
+      if (pendingRef.current.pending && pendingRef.current.silent && away > 30_000 && !progress.active()) {
+        Updates.reloadAsync().catch(() => {});
+        return;
+      }
+      check(45_000);
+    });
+    const t = setInterval(() => { if (AppState.currentState === 'active') check(9 * 60_000); }, 10 * 60_000);
+    return () => { sub.remove(); clearInterval(t); };
+  }, []);
+
   // ما نقاطع عملية شغالة على الراوتر (قفل تردد، تجربة دمج…)
   useEffect(() => {
     if (!isUpdatePending) return;
@@ -37,6 +64,7 @@ export function UpdateBanner() {
   // تحديث صامت: ينزل ويتطبّق لحاله أول ما يفتح التطبيق من جديد — بدون نافذة
   const m: any = (downloadedUpdate ?? availableUpdate)?.manifest;
   const silent = !!(m?.extra?.expoClient?.extra?.silentUpdate);
+  pendingRef.current = { pending: isUpdatePending, silent };
   if (!Updates.isEnabled || !isUpdatePending || busy || silent) return null;
   const reload = () => Updates.reloadAsync().catch(() => {});
 
