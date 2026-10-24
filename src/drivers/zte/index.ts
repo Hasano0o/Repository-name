@@ -344,6 +344,73 @@ export class ZteDriver implements RouterDriver {
     return this.loginP;
   }
 
+  /** قيم كلمة المرور المحتملة حسب صيغة الفيرموير (من service.js) */
+  private loginCandidates(password: string, ld: string, rd: string): Array<{ name: string; val: string }> {
+    const candidates: Array<{ name: string; val: string }> = [];
+    const s1u = sha256Upper(password);  // sha256(pw) upper-hex
+    const s1l = sha256Hex(password);    // sha256(pw) lower-hex
+
+    // حالة "2": sha256(sha256(pw) + LD) — الأكثر شيوعاً في MU5001
+    if (ld) {
+      candidates.push({ name: 'sha2(sha2(pw)+LD)', val: sha256Upper(s1u + ld) });
+      candidates.push({ name: 'sha2(sha2(pw)+LD.up)', val: sha256Upper(s1u + ld.toUpperCase()) });
+      candidates.push({ name: 'sha2(sha2L+LD)', val: sha256Hex(s1l + ld) });
+      candidates.push({ name: 'sha2(pw+LD)', val: sha256Upper(password + ld) });
+      candidates.push({ name: 'sha2(pw+LD.up)', val: sha256Upper(password + ld.toUpperCase()) });
+    }
+    candidates.push({ name: 'sha2(pw).up', val: s1u });
+    candidates.push({ name: 'sha2(pw).lo', val: s1l });
+
+    // حالة "1": sha256(base64(pw))
+    try {
+      const b64 = btoa(password);
+      candidates.push({ name: 'sha2(b64).up', val: sha256Upper(b64) });
+      candidates.push({ name: 'sha2(b64).lo', val: sha256Hex(b64) });
+    } catch {}
+
+    // حالة "0": base64(pw)
+    try { candidates.push({ name: 'b64(pw)', val: btoa(password) }); } catch {}
+
+    // ═══ احتياطي MD5 ═══
+    if (rd) candidates.push({ name: 'md5(md5(pw)+RD)', val: md5Hex(md5Hex(password) + rd) });
+    candidates.push({ name: 'md5(md5(pw))', val: md5Hex(md5Hex(password)) });
+
+    return candidates;
+  }
+
+  /**
+   * «دخول المطوّر» (DEVELOPER_OPTION_LOGIN) — بعض فيرموير ZTE الأحدث (MC888/MC889 وغيرها)
+   * يرفض تثبيت الترددات إلا بجلسة مطوّر فوق جلسة الأدمن (مرجع: zte-advanced-router-panel، MIT).
+   * محاولة وحدة بس بالجلسة، وبالصيغة اللي نجح فيها الدخول، وما نجرّب لو باقي أقل من ٣ محاولات.
+   */
+  private devTried = false;
+  private devOk = false;
+  private async devLogin(): Promise<boolean> {
+    if (this.devTried) return this.devOk;
+    this.devTried = true;
+    const known = GOOD_FORMULA.get(this.host) ?? await loadFormula(this.host);
+    if (!known || !this.password) return false;
+    const left = await this.attemptsLeft();
+    if (left !== undefined && left < 3) return false;
+    try {
+      const v = await this.get(['LD', 'RD']);
+      const c = this.loginCandidates(this.password, v.LD || '', v.RD || '').find(x => x.name === known);
+      if (!c) return false;
+      const out = await this.post({ goformId: 'DEVELOPER_OPTION_LOGIN', password: c.val });
+      this.log('dev-login →', out.slice(0, 80));
+      this.devOk = /"result"\s*:\s*"?(0|success)"?/i.test(out);
+    } catch { this.devOk = false; }
+    return this.devOk;
+  }
+
+  /** 5G: NSA (مع 4G) ولا SA — لازم لأمر WAN_PERFORM_NR5G_SANSA_BAND_LOCK */
+  private async nrType(): Promise<'0' | '1'> {
+    try {
+      const r = await this.get(['network_type']);
+      return /^SA$/i.test((r.network_type || '').trim()) ? '0' : '1';
+    } catch { return '1'; }
+  }
+
   private async loginOnce(host: string, _username: string, password: string, lastTry = false, fresh = false): Promise<void> {
     this.host = host;
     this.password = password;
@@ -382,35 +449,7 @@ export class ZteDriver implements RouterDriver {
     this.log('login: LD=' + (ld ? ld.slice(0, 12) + '..' : '∅'),
              'RD=' + (rd ? rd.slice(0, 12) + '..' : '∅'));
 
-    // ═══ من service.js: WEB_ATTR_IF_SUPPORT_SHA256 له 3 حالات ═══
-    const candidates: Array<{ name: string; val: string }> = [];
-    const s1u = sha256Upper(password);  // sha256(pw) upper-hex
-    const s1l = sha256Hex(password);    // sha256(pw) lower-hex
-
-    // حالة "2": sha256(sha256(pw) + LD) — الأكثر شيوعاً في MU5001
-    if (ld) {
-      candidates.push({ name: 'sha2(sha2(pw)+LD)', val: sha256Upper(s1u + ld) });
-      candidates.push({ name: 'sha2(sha2(pw)+LD.up)', val: sha256Upper(s1u + ld.toUpperCase()) });
-      candidates.push({ name: 'sha2(sha2L+LD)', val: sha256Hex(s1l + ld) });
-      candidates.push({ name: 'sha2(pw+LD)', val: sha256Upper(password + ld) });
-      candidates.push({ name: 'sha2(pw+LD.up)', val: sha256Upper(password + ld.toUpperCase()) });
-    }
-    candidates.push({ name: 'sha2(pw).up', val: s1u });
-    candidates.push({ name: 'sha2(pw).lo', val: s1l });
-
-    // حالة "1": sha256(base64(pw))
-    try {
-      const b64 = btoa(password);
-      candidates.push({ name: 'sha2(b64).up', val: sha256Upper(b64) });
-      candidates.push({ name: 'sha2(b64).lo', val: sha256Hex(b64) });
-    } catch {}
-
-    // حالة "0": base64(pw)
-    try { candidates.push({ name: 'b64(pw)', val: btoa(password) }); } catch {}
-
-    // ═══ احتياطي MD5 ═══
-    if (rd) candidates.push({ name: 'md5(md5(pw)+RD)', val: md5Hex(md5Hex(password) + rd) });
-    candidates.push({ name: 'md5(md5(pw))', val: md5Hex(md5Hex(password)) });
+    const candidates = this.loginCandidates(password, ld, rd);
 
     const isOk = (s: string) =>
       /"result"\s*:\s*"?0"?/.test(s) || /"result"\s*:\s*"?success"?/i.test(s);
@@ -929,23 +968,56 @@ export class ZteDriver implements RouterDriver {
     // «فك التثبيت» = الترددات الأصلية للراوتر لو نعرفها (مو قائمة تخمينية — كانت تشيل ترددات زي B38 ويطيح الراوتر بدون خدمة)
     const all = this.baseLte() ?? [...new Set([...DEFAULT_LTE, ...(await this.readLocks()).lte])];
     const lte = bands.length ? bands : all;
-    const out = await this.act({
+    // بعض الفيرموير (MC888/MC889…) يبي القناع ١٢ خانة بالضبط: 0x000000000005 بدل 0x5
+    const short = maskFromBands(lte);
+    const padded = '0x' + short.slice(2).padStart(12, '0');
+    const masks = [...new Set(this.ltePad ? [padded, short] : [short, padded])];
+    const send = (m: string) => this.act({
       goformId: 'BAND_SELECT',
       is_gw_band: '0', gw_band_mask: '0',
-      is_lte_band: '1', lte_band_mask: maskFromBands(lte),
+      is_lte_band: '1', lte_band_mask: m,
     });
-    if (!/success/i.test(out)) throw this.rejected('تثبيت الترددات', out);
+    let out = '';
+    for (const m of masks) {
+      out = await send(m);
+      if (/success/i.test(out)) { this.ltePad = m === padded && m !== short; return; }
+    }
+    // آخر شي: جلسة مطوّر (بعض الأجهزة تشترطها للتثبيت)
+    if (await this.devLogin()) {
+      for (const m of masks) {
+        out = await send(m);
+        if (/success/i.test(out)) { this.ltePad = m === padded && m !== short; return; }
+      }
+    }
+    throw this.rejected('تثبيت الترددات', out);
   }
+  private ltePad = false;
+  /** أي أمر 5G قبله الراوتر: classic = WAN_PERFORM_NR5G_BAND_LOCK (MU5001)، sansa = الأحدث مع type */
+  private nrCmd: 'classic' | 'sansa' | null = null;
   private async setNrBands(nrBands: number[]): Promise<void> {
     const nr = nrBands.length ? nrBands : (this.baseNr() ?? SAFE_NR);
     const cur = (await this.readLocks()).nr;
     const same = cur.length === nr.length && nr.every(b => cur.includes(b));
     if (same) return;
-    let o2 = await this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: nr.join(',') });
-    if (!/success/i.test(o2) && !nrBands.length) {
-      o2 = await this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: SAFE_NR.join(',') });
-    }
-    if (!/success/i.test(o2)) throw this.rejected('تثبيت ترددات 5G', o2);
+    const classic = (m: string) => this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: m });
+    const sansa = async (m: string) => this.act({
+      goformId: 'WAN_PERFORM_NR5G_SANSA_BAND_LOCK', nr5g_band_mask: m, type: await this.nrType(),
+    });
+    const ok = (o: string) => /success/i.test(o);
+    const tryAll = async (m: string): Promise<string> => {
+      const order = this.nrCmd === 'sansa' ? [sansa, classic] : [classic, sansa];
+      let o = '';
+      for (const f of order) {
+        o = await f(m);
+        if (ok(o)) { this.nrCmd = f === sansa ? 'sansa' : 'classic'; return o; }
+      }
+      return o;
+    };
+    let o2 = await tryAll(nr.join(','));
+    if (!ok(o2) && !nrBands.length) o2 = await tryAll(SAFE_NR.join(','));
+    // آخر شي: جلسة مطوّر ثم نعيد
+    if (!ok(o2) && await this.devLogin()) o2 = await tryAll(nr.join(','));
+    if (!ok(o2)) throw this.rejected('تثبيت ترددات 5G', o2);
   }
 
   async getActiveLock(): Promise<ActiveLock | null> {
