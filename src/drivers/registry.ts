@@ -2,6 +2,7 @@ import { RouterDriver } from './types';
 import { HuaweiDriver } from './huawei';
 import { ZteDriver } from './zte';
 import { ZteNgDriver } from './zteng';
+import { ZyxelDriver } from './zyxel';
 import { UnknownDriver } from './unknown';
 import { DeviceDriver } from './device';
 import { DemoDriver } from './demo';
@@ -20,6 +21,8 @@ const factories: (() => RouterDriver)[] = [
   () => new ZteDriver(),
   // ZTE الجيل الجديد (U60 Pro / MU5250 …) — ubus بدل goform. قراءة بس للحين
   () => new ZteNgDriver(),
+  // زيكسل (صفحة Web-Based Configurator الجديدة) — قراءة بس للحين
+  () => new ZyxelDriver(),
   () => new UnknownDriver(),
 ];
 

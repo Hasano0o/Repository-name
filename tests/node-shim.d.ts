@@ -12,3 +12,12 @@ declare module 'node:assert/strict' {
   };
   export default assert;
 }
+declare module 'node:crypto' {
+  type Bytes = Uint8Array;
+  interface Cipher { update(d: string | Bytes): Bytes; final(): Bytes }
+  export function randomBytes(n: number): Bytes;
+  export function createCipheriv(alg: string, key: Bytes, iv: Bytes): Cipher;
+  export function generateKeyPairSync(t: 'rsa', o: unknown): { publicKey: string; privateKey: string };
+  export function privateDecrypt(o: { key: string; padding: number }, data: Bytes): Bytes;
+  export const constants: { RSA_PKCS1_PADDING: number };
+}

@@ -24,6 +24,7 @@ const files = [
   'src/store/routerLockCore.ts',
   'src/assistant/core.ts',
   'src/drivers/models.ts',
+  'src/drivers/zyxel/crypto.ts',
   ...fs.readdirSync(path.join(root, 'tests')).filter(f => f.endsWith('.test.ts')).map(f => `tests/${f}`),
 ];
 
