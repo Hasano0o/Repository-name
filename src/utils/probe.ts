@@ -594,6 +594,54 @@ export interface Fingerprint {
   forms: string[];
   /** متوسط رد الراوتر بالمللي */
   lanMs?: number;
+  /** مسارات API لقيناها داخل ملفات الجافاسكربت العامة للصفحة (بدون أي بيانات للمستخدم) */
+  apis?: string[];
+  /** كلمات تدل على طريقة الدخول/التشفير (sha256، md5، rsa…) */
+  hints?: string[];
+}
+
+const ASSET_EXT = /\.(js|css|png|jpe?g|gif|svg|ico|woff2?|ttf|map|json|html?)$/i;
+
+/** يقرأ ملفات الجافاسكربت العامة للصفحة ويطلّع منها مسارات الـ API — هذي هي اللي نحتاجها لبناء درايفر */
+async function scanScripts(base: string, html: string): Promise<{ apis: string[]; hints: string[] }> {
+  const urls = new Set<string>();
+  for (const m of html.matchAll(/<script[^>]+src=["']?([^"'\s>]+)/gi)) {
+    const u = m[1].split('#')[0];
+    if (!/^https?:/i.test(u) || u.startsWith(base)) urls.add(u.replace(base, ''));
+  }
+  // Vue/Webpack: الملفات المؤجّلة مذكورة في كود التحميل {"chunk-xxx":"hash"} مع "static/js/"
+  const prefix = html.match(/["'](\/?static\/js\/)["']/)?.[1] ?? (html.includes('static/js/') ? '/static/js/' : '');
+  if (prefix) {
+    const map = html.match(/\{("chunk-[\w-]+":"[0-9a-f]+",?)+\}/);
+    if (map) for (const m of map[0].matchAll(/"(chunk-[\w-]+)":"([0-9a-f]+)"/g)) urls.add('/' + prefix.replace(/^\//, '') + m[1] + '.' + m[2] + '.js');
+  }
+  const list = [...urls].filter(u => /\.js(\?|$)/i.test(u) && !/tinymce|jquery|jtopo|vendor|polyfill|chunk-libs|elementUI/i.test(u)).slice(0, 40);
+  const apis = new Set<string>();
+  const hints = new Set<string>();
+  let total = 0;
+  for (const u of list) {
+    if (total > 8_000_000 || apis.size > 200) break;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 5000);
+    try {
+      const res = await fetch(base + (u.startsWith('/') ? u : '/' + u), { signal: ctrl.signal } as any);
+      if (!res.ok) continue;
+      const js = (await res.text()).slice(0, 3_000_000);
+      total += js.length;
+      for (const m of js.matchAll(/["'`](\/?(?:api|cgi-bin|goform|action|ubus|rest|reqproc|boaform|web|webapi|jsonrpc|rpc|router|device|system|lte|nr|network)[\w\/.\-]{2,70})["'`]/gi)) {
+        const v = m[1];
+        if (!ASSET_EXT.test(v) && !/\s/.test(v)) apis.add(v.startsWith('/') ? v : '/' + v);
+      }
+      for (const m of js.matchAll(/["'`](\/[a-z][\w-]{1,30}\/[\w\/-]{2,60})["'`]/gi)) {
+        const v = m[1];
+        if (!ASSET_EXT.test(v) && !/^\/(static|node_modules|src)\//i.test(v)) apis.add(v);
+      }
+      for (const k of ['sha256', 'sha1', 'md5', 'hmac', 'rsa', 'jsencrypt', 'aes', 'base64', 'pbkdf2', 'nonce', 'salt', 'token', 'csrf', 'websocket', 'mqtt']) {
+        if (new RegExp(k, 'i').test(js)) hints.add(k);
+      }
+    } catch {} finally { clearTimeout(t); }
+  }
+  return { apis: [...apis].sort().slice(0, 200), hints: [...hints] };
 }
 
 export async function fingerprint(host: string): Promise<Fingerprint> {
@@ -612,7 +660,8 @@ export async function fingerprint(host: string): Promise<Fingerprint> {
         fp.poweredBy = (res.headers.get('x-powered-by') || '').slice(0, 60) || undefined;
         const html = (await res.text()).slice(0, 200_000);
         const uniq = (xs: string[]) => [...new Set(xs)];
-        fp.scripts = uniq([...html.matchAll(/<script[^>]+src=["']([^"'?#]+)/gi)].map(m => m[1].split('/').slice(-2).join('/'))).slice(0, 15);
+        fp.scripts = uniq([...html.matchAll(/<script[^>]+src=["']?([^"'?#\s>]+)/gi)].map(m => m[1].split('/').slice(-2).join('/'))).slice(0, 15);
+        try { const sc = await scanScripts(base, html); if (sc.apis.length) fp.apis = sc.apis; if (sc.hints.length) fp.hints = sc.hints; } catch {}
         // أسماء الخانات بس — ما ناخذ أي value
         fp.loginFields = uniq([...html.matchAll(/<input[^>]*>/gi)].map(m => {
           const tag = m[0];
@@ -636,5 +685,7 @@ export function fingerprintText(fp: Fingerprint): string[] {
     fp.loginFields.length ? `خانات الصفحة: ${fp.loginFields.join(' · ')}` : '',
     fp.forms.length ? `نماذج: ${fp.forms.join(' · ')}` : '',
     fp.lanMs !== undefined ? `رد الراوتر: ${fp.lanMs}ms` : '',
+    fp.hints?.length ? `طريقة الدخول (تلميحات): ${fp.hints.join(' · ')}` : '',
+    fp.apis?.length ? `مسارات API (${fp.apis.length}):\n    ${fp.apis.join('\n    ')}` : '',
   ].filter(Boolean);
 }
