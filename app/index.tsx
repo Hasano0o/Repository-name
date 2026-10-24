@@ -108,7 +108,8 @@ export default function RoutersList() {
   const canScanLabel = Platform.OS !== 'web' && !desktop;
   const addByLabel = () => router.push('/add-router?scan=1' as Href);
   const guided = () => router.push('/setup' as Href);
-  const explore = () => router.push('/probe' as Href);
+  // «غير مدعوم؟» ← طلب بسيط يوصل للمبرمج (والاستكشاف المتقدم داخله)
+  const explore = () => router.push('/newdevice' as Href);
   const demo = async () => {
     const id = await addDemoRouter();
     router.push({ pathname: '/router/[id]', params: { id } });
@@ -186,7 +187,7 @@ export default function RoutersList() {
         </Pressable>
         <Pressable style={s.link} onPress={explore}>
           <Icon name="compass" size={16} color={P.violet} />
-          <Text style={s.linkTxt}>استكشاف جهاز غير مدعوم</Text>
+          <Text style={s.linkTxt}>راوترك مو مدعوم؟ نضيفه لك</Text>
         </Pressable>
         <BlockerAsk onAdd={add} onExplore={explore} onHelp={guided} />
         {desktop?.openTech && (

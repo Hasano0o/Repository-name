@@ -45,6 +45,7 @@ const SCREENS: [string, string][] = [
   ['auto/[id]', 'الوضع الذكي'],
   ['combo/[id]', 'الأساسي والثانوي'],
   ['probe', 'استكشاف جهاز'],
+  ['newdevice', 'نضيف راوترك'],
   ['profiles/[id]', 'ملفاتي'],
   ['optimize/[id]', 'المُحسِّن التلقائي'],
   ['report/[id]', 'تقرير الاتصال'],

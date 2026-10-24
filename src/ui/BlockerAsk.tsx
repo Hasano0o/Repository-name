@@ -93,8 +93,8 @@ export function BlockerAsk({ onAdd, onExplore, onHelp }: { onAdd: () => void; on
           <Text style={s.title}>شكراً 🙏</Text>
           {pick === 'unsupported' && (
             <>
-              <Text style={s.sub}>جرّب «استكشاف جهاز» — يقرأ صفحة راوترك ويرسل لنا بصمته عشان ندعمه</Text>
-              <Pressable style={s.btn} onPress={onExplore}><Text style={s.btnTxt}>استكشاف جهاز</Text></Pressable>
+              <Text style={s.sub}>أرسل لنا نوعه وطريقة التواصل — المبرمج يتواصل معك ويضيفه</Text>
+              <Pressable style={s.btn} onPress={onExplore}><Text style={s.btnTxt}>نضيف راوترك</Text></Pressable>
             </>
           )}
           {pick === 'howto' && (

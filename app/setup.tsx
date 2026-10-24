@@ -217,7 +217,7 @@ export default function SetupScreen() {
                 '١) افتح «الإعدادات» في جوالك ← «واي فاي».\n٢) اختر اسم شبكة راوترك — مكتوب على الملصق تحت الراوتر (جنب SSID أو WLAN).\n٣) اكتب كلمة سر الواي فاي اللي على الملصق.\n٤) ارجع لـ Bandly — أكمّل لحالي.')} />
             <Big icon="refresh" color="#2f6bff" title="جرّب الحين" onPress={search} />
             <Big icon="settings" color="#7c5cff" title="أدخل البيانات بنفسي" sub="لو عنوان راوترك غير المعتاد" onPress={() => router.replace('/add-router' as Href)} />
-            <Big icon="compass" color="#64748b" title="راوتري مو مدعوم؟" sub="استكشاف جهاز" onPress={() => router.replace('/probe' as Href)} />
+            <Big icon="compass" color="#64748b" title="راوتري مو مدعوم؟" sub="استكشاف جهاز" onPress={() => router.replace('/newdevice' as Href)} />
             <Pressable onPress={demo} style={s.link}><Text style={s.linkTxt}>جرّب بدون راوتر · Demo</Text></Pressable>
           </>
         )}
