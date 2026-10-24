@@ -11,7 +11,7 @@ import { sheet } from '../i18n';
 
 const STEPS: { icon: IconName; color: string; title: string; text: string }[] = [
   { icon: 'chart', color: '#2f6bff', title: 'فوق: قوة اتصالك', text: 'البطاقات فوق تقول لك إشارتك ممتازة ولا ضعيفة، و4G ولا 5G.' },
-  { icon: 'spark', color: '#0e7d93', title: 'كلّم مساعد Bandly', text: 'تحت «حسّن اتصالك» — قل له «أفضل تردد» أو «أفضل برج» أو «افحص إشارتي» ويسويها لك.' },
+  { icon: 'spark', color: '#7c5cff', title: 'اضبط لي كل شي', text: 'ضغطة وحدة تحت «خلّ Bandly يسويها عنك» — يختار أفضل تردد وبرج وقناة بنفسه.' },
   { icon: 'aim', color: '#12b76a', title: 'وجّه الأنتنا', text: 'حرّك الراوتر أو الأنتنا وهو يقول لك بالصوت متى صارت الإشارة أقوى.' },
   { icon: 'power', color: '#d97706', title: 'إعادة التشغيل', text: 'لو علّق النت، قل للمساعد «أعد تشغيل الراوتر» — يسأل قبل ويتأكد إنه رجع.' },
 ];
@@ -64,6 +64,6 @@ const s = sheet({
   rowText: { color: C.sub, fontSize: 13, lineHeight: 20, textAlign: 'right', marginTop: 2 },
   primary: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: C.blue, borderRadius: 16, paddingVertical: 14, marginTop: 4 },
   primaryTxt: { color: C.onAccent, fontWeight: '800', fontSize: 15 },
-  secondary: { alignItems: 'center', paddingVertical: 8 },
-  secondaryTxt: { color: C.sub, fontWeight: '700', fontSize: 13.5 },
+  secondary: { alignItems: 'center', justifyContent: 'center', borderRadius: 16, paddingVertical: 13, borderWidth: 1.5, borderColor: C.cardBorder, backgroundColor: C.rowBg },
+  secondaryTxt: { color: C.text, fontWeight: '800', fontSize: 14.5 },
 });
