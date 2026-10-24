@@ -17,6 +17,8 @@ export interface LabelData {
   /** كلمة سر صفحة الإدارة */
   adminPassword?: string;
   wifi?: Partial<WifiCreds>;
+  /** وضع «الموديل»: سطور النص كما انقرأت */
+  rawLines?: string[];
 }
 
 // ─── رمز QR للواي فاي: WIFI:T:WPA;S:<اسم>;P:<كلمة>;H:false;; ───

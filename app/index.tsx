@@ -185,9 +185,9 @@ export default function RoutersList() {
           <Text style={s.demoTxt}>جرّب بدون راوتر · Demo</Text>
           <Text style={s.demoSub}>راوتر تجريبي تشوف فيه كل المزايا · Try without a router</Text>
         </Pressable>
-        <Pressable style={s.link} onPress={explore}>
-          <Icon name="compass" size={16} color={P.violet} />
-          <Text style={s.linkTxt}>راوترك مو مدعوم؟ نضيفه لك</Text>
+        <Pressable style={s.unsup} onPress={explore} accessibilityRole="button">
+          <Icon name="compass" size={16} color={tFg('#c2410c')} />
+          <Text style={s.unsupTxt}>راوترك مو مدعوم؟ أرسل لنا ونضيفه</Text>
         </Pressable>
         <BlockerAsk onAdd={add} onExplore={explore} onHelp={guided} />
         {desktop?.openTech && (
@@ -410,6 +410,12 @@ const s = sheet({
   exploreTitle: { color: P.violet, fontSize: 14, fontWeight: '800' },
   exploreSub: { color: P.sub, fontSize: 11.5, marginTop: 1 },
 
+  unsup: {
+    flexDirection: 'row-reverse', alignSelf: 'center', alignItems: 'center', gap: 6, marginTop: 12,
+    paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999,
+    borderWidth: 1.5, borderColor: tBd('#f9731666'), backgroundColor: tBg('#f9731614'),
+  },
+  unsupTxt: { color: tFg('#c2410c'), fontWeight: '800', fontSize: 13.5 },
   link: { flexDirection: 'row-reverse', alignSelf: 'center', alignItems: 'center', gap: 6, paddingVertical: 14, paddingHorizontal: 14 },
   linkTxt: { color: P.violet, fontWeight: '700', fontSize: 13 },
   demoTag: { backgroundColor: tBg('#f3edff'), borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },

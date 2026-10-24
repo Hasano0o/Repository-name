@@ -199,8 +199,8 @@ export function HomeFooter({ onExplore }: { onExplore: () => void }) {
         <Tile title="وضع الفني" sub="عميل عن بُعد" colors={['#22c3e6', '#0b86a1']}
           icon={<Icon name="aim" size={22} color={tFg('#0b86a1')} stroke={2.2} />}
           onPress={() => (desktop?.openTech ? desktop.openTech() : router.push('/tech' as Href))} />
-        <Tile title="جهاز جديد" sub="نضيفه لك" colors={['#a78bfa', '#6a45ec']}
-          icon={<Icon name="compass" size={22} color={tFg('#6a45ec')} stroke={2.2} />} onPress={onExplore} />
+        <Tile title="مو مدعوم؟" sub="نضيف راوترك" colors={['#fdba74', '#ea580c']}
+          icon={<Icon name="compass" size={22} color={tFg('#ea580c')} stroke={2.2} />} onPress={onExplore} />
         <Tile title="ادعُ ربعك" sub="شارك الرابط" colors={['#f472b6', '#c0389b']}
           icon={<PeopleIcon c={tFg('#c0389b')} />} onPress={invite} />
       </View>

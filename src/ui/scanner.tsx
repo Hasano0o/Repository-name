@@ -8,7 +8,8 @@ import { requireOptionalNativeModule } from 'expo';
 import type { LabelData } from '../utils/routerLabel';
 import { desktop } from '../desktop/bridge';
 
-export type ScanMode = 'full' | 'wifi';
+/** model: نرجّع سطور الملصق المقروءة بس (لطلب «نضيف راوترك») — بدون مراجعة كلمات المرور */
+export type ScanMode = 'full' | 'wifi' | 'model';
 
 export interface ScannerProps {
   visible: boolean;

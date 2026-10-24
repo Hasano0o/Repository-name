@@ -44,7 +44,7 @@ export function LabelScanner({ mode = 'full', onClose, onResult }: ScannerProps)
   const fields = mode === 'wifi' ? WIFI_ONLY : FULL;
 
   const onQr = ({ data }: { data: string }) => {
-    if (lock.current || review) return;
+    if (lock.current || review || mode === 'model') return;
     const w = parseWifiQr(data);
     if (!w) { setNote('هذا الرمز مو للواي فاي — جرّب «اقرأ النص»'); return; }
     lock.current = true;
@@ -62,6 +62,12 @@ export function LabelScanner({ mode = 'full', onClose, onResult }: ScannerProps)
       if (!pic?.uri) throw new Error('ما قدرنا نصوّر');
       setBusy('نقرأ النص...');
       const { lines } = await recognizeText(pic.uri);
+      if (mode === 'model') {
+        if (!lines.length) { setNote('ما قدرنا نقرأ شي — قرّب الكاميرا من الملصق وخل الإضاءة زينة'); lock.current = false; return; }
+        onResult({ rawLines: lines });
+        onClose();
+        return;
+      }
       const d = parseLabelText(lines);
       if (labelCount(d) === 0) {
         setNote('ما قدرنا نقرأ شي واضح — قرّب الكاميرا من الملصق وخل الإضاءة زينة');

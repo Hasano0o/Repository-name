@@ -11,6 +11,8 @@ import { router, Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { runProbe, reportText } from '../src/utils/probe';
 import { detectDriver } from '../src/drivers/registry';
+import { LabelScannerHost, ensureScanner } from '../src/ui/scanner';
+import { ocrAvailable } from '../modules/bandly-cell/src';
 import { sendSupportReport } from '../src/services/errors';
 import { Icon } from '../src/ui/Icon';
 import { C, R, S, tBg, tBd, tFg } from '../src/ui/theme';
@@ -18,6 +20,21 @@ import { sheet } from '../src/i18n';
 
 const TELEGRAM = 'https://t.me/hasa_n20';
 const OPS = ['stc', 'زين', 'موبايلي', 'سلام', 'غيرها'];
+const WANTS = ['الإشارة', 'الترددات', 'تثبيت البرج', 'إعادة التشغيل', 'الأجهزة المتصلة', 'الواي فاي'];
+/** سطور الملصق اللي فيها الموديل/النسخة — ونستبعد أي شي فيه كلمة مرور أو رقم تسلسلي/IMEI */
+const SECRET = /pass|pwd|key|pin|wpa|كلم|رمز|imei|s\/?n\b|serial|mac\b|ssid/i;
+const MODELISH = /model|موديل|type|p\/?n|h\/?w|hardware|version|ver\b|zyxel|tp-?link|huawei|zte|nokia|alcatel|netgear|d-?link|tenda|[a-z]{2,}[- ]?\d{3,}/i;
+function modelLines(lines: string[]): string[] {
+  return [...new Set(lines.map(l => l.trim()).filter(l => l.length >= 3 && l.length <= 60 && !SECRET.test(l) && MODELISH.test(l)))].slice(0, 8);
+}
+/** الموديل والفيرموير من صفحة الراوتر نفسها (بدون دخول) — من تقرير الفحص */
+function pageInfo(probe: string): string[] {
+  const out = new Set<string>();
+  const t = probe.match(/<title>([^<]{3,60})<\/title>/i)?.[1]?.trim();
+  if (t) out.add(`عنوان الصفحة: ${t}`);
+  for (const m of probe.matchAll(/"?(wa_inner_version|web_version|hardware_version|SoftwareVersion|HardwareVersion|FirmwareVersion|DeviceName|ModelName|model_name|product_name|devcap_model)"?\s*[:=]\s*"([^"]{3,50})"/gi)) out.add(`${m[1]}: ${m[2]}`);
+  return [...out].slice(0, 6);
+}
 const HOSTS = ['192.168.8.1', '192.168.0.1', '192.168.1.1', '192.168.100.1', '192.168.31.1', '192.168.3.1'];
 
 async function answers(host: string, ms = 2000): Promise<boolean> {
@@ -33,6 +50,13 @@ export default function NewDeviceScreen() {
   const [city, setCity] = useState('');
   const [tg, setTg] = useState('');
   const [scan, setScan] = useState(true);
+  const [label, setLabel] = useState<string[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const canOcr = Platform.OS === 'android' && ocrAvailable();
+  const [tester, setTester] = useState(false);
+  const [laptop, setLaptop] = useState(false);
+  const [wants, setWants] = useState<string[]>([]);
+  const toggleWant = (w: string) => setWants(x => (x.includes(w) ? x.filter(y => y !== w) : [...x, w]));
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState('');
   const [sent, setSent] = useState(false);
@@ -77,6 +101,10 @@ export default function NewDeviceScreen() {
       `• الشركة: ${op || '—'}`,
       `• المدينة: ${city.trim() || '—'}`,
       `• ${contact}`,
+      `• يبي: ${wants.length ? wants.join('، ') : '—'}`,
+      `• ${tester ? '✅ مستعد يجرّب التحديثات' : '— ما أكّد إنه يجرّب'} · ${laptop ? '💻 عنده لابتوب' : 'بدون لابتوب'}`,
+      ...(label.length ? ['', '📷 من الملصق:', ...label.map(l => `  ${l}`)] : Platform.OS === 'ios' ? ['', '📷 الملصق: بيرسل صورته على تليجرام'] : []),
+      ...(probe && pageInfo(probe).length ? ['', '🧾 من صفحة الراوتر:', ...pageInfo(probe).map(l => `  ${l}`)] : []),
       '',
       probe || '(بدون فحص)',
     ].join('\n');
@@ -107,7 +135,7 @@ export default function NewDeviceScreen() {
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: C.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
       <ScrollView contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 40 }]} keyboardShouldPersistTaps="handled">
         <View style={s.hero}>
-          <View style={s.heroIcon}><Icon name="compass" size={30} color={tFg('#6a45ec')} /></View>
+          <View style={s.heroIcon}><Icon name="compass" size={30} color={tFg('#ea580c')} /></View>
           <Text style={s.title}>راوترك مو مدعوم؟ نضيفه لك</Text>
           <Text style={s.sub}>عبّي هالبيانات والمبرمج يتواصل معك ويضيف جهازك للتطبيق</Text>
         </View>
@@ -115,6 +143,22 @@ export default function NewDeviceScreen() {
         <View style={s.card}>
           <Text style={s.lbl}>نوع الراوتر أو الموديل</Text>
           <TextInput style={s.input} value={model} onChangeText={setModel} placeholder="مكتوب على الملصق، مثل: TP-Link MR600" placeholderTextColor={C.muted} />
+          {canOcr ? (
+            <Pressable onPress={() => ensureScanner() && setScanning(true)} style={s.scanBtn} accessibilityRole="button">
+              <Icon name="camera" size={16} color={tFg('#ea580c')} />
+              <Text style={s.scanTxt}>{label.length ? 'صوّر الملصق مرة ثانية' : 'صوّر الملصق — نقرأ الموديل لحالنا'}</Text>
+            </Pressable>
+          ) : (
+            <Text style={s.rowSub}>📷 بعد الإرسال، أرسل صورة الملصق اللي تحت الراوتر على تليجرام — تساعد كثير.</Text>
+          )}
+          {!!label.length && (
+            <View style={s.labelBox}>
+              <Text style={s.rowSub}>قرينا من الملصق (بدون كلمات المرور):</Text>
+              {label.map(l => <Text key={l} style={s.labelLine}>{l}</Text>)}
+            </View>
+          )}
+          <LabelScannerHost visible={scanning} mode="model" onClose={() => setScanning(false)}
+            onResult={d => { const ls = modelLines(d.rawLines ?? []); setLabel(ls); if (!model.trim() && ls[0]) setModel(ls[0]); }} />
 
           <Text style={s.lbl}>الشركة</Text>
           <View style={s.chips}>
@@ -136,15 +180,40 @@ export default function NewDeviceScreen() {
         </View>
 
         <View style={s.card}>
+          <Text style={s.lbl}>وش تبي يشتغل في راوترك؟</Text>
+          <View style={s.chips}>
+            {WANTS.map(w => (
+              <Pressable key={w} onPress={() => toggleWant(w)} style={[s.chip, wants.includes(w) && s.chipOn]}>
+                <Text style={[s.chipTxt, wants.includes(w) && { color: C.onAccent }]}>{w}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={[s.row, s.rowLine]}>
+            <Switch value={tester} onValueChange={setTester} trackColor={{ true: '#ea580c', false: C.track }} thumbColor={C.onAccent} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.rowTitle}>مستعد أجرّب معكم</Text>
+              <Text style={s.rowSub}>نرسل لك تحديث تجريبي وتقول لنا وش اشتغل — بدونه صعب ندعم راوترك</Text>
+            </View>
+          </View>
+          <View style={[s.row, s.rowLine]}>
+            <Switch value={laptop} onValueChange={setLaptop} trackColor={{ true: '#ea580c', false: C.track }} thumbColor={C.onAccent} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.rowTitle}>عندي لابتوب</Text>
+              <Text style={s.rowSub}>ممكن نطلب منك تسجّل صفحة الراوتر من المتصفح (نشرح لك خطوة خطوة)</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={s.card}>
           <View style={s.row}>
-            <Switch value={scan} onValueChange={setScan} trackColor={{ true: C.violet, false: C.track }} thumbColor={C.onAccent} />
+            <Switch value={scan} onValueChange={setScan} trackColor={{ true: '#ea580c', false: C.track }} thumbColor={C.onAccent} />
             <View style={{ flex: 1 }}>
               <Text style={s.rowTitle}>أرفق فحص الراوتر</Text>
               <Text style={s.rowSub}>يساعد المبرمج يضيفه أسرع — لازم تكون على واي فاي الراوتر. ما نرفع كلمات المرور ولا أجهزتك.</Text>
             </View>
           </View>
           <View style={[s.row, s.rowLine]}>
-            <Switch value={agree} onValueChange={setAgree} trackColor={{ true: C.violet, false: C.track }} thumbColor={C.onAccent} />
+            <Switch value={agree} onValueChange={setAgree} trackColor={{ true: '#ea580c', false: C.track }} thumbColor={C.onAccent} />
             <Text style={[s.rowSub, { flex: 1 }]}>موافق أرسل هالبيانات للمبرمج عشان يتواصل معي — وما تنحفظ في التطبيق.</Text>
           </View>
         </View>
@@ -169,7 +238,11 @@ const s = sheet({
   page: { padding: S.lg, gap: S.md },
   center: { alignItems: 'center', justifyContent: 'center', gap: 12 },
   hero: { alignItems: 'center', gap: 6, paddingVertical: 6 },
-  heroIcon: { width: 64, height: 64, borderRadius: 22, backgroundColor: tBg('#6a45ec1a'), alignItems: 'center', justifyContent: 'center' },
+  heroIcon: { width: 64, height: 64, borderRadius: 22, backgroundColor: tBg('#ea580c1a'), alignItems: 'center', justifyContent: 'center' },
+  scanBtn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderStyle: 'dashed', borderColor: tBd('#ea580c88'), backgroundColor: tBg('#ea580c0f'), borderRadius: 14, paddingVertical: 11 },
+  scanTxt: { color: tFg('#c2410c'), fontWeight: '800', fontSize: 13.5 },
+  labelBox: { backgroundColor: C.rowBg, borderRadius: 12, padding: 10, gap: 2 },
+  labelLine: { color: C.text, fontSize: 13, fontWeight: '700', textAlign: 'left' },
   doneIcon: { width: 72, height: 72, borderRadius: 36, backgroundColor: tBg('#12b76a1a'), alignItems: 'center', justifyContent: 'center' },
   title: { color: C.text, fontSize: 21, fontWeight: '900', textAlign: 'center' },
   sub: { color: C.sub, fontSize: 13.5, textAlign: 'center', lineHeight: 21 },
@@ -178,13 +251,13 @@ const s = sheet({
   input: { backgroundColor: C.rowBg, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, color: C.text, fontSize: 15, textAlign: 'right' },
   chips: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
   chip: { borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.card, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
-  chipOn: { backgroundColor: '#6a45ec', borderColor: '#6a45ec' },
+  chipOn: { backgroundColor: '#ea580c', borderColor: '#ea580c' },
   chipTxt: { color: C.text, fontWeight: '700', fontSize: 13.5 },
   row: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   rowLine: { borderTopWidth: 1, borderColor: C.lineSoft, paddingTop: 10 },
   rowTitle: { color: C.text, fontWeight: '800', fontSize: 14, textAlign: 'right' },
   rowSub: { color: C.sub, fontSize: 12.5, lineHeight: 19, textAlign: 'right' },
-  btn: { alignSelf: 'stretch', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#6a45ec', borderRadius: 16, paddingVertical: 15 },
+  btn: { alignSelf: 'stretch', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#ea580c', borderRadius: 16, paddingVertical: 15 },
   btnTxt: { color: C.onAccent, fontWeight: '900', fontSize: 16 },
   link: { alignItems: 'center', paddingVertical: 8 },
   linkTxt: { color: tFg('#2a9fd8'), fontWeight: '800', fontSize: 14 },
