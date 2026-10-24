@@ -20,6 +20,7 @@ import { sheet } from '../../src/i18n';
 const ST: Record<StepStatus, { icon: IconName; color: string; word: string }> = {
   wait: { icon: 'clock', color: '#9aa1bd', word: 'بالدور' },
   run: { icon: 'refresh', color: '#2f6bff', word: 'شغّال' },
+  done: { icon: 'check', color: '#2f6bff', word: 'تم' },
   ok: { icon: 'check', color: '#12b76a', word: 'تحسّن' },
   same: { icon: 'check', color: '#5ba644', word: 'الحالي أفضل' },
   skip: { icon: 'chevron', color: '#9aa1bd', word: 'تخطّيناها' },
@@ -27,12 +28,16 @@ const ST: Record<StepStatus, { icon: IconName; color: string; word: string }> = 
 };
 const STEP_ICON: Record<string, IconName> = { check: 'antenna', band: 'bands', tower: 'tower', wifi: 'wifi', final: 'chart' };
 
-function Cmp({ label, before, after, unit, lowerBetter, level }: {
+function Cmp({ label, before, after, unit, lowerBetter, level, min = 3 }: {
   label: string; before?: number; after?: number; unit: string; lowerBetter?: boolean; level?: (v?: number) => string;
+  /** أقل فرق نعتبره تغيّر حقيقي (غيره تذبذب عادي) */
+  min?: number;
 }) {
   if (before === undefined && after === undefined) return null;
-  const better = before !== undefined && after !== undefined && (lowerBetter ? after < before - 1 : after > before + 1);
-  const worse = before !== undefined && after !== undefined && (lowerBetter ? after > before + 1 : after < before - 1);
+  // فرق حقيقي: أكبر من «min» ومن ١٥٪ للبنق/التذبذب — وإلا «=» (تذبذب الشبكة الطبيعي)
+  const th = lowerBetter && before !== undefined ? Math.max(min, Math.abs(before) * 0.15) : min;
+  const better = before !== undefined && after !== undefined && (lowerBetter ? after < before - th : after > before + th);
+  const worse = before !== undefined && after !== undefined && (lowerBetter ? after > before + th : after < before - th);
   const col = (v?: number) => (level && v !== undefined ? LEVEL_COLOR[level(v) as keyof typeof LEVEL_COLOR] : C.text);
   return (
     <View style={s.cmpRow}>
@@ -131,12 +136,13 @@ export default function AutopilotScreen() {
       {(before || after) && (
         <View style={s.card}>
           <Text style={s.cardTitle}>قبل ← بعد</Text>
+          {done && !changed.length && <Text style={s.cmpHint}>ما غيّرت شي — أي فرق صغير هنا تذبذب طبيعي في الشبكة</Text>}
           <Cmp label="قوة 4G" before={before?.rsrp} after={after?.rsrp} unit="dBm" level={v => rsrpLevel(v)} />
           <Cmp label="صفاء 4G" before={before?.sinr} after={after?.sinr} unit="dB" level={v => sinrLevel(v)} />
           <Cmp label="قوة 5G" before={before?.nrRsrp} after={after?.nrRsrp} unit="dBm" level={v => rsrpLevel(v)} />
-          <Cmp label="البنق" before={before?.ping} after={after?.ping} unit="ms" lowerBetter />
-          <Cmp label="التذبذب" before={before?.jitter} after={after?.jitter} unit="ms" lowerBetter />
-          <Cmp label="درجة اللعب" before={before?.game} after={after?.game} unit="/100" />
+          <Cmp label="البنق" before={before?.ping} after={after?.ping} unit="ms" lowerBetter min={8} />
+          <Cmp label="التذبذب" before={before?.jitter} after={after?.jitter} unit="ms" lowerBetter min={5} />
+          <Cmp label="درجة اللعب" before={before?.game} after={after?.game} unit="/100" min={8} />
         </View>
       )}
 
@@ -180,6 +186,7 @@ const s = sheet({
   heroSub: { color: C.sub, fontSize: 13.5, textAlign: 'center' },
   card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: R.lg, padding: 14, gap: 8 },
   cardTitle: { color: C.sub, fontWeight: '800', fontSize: 13, textAlign: 'center' },
+  cmpHint: { color: C.muted, fontSize: 11.5, textAlign: 'center' },
   step: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, paddingVertical: 8 },
   stepLine: { borderTopWidth: 1, borderColor: C.lineSoft },
   stepIcon: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },

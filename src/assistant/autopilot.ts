@@ -19,10 +19,11 @@ import { measureUrl, regionUrls, selectedRegion, gameScore, LatencyResult } from
 import { totalScore } from '../utils/optimize';
 import { runTowerTrials, TrialTarget } from '../utils/towerTrial';
 import { groupTowers, loadConfirmed, bandName } from '../utils/towers';
-import { bandLabel } from '../utils/bands';
+import { bandLabel, SCAN_PREFERRED } from '../utils/bands';
+import { operatorBands } from '../store/operator';
 
 export type StepKey = 'check' | 'band' | 'tower' | 'wifi' | 'final';
-export type StepStatus = 'wait' | 'run' | 'ok' | 'same' | 'skip' | 'fail';
+export type StepStatus = 'wait' | 'run' | 'done' | 'ok' | 'same' | 'skip' | 'fail';
 export interface PilotStep { key: StepKey; title: string; status: StepStatus; note?: string }
 
 export interface Measure {
@@ -53,7 +54,9 @@ async function latency(n = 8): Promise<LatencyResult | null> {
   return measureUrl(regionUrls(reg), n).catch(() => null);
 }
 export async function measureNow(r: SavedRouter): Promise<Measure> {
-  const [s, l] = await Promise.all([readSig(r), latency(10)]);
+  // إحماء: أول طلبات بعد فتح الشاشة فيها DNS واتصال جديد — كانت تطلع بنق ١٧٠ وتذبذب ١٤٥ وهي وهم
+  await latency(3).catch(() => null);
+  const [s, l] = await Promise.all([readSig(r), latency(12)]);
   return {
     rsrp: s?.rsrp, sinr: s?.sinr, nrRsrp: s?.nrRsrp, nrSinr: s?.nrSinr, band: s?.band, nrBand: s?.nrBand,
     ping: l?.samples ? Math.round(l.median) : undefined,
@@ -135,7 +138,7 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
     for (const k of ['band', 'tower', 'wifi', 'final'] as StepKey[]) set(k, 'skip');
     return report;
   }
-  set('check', 'ok', `${before.rsrp !== undefined ? `4G ${Math.round(before.rsrp)}` : ''}${before.nrRsrp !== undefined ? ` · 5G ${Math.round(before.nrRsrp)}` : ''}${before.ping !== undefined ? ` · بنق ${before.ping}ms` : ''}`);
+  set('check', 'done', `${before.rsrp !== undefined ? `4G ${Math.round(before.rsrp)}` : ''}${before.nrRsrp !== undefined ? ` · 5G ${Math.round(before.nrRsrp)}` : ''}${before.ping !== undefined ? ` · بنق ${before.ping}ms` : ''}`);
 
   await withRouterLock(r, async (op: RouterOp) => {
     // ═══ ٢) أفضل تردد 4G ═══
@@ -153,8 +156,12 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
         // المرشحين: ترددات 4G اللي لها أبراج حولك فعلاً (الأقوى أول)
         const seen = new Map<number, number>();
         for (const c of cells) if (c.tech === 'LTE' && c.band && cfg?.supported.includes(c.band)) seen.set(c.band, Math.max(c.rsrp ?? -999, seen.get(c.band) ?? -999));
-        const cands = [...seen.entries()].sort((a, b) => b[1] - a[1]).map(x => x[0]).slice(0, 4);
-        if (cands.length < 2) set('band', 'same', 'ما فيه ترددات ثانية حولك تستاهل التجربة');
+        let cands = [...seen.entries()].sort((a, b) => b[1] - a[1]).map(x => x[0]);
+        // بعض الراوترات (ZTE) ترجّع البرج المتصل بس — نكمّل من ترددات شبكتك (زين/موبايلي/stc) أو المشهورة
+        const opBands = await operatorBands(r.id);
+        for (const b of (opBands?.lte ?? SCAN_PREFERRED)) if (cands.length < 4 && cfg?.supported.includes(b) && !cands.includes(b)) cands.push(b);
+        cands = cands.slice(0, 4);
+        if (cands.length < 2) set('band', 'same', 'راوترك يدعم تردد واحد بس — ما فيه شي نجرّبه');
         else {
           const lat0 = await latency(6);
           const base = totalScore(before.rsrp, before.sinr, lat0 ?? undefined);
@@ -303,7 +310,7 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
   const after = await measureNow(r);
   report.after = after;
   o.onMeasure?.('after', after);
-  set('final', 'ok', changed.length ? `غيّرت: ${changed.join('، ')}` : 'ما احتاج أغيّر شي — إعدادك الحالي هو الأفضل');
+  set('final', changed.length ? 'ok' : 'same', changed.length ? `غيّرت: ${changed.join('، ')}` : 'ما احتاج أغيّر شي — إعدادك الحالي هو الأفضل');
   o.onStatus('');
   return report;
 }

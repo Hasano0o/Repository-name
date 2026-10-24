@@ -65,6 +65,17 @@ export async function learnOperatorBands(routerId: string, lte: number[], nr: nu
   } catch {}
 }
 
+/** نفس useOperatorBands بدون React (للمحركات) — null = ما نعرف الشبكة */
+export async function operatorBands(routerId: string): Promise<OpBands | null> {
+  try {
+    const k = (await AsyncStorage.getItem(routerKey(routerId))) as OpKey | null;
+    if (!k || !OP_DEFAULT[k]) return null;
+    const l = await getLearned(k);
+    const uniq = (xs: number[]) => [...new Set(xs)];
+    return { lte: uniq([...OP_DEFAULT[k].lte, ...l.lte]), nr: uniq([...OP_DEFAULT[k].nr, ...l.nr]) };
+  } catch { return null; }
+}
+
 /** شبكة الراوتر وتردداتها (الافتراضية + اللي تعلمناها). null = ما نعرف الشبكة → نعرض الكل */
 export function useOperatorBands(routerId?: string): { key: OpKey; name: string; bands: OpBands } | null {
   const [v, setV] = useState<{ key: OpKey; name: string; bands: OpBands } | null>(null);
