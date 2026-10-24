@@ -56,7 +56,7 @@ export function WhatsNew() {
           if (!old) { await AsyncStorage.setItem(KEY, WN_ID); return; }
         }
         if (seen === WN_ID) return;
-        const real = rs.find(r => r.driverId !== DEMO_DRIVER_ID && ['huawei-lte', 'zte'].includes(r.driverId));
+        const real = rs.find(r => r.driverId !== DEMO_DRIVER_ID && ['huawei-lte', 'zte', 'zte-ng'].includes(r.driverId));
         setRid(real?.id ?? rs.find(r => r.driverId === DEMO_DRIVER_ID)?.id ?? null);
         setShow(true);
       } catch {}

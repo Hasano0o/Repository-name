@@ -467,7 +467,7 @@ export default function RouterDashboard() {
   }, [info, rescueStep]);
   const onRestoreSaved = () => {
     if (!info || !relSnap) return;
-    Alert.alert('رجّع إعدادك السابق', `بنرجّع الراوتر على الإعداد اللي كان قبل فك التثبيتات:\n${relSnap.summary}\n\nونتأكد منه من الراوتر نفسه. ممكن النت ينقطع دقيقة${info.driverId === 'zte' ? ' (وZTE ممكن يعيد التشغيل)' : ''}.`, [
+    Alert.alert('رجّع إعدادك السابق', `بنرجّع الراوتر على الإعداد اللي كان قبل فك التثبيتات:\n${relSnap.summary}\n\nونتأكد منه من الراوتر نفسه. ممكن النت ينقطع دقيقة${info.driverId === 'zte' || info.driverId === 'zte-ng' ? ' (وZTE ممكن يعيد التشغيل)' : ''}.`, [
       { text: 'إلغاء', style: 'cancel' },
       {
         text: 'رجّعه', onPress: async () => {
