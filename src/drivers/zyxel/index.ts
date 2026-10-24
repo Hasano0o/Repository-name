@@ -11,7 +11,8 @@
 import * as Crypto from 'expo-crypto';
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
-import { RouterDriver, Capability, Signal, Carrier, Usage, NetworkInfo, SignalSnapshot, CellTower } from '../types';
+import { RouterDriver, Capability, Signal, Carrier, Usage, NetworkInfo, SignalSnapshot, CellTower, BandConfig, ConnectedDevice } from '../types';
+import { noChange } from '../noChange';
 import { http } from '../http';
 import { buildSnapshot } from '../../utils/snapshot';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
@@ -31,7 +32,7 @@ const bandOf = (v: unknown) => { const m = str(v).match(/(\d+)\s*$/); return m ?
 export class ZyxelDriver implements RouterDriver {
   id = 'zyxel';
   name = 'Zyxel';
-  capabilities: Capability[] = ['signal', 'reboot', 'usage'];
+  capabilities: Capability[] = ['signal', 'reboot', 'usage', 'devices'];
 
   private host = '';
   private user = 'admin';
@@ -223,4 +224,85 @@ export class ZyxelDriver implements RouterDriver {
     try { j = this.decrypt(await r.json()); } catch {}
     if (j && j.result && j.result !== 'ZCFG_SUCCESS') throw new Error('الراوتر رفض إعادة التشغيل');
   }
+
+  // ─── الأجهزة المتصلة (lanhosts) — أسماء الحقول تختلف، نلقط اللي فيه MAC ───
+  async getDevices(): Promise<ConnectedDevice[]> {
+    const o: any = (await this.dal('lanhosts')) ?? {};
+    const out: ConnectedDevice[] = [];
+    const walk = (x: any) => {
+      if (Array.isArray(x)) { x.forEach(walk); return; }
+      if (!x || typeof x !== 'object') return;
+      const keys = Object.keys(x);
+      const macK = keys.find(k => /mac|physaddr/i.test(k) && /^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$/i.test(str(x[k])));
+      if (macK) {
+        const ipK = keys.find(k => /^ip|ipaddr/i.test(k) && /\d+\.\d+\.\d+\.\d+/.test(str(x[k])));
+        const nmK = keys.find(k => /host.?name|devicename|^name$/i.test(k));
+        const act = keys.find(k => /^active$/i.test(k));
+        if (!act || x[act] === true || /true|1/i.test(str(x[act]))) {
+          out.push({ mac: str(x[macK]).toUpperCase(), ip: ipK ? str(x[ipK]) : undefined, name: nmK ? str(x[nmK]) || undefined : undefined });
+        }
+        return;
+      }
+      keys.forEach(k => walk(x[k]));
+    };
+    walk(o);
+    const seen = new Set<string>();
+    return out.filter(d => (seen.has(d.mac) ? false : (seen.add(d.mac), true)));
+  }
+
+  // ─── الترددات ───
+  // أمر التثبيت يختلف بين فيرموير زيكسل وما عندنا مرجع مؤكد له — نعرض الترددات المدعومة من الراوتر،
+  // ولو المستخدم حاول يثبّت: ما نكتب شي، ونرسل للمطوّر (مرة وحدة) أسماء إعدادات الشبكة الخلوية
+  // اللي يقبلها راوتره — بدون أي رقم شريحة/جهاز/واي فاي — عشان نبني التثبيت الصح.
+  async getBandConfig(): Promise<BandConfig> {
+    const c = (await this.dal('cellwan_status')) ?? {};
+    const lte: number[] = [], nr: number[] = [];
+    for (const t of str(c.INTF_Supported_Bands).split(',')) {
+      const b = bandOf(t); if (!b) continue;
+      (/^NR|^N\d/i.test(t.trim()) ? nr : lte).push(b);
+    }
+    return {
+      supported: [...new Set(lte)].sort((a, b) => a - b),
+      locked: [],
+      nrSupported: [],
+      nrLocked: [],
+      nrLockable: false,
+      mode: '00',
+      modes: [],
+    };
+  }
+
+  private dumped = false;
+  async setBand(): Promise<void> {
+    if (!this.dumped) {
+      this.dumped = true;
+      this.cellwanDump().then(t => import('../../services/errors').then(m => m.sendSupportReport('zyxel-bands', t))).catch(() => {});
+    }
+    throw noChange('تثبيت الترددات لراوترك زيكسل لسا ما جهز — ما غيّرنا أي شي. أرسلنا للمطوّر أسماء إعدادات راوترك (بدون أي بيانات شخصية) عشان يضيفه قريب.');
+  }
+
+  /** أسماء إعدادات الشبكة الخلوية اللي يقبلها الراوتر — بدون الأرقام الحساسة */
+  async cellwanDump(): Promise<string> {
+    const OIDS = ['cellwan_band', 'cellwan_bandsel', 'cellular_band', 'cellwan_mgmt', 'cellwan_wan', 'cellwan_psru',
+      'cellwan_lock', 'cellwan_ltecell', 'cellwan_nrcell', 'cellwan_cell_lock', 'cellwan_sim', 'cellwan_mapn', 'cellwan_nsa'];
+    const SECRET = /imei|imsi|iccid|msisdn|mac|passw|psk|key|ssid|serial|phone|number|apn_?user|pin(?!g)/i;
+    const clean = (x: any): any => {
+      if (Array.isArray(x)) return x.slice(0, 8).map(clean);
+      if (x && typeof x === 'object') {
+        const o: any = {};
+        for (const [k, v] of Object.entries(x)) o[k] = SECRET.test(k) ? '«محذوف»' : clean(v);
+        return o;
+      }
+      return typeof x === 'string' && x.length > 120 ? x.slice(0, 120) + '…' : x;
+    };
+    const lines: string[] = [`Zyxel ${(await this.identify().catch(() => null))?.label ?? ''} — إعدادات الشبكة الخلوية`];
+    for (const oid of OIDS) {
+      try {
+        const o = await this.dal(oid);
+        lines.push(`--- ${oid}: ${o ? JSON.stringify(clean(o)).slice(0, 2500) : '(ما فيه)'}`);
+      } catch (e: any) { lines.push(`--- ${oid}: ✗ ${String(e?.message ?? e).slice(0, 60)}`); }
+    }
+    return lines.join('\n');
+  }
+
 }
