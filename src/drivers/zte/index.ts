@@ -625,17 +625,19 @@ export class ZteDriver implements RouterDriver {
       // صحة الوصلة (CQI / MCS) — أسماء مرشحة غير موثقة لكل الفيرموير؛ نعرض بس اللي يرجع بقيمة منطقية
       'lte_cqi', 'cqi', 'lte_dl_mcs', 'lte_mcs', 'dl_mcs', 'lte_ul_mcs', 'ul_mcs',
       'nr5g_cqi', 'nr_cqi', 'Z5g_dl_mcs', 'nr5g_dl_mcs', 'nr5g_mcs', 'nr_mcs',
+      // MC888/MC889 (مرجع zte-advanced-router-panel): تردد 5G بوضع NSA + عرضه + قوة الإرسال
+      'nr5g_action_nsa_band', 'nr5g_nsa_bandwidth', 'nr_ca_pcell_band', 'tx_power',
     ]);
     // نأخذ أول قيمة غير فاضية من قائمة بدائل (5G SA يسمي الحقول بشكل مختلف)
     const pickAny = (...keys: string[]): string | undefined => pick(r, ...keys);
     const nrRsrpVal = pickAny('Z5g_rsrp', 'nr5g_rsrp', 'nr5g_sa_rsrp');
     const nrSinrVal = pickAny('Z5g_SINR', 'nr5g_sinr', 'nr5g_sa_sinr', 'Z5g_snr', 'nr5g_snr');
     const nrRsrqVal = pickAny('Z5g_rsrq', 'nr5g_rsrq', 'nr5g_sa_rsrq');
-    const nrBandVal = pickAny('nr5g_action_band', 'nr5g_band', 'nr5g_sa_band', 'nr_band');
+    const nrBandVal = pickAny('nr5g_action_band', 'nr5g_action_nsa_band', 'nr_ca_pcell_band', 'nr5g_band', 'nr5g_sa_band', 'nr_band');
     const nrPciVal = pickAny('nr5g_pci', 'nr5g_sa_pci', 'nr_pci', 'nr5g_cell_pci');
     const nrArfcnVal = pickAny('Z5g_dlEarfcn', 'nr5g_action_channel', 'nr5g_dlEarfcn', 'nr5g_dl_earfcn', 'nr5g_sa_arfcn', 'nr5g_arfcn');
     const nrCellIdVal = pickAny('nr5g_cell_id', 'nr5g_sa_cell_id', 'nr_cell_id');
-    const nrBwVal = pickAny('nr5g_dlbandwidth', 'nr5g_bandwidth', 'nr5g_sa_bandwidth', 'nr5g_dl_bandwidth');
+    const nrBwVal = pickAny('nr5g_dlbandwidth', 'nr5g_bandwidth', 'nr5g_nsa_bandwidth', 'nr5g_sa_bandwidth', 'nr5g_dl_bandwidth');
     const nrOn = !!(nrRsrpVal || nrBandVal);
     const nsa = /ENDC|NSA/i.test(r.network_type || '');
     return {
@@ -660,6 +662,8 @@ export class ZteDriver implements RouterDriver {
       cqi: inRange(pick(r, 'lte_cqi', 'cqi'), 1, 15),
       dlMcs: inRange(pick(r, 'lte_dl_mcs', 'lte_mcs', 'dl_mcs'), 0, 31),
       ulMcs: inRange(pick(r, 'lte_ul_mcs', 'ul_mcs'), 0, 31),
+      // قوة إرسال الراوتر (dBm) — عالية = البرج بعيد والراوتر يصارخ عشان يوصله
+      txPower: ((t) => (t !== undefined && t >= -50 && t <= 33 ? t : undefined))(num(pick(r, 'tx_power'))),
       nrCqi: nrOn ? inRange(pick(r, 'Z5g_CQI', 'nr5g_cqi', 'nr_cqi'), 1, 15) : undefined,
       nrDlMcs: nrOn ? inRange(pick(r, 'Z5g_dl_mcs', 'nr5g_dl_mcs', 'nr5g_mcs', 'nr_mcs'), 0, 31) : undefined,
     };
@@ -1039,6 +1043,8 @@ export class ZteDriver implements RouterDriver {
       'nr5g_rsrq', 'nr5g_dlbandwidth', 'nr5g_sa_bandwidth',
       // عرض 5G — كل فيرموير يسميه باسم (تطبيقات ثانية تعرضه، فالراوتر يعطيه)
       'nr5g_dl_bandwidth', 'nr_ca_pcell_bandwidth', 'nr5g_ca_pcell_bandwidth',
+      // MC888/MC889: تردد 5G بوضع NSA + دمج 5G (أكثر من تردد 5G مع بعض)
+      'nr5g_action_nsa_band', 'nr5g_nsa_bandwidth', 'nr_ca_pcell_band', 'nr_multi_ca_scell_info',
     ]);
     const out: Carrier[] = [];
     const earfcn = num(r.wan_active_channel);
@@ -1061,7 +1067,7 @@ export class ZteDriver implements RouterDriver {
         });
       }
     }
-    const nrBand = pick(r, 'nr5g_action_band', 'nr5g_band', 'nr5g_sa_band');
+    const nrBand = pick(r, 'nr5g_action_band', 'nr5g_action_nsa_band', 'nr_ca_pcell_band', 'nr5g_band', 'nr5g_sa_band');
     const nrRsrpV = pick(r, 'Z5g_rsrp', 'nr5g_rsrp');
     const nb = bandNum(nrBand);
     if (nb && nrRsrpV) {
@@ -1069,11 +1075,25 @@ export class ZteDriver implements RouterDriver {
         tech: 'NR', role: out.length ? 'SCC' : 'PCC', band: nb,
         arfcn: pick(r, 'Z5g_dlEarfcn', 'nr5g_action_channel', 'nr5g_dlEarfcn', 'nr5g_sa_arfcn') || undefined,
         pci: pciDec(pick(r, 'nr5g_pci', 'nr5g_sa_pci')),
-        bandwidth: num(pick(r, 'nr5g_bandwidth', 'nr5g_dlbandwidth', 'nr5g_sa_bandwidth', 'nr5g_dl_bandwidth', 'nr_ca_pcell_bandwidth', 'nr5g_ca_pcell_bandwidth')),
+        bandwidth: num(pick(r, 'nr5g_bandwidth', 'nr5g_dlbandwidth', 'nr5g_nsa_bandwidth', 'nr5g_sa_bandwidth', 'nr5g_dl_bandwidth', 'nr_ca_pcell_bandwidth', 'nr5g_ca_pcell_bandwidth')),
         rsrp: num(nrRsrpV),
         rsrq: num(pick(r, 'Z5g_rsrq', 'nr5g_rsrq')),
         sinr: num(pick(r, 'Z5g_SINR', 'nr5g_sinr')),
       });
+      // دمج 5G: «idx,pci,?,band,arfcn,bw,?,rsrp,rsrq,sinr» لكل ناقل، مفصولة بـ ;
+      for (const row of (r.nr_multi_ca_scell_info || '').split(';')) {
+        const f = row.split(',').map(x => x.trim());
+        if (f.length < 6) continue;
+        const b = bandNum(f[3]);
+        if (!b) continue;
+        const rsrp = num(f[7]);
+        out.push({
+          tech: 'NR', role: 'SCC', band: b, arfcn: f[4] || undefined, pci: pciDec(f[1]),
+          bandwidth: num((f[5] || '').replace(/MHz/i, '')),
+          rsrp: rsrp !== undefined && rsrp < 0 ? rsrp : undefined,
+          rsrq: num(f[8]), sinr: f[9] && f[9] !== '0.0' ? num(f[9]) : undefined,
+        });
+      }
     }
     return out;
   }

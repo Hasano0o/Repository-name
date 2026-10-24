@@ -220,7 +220,7 @@ export default function AddRouterScreen() {
       setStep('نتعرّف على نوع الراوتر...');
       let driver = await detectDriver(h);
       if (!driver && over?.findHost) {
-        for (const alt of ['192.168.8.1', '192.168.0.1', '192.168.1.1', '192.168.100.1'].filter(x => x !== h)) {
+        for (const alt of ['192.168.8.1', '192.168.0.1', '192.168.1.1', '192.168.100.1', '192.168.192.1', '192.168.254.1'].filter(x => x !== h)) {
           setStep(`ندوّر على الراوتر (${alt})...`);
           driver = await detectDriver(alt);
           if (driver) { h = alt; setHost(alt); break; }

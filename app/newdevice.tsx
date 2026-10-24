@@ -38,7 +38,7 @@ function pageInfo(probe: string): string[] {
   for (const m of probe.matchAll(/"?(wa_inner_version|web_version|hardware_version|SoftwareVersion|HardwareVersion|FirmwareVersion|DeviceName|ModelName|model_name|product_name|devcap_model)"?\s*[:=]\s*"([^"]{3,50})"/gi)) out.add(`${m[1]}: ${m[2]}`);
   return [...out].slice(0, 6);
 }
-const HOSTS = ['192.168.8.1', '192.168.0.1', '192.168.1.1', '192.168.100.1', '192.168.31.1', '192.168.3.1'];
+const HOSTS = ['192.168.8.1', '192.168.0.1', '192.168.1.1', '192.168.100.1', '192.168.31.1', '192.168.3.1', '192.168.192.1', '192.168.254.1'];
 
 async function answers(host: string, ms = 2000): Promise<boolean> {
   const ctrl = new AbortController();
