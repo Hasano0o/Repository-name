@@ -19,3 +19,9 @@ test('هواوي', () => {
   assert.equal(identifyHuawei('H158-381').nrLock, false);
   assert.match(identifyHuawei('B818-263').label, /B818-263/);
 });
+
+test('MU5001 مقفول على المجرّب — بدون بدائل', () => {
+  const p = identifyZte('BD_STCMU5001V1.0.2B04');
+  assert.deepEqual(p.pinned, { ad: 'wa+cr', lteMask: 'short', nrCmd: 'classic' });
+  assert.equal(identifyZte('BD_XCBZHKMC801A ProV1.0.0B03', 'WEB_XCBZHKG5BV1.0.0B03').pinned, undefined);
+});

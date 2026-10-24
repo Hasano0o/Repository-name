@@ -19,12 +19,19 @@ export interface ModelProfile {
   note?: string;
   /** جرّبناه مع مستخدم حقيقي */
   verified?: boolean;
+  /**
+   * مقفول على اللي ثبت إنه يشتغل عنده — بدون أي بدائل أو تجارب.
+   * أي إصلاح لموديل ثاني ما يمر على هذا الموديل أبداً.
+   */
+  pinned?: { ad: string; lteMask: 'short' | 'padded'; nrCmd: 'classic' | 'sansa' };
 }
 
 const P = (p: ModelProfile) => p;
 
 export const MODELS = {
-  mu5001: P({ id: 'mu5001', label: 'ZTE MU5001', brand: 'zte', tech: '5G', write: 'goform', nrLock: true, verified: true }),
+  mu5001: P({ id: 'mu5001', label: 'ZTE MU5001', brand: 'zte', tech: '5G', write: 'goform', nrLock: true, verified: true,
+    // مجرّب على جهاز حسن (STC، BD_STCMU5001V1.0.2B04): توقيع MD5 · القناع القصير · أمر 5G القديم
+    pinned: { ad: 'wa+cr', lteMask: 'short', nrCmd: 'classic' } }),
   mc801aPro: P({ id: 'mc801a-pro', label: 'ZTE MC801A Pro', brand: 'zte', tech: '5G', write: 'ubus', nrLock: true }),
   mc801a: P({ id: 'mc801a', label: 'ZTE MC801A', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
   mc888: P({ id: 'mc888', label: 'ZTE MC888', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),

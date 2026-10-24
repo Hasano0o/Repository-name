@@ -273,6 +273,8 @@ export class ZteDriver implements RouterDriver {
       const saved = await loadAdFormula(this.host);
       if (saved) AD_LEARNED.set(this.host, saved);
     }
+    const pin = this.profile?.pinned;
+    if (pin) return this.computeAd(pin.ad);
     return this.computeAd(this.adFormula ?? AD_LEARNED.get(this.host) ?? 'wa+cr');
   }
 
@@ -570,7 +572,7 @@ export class ZteDriver implements RouterDriver {
     out = await this.post(body);
     if (/success/i.test(out)) return out;
     // نفس الرفض بعد الدخول = غالباً صيغة AD (مرة وحدة لكل راوتر — بعدها نعرف الصح)
-    if (!this.adTried) {
+    if (!this.adTried && !(await this.identify())?.pinned) {
       this.adTried = true;
       const alt = await this.retryWithOtherAd(body);
       if (alt) return alt;
@@ -962,7 +964,7 @@ export class ZteDriver implements RouterDriver {
     { const ng = await this.ubusFirst(); if (ng) { try { await ng.setNetworkMode(v); return; } catch (e) { this.log('ubus write failed → goform', (e as any)?.message); } } }
     const out = await this.act({ goformId: 'SET_BEARER_PREFERENCE', BearerPreference: v });
     if (!/success/i.test(out)) {
-      const ng = await this.ngWriter();
+      const ng = (await this.identify())?.pinned ? null : await this.ngWriter();
       if (ng) { await ng.setNetworkMode(v); return; }
       throw this.rejected('تغيير وضع الشبكة', out);
     }
@@ -981,7 +983,9 @@ export class ZteDriver implements RouterDriver {
     // بعض الفيرموير (MC888/MC889…) يبي القناع ١٢ خانة بالضبط: 0x000000000005 بدل 0x5
     const short = maskFromBands(lte);
     const padded = '0x' + short.slice(2).padStart(12, '0');
-    const masks = [...new Set(this.ltePad ? [padded, short] : [short, padded])];
+    const pin = (await this.identify())?.pinned;
+    // موديل مقفول (MU5001): القناع اللي ثبت عنده بس — بدون تجارب
+    const masks = pin ? [pin.lteMask === 'padded' ? padded : short] : [...new Set(this.ltePad ? [padded, short] : [short, padded])];
     const send = (m: string) => this.act({
       goformId: 'BAND_SELECT',
       is_gw_band: '0', gw_band_mask: '0',
@@ -992,6 +996,7 @@ export class ZteDriver implements RouterDriver {
       out = await send(m);
       if (/success/i.test(out)) { this.ltePad = m === padded && m !== short; return; }
     }
+    if (pin) throw this.rejected('تثبيت الترددات', out);
     // آخر شي: جلسة مطوّر (بعض الأجهزة تشترطها للتثبيت)
     if (await this.devLogin()) {
       for (const m of masks) {
@@ -1045,13 +1050,14 @@ export class ZteDriver implements RouterDriver {
     const same = cur.length === nr.length && nr.every(b => cur.includes(b));
     if (same) return;
     { const ng = await this.ubusFirst(); if (ng) { try { await ng.setNrBandsTyped(nr, (await this.nrType()) === '1'); return; } catch (e) { this.log('ubus write failed → goform', (e as any)?.message); } } }
+    const pinNr = (await this.identify())?.pinned?.nrCmd;
     const classic = (m: string) => this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: m });
     const sansa = async (m: string) => this.act({
       goformId: 'WAN_PERFORM_NR5G_SANSA_BAND_LOCK', nr5g_band_mask: m, type: await this.nrType(),
     });
     const ok = (o: string) => /success/i.test(o);
     const tryAll = async (m: string): Promise<string> => {
-      const order = this.nrCmd === 'sansa' ? [sansa, classic] : [classic, sansa];
+      const order = pinNr ? [pinNr === 'sansa' ? sansa : classic] : this.nrCmd === 'sansa' ? [sansa, classic] : [classic, sansa];
       let o = '';
       for (const f of order) {
         o = await f(m);
@@ -1062,6 +1068,7 @@ export class ZteDriver implements RouterDriver {
     let o2 = await tryAll(nr.join(','));
     if (!ok(o2) && !nrBands.length) o2 = await tryAll(SAFE_NR.join(','));
     // آخر شي: جلسة مطوّر ثم نعيد
+    if (!ok(o2) && pinNr) throw this.rejected('تثبيت ترددات 5G', o2);
     if (!ok(o2) && await this.devLogin()) o2 = await tryAll(nr.join(','));
     if (!ok(o2)) {
       const ng = await this.ngWriter();
