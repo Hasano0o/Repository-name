@@ -1332,7 +1332,12 @@ export class ZteDriver implements RouterDriver {
   async getWifiRadios(): Promise<WifiRadio[]> {
     await this.ensure();
     // الموديلات الجديدة (MU5001…): القنوات في queryAccessPointInfo لكل شريحة
-    const fresh = await zteRadios(this.io()).catch(() => []);
+    let fresh = await zteRadios(this.io()).catch(() => []);
+    // بعد تغيير القناة بعض الأجهزة ترد بقائمة فاضية لين ندخل من جديد (تقرير MU5001: len=27 لدقايق)
+    if (!fresh.length && this.wifiSrc === 'ap' && this.password) {
+      try { await this.login(this.host, '', this.password, { fresh: true }); } catch {}
+      fresh = await zteRadios(this.io()).catch(() => []);
+    }
     if (fresh.length) { this.wifiSrc = 'ap'; return fresh; }
     if (this.wifiSrc === 'ap') throw new Error('الراوتر ما رد على إعدادات الواي فاي — غالباً الواي فاي يعيد التشغيل. جرّب بعد ثواني.');
     this.wifiSrc = 'legacy';
@@ -1356,7 +1361,11 @@ export class ZteDriver implements RouterDriver {
     // قبل ما نقرر إن الراوتر من النوع القديم (كان يطلع «ما يسمح نغيّر قناة هذا النطاق» بالغلط على MU5001)
     for (let i = 0; i < (this.wifiSrc === 'legacy' ? 1 : 4); i++) {
       if ((await zteRadios(this.io()).catch(() => [])).length) { this.wifiSrc = 'ap'; return zteSetChannel(this.io(), band, channel); }
-      if (this.wifiSrc !== 'legacy') await sleep(2500);
+      if (this.wifiSrc !== 'legacy') {
+        // المحاولة الثانية: دخول جديد (القائمة الفاضية غالباً جلسة انتهت بعد إعادة تشغيل الواي فاي)
+        if (i === 1 && this.password) { try { await this.login(this.host, '', this.password, { fresh: true }); } catch {} }
+        await sleep(2500);
+      }
     }
     if (this.wifiSrc === 'ap') throw new Error('الراوتر ما رد على إعدادات الواي فاي — غالباً الواي فاي يعيد التشغيل.');
     const r = await this.get(ZteDriver.WIFI_FIELDS);
@@ -1534,6 +1543,9 @@ export class ZteDriver implements RouterDriver {
   async wifiDebug(): Promise<string> {
     await this.ensure();
     const a = await this.get([...ZteDriver.WIFI_FIELDS, ...ZteDriver.WIFI5_FIELDS, 'SSID1', 'wifi_chip1_ssid1_wifi_coverage']).catch(e => ({ err: String(e?.message ?? e) }));
-    return JSON.stringify(a, null, 1);
+    // MU5001 وغيره: القنوات في queryAccessPointInfo — نرسل شكله بدون أسماء الشبكات وكلماتها
+    const ap = await this.getRaw('queryAccessPointInfo').catch(e => ({ err: String((e as any)?.message ?? e) }));
+    const clean = JSON.stringify(ap ?? null).replace(/"(SSID|Password|WPAPSK1?|KeyPassphrase|PreSharedKey|WEPKey\w*)"\s*:\s*"[^"]*"/gi, '"$1":"«محذوف»"');
+    return JSON.stringify(a, null, 1) + '\n\nqueryAccessPointInfo: ' + clean.slice(0, 3000);
   }
 }
