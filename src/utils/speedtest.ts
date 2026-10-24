@@ -66,8 +66,8 @@ const COLO: Record<string, string> = {
   LHR: 'لندن', CDG: 'باريس', AMS: 'أمستردام', MXP: 'ميلانو', BOM: 'مومباي', SIN: 'سنغافورة',
 };
 
-/** وين بنقيس — best-effort (لو فشل نكمّل عادي) */
-async function readMeta(): Promise<{ server?: string; isp?: string }> {
+/** وين بنقيس — best-effort (لو فشل نكمّل عادي). نستخدمها بعد في «نضيف راوترك» عشان نعرف الشركة من الإنترنت */
+export async function readMeta(): Promise<{ server?: string; isp?: string }> {
   try {
     const r = await timed(`${BASE}/meta?${nocache()}`, {}, 4000);
     if (r.ok) {

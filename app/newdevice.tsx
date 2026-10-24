@@ -9,7 +9,8 @@ import { ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform, Scro
 import { View, Text, TextInput, Pressable } from '../src/i18n/rn';
 import { router, Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { runProbe, reportText } from '../src/utils/probe';
+import { runProbe, reportText, fingerprint, fingerprintText } from '../src/utils/probe';
+import { readMeta } from '../src/utils/speedtest';
 import { detectDriver } from '../src/drivers/registry';
 import { LabelScannerHost, ensureScanner } from '../src/ui/scanner';
 import { ocrAvailable } from '../modules/bandly-cell/src';
@@ -68,9 +69,10 @@ export default function NewDeviceScreen() {
   const send = async () => {
     if (!canSend) return;
     let probe = '';
+    let found: string | undefined;
     if (scan) {
       setBusy('أدوّر على راوترك…');
-      const found = (await Promise.all(HOSTS.map(async h => ((await answers(h)) ? h : null)))).find(Boolean) as string | undefined;
+      found = (await Promise.all(HOSTS.map(async h => ((await answers(h)) ? h : null)))).find(Boolean) as string | undefined;
       if (found) {
         // الراوتر مدعوم أصلاً؟ (المستخدم ما عرف يضيفه) — نقوله بدل ما يرسل طلب على الفاضي
         setBusy('أتعرّف على راوترك…');
@@ -95,6 +97,17 @@ export default function NewDeviceScreen() {
         } catch { probe = `(الفحص ما كمل على ${found})`; }
       } else probe = '(ما لقينا راوتر على الشبكة — المستخدم مو متصل بواي فاي الراوتر)';
     }
+    // ═══ تلقائي: الشركة من الإنترنت + بصمة الراوتر ═══
+    setBusy('أجمع تفاصيل الاتصال…');
+    const [meta, fp] = await Promise.all([
+      readMeta().catch(() => ({} as { isp?: string; server?: string })),
+      scan && found ? fingerprint(found).catch(() => null) : Promise.resolve(null),
+    ]);
+    const netLines = [
+      meta.isp ? `الشركة (من الإنترنت): ${meta.isp}` : 'الإنترنت: ما وصلنا (الراوتر بدون نت أو الجوال على بيانات ثانية)',
+      found ? `عنوان الراوتر: ${found}` : 'ما لقينا راوتر على الواي فاي',
+      ...(fp ? fingerprintText(fp) : []),
+    ];
     setBusy('أرسل الطلب…');
     const contact = `💬 تليجرام: ${tg.trim() ? '@' + tg.trim().replace(/^@/, '') : 'بيتواصل بنفسه على @hasa_n20'}`;
     const text = [
@@ -107,6 +120,7 @@ export default function NewDeviceScreen() {
       `• ${tester ? '✅ مستعد يجرّب التحديثات' : '— ما أكّد إنه يجرّب'} · ${laptop ? '💻 عنده لابتوب' : 'بدون لابتوب'}`,
       ...(label.length ? ['', '📷 من الملصق:', ...label.map(l => `  ${l}`)] : Platform.OS === 'ios' ? ['', '📷 الملصق: بيرسل صورته على تليجرام'] : []),
       ...(probe && pageInfo(probe).length ? ['', '🧾 من صفحة الراوتر:', ...pageInfo(probe).map(l => `  ${l}`)] : []),
+      '', '🔎 تلقائي من الاتصال:', ...netLines.map(l => `  ${l}`),
       '',
       probe || '(بدون فحص)',
     ].join('\n');

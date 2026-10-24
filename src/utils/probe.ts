@@ -582,3 +582,59 @@ export async function deepCommandHarvest(
     },
   };
 }
+
+/* ═══ بصمة سريعة بدون دخول («نضيف راوترك») ═══
+ * نوع سيرفر الراوتر + ملفات الصفحة + أسماء خانات الدخول (الأسماء بس، مو القيم) + سرعة الرد.
+ * كلها من الصفحة الرئيسية اللي أي متصفح يشوفها — ما فيه كلمات مرور ولا بيانات شخصية. */
+export interface Fingerprint {
+  server?: string;
+  poweredBy?: string;
+  scripts: string[];
+  loginFields: string[];
+  forms: string[];
+  /** متوسط رد الراوتر بالمللي */
+  lanMs?: number;
+}
+
+export async function fingerprint(host: string): Promise<Fingerprint> {
+  const base = 'http://' + host.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  const fp: Fingerprint = { scripts: [], loginFields: [], forms: [] };
+  const times: number[] = [];
+  for (let i = 0; i < 3; i++) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 3000);
+    const t0 = Date.now();
+    try {
+      const res = await fetch(base + '/?_=' + t0, { signal: ctrl.signal, cache: 'no-store' } as any);
+      times.push(Date.now() - t0);
+      if (i === 0) {
+        fp.server = (res.headers.get('server') || '').slice(0, 60) || undefined;
+        fp.poweredBy = (res.headers.get('x-powered-by') || '').slice(0, 60) || undefined;
+        const html = (await res.text()).slice(0, 200_000);
+        const uniq = (xs: string[]) => [...new Set(xs)];
+        fp.scripts = uniq([...html.matchAll(/<script[^>]+src=["']([^"'?#]+)/gi)].map(m => m[1].split('/').slice(-2).join('/'))).slice(0, 15);
+        // أسماء الخانات بس — ما ناخذ أي value
+        fp.loginFields = uniq([...html.matchAll(/<input[^>]*>/gi)].map(m => {
+          const tag = m[0];
+          const type = tag.match(/type=["']?([\w-]+)/i)?.[1] ?? 'text';
+          const name = tag.match(/(?:name|id)=["']?([\w.-]+)/i)?.[1];
+          return name && /text|password|email|hidden/i.test(type) ? `${name}(${type})` : '';
+        }).filter(Boolean)).slice(0, 15);
+        fp.forms = uniq([...html.matchAll(/<form[^>]*action=["']?([^"'\s>]+)/gi)].map(m => m[1])).slice(0, 5);
+      } else await res.text().catch(() => '');
+    } catch {} finally { clearTimeout(t); }
+  }
+  if (times.length) fp.lanMs = Math.round(times.reduce((a, b) => a + b, 0) / times.length);
+  return fp;
+}
+
+export function fingerprintText(fp: Fingerprint): string[] {
+  return [
+    fp.server ? `سيرفر الراوتر: ${fp.server}` : '',
+    fp.poweredBy ? `X-Powered-By: ${fp.poweredBy}` : '',
+    fp.scripts.length ? `ملفات الصفحة: ${fp.scripts.join(' · ')}` : '',
+    fp.loginFields.length ? `خانات الصفحة: ${fp.loginFields.join(' · ')}` : '',
+    fp.forms.length ? `نماذج: ${fp.forms.join(' · ')}` : '',
+    fp.lanMs !== undefined ? `رد الراوتر: ${fp.lanMs}ms` : '',
+  ].filter(Boolean);
+}
