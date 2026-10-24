@@ -65,6 +65,51 @@ export default function AddRouterScreen() {
     if (gw && !editId && !hostTouched.current && !net.diag?.noAddress) setHost(gw);
   }, [net.diag, editId]);
 
+  // ═══ التعرّف على الراوتر وموديله أول ما تنفتح الشاشة (بدون كلمة مرور) ═══
+  const [model, setModel] = useState<{ state: 'search' | 'found' | 'none'; label?: string; host?: string }>({ state: 'search' });
+  const identifyHost = async (h: string): Promise<string | null> => {
+    const d = await detectDriver(h).catch(() => null);
+    if (!d || (d as any).id === 'unknown') return null;
+    const p = d.identify ? await d.identify().catch(() => null) : null;
+    return p?.label ?? (d as any).name ?? null;
+  };
+  useEffect(() => {
+    if (editId || welcomeScan) { setModel({ state: 'none' }); return; }
+    let alive = true;
+    (async () => {
+      const HOSTS = ['192.168.8.1', '192.168.0.1', '192.168.1.1', '192.168.31.1', '192.168.100.1', '192.168.3.1', '192.168.192.1', '192.168.254.1'];
+      const ping = async (h: string) => {
+        const c = new AbortController(); const t = setTimeout(() => c.abort(), 1800);
+        try { await fetch(`http://${h}/`, { signal: c.signal }); return true; } catch { return false; } finally { clearTimeout(t); }
+      };
+      const alive2 = (await Promise.all(HOSTS.map(async h => ((await ping(h)) ? h : null)))).filter(Boolean) as string[];
+      for (const h of alive2) {
+        const label = await identifyHost(h);
+        if (!alive) return;
+        if (label) {
+          if (!hostTouched.current) setHost(h);
+          setModel({ state: 'found', label, host: h });
+          return;
+        }
+      }
+      if (alive) setModel({ state: 'none' });
+    })();
+    return () => { alive = false; };
+  }, [editId, welcomeScan]);
+  // غيّر العنوان بنفسه ← نتعرّف على اللي كتبه (بعد ما يوقف كتابة)
+  useEffect(() => {
+    if (!hostTouched.current || editId) return;
+    const h = host.trim();
+    if (!isLanHost(h)) return;
+    let alive = true;
+    const t = setTimeout(async () => {
+      setModel({ state: 'search' });
+      const label = await identifyHost(h);
+      if (alive) setModel(label ? { state: 'found', label, host: h } : { state: 'none' });
+    }, 800);
+    return () => { alive = false; clearTimeout(t); };
+  }, [host, editId]);
+
   // الترحيب ← الكاميرا تنفتح على طول (مرة وحدة)
   const autoScanned = useRef(false);
   useEffect(() => {
@@ -544,6 +589,21 @@ export default function AddRouterScreen() {
                 returnKeyType="next"
               />
             </Field>
+            {!editId && model.state === 'found' && (
+              <View style={styles.modelOk}>
+                <Icon name="check" size={18} color={tFg('#12b76a')} stroke={3} />
+                <Text style={styles.modelTxt}>تعرّفنا على راوترك: <Text style={styles.modelBold}>{model.label}</Text></Text>
+              </View>
+            )}
+            {!editId && model.state === 'search' && (
+              <View style={styles.modelWait}>
+                <ActivityIndicator size="small" color={C.blue} />
+                <Text style={styles.modelTxt}>نتعرّف على راوترك…</Text>
+              </View>
+            )}
+            {!editId && model.state === 'none' && !isDevice && (
+              <Text style={styles.modelNone}>ما تعرّفنا على راوتر — تأكد إن جوالك متصل بواي فاي الراوتر، أو اختر نوعه تحت 👇</Text>
+            )}
             <Text style={styles.hostsCap}>وش نوع راوترك؟ اختره والعنوان يتعبى لحاله 👇</Text>
             <View style={styles.hosts}>
               {COMMON_HOSTS.map(h => {
@@ -741,6 +801,11 @@ const styles = sheet({
     textAlign: 'right',
   },
   ltr: { textAlign: 'left', writingDirection: 'ltr', fontWeight: '700', letterSpacing: 0.3 },
+  modelOk: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, backgroundColor: tBg('#12b76a14'), borderColor: tBd('#12b76a40'), borderWidth: 1.5, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 10 },
+  modelWait: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, paddingVertical: 8, marginBottom: 6 },
+  modelTxt: { color: C.text, fontSize: 14, fontWeight: '700', textAlign: 'right', flex: 1 },
+  modelBold: { fontWeight: '900', color: tFg('#0f9d58') },
+  modelNone: { color: C.sub, fontSize: 12.5, textAlign: 'right', marginBottom: 8 },
   hostsCap: { color: C.sub, fontSize: 12, fontWeight: '700', textAlign: 'right', marginTop: -4, marginBottom: 8 },
   hosts: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8, marginBottom: S.md },
   hostChip: {
