@@ -3,7 +3,7 @@
  * المحرك في src/assistant/autopilot.ts (كل تغيير بأمان ويرجع لو صار أسوأ).
  */
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { ActivityIndicator, Alert, Platform, ScrollView, Switch } from 'react-native';
 import { View, Text, Pressable } from '../../src/i18n/rn';
 import { useLocalSearchParams, router, Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +16,8 @@ import { LEVEL_COLOR, rsrpLevel, sinrLevel } from '../../src/utils/signal';
 import { Icon, IconName } from '../../src/ui/Icon';
 import { C, R, S, tBg, tBd, tFg } from '../../src/ui/theme';
 import { sheet } from '../../src/i18n';
+import { getHealer, setHealerOn, HealerState } from '../../src/store/healer';
+import { startMonitor } from '../../src/tasks/monitor';
 
 const ST: Record<StepStatus, { icon: IconName; color: string; word: string }> = {
   wait: { icon: 'clock', color: '#9aa1bd', word: 'بالدور' },
@@ -72,6 +74,23 @@ export default function AutopilotScreen() {
 
   const zte = !!(info && driverById(info.driverId)?.cellLockRisk);
 
+  // ═══ 🛡️ الحارس ═══
+  const [healer, setHealer] = useState<HealerState | null>(null);
+  const [showLog, setShowLog] = useState(false);
+  useEffect(() => { if (id) getHealer(id).then(h => alive.current && setHealer(h)); }, [id]);
+  const toggleHealer = async (on: boolean) => {
+    if (!id) return;
+    if (on) {
+      const ok = await new Promise<boolean>(res => Alert.alert('🛡️ الحارس',
+        `أراقب راوترك بالخلفية، ولو صار «بدون خدمة» أو ضعفت الإشارة أو طاح 5G أصلّح لحالي بالتدريج:\n\n١) أصحّي الراديو\n٢) أعيد الاتصال بالبرج\n٣) أرجّع الراوتر يختار بنفسه\n٤) إعادة تشغيل (مرة باليوم كحد أقصى)\n\n• ما أقطع النت وأحد يحمّل\n• أرسل لك إشعار بكل شي أسويه${Platform.OS === 'ios' ? '\n• على الآيفون النظام يصحّي التطبيق أحياناً بس — المراقبة مو كل ١٥ دقيقة' : ''}`,
+        [{ text: 'لا', style: 'cancel', onPress: () => res(false) }, { text: 'شغّله', onPress: () => res(true) }]));
+      if (!ok) return;
+    }
+    await setHealerOn(id, on, startMonitor);
+    const h = await getHealer(id);
+    if (alive.current) setHealer(h);
+  };
+
   const start = async () => {
     if (!info || running) return;
     cancel.current = false;
@@ -106,6 +125,30 @@ export default function AutopilotScreen() {
         <Text style={s.heroTitle}>أضبط لك كل شي بنفسي</Text>
         <Text style={s.heroSub}>أفحص · أجرّب · أثبّت الأفضل · وأرجّع أي شي صار أسوأ</Text>
       </View>
+
+      {/* ═══ الحارس: مفتاح واحد ═══ */}
+      {healer && (
+        <View style={[s.card, { borderColor: tBd(healer.on ? '#12b76a77' : C.cardBorder), backgroundColor: healer.on ? tBg('#12b76a0c') : C.card }]}>
+          <View style={s.guardRow}>
+            <Switch value={healer.on} onValueChange={toggleHealer} trackColor={{ true: '#12b76a', false: C.track }} thumbColor={C.onAccent} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.guardTitle}>🛡️ خلّني أراقب وأصلّح لحالي</Text>
+              <Text style={s.stepNote}>{healer.on ? 'شغّال — لو صار «بدون خدمة» أو ضعفت الإشارة أو طاح 5G، أصلّحه وأرسل لك إشعار' : 'الحارس: يراقب بالخلفية ويصلّح بالتدريج بدون ما تفتح التطبيق'}</Text>
+            </View>
+          </View>
+          {!!healer.log?.length && (
+            <Pressable onPress={() => setShowLog(v => !v)} style={s.logToggle}>
+              <Text style={s.logToggleTxt}>{showLog ? 'اخفِ السجل' : `وش سويت لك (${healer.log.length})`}</Text>
+            </Pressable>
+          )}
+          {showLog && [...(healer.log ?? [])].reverse().slice(0, 10).map((l, i) => (
+            <View key={l.at + '-' + i} style={s.logRow}>
+              <Text style={[s.logTxt, l.ok === true && { color: tFg('#12b76a') }, l.ok === false && { color: C.red }]}>{l.text}</Text>
+              <Text style={s.logAt}>{new Date(l.at).toLocaleString('ar-SA', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</Text>
+            </View>
+          ))}
+        </View>
+      )}
 
       {/* الخطوات */}
       <View style={s.card}>
@@ -185,6 +228,13 @@ const s = sheet({
   heroTitle: { color: C.text, fontSize: 22, fontWeight: '900', textAlign: 'center' },
   heroSub: { color: C.sub, fontSize: 13.5, textAlign: 'center' },
   card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: R.lg, padding: 14, gap: 8 },
+  guardRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
+  guardTitle: { color: C.text, fontWeight: '900', fontSize: 15.5, textAlign: 'right' },
+  logToggle: { alignSelf: 'center', paddingVertical: 4 },
+  logToggleTxt: { color: tFg('#2f6bff'), fontWeight: '800', fontSize: 13 },
+  logRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, paddingVertical: 4, borderTopWidth: 1, borderColor: C.lineSoft },
+  logTxt: { flex: 1, color: C.text, fontSize: 12.5, textAlign: 'right' },
+  logAt: { color: C.muted, fontSize: 11 },
   cardTitle: { color: C.sub, fontWeight: '800', fontSize: 13, textAlign: 'center' },
   cmpHint: { color: C.muted, fontSize: 11.5, textAlign: 'center' },
   step: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, paddingVertical: 8 },

@@ -13,6 +13,7 @@ import { buildWeekly, weeklyLines, weeklyDue, markWeeklySent } from '../utils/we
 import { runAutomation } from './automation';
 import { getAutoState } from '../store/automation';
 import { runGuard } from './guard5g';
+import { runHealer } from './healer';
 
 export const MONITOR_TASK = 'bandly-monitor-v1';
 
@@ -138,6 +139,9 @@ export async function runMonitorCheck(): Promise<boolean> {
 
       // ═══ حارس 5G — يرجّع التلقائي لو التركيبة المثبّتة طيّحت النت ═══
       if (!rebooting && (await runGuard(r, sig, online).catch(() => false))) fired = true;
+
+      // ═══ الحارس — يصلّح لحاله بالتدريج (بدون خدمة / إشارة ضعيفة / 5G طاح) ═══
+      if (!rebooting && (await runHealer(r, sig, online).catch(() => false))) fired = true;
 
       // ═══ الوضع الذكي والصيانة الليلية ═══
       if (await runAutomation(r, sig).catch(() => false)) fired = true;
