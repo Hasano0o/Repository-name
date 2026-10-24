@@ -30,8 +30,10 @@ function modelLines(lines: string[]): string[] {
 /** الموديل والفيرموير من صفحة الراوتر نفسها (بدون دخول) — من تقرير الفحص */
 function pageInfo(probe: string): string[] {
   const out = new Set<string>();
-  const t = probe.match(/<title>([^<]{3,60})<\/title>/i)?.[1]?.trim();
-  if (t) out.add(`عنوان الصفحة: ${t}`);
+  // العنوان من الصفحة الرئيسية بس — مو من صفحات الخطأ (404) اللي ترجع من الفحوصات الثانية
+  const main = probe.split(/\n--- /).find(sec => sec.startsWith('الصفحة الرئيسية')) ?? '';
+  const t = main.match(/<title>([^<]{3,60})<\/title>/i)?.[1]?.trim();
+  if (t && !/error|not found|404|forbidden|unauthori/i.test(t)) out.add(`عنوان الصفحة: ${t}`);
   for (const m of probe.matchAll(/"?(wa_inner_version|web_version|hardware_version|SoftwareVersion|HardwareVersion|FirmwareVersion|DeviceName|ModelName|model_name|product_name|devcap_model)"?\s*[:=]\s*"([^"]{3,50})"/gi)) out.add(`${m[1]}: ${m[2]}`);
   return [...out].slice(0, 6);
 }
