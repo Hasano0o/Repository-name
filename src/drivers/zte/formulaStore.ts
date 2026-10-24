@@ -45,3 +45,12 @@ export async function markBadPassword(host: string, fp: string | null): Promise<
   badMem.set(host, fp ?? '');
   try { fp ? await AsyncStorage.setItem(badKey(host), fp) : await AsyncStorage.removeItem(badKey(host)); } catch {}
 }
+
+/** صيغة توقيع الأوامر (AD) اللي نجحت لكل راوتر — تنحفظ عشان ما نعيد التجربة كل مرة */
+const adKey = (host: string) => `bandly.zte.ad.${host}`;
+export async function loadAdFormula(host: string): Promise<string | null> {
+  try { return await AsyncStorage.getItem(adKey(host)); } catch { return null; }
+}
+export async function saveAdFormula(host: string, f: string): Promise<void> {
+  try { await AsyncStorage.setItem(adKey(host), f); } catch {}
+}

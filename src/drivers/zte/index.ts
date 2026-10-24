@@ -7,7 +7,7 @@ import {
   SignalSnapshot, CellLockState, CellLockTarget, WifiRadio, DeviceTemp, SmsMessage,
 } from '../types';
 import { http } from '../http';
-import { loadFormula, saveFormula, isBadPassword, markBadPassword } from './formulaStore';
+import { loadFormula, saveFormula, isBadPassword, markBadPassword, loadAdFormula, saveAdFormula } from './formulaStore';
 import { ZteIo, zteExtras, zteSetUpnp, zteSetDmz, zteSetLedNight, zteSetBandOn, zteSetGuest, zteSetUrlBlocks, zteRadios, zteSetChannel, zteSetAutoRecover, zteSetWifiSleep, zteSetWifiNames, zteFactoryReset } from './extras';
 import {
   parsePci, decodeBandMask, encodeBandMask, parseZteCa, bandLabel,
@@ -126,6 +126,8 @@ const inRange = (v: string | undefined, lo: number, hi: number): number | undefi
 /** صيغة كلمة المرور اللي نجحت مع كل راوتر — عشان المرة الجاية نحاول مرة وحدة بس
  *  (كل محاولة غلط تنقص عداد الراوتر، وبعد ٥ غلطات يقفل الدخول دقائق) */
 const GOOD_FORMULA = new Map<string, string>();
+/** صيغة AD اللي نجحت لكل راوتر (بالذاكرة) */
+const AD_LEARNED = new Map<string, string>();
 
 /** تباعد الترددات الفرعية (SCS) لـ 5G — ترددات TDD العالية 30 والباقي 15 */
 const NR_SCS30 = new Set([34, 38, 39, 40, 41, 46, 47, 48, 77, 78, 79]);
@@ -238,9 +240,8 @@ export class ZteDriver implements RouterDriver {
    * مرشحو صيغة AD — من الأكثر شيوعاً للأقل. كلها موثقة من فيرمويرات ZTE،
    * مو brute-force. نجربها مرة وحدة ثم نحفظ الناجحة.
    */
-  private static readonly AD_FORMULAS = ['wa+cr', 'wa', 'wa+cr+web', 'wa+web', 'concat'] as const;
+  private static readonly AD_FORMULAS = ['wa+cr', 'sha:wa+cr', 'sha:wa+cr.lo', 'sha:wa', 'wa', 'wa+cr+web', 'wa+web', 'concat'] as const;
   private adFormula: string | null = null;
-  private adProbed = false;
 
   private async computeAd(formula: string): Promise<string | undefined> {
     try {
@@ -256,6 +257,10 @@ export class ZteDriver implements RouterDriver {
         case 'wa+cr+web': return md5Hex(md5Hex(wa + cr + web) + rd);
         case 'wa+web': return md5Hex(md5Hex(wa + web) + rd);
         case 'concat': return md5Hex(wa + cr + rd);
+        // فيرموير ZTE الأحدث (MC801A/MC888/MC889/G5…): نفس الفكرة بس SHA256 (service.js: cookWithRequest)
+        case 'sha:wa+cr': return sha256Upper(sha256Upper(wa + cr) + rd);
+        case 'sha:wa+cr.lo': return sha256Hex(sha256Hex(wa + cr) + rd);
+        case 'sha:wa': return sha256Upper(sha256Upper(wa) + rd);
         default: return undefined;
       }
     } catch {
@@ -263,46 +268,28 @@ export class ZteDriver implements RouterDriver {
     }
   }
 
-  /** يختبر الصيغ على SET_WEB_LANGUAGE (بلا تأثير جانبي — نفس اللغة). */
-  private async probeAdFormula(): Promise<void> {
-    if (this.adProbed) return;
-    this.adProbed = true;
-    try {
-      const v = await this.get(['wa_inner_version', 'cr_version', 'web_version']);
-      const rd = (await this.get(['RD'])).RD;
-      if (!rd) return;
-      const wa = v.wa_inner_version ?? '';
-      const cr = v.cr_version ?? '';
-      const web = v.web_version ?? '';
-      const formulas: Array<[string, string]> = [
-        ['wa+cr', md5Hex(md5Hex(wa + cr) + rd)],
-        ['wa', md5Hex(md5Hex(wa) + rd)],
-        ['wa+cr+web', md5Hex(md5Hex(wa + cr + web) + rd)],
-        ['wa+web', md5Hex(md5Hex(wa + web) + rd)],
-        ['concat', md5Hex(wa + cr + rd)],
-      ];
-      for (const [name, ad] of formulas) {
-        try {
-          const form = `isTest=false&goformId=SET_WEB_LANGUAGE&Language=en&AD=${encodeURIComponent(ad)}`;
-          const res = await http(this.base() + '/goform/goform_set_cmd_process', {
-            method: 'POST',
-            headers: this.headers({ 'Content-Type': 'application/x-www-form-urlencoded' }),
-            body: form,
-          });
-          const out = await res.text();
-          if (/"result"\s*:\s*"?0"?/.test(out) || /success/i.test(out)) {
-            this.adFormula = name;
-            return;
-          }
-        } catch {}
-      }
-      this.adFormula = 'wa+cr';
-    } catch {}
+  private async signAd(): Promise<string | undefined> {
+    if (!this.adFormula && !AD_LEARNED.has(this.host)) {
+      const saved = await loadAdFormula(this.host);
+      if (saved) AD_LEARNED.set(this.host, saved);
+    }
+    return this.computeAd(this.adFormula ?? AD_LEARNED.get(this.host) ?? 'wa+cr');
   }
 
-  private async signAd(): Promise<string | undefined> {
-    if (!this.adProbed) await this.probeAdFormula();
-    return this.computeAd(this.adFormula ?? 'wa+cr');
+  /**
+   * الأمر انرفض ({"result":"failure"}) — غالباً صيغة AD غلط (تقرير MC801A: الدخول نجح وكل أمر فيه AD انرفض،
+   * حتى LOGOUT). نجرّب الصيغ الثانية على نفس الأمر، والناجحة نحفظها للراوتر. الأمر المرفوض ما يغيّر شي.
+   */
+  private async retryWithOtherAd(body: Record<string, string>): Promise<string | null> {
+    const cur = this.adFormula ?? AD_LEARNED.get(this.host) ?? 'wa+cr';
+    for (const f of ZteDriver.AD_FORMULAS) {
+      if (f === cur) continue;
+      this.adFormula = f;
+      const out = await this.post(body);
+      if (/success/i.test(out)) { AD_LEARNED.set(this.host, f); await saveAdFormula(this.host, f); this.log('AD formula →', f); return out; }
+    }
+    this.adFormula = cur;
+    return null;
   }
 
   private async post(body: Record<string, string>): Promise<string> {
@@ -581,8 +568,16 @@ export class ZteDriver implements RouterDriver {
     if (/success/i.test(out) || !this.password) return out;
     try { await this.login(this.host, '', this.password); } catch {}
     out = await this.post(body);
+    if (/success/i.test(out)) return out;
+    // نفس الرفض بعد الدخول = غالباً صيغة AD (مرة وحدة لكل راوتر — بعدها نعرف الصح)
+    if (!this.adTried) {
+      this.adTried = true;
+      const alt = await this.retryWithOtherAd(body);
+      if (alt) return alt;
+    }
     return out;
   }
+  private adTried = false;
 
   private rejected(what: string, out: string): Error {
     const raw = (out || '').replace(/\s+/g, ' ').slice(0, 80);
@@ -964,7 +959,7 @@ export class ZteDriver implements RouterDriver {
   async setNetworkMode(mode: string): Promise<void> {
     await this.ensure();
     const v = CODE_TO_ZTE[mode] ?? mode;
-    { const ng = await this.ubusFirst(); if (ng) { await ng.setNetworkMode(v); return; } }
+    { const ng = await this.ubusFirst(); if (ng) { try { await ng.setNetworkMode(v); return; } catch (e) { this.log('ubus write failed → goform', (e as any)?.message); } } }
     const out = await this.act({ goformId: 'SET_BEARER_PREFERENCE', BearerPreference: v });
     if (!/success/i.test(out)) {
       const ng = await this.ngWriter();
@@ -982,7 +977,7 @@ export class ZteDriver implements RouterDriver {
     // «فك التثبيت» = الترددات الأصلية للراوتر لو نعرفها (مو قائمة تخمينية — كانت تشيل ترددات زي B38 ويطيح الراوتر بدون خدمة)
     const all = this.baseLte() ?? [...new Set([...DEFAULT_LTE, ...(await this.readLocks()).lte])];
     const lte = bands.length ? bands : all;
-    { const ng = await this.ubusFirst(); if (ng) { await ng.setBand(lte, undefined); return; } }
+    { const ng = await this.ubusFirst(); if (ng) { try { await ng.setBand(lte, undefined); return; } catch (e) { this.log('ubus write failed → goform', (e as any)?.message); } } }
     // بعض الفيرموير (MC888/MC889…) يبي القناع ١٢ خانة بالضبط: 0x000000000005 بدل 0x5
     const short = maskFromBands(lte);
     const padded = '0x' + short.slice(2).padStart(12, '0');
@@ -1049,7 +1044,7 @@ export class ZteDriver implements RouterDriver {
     const cur = (await this.readLocks()).nr;
     const same = cur.length === nr.length && nr.every(b => cur.includes(b));
     if (same) return;
-    { const ng = await this.ubusFirst(); if (ng) { await ng.setNrBandsTyped(nr, (await this.nrType()) === '1'); return; } }
+    { const ng = await this.ubusFirst(); if (ng) { try { await ng.setNrBandsTyped(nr, (await this.nrType()) === '1'); return; } catch (e) { this.log('ubus write failed → goform', (e as any)?.message); } } }
     const classic = (m: string) => this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: m });
     const sansa = async (m: string) => this.act({
       goformId: 'WAN_PERFORM_NR5G_SANSA_BAND_LOCK', nr5g_band_mask: m, type: await this.nrType(),
