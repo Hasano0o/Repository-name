@@ -62,7 +62,7 @@ const SCREENS: [string, string][] = [
   ['carriers/[id]', 'الناقلات النشطة'],
   ['places/[id]', 'مقارنة الأماكن'],
   ['antenna/[id]', 'مستشار الأنتنا'],
-  ['finder/[id]', 'اختار لي الأفضل'],
+  ['finder/[id]', 'أدوات متقدمة'],
   ['advisor/[id]', 'المستشار الذكي'],
   ['calab/[id]', 'مختبر الدمج'],
   ['anchor/[id]', 'مرساة 5G'],

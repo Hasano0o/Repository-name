@@ -909,10 +909,10 @@ export default function RouterDashboard() {
                 onPress={() => router.push(`/aim/${info.id}` as Href)} />
               <ToolTile wide icon="tower" color={tFg('#12b76a')} title="الأبراج" sub="النواقل والدمج"
                 onPress={() => router.push(`/towers/${info.id}` as Href)} />
-              <ToolTile wide icon="spark" color={tFg('#f97316')} title="اختار الأفضل" sub="سرعة · ألعاب · ثبات"
-                onPress={() => router.push(`/finder/${info.id}` as Href)} />
               <ToolTile wide icon="game" color={tFg('#ec4899')} title="مُحسّن الألعاب" sub="أقل بنق للعبتك"
                 onPress={() => router.push(`/ping/${info.id}` as Href)} />
+              <ToolTile wide icon="settings" color={tFg('#64748b')} title="أدوات متقدمة" sub="الترددات والدمج يدوي"
+                onPress={() => router.push(`/finder/${info.id}` as Href)} />
             </TileGrid>
             <GroupTitle title="قِس وتابع" color={tFg('#12b76a')} />
             <TileGrid>

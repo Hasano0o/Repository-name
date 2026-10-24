@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, Href } from 'expo-router';
 import { Icon, IconName } from '../../src/ui/Icon';
 
-import { C, tBg, tFg } from '../../src/ui/theme';
+import { C, tBg, tBd, tFg } from '../../src/ui/theme';
 import { sheet } from '../../src/i18n';
 const BLUE = '#3567F5';
 const PURPLE = '#7655F5';
@@ -36,39 +36,6 @@ interface Section {
 
 const SECTIONS: Section[] = [
   {
-    key: 'auto',
-    icon: '🚀',
-    title: 'اختار لي الأفضل',
-    subtitle: 'وش يهمك أكثر؟ التطبيق يجرّب ويقيس ويثبّت الأفضل لحاله',
-    items: [
-      {
-        key: 'speed',
-        icon: 'spark',
-        color: tFg('#7c5cff'),
-        title: 'أسرع إنترنت',
-        sub: 'يجرّب الترددات ويقيس السرعة والثبات، ويثبّت الأفضل',
-        tag: 'موصى به',
-        path: 'optimize',
-      },
-      {
-        key: 'game',
-        icon: 'game',
-        color: tFg('#ec4899'),
-        title: 'أقل بنق للألعاب',
-        sub: 'يقيس البنق لسيرفر لعبتك في كل تردد، ويثبّت الأقل',
-        path: 'ping',
-      },
-      {
-        key: 'advisor',
-        icon: 'bulb',
-        color: tFg('#0ea5a4'),
-        title: 'أقوى برج وأثبت اتصال',
-        sub: 'يقارن برجك بالأبراج حولك ويجرّبها فعلياً — ما يغيّر شي بدون إذنك',
-        path: 'advisor',
-      },
-    ],
-  },
-  {
     key: 'manual',
     icon: '🎯',
     title: 'تحكم يدوي',
@@ -81,6 +48,14 @@ const SECTIONS: Section[] = [
         title: 'قفل الترددات',
         sub: 'اختيار يدوي كامل + وضع الشبكة',
         path: 'bands',
+      },
+      {
+        key: 'combo',
+        icon: 'layers',
+        color: tFg('#2f6bff'),
+        title: 'الأساسي والثانوي',
+        sub: 'اختر التردد الأساسي واللي ينضاف معه (4G و5G)',
+        path: 'combo',
       },
     ],
   },
@@ -148,9 +123,20 @@ export default function Finder() {
         contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 40 }]}
       >
         <View style={s.header}>
-          <Text style={s.lead}>وش تبي تسوي؟</Text>
-          <Text style={s.sub}>اختر هدفك والتطبيق يكمّل، أو تحكّم بنفسك من تحت</Text>
+          <Text style={s.lead}>أدوات متقدمة</Text>
+          <Text style={s.sub}>للي يبي يتحكم بنفسه في الترددات والدمج</Text>
         </View>
+
+        {/* اللي ما يبي يتعب: «اضبط لي كل شي» يسوي هالشغل كله لحاله */}
+        <Pressable onPress={() => router.push(`/autopilot/${id}` as Href)} accessibilityRole="button"
+          style={({ pressed }) => [s.auto, pressed && { opacity: 0.8 }]}>
+          <View style={[s.iconWrap, { backgroundColor: tBg('#7c5cff22') }]}><Icon name="spark" size={20} color={tFg('#7c5cff')} /></View>
+          <View style={{ flex: 1, alignItems: 'flex-end' }}>
+            <Text style={[s.title, { color: tFg('#7c5cff') }]}>تبي التطبيق يسويها عنك؟</Text>
+            <Text style={s.itemSubPlain}>«اضبط لي كل شي» يجرّب الترددات والدمج والأبراج ويثبّت الأفضل لحاله</Text>
+          </View>
+          <Icon name="chevron" size={18} color={tFg('#7c5cff')} />
+        </Pressable>
 
         {SECTIONS.map((sec) => (
           <View key={sec.key} style={s.section}>
@@ -204,6 +190,11 @@ export default function Finder() {
 const s = sheet({
   page: { padding: 16, gap: 16 },
   header: { gap: 3 },
+  auto: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 12, padding: 14, borderRadius: 18,
+    borderWidth: 1.5, borderColor: tBd('#7c5cff55'), backgroundColor: tBg('#7c5cff10'),
+  },
+  itemSubPlain: { color: MUTED, fontSize: 12, textAlign: 'right', marginTop: 2, lineHeight: 18 },
   lead: { color: TEXT, fontSize: 22, fontWeight: '900', textAlign: 'right' },
   sub: { color: MUTED, fontSize: 12.5, textAlign: 'right' },
   section: {
