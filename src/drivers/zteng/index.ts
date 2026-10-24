@@ -81,7 +81,11 @@ export class ZteNgDriver implements RouterDriver {
     const body = JSON.stringify([{ jsonrpc: '2.0', id: 1, method: 'call', params: [session ?? this.session, obj, method, params] }]);
     const res = await http(`${this.base()}/ubus/?t=${Date.now()}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Referer: this.base() + '/', 'Z-Mode': '1' },
+      // نفس هيدرات صفحة الراوتر (G5/U60): Z-Mode 1 بعد الدخول، Z-Tag = اسم الأمر
+      headers: {
+        'Content-Type': 'application/json', Referer: this.base() + '/index.html', Origin: this.base(),
+        'X-Requested-With': 'XMLHttpRequest', 'Z-Mode': (session ?? this.session) === ZERO ? '0' : '1', 'Z-Tag': method,
+      },
       body,
     }, 6000);
     const j: any = await res.json();
@@ -403,6 +407,15 @@ export class ZteNgDriver implements RouterDriver {
       const cur = nrListOf((await this.net()).nr5g_sa_band_lock);
       if (!sameSet(cur, nr)) await this.write('zte_nwinfo_api', 'nwinfo_set_nrbandlock', { nr5g_type: 'SA', nr5g_band: nr.join(',') });
     }
+  }
+
+  /** لأجهزة G5 (MC801A Pro…): 5G بوضع NSA يحتاج nr5g_type=nsa — لو رفض نجرّب SA */
+  async setNrBandsTyped(nr: number[], nsa: boolean): Promise<void> {
+    const band = nr.join(',');
+    if (nsa) {
+      try { await this.write('zte_nwinfo_api', 'nwinfo_set_nrbandlock', { nr5g_type: 'nsa', nr5g_band: band }); return; } catch {}
+    }
+    await this.write('zte_nwinfo_api', 'nwinfo_set_nrbandlock', { nr5g_type: 'SA', nr5g_band: band });
   }
 
   async getActiveLock(): Promise<ActiveLock | null> {

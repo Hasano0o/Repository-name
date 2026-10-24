@@ -16,6 +16,7 @@ import { buildSnapshot } from '../../utils/snapshot';
 import { noChange, markNoChange } from '../noChange';
 
 import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
+import { ZteNgDriver } from '../zteng';
 import { ZTE_LOCK_KEYS, ZteLockData, checkComplete, zteDiff, zteSummary, ZTE_PART_LABEL, lteBands, nrBands, lteCell, nrCell } from './lockState';
 const sha256Upper = (s: string) => bytesToHex(sha256(utf8ToBytes(s))).toUpperCase();
 const sha256Hex = (s: string) => bytesToHex(sha256(utf8ToBytes(s)));
@@ -960,7 +961,11 @@ export class ZteDriver implements RouterDriver {
     await this.ensure();
     const v = CODE_TO_ZTE[mode] ?? mode;
     const out = await this.act({ goformId: 'SET_BEARER_PREFERENCE', BearerPreference: v });
-    if (!/success/i.test(out)) throw this.rejected('تغيير وضع الشبكة', out);
+    if (!/success/i.test(out)) {
+      const ng = await this.ngWriter();
+      if (ng) { await ng.setNetworkMode(v); return; }
+      throw this.rejected('تغيير وضع الشبكة', out);
+    }
   }
 
   async setBand(bands: number[] | 'keep', nrBands?: number[]): Promise<void> {
@@ -993,9 +998,27 @@ export class ZteDriver implements RouterDriver {
         if (/success/i.test(out)) { this.ltePad = m === padded && m !== short; return; }
       }
     }
+    // أجهزة ZTE الجديدة (MC801A Pro بصفحة G5…): القراءة goform بس الكتابة عبر ubus
+    const ng = await this.ngWriter();
+    if (ng) { await ng.setBand(lte, undefined); return; }
     throw this.rejected('تثبيت الترددات', out);
   }
   private ltePad = false;
+  /** كاتب احتياطي عبر ubus (undefined = ما فحصنا، null = الجهاز ما يدعمه) */
+  private ng: ZteNgDriver | null | undefined;
+  private async ngWriter(): Promise<ZteNgDriver | null> {
+    if (this.ng !== undefined) return this.ng;
+    this.ng = null;
+    try {
+      const d = new ZteNgDriver();
+      if (await d.detect(this.host)) {
+        await d.login(this.host, '', this.password);
+        this.ng = d;
+        this.log('writer: ubus (zwrt) — goform رفض الكتابة');
+      }
+    } catch { this.ng = null; }
+    return this.ng;
+  }
   /** أي أمر 5G قبله الراوتر: classic = WAN_PERFORM_NR5G_BAND_LOCK (MU5001)، sansa = الأحدث مع type */
   private nrCmd: 'classic' | 'sansa' | null = null;
   private async setNrBands(nrBands: number[]): Promise<void> {
@@ -1021,7 +1044,11 @@ export class ZteDriver implements RouterDriver {
     if (!ok(o2) && !nrBands.length) o2 = await tryAll(SAFE_NR.join(','));
     // آخر شي: جلسة مطوّر ثم نعيد
     if (!ok(o2) && await this.devLogin()) o2 = await tryAll(nr.join(','));
-    if (!ok(o2)) throw this.rejected('تثبيت ترددات 5G', o2);
+    if (!ok(o2)) {
+      const ng = await this.ngWriter();
+      if (ng) { await ng.setNrBandsTyped(nr, (await this.nrType()) === '1'); return; }
+      throw this.rejected('تثبيت ترددات 5G', o2);
+    }
   }
 
   async getActiveLock(): Promise<ActiveLock | null> {
@@ -1170,18 +1197,10 @@ export class ZteDriver implements RouterDriver {
     const todo = zteDiff(d, await read());
     this.log('restore parts', todo.join(',') || 'none');
     const must = (what: string, out: string) => { if (!/success/i.test(out)) throw this.rejected(what, out); };
-    if (todo.includes('mode')) {
-      must('إرجاع وضع الشبكة', await this.act({ goformId: 'SET_BEARER_PREFERENCE', BearerPreference: d.net_select }));
-    }
-    if (todo.includes('lte')) {
-      must('إرجاع ترددات 4G', await this.act({
-        goformId: 'BAND_SELECT', is_gw_band: '0', gw_band_mask: '0',
-        is_lte_band: '1', lte_band_mask: maskFromBands(lteBands(d)),
-      }));
-    }
-    if (todo.includes('nr')) {
-      must('إرجاع ترددات 5G', await this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: nrBands(d).join(',') }));
-    }
+    // نفس طرق التثبيت (فيها البدائل: القناع الطويل، أمر 5G الجديد، دخول المطوّر، ubus)
+    if (todo.includes('mode') && d.net_select) await this.setNetworkMode(d.net_select);
+    if (todo.includes('lte') && lteBands(d).length) await this.setLteBands(lteBands(d));
+    if (todo.includes('nr') && nrBands(d).length) await this.setNrBands(nrBands(d));
     let cellChanged = false;
     if (todo.includes('lteCell')) {
       const c = lteCell(d);
