@@ -10,7 +10,7 @@
  *  • ما فيه ضبط مصنع ولا تغيير كلمات مرور. الإلغاء يوقف ويرجّع.
  */
 import { SavedRouter } from '../store/routers';
-import { withSession, withRouterLock, RouterOp } from '../store/sessions';
+import { withSession, withSessionPatient, withRouterLock, RouterOp } from '../store/sessions';
 import { driverById } from '../drivers/registry';
 import type { CellTower, CellLockState, BandConfig, Signal, WifiRadio } from '../drivers/types';
 import type { LockSnapshot } from '../drivers/lockSnapshot';
@@ -139,6 +139,8 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
   }
   set('check', 'done', `${before.rsrp !== undefined ? `4G ${Math.round(before.rsrp)}` : ''}${before.nrRsrp !== undefined ? ` · 5G ${Math.round(before.nrRsrp)}` : ''}${before.ping !== undefined ? ` · بنق ${before.ping}ms` : ''}`);
 
+  /** إعدادك قبل أي تغيير — لو الشبكة طاحت بالآخر نرجّعه */
+  let startSnap: LockSnapshot | null = null;
   await withRouterLock(r, async (op: RouterOp) => {
     // ═══ ٢) أفضل تردد 4G ═══
     if (cancelled()) return;
@@ -148,6 +150,7 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
       try {
         o.onStatus('أحفظ إعدادك الحالي…');
         const snap = await readSnapOrStop(r) as LockSnapshot;
+        startSnap = snap;
         const [cfg, cells] = await withSession(r, async d => Promise.all([
           d.getBandConfig ? d.getBandConfig() : Promise.resolve(null as BandConfig | null),
           d.getCells ? d.getCells().catch(() => [] as CellTower[]) : Promise.resolve([] as CellTower[]),
@@ -323,7 +326,39 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
   set('final', 'run');
   o.onStatus('أقيس مرة ثانية…');
   await sleep(3000);
-  const after = await measureNow(r);
+  let after = await measureNow(r);
+  // ═══ حماية أخيرة: لو الشبكة طاحت بعد التغييرات (تقرير MU5001: ثبّت B7 وبعد دقيقة صار «بدون خدمة»)
+  // ننتظر شوي، ولو ما رجعت نرجّع إعدادك الأصلي بالضبط ونتأكد
+  const down = async () => {
+    const ok = await withSession(r, d => (d.isConnected ? d.isConnected() : Promise.resolve(true)), false).catch(() => true);
+    return !ok;
+  };
+  if (startSnap && changed.length && await down()) {
+    o.onStatus('الشبكة طاحت بعد التغيير — أنتظر شوي…');
+    await sleep(30000);
+    if (await down()) {
+      o.onStatus('أرجّع إعدادك الأصلي…');
+      try {
+        const snap0 = startSnap as LockSnapshot;
+        await withRouterLock(r, async () => {
+          await withSessionPatient(r, d => d.restoreLockState!(snap0), 90_000);
+          await waitOnline(r, 120_000, () => false).catch(() => false);
+        }, { label: 'رجّع إعدادي (اضبط لي كل شي)' });
+        changed.splice(0, changed.length);
+        after = await measureNow(r);
+        report.after = after;
+        o.onMeasure?.('after', after);
+        set('final', 'fail', 'الشبكة طاحت بعد التغيير — رجّعت إعدادك الأصلي');
+        o.onStatus('');
+        return report;
+      } catch (e) {
+        set('final', 'fail', 'الشبكة طاحت وما قدرت أرجّع إعدادك — اضغط «رجّع الإشارة» في صفحة الراوتر');
+        o.onStatus('');
+        return report;
+      }
+    }
+    after = await measureNow(r);
+  }
   report.after = after;
   o.onMeasure?.('after', after);
   set('final', changed.length ? 'ok' : 'same', changed.length ? `غيّرت: ${changed.join('، ')}` : 'ما احتاج أغيّر شي — إعدادك الحالي هو الأفضل');
