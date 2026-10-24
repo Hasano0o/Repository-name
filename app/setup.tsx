@@ -63,7 +63,7 @@ export default function SetupScreen() {
   const [ping, setPing] = useState<{ ms: number; word: string; region: string } | null>(null);
   const [pinging, setPinging] = useState(false);
   const [status, setStatus] = useState('');
-  const [found, setFound] = useState<{ host: string; d: RouterDriver } | null>(null);
+  const [found, setFound] = useState<{ host: string; d: RouterDriver; model?: string } | null>(null);
   const [pw, setPw] = useState('');
   const [show, setShow] = useState(false);
   const [err, setErr] = useState('');
@@ -82,7 +82,11 @@ export default function SetupScreen() {
       setStatus(`لقيت جهاز على ${h} — أتعرّف عليه…`);
       try {
         const d = await detectDriver(h);
-        if (d && (d as any).id !== 'unknown') { if (alive.current) { setFound({ host: h, d }); setStep('hub'); } return; }
+        if (d && (d as any).id !== 'unknown') {
+          const prof = d.identify ? await d.identify().catch(() => null) : null;
+          if (alive.current) { setFound({ host: h, d, model: prof?.label }); setStep('hub'); }
+          return;
+        }
         if (d) unsupported = true;
       } catch {}
     }
@@ -121,7 +125,7 @@ export default function SetupScreen() {
     try {
       setStatus('أحفظ راوترك…');
       const dAny = d as unknown as { id?: string; name?: string };
-      const payload = { name: dAny.name || 'راوتري', host, username: user, driverId: dAny.id ?? 'unknown', driverName: dAny.name ?? 'راوتر' };
+      const payload = { name: found.model || dAny.name || 'راوتري', host, username: user, driverId: dAny.id ?? 'unknown', driverName: found.model || dAny.name || 'راوتر' };
       const all = await listRouters().catch(() => [] as SavedRouter[]);
       const norm = (x: string) => x.trim().toLowerCase();
       const dup = all.find(x => x.driverId === payload.driverId && norm(x.host) === norm(host));
@@ -227,7 +231,7 @@ export default function SetupScreen() {
             <View style={s.online}>
               <Icon name="check" size={30} color={tFg('#12b76a')} stroke={3} />
               <Text style={s.onTitle}>متصل براوترك ✓</Text>
-              <Text style={s.offSub}>{(found.d as any).name ?? 'راوتر'} · {found.host}</Text>
+              <Text style={s.offSub}>{found.model ?? (found.d as any).name ?? 'راوتر'} · {found.host}</Text>
             </View>
 
             <Text style={s.section}>تقدر تبدأ على طول</Text>
@@ -242,7 +246,7 @@ export default function SetupScreen() {
 
         {step === 'password' && found && (
           <>
-            <Bubble tone="ok"><Text style={s.txt}>✓ متصل براوترك: <Text style={s.bold}>{(found.d as any).name ?? 'راوتر'}</Text></Text></Bubble>
+            <Bubble tone="ok"><Text style={s.txt}>✓ متصل براوترك: <Text style={s.bold}>{found.model ?? (found.d as any).name ?? 'راوتر'}</Text></Text></Bubble>
             <Bubble>
               <Text style={s.txt}>راوترك يحمي الأرقام بكلمة مرور — اكتبها <Text style={s.bold}>مرة وحدة بس</Text> وتنحفظ على جوالك.{'\n'}{'\n'}تلقاها على الملصق تحت الراوتر — جنب كلمة <Text style={s.bold}>Password</Text> أو «كلمة المرور» (مو كلمة الواي فاي إلا لو ما فيه غيرها).</Text>
             </Bubble>

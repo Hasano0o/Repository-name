@@ -372,6 +372,8 @@ export interface RouterDriver {
   factoryReset?(): Promise<void>;
   setAutoRecover?(on: boolean): Promise<void>;
   setWifiSleep?(mins: number): Promise<void>;
+  /** موديل الراوتر بالضبط (بدون كلمة مرور) — التطبيق يضبط نفسه عليه */
+  identify?(): Promise<ModelProfile | null>;
   /** هواوي: الأنتنا الداخلية/الخارجية */
   getAntenna?(): Promise<AntennaInfo | null>;
   setAntenna?(mode: number): Promise<void>;
@@ -382,5 +384,7 @@ export interface RouterDriver {
 }
 
 /** mode: 0 داخلية · 1 خارجية (المنفذين) · 2 خارجية (منفذ ١) · 3 تلقائي */
+export type { ModelProfile } from './models';
+import type { ModelProfile } from './models';
 export interface AntennaInfo { mode?: number; canSet: boolean; raw: [string, string][] }
 export interface RouterPingResult { ok: boolean; ms?: number; raw: [string, string][] }

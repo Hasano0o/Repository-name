@@ -245,6 +245,13 @@ export default function AddRouterScreen() {
         return;
       }
 
+      // الموديل بالضبط (بدون كلمة مرور) — التطبيق يضبط نفسه عليه
+      const prof = driver.identify ? await driver.identify().catch(() => null) : null;
+      if (prof) {
+        setStep(`تعرّفنا على راوترك: ${prof.label} ✓`);
+        await new Promise(r => setTimeout(r, 900));
+      }
+
       setStep('نسجّل الدخول...');
       try {
         await driver.login(h, u, password, { fresh: true });
@@ -277,7 +284,7 @@ export default function AddRouterScreen() {
 
       const dAny = driver as unknown as { id?: string; name?: string };
       const dId = dAny.id ?? 'unknown';
-      const dName = dAny.name ?? dId;
+      const dName = prof?.label ?? dAny.name ?? dId;
 
       const payload = {
         name: nameNow || dName || 'راوتر',

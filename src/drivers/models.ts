@@ -1,0 +1,66 @@
+/**
+ * ملفات الموديلات — التطبيق يعرف موديل الراوتر من أول ثانية (بدون كلمة مرور) ويضبط نفسه عليه:
+ * أي طريقة كتابة تشتغل، هل يقبل تثبيت 5G، هل تثبيت البرج آمن.
+ * كل ما ضبط موديل جديد مع مستخدم نضيفه هنا — والكل يستفيد.
+ * ملف صافي بدون react-native (عليه اختبارات).
+ */
+export interface ModelProfile {
+  /** مفتاح ثابت */
+  id: string;
+  /** الاسم اللي يشوفه المستخدم */
+  label: string;
+  brand: 'zte' | 'huawei';
+  tech: '4G' | '5G';
+  /** ZTE: طريقة الكتابة — goform (القديمة) أو ubus (أجهزة G5/الجيل الجديد) */
+  write?: 'goform' | 'ubus';
+  /** يقبل تثبيت ترددات 5G؟ (false = 5G يبقى تلقائي) */
+  nrLock?: boolean;
+  /** ملاحظة تطلع للمستخدم لو فيه شي يعرفه */
+  note?: string;
+  /** جرّبناه مع مستخدم حقيقي */
+  verified?: boolean;
+}
+
+const P = (p: ModelProfile) => p;
+
+export const MODELS = {
+  mu5001: P({ id: 'mu5001', label: 'ZTE MU5001', brand: 'zte', tech: '5G', write: 'goform', nrLock: true, verified: true }),
+  mc801aPro: P({ id: 'mc801a-pro', label: 'ZTE MC801A Pro', brand: 'zte', tech: '5G', write: 'ubus', nrLock: true }),
+  mc801a: P({ id: 'mc801a', label: 'ZTE MC801A', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
+  mc888: P({ id: 'mc888', label: 'ZTE MC888', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
+  mc889: P({ id: 'mc889', label: 'ZTE MC889', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
+  u10sPro: P({ id: 'u10s-pro', label: 'ZTE U10S Pro', brand: 'zte', tech: '4G', write: 'goform', nrLock: false, note: 'راوتر جيب 4G — ما فيه 5G' }),
+  zteG5: P({ id: 'zte-g5', label: 'ZTE (G5)', brand: 'zte', tech: '5G', write: 'ubus', nrLock: true }),
+  zte: P({ id: 'zte', label: 'ZTE', brand: 'zte', tech: '5G', write: 'goform' }),
+  u60Pro: P({ id: 'u60-pro', label: 'ZTE U60 Pro', brand: 'zte', tech: '5G', write: 'ubus', nrLock: true, verified: true, note: 'تثبيت 5G يسري على وضع SA بس' }),
+  zteNg: P({ id: 'zte-ng', label: 'ZTE (الجيل الجديد)', brand: 'zte', tech: '5G', write: 'ubus' }),
+  h158: P({ id: 'h158', label: 'Huawei H158-381', brand: 'huawei', tech: '5G', nrLock: false, note: 'يقبل تثبيت 4G بس — 5G يبقى تلقائي' }),
+  huawei: P({ id: 'huawei', label: 'Huawei', brand: 'huawei', tech: '5G' }),
+} as const;
+
+/** ZTE goform: من wa_inner_version (مثل BD_XCBZHKMC801A ProV1.0.0B03) و web_version (مثل WEB_…G5BV1.0.0B03) */
+export function identifyZte(wa?: string, web?: string, hw?: string): ModelProfile {
+  const s = `${wa ?? ''} ${hw ?? ''}`;
+  if (/MU5001/i.test(s)) return MODELS.mu5001;
+  if (/MU5250|U60/i.test(s)) return MODELS.u60Pro;
+  if (/U10S\s*Pro/i.test(s)) return MODELS.u10sPro;
+  if (/MC801A\s*Pro/i.test(s)) return MODELS.mc801aPro;
+  // صفحة G5 (WEB_…G5…) = عائلة جديدة: تقرا goform وتكتب ubus
+  if (/(^|_)WEB_\w*G5/i.test(web ?? '') || /G5[A-Z]?V\d/i.test(web ?? '')) {
+    const m = s.match(/(MC\d{3}[A-Z]?(?:\s*Pro)?)/i);
+    return m ? { ...MODELS.zteG5, id: 'zte-g5-' + m[1].toLowerCase().replace(/\s+/g, ''), label: 'ZTE ' + m[1].toUpperCase().replace(/PRO$/i, 'Pro') } : MODELS.zteG5;
+  }
+  if (/MC801A/i.test(s)) return MODELS.mc801a;
+  if (/MC888/i.test(s)) return MODELS.mc888;
+  if (/MC889/i.test(s)) return MODELS.mc889;
+  const m = s.match(/\b((?:MC|MU|MF|U)\d{2,4}[A-Z]{0,2}(?:\s*Pro)?)/i);
+  return m ? { ...MODELS.zte, id: 'zte-' + m[1].toLowerCase().replace(/\s+/g, ''), label: 'ZTE ' + m[1] } : MODELS.zte;
+}
+
+/** هواوي: من devicename في device/basic_information أو device/information */
+export function identifyHuawei(name?: string): ModelProfile {
+  const n = (name ?? '').trim();
+  if (/H158/i.test(n)) return MODELS.h158;
+  if (n) return { ...MODELS.huawei, id: 'huawei-' + n.toLowerCase().replace(/[^a-z0-9]+/g, '-'), label: 'Huawei ' + n };
+  return MODELS.huawei;
+}

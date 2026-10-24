@@ -23,6 +23,7 @@ import { http } from '../http';
 import { buildSnapshot } from '../../utils/snapshot';
 import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
+import { MODELS, ModelProfile } from '../models';
 
 const ZERO = '00000000000000000000000000000000';
 const sha = (s: string) => bytesToHex(sha256(utf8ToBytes(s))).toUpperCase();
@@ -268,6 +269,15 @@ export class ZteNgDriver implements RouterDriver {
       const t = str(d.network_type).toUpperCase();
       return !!t && !/NO_?SERVICE|LIMITED|^NONE$/.test(t);
     } catch { return false; }
+  }
+
+  async identify(): Promise<ModelProfile | null> {
+    try {
+      const i = await this.call('zwrt_web', 'web_info', {}, ZERO).catch(() => ({} as Record<string, unknown>));
+      const txt = JSON.stringify(i);
+      if (/MU5250|U60/i.test(txt)) return MODELS.u60Pro;
+    } catch {}
+    return MODELS.zteNg;
   }
 
   async getSnapshot(): Promise<SignalSnapshot> {

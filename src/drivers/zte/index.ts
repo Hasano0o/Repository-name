@@ -17,6 +17,7 @@ import { noChange, markNoChange } from '../noChange';
 
 import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { ZteNgDriver } from '../zteng';
+import { identifyZte, ModelProfile } from '../models';
 import { ZTE_LOCK_KEYS, ZteLockData, checkComplete, zteDiff, zteSummary, ZTE_PART_LABEL, lteBands, nrBands, lteCell, nrCell } from './lockState';
 const sha256Upper = (s: string) => bytesToHex(sha256(utf8ToBytes(s))).toUpperCase();
 const sha256Hex = (s: string) => bytesToHex(sha256(utf8ToBytes(s)));
@@ -953,6 +954,9 @@ export class ZteDriver implements RouterDriver {
     } catch {}
     // اللي نجرّبه تلقائياً: إعداد الراوتر الأصلي (أو المصنع) + المكتوب حالياً — مو DEFAULT_NR (أغلبها يرفضها الفيرموير)
     const nrPreferred = [...new Set([...(bn ?? SAFE_NR), ...nr])].sort((a, b) => a - b);
+    // موديل 4G بس (مثل U10S Pro) أو ما يقبل تثبيت 5G ← ما نعرض خيارات 5G
+    const prof = await this.identify();
+    if (prof?.nrLock === false) return { supported, locked, nrSupported: [], nrLocked: [], nrPreferred: [], nrLockable: false, mode, modes };
     return { supported, locked, nrSupported, nrLocked, nrPreferred, mode, modes };
   }
 
@@ -960,6 +964,7 @@ export class ZteDriver implements RouterDriver {
   async setNetworkMode(mode: string): Promise<void> {
     await this.ensure();
     const v = CODE_TO_ZTE[mode] ?? mode;
+    { const ng = await this.ubusFirst(); if (ng) { await ng.setNetworkMode(v); return; } }
     const out = await this.act({ goformId: 'SET_BEARER_PREFERENCE', BearerPreference: v });
     if (!/success/i.test(out)) {
       const ng = await this.ngWriter();
@@ -977,6 +982,7 @@ export class ZteDriver implements RouterDriver {
     // «فك التثبيت» = الترددات الأصلية للراوتر لو نعرفها (مو قائمة تخمينية — كانت تشيل ترددات زي B38 ويطيح الراوتر بدون خدمة)
     const all = this.baseLte() ?? [...new Set([...DEFAULT_LTE, ...(await this.readLocks()).lte])];
     const lte = bands.length ? bands : all;
+    { const ng = await this.ubusFirst(); if (ng) { await ng.setBand(lte, undefined); return; } }
     // بعض الفيرموير (MC888/MC889…) يبي القناع ١٢ خانة بالضبط: 0x000000000005 بدل 0x5
     const short = maskFromBands(lte);
     const padded = '0x' + short.slice(2).padStart(12, '0');
@@ -1004,6 +1010,23 @@ export class ZteDriver implements RouterDriver {
     throw this.rejected('تثبيت الترددات', out);
   }
   private ltePad = false;
+  private profile: ModelProfile | null = null;
+  /** الموديل من wa_inner_version/web_version — بدون دخول */
+  async identify(): Promise<ModelProfile | null> {
+    if (this.profile) return this.profile;
+    try {
+      const r = await this.get(['wa_inner_version', 'web_version', 'hardware_version']);
+      if (!r.wa_inner_version && !r.web_version) return null;
+      this.profile = identifyZte(r.wa_inner_version, r.web_version, r.hardware_version);
+      this.log('model:', this.profile.label, '· write:', this.profile.write);
+    } catch { return null; }
+    return this.profile;
+  }
+  /** الموديل معروف إنه يكتب عبر ubus؟ نروح له على طول بدل ما نجرّب goform ونفشل */
+  private async ubusFirst(): Promise<ZteNgDriver | null> {
+    const p = await this.identify();
+    return p?.write === 'ubus' ? await this.ngWriter() : null;
+  }
   /** كاتب احتياطي عبر ubus (undefined = ما فحصنا، null = الجهاز ما يدعمه) */
   private ng: ZteNgDriver | null | undefined;
   private async ngWriter(): Promise<ZteNgDriver | null> {
@@ -1026,6 +1049,7 @@ export class ZteDriver implements RouterDriver {
     const cur = (await this.readLocks()).nr;
     const same = cur.length === nr.length && nr.every(b => cur.includes(b));
     if (same) return;
+    { const ng = await this.ubusFirst(); if (ng) { await ng.setNrBandsTyped(nr, (await this.nrType()) === '1'); return; } }
     const classic = (m: string) => this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: m });
     const sansa = async (m: string) => this.act({
       goformId: 'WAN_PERFORM_NR5G_SANSA_BAND_LOCK', nr5g_band_mask: m, type: await this.nrType(),

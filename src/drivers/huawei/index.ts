@@ -16,6 +16,7 @@ import { carriersFrom } from './carriers';
 import { getWifiRadios, setWifiChannel, wifiDebug } from './wifi';
 import * as extras from './extras';
 import * as more from './more';
+import { identifyHuawei, ModelProfile } from '../models';
 import { parseTxPower, parseDlMcs, parseUlMcs } from '../../utils/linkHealth';
 import { buildSnapshot } from '../../utils/snapshot';
 import { noChange } from '../noChange';
@@ -1171,6 +1172,15 @@ export class HuaweiDriver implements RouterDriver {
   wifiDebug() { return wifiDebug(this.io()); }
   // ───── مركز التحكم (extras.ts) ─────
   getExtras() { return extras.getExtras(this.io()); }
+  /** الموديل من device/basic_information (بدون دخول في أغلب الموديلات) */
+  async identify(): Promise<ModelProfile | null> {
+    try {
+      const r = await this.http(this.url('device/basic_information'), { headers: this.headers() });
+      const x = await r.text();
+      if (x.includes('<error>')) return identifyHuawei('');
+      return identifyHuawei(tag(x, 'devicename') ?? tag(x, 'DeviceName') ?? '');
+    } catch { return null; }
+  }
   getAntenna() { return more.getAntenna(this.io()); }
   setAntenna(mode: number) { return more.setAntenna(this.io(), mode); }
   ussd(code: string) { return more.ussd(this.io(), code); }
