@@ -1180,7 +1180,10 @@ async def app_report(req: Request):
         b = await req.json()
     except Exception:
         raise HTTPException(400, "bad json")
-    text = str(b.get("text") or "")[:20000]
+    # السجل يبدأ من الأقدم والخطأ دايم في الآخر — لو كبير نخلي الرأس (الجهاز والنسخة) + الآخر، مو الأول
+    raw = str(b.get("text") or "")
+    MAXR = 200000
+    text = raw if len(raw) <= MAXR else raw[:2000] + "\n…(انقص من النص)…\n" + raw[-(MAXR - 2100):]
     feat, rtr = _cl(b.get("feature"), 30), _cl(b.get("router"), 60)
     if not text.strip():
         raise HTTPException(400, "empty")
