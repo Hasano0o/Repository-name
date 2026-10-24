@@ -228,7 +228,20 @@ export default function AddRouterScreen() {
       }
       if (!driver) {
         if (await explainDetectFailure(h, net, pickHost)) return;
-        Alert.alert('تعذّر التعرف', 'ما تعرفنا على نوع الراوتر على هذا العنوان. تأكد إنك متصل بشبكة الراوتر.');
+        // نفرّق: فيه جهاز يرد بس نوعه مو مدعوم ← «نضيفه لك» / ما فيه شي يرد ← مو على شبكة الراوتر
+        setStep('نتأكد…');
+        const ctrl = new AbortController();
+        const tm = setTimeout(() => ctrl.abort(), 2500);
+        const answered = await fetch(`http://${h}/`, { signal: ctrl.signal }).then(() => true, () => false).finally(() => clearTimeout(tm));
+        if (answered) {
+          Alert.alert('راوترك مو مدعوم للحين',
+            `لقينا راوتر على ${h}، بس نوعه للحين ما يشتغل مع Bandly.\n\nأرسل لنا تفاصيله (دقيقة وحدة) والمبرمج يتواصل معك ويضيفه.`,
+            [{ text: 'رجوع', style: 'cancel' }, { text: 'نضيفه لك', onPress: () => nav.push('/newdevice') }]);
+        } else {
+          Alert.alert('ما لقينا راوتر',
+            `ما فيه جهاز يرد على ${h}.\n\nتأكد إن جوالك متصل بواي فاي الراوتر (مو بيانات الجوال)، أو خلّ التطبيق يدوّر عليه.`,
+            [{ text: 'تمام', style: 'cancel' }, { text: 'دوّر عليه', onPress: () => nav.push('/setup') }]);
+        }
         return;
       }
 
