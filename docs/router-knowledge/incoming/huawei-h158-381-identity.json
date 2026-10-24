@@ -1,0 +1,27 @@
+{
+  "recordId": "huawei.h158-381.identity.initial",
+  "manufacturer": "Huawei",
+  "model": "H158-381",
+  "softwareVersion": "4.0.0.5 (H3568SP1C983)",
+  "featureId": "identity.initial-documentation",
+  "claim": "توثيق أولي لهوية الجهاز وإصدار النظام المسجل سابقًا دون تأكيد مستقل.",
+  "verification": {
+    "status": "DISCOVERED",
+    "checkedAt": "2026-10-23",
+    "reviewer": null,
+    "testNotes": "سجل أولي مبني على ملف التوثيق الموجود؛ لم يُجرَ اختبار جديد على الجهاز."
+  },
+  "evidence": [
+    {
+      "type": "other",
+      "reference": "docs/router-knowledge/huawei/H158-381/README.md",
+      "supports": "وجود معلومات الطراز وإصدار النظام مسجلة في ملف التوثيق، وليس التحقق المستقل من صحتها."
+    }
+  ],
+  "limitations": [
+    "لم يتم التحقق من إصدار البرنامج الثابت على الجهاز في هذه الخطوة.",
+    "لا توجد نتائج اختبار فعلية أو أدلة رسمية مرفقة.",
+    "لا يثبت هذا السجل دعم أي ميزة في الراوتر."
+  ],
+  "riskLevel": "LOW"
+}

@@ -1,0 +1,123 @@
+[
+  {
+    "recordId": "zte.mu5001.community-hidden-menus",
+    "manufacturer": "ZTE",
+    "model": "MU5001",
+    "hardwareVersion": null,
+    "softwareVersion": null,
+    "featureId": "community-hidden-menus-and-telemetry",
+    "claim": "يوثق مشروع ZTE-MU5001-HACK قوائم إضافية وقياسات مباشرة عبر واجهة المتصفح. لا يثبت المصدر توافق جميع إصدارات البرنامج الثابت، ولا يثبت توافق هذه الوظائف مع Bandly.",
+    "verification": {
+      "status": "DISCOVERED",
+      "checkedAt": "2026-10-23",
+      "reviewer": null,
+      "testNotes": "مراجعة README لمشروع مجتمعي فقط. لم يتم الاتصال براوتر فعلي أو تنفيذ أي إجراء على الجهاز."
+    },
+    "evidence": [
+      {
+        "type": "source_code",
+        "reference": "https://github.com/ZTETool/ZTE-MU5001-HACK",
+        "supports": "وجود مشروع يعرض قوائم الراوتر وقياسات مباشرة، مع تنبيه إلى عدم اكتمال توثيق توافق البرامج الثابتة.",
+        "accessedAt": "2026-10-23"
+      }
+    ],
+    "limitations": [
+      "إصدار البرنامج الثابت والمنطقة اللذان يدعمهما المصدر غير محسومين.",
+      "لم يتم اختبار أي واجهة من Bandly على الجهاز.",
+      "لا يعني ظهور قائمة مخفية أن الوظيفة آمنة أو مدعومة.",
+      "لا يُسمح باعتبار قفل الخلية أو النطاق ميزة معتمدة بناء على هذا المرجع وحده."
+    ],
+    "riskLevel": "HIGH"
+  },
+  {
+    "recordId": "fiberhome.lg6851f.community-telemetry-and-cell-reference",
+    "manufacturer": "FiberHome",
+    "model": "LG6851F",
+    "hardwareVersion": null,
+    "softwareVersion": null,
+    "featureId": "community-telemetry-and-neighbor-cells",
+    "claim": "يعرض مشروع FiberHome Manager التجريبي قراءات RSRP وRSRQ وSINR وRSSI، ومعلومات تجميع الترددات والخلايا المجاورة، ويذكر وظائف لقفل النطاق والخلية. هذه قدرات يصفها المصدر وليست اختبارات توافق أجراها Bandly.",
+    "verification": {
+      "status": "DISCOVERED",
+      "checkedAt": "2026-10-23",
+      "reviewer": null,
+      "testNotes": "مراجعة وصف المستودع والإصدار التجريبي فقط. لم يتم الاتصال براوتر أو تنفيذ أوامر قراءة أو كتابة."
+    },
+    "evidence": [
+      {
+        "type": "source_code",
+        "reference": "https://github.com/0dayfa/FiberHome-Manager",
+        "supports": "وصف واجهة LG6851F وقراءات الإشارة والخلايا المجاورة ووظائف التحكم التجريبية.",
+        "accessedAt": "2026-10-23"
+      }
+    ],
+    "limitations": [
+      "لم يتم التحقق من إصدار البرنامج الثابت أو نسخة العتاد.",
+      "لم يتم اختبار التوافق مع Bandly.",
+      "وظائف قفل الخلايا والنطاق وإعادة التشغيل وتغيير الإعدادات عالية المخاطر وتحتاج مراجعة منفصلة.",
+      "يجب مراجعة الترخيص قبل إعادة استخدام أي كود."
+    ],
+    "riskLevel": "HIGH"
+  },
+  {
+    "recordId": "tp-link.archer-mr600-v2.official-cell-lock",
+    "manufacturer": "TP-Link",
+    "model": "Archer MR600 V2",
+    "hardwareVersion": "V2",
+    "softwareVersion": null,
+    "featureId": "official-web-ui-cell-lock",
+    "claim": "يوضح توثيق TP-Link طريقة قفل الخلية من واجهة إدارة الراوتر باستخدام EARFCN وPCI، ويذكر أن ميزة Cell Lock المذكورة تخص راوترات 4G المتوافقة وليست راوترات 5G عمومًا. لا يثبت التوثيق وجود API متاح لـ Bandly.",
+    "verification": {
+      "status": "DISCOVERED",
+      "checkedAt": "2026-10-23",
+      "reviewer": null,
+      "testNotes": "مراجعة التوثيق الرسمي فقط. لم يتم تسجيل الدخول إلى جهاز أو تفعيل قفل الخلية."
+    },
+    "evidence": [
+      {
+        "type": "official_documentation",
+        "reference": "https://service-provider.tp-link.com/faq/887/",
+        "supports": "خطوات Cell Lock باستخدام EARFCN وPCI، وحدود الميزة كما يذكرها توثيق الشركة.",
+        "accessedAt": "2026-10-23"
+      }
+    ],
+    "limitations": [
+      "التوثيق لا يثبت دعم كل إصدارات MR600 أو كل البرامج الثابتة.",
+      "وجود الميزة في واجهة الويب لا يثبت توفر API مناسب للتطبيق.",
+      "لم يتم اختبار الجهاز فعليًا بواسطة Bandly.",
+      "لا يجوز تعميم هذه الميزة على أجهزة TP-Link 5G."
+    ],
+    "riskLevel": "MEDIUM"
+  },
+  {
+    "recordId": "nokia.fastmile-4g17-a.community-telemetry",
+    "manufacturer": "Nokia",
+    "model": "FastMile 4G17-A",
+    "hardwareVersion": null,
+    "softwareVersion": "FASTMILE2_D020111B90T0101M01E0130S",
+    "featureId": "community-status-and-cell-telemetry",
+    "claim": "يوثق FastMileScraper قراءة صفحة الحالة وتحليل بيانات المودم، ويعرض معلومات عن الخلايا النشطة وPCI وEARFCN وRSRP وRSRQ وRSSI وSINR وبعض بيانات تجميع الترددات. يذكر المصدر اختبار المكتبة على موديل وإصدار برنامج ثابت محددين.",
+    "verification": {
+      "status": "DISCOVERED",
+      "checkedAt": "2026-10-23",
+      "reviewer": null,
+      "testNotes": "مراجعة README ومثال المخرجات المنشور. إصدار الاختبار المذكور يخص المشروع الأصلي وليس Bandly."
+    },
+    "evidence": [
+      {
+        "type": "source_code",
+        "reference": "https://github.com/zayigo/FastMileScraper",
+        "supports": "الموديل وإصدار البرنامج الثابت المذكوران، وحقول الحالة والخلايا النشطة وتجميع الترددات في أمثلة المصدر.",
+        "accessedAt": "2026-10-23"
+      }
+    ],
+    "limitations": [
+      "لم يتم اختبار الراوتر أو إصدار البرنامج الثابت بواسطة Bandly.",
+      "بعض قياسات الخلايا المتاحة قد تتطلب إجراء قياس من واجهة الراوتر وقد تؤثر مؤقتًا على الاتصال.",
+      "المكتبة لا تثبت دعم قفل PCI أو النطاق في واجهة Bandly.",
+      "المصدر مرخص بـ GPL-3.0؛ يجب مراجعة الالتزامات القانونية قبل إعادة استخدام الكود.",
+      "يجب عدم تخزين الرقم التسلسلي أو IMEI أو IMSI أو أي بيانات تعريفية من المخرجات."
+    ],
+    "riskLevel": "MEDIUM"
+  }
+]

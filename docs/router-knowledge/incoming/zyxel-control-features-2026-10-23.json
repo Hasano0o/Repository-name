@@ -1,0 +1,85 @@
+[
+  {
+    "recordId": "zyxel-nr5103e-web-ui-band-lock-2026-10",
+    "manufacturer": "Zyxel",
+    "model": "NR5103E",
+    "featureId": "web-ui-band-lock",
+    "claim": "واجهة الويب في NR5103E فيها قفل ترددات LTE (Broadband > Cellular Band بعد تعطيل Band Auto Selection)، وبحسب المصدر ما تسمح بتحديد التردد الأساسي.",
+    "verification": {
+      "status": "DISCOVERED",
+      "checkedAt": "2026-10-23",
+      "reviewer": null,
+      "testNotes": "عنوان الخيط تأكد عبر بحث ويب؛ المحتوى منقول من تقرير DeepSeek ولم يُقرأ مباشرة. لا يوجد اختبار على جهاز."
+    },
+    "evidence": [
+      {
+        "type": "other",
+        "reference": "https://community.zyxel.com/en/discussion/comment/54214",
+        "supports": "خيط منتدى Zyxel بعنوان «NR5103 - How to lock the LTE primary/anchor band?».",
+        "accessedAt": "2026-10-23"
+      }
+    ],
+    "limitations": [
+      "وجود الميزة في الواجهة لا يعني وجود API يستخدمها Bandly.",
+      "اسم oid أو صيغة طلب DAL للقفل غير معروف.",
+      "إصدار الفيرموير غير محدد.",
+      "لا يُعمم على NR5103v2 أو NR7101 أو غيرها."
+    ],
+    "riskLevel": "HIGH"
+  },
+  {
+    "recordId": "zyxel-nr7101-cell-lock-at-only-2026-10",
+    "manufacturer": "Zyxel",
+    "model": "NR7101",
+    "featureId": "cell-lock-at-commands",
+    "claim": "قفل الخلية في NR7101 (مودم Quectel) يتم بأوامر AT، وتسلسل الأوامر تغيّر مع فيرموير مودم Quectel الأحدث.",
+    "verification": {
+      "status": "DISCOVERED",
+      "checkedAt": "2026-10-23",
+      "reviewer": null,
+      "testNotes": "عنوان الخيط تأكد عبر بحث ويب؛ المحتوى منقول من تقرير DeepSeek ولم يُقرأ مباشرة. لا يوجد اختبار على جهاز."
+    },
+    "evidence": [
+      {
+        "type": "other",
+        "reference": "https://community.zyxel.com/en/discussion/comment/38252/",
+        "supports": "خيط منتدى Zyxel بعنوان «New Quectel Firmware Module Change Cell lock sequence».",
+        "accessedAt": "2026-10-23"
+      }
+    ],
+    "limitations": [
+      "القفل عبر AT فقط ولا يوجد API عبر HTTP معروف؛ Bandly لا يصل له بدون SSH.",
+      "الوصول لـ SSH بصلاحيات supervisor يعتمد على طرق غير آمنة — مرفوضة لتطبيق Bandly.",
+      "التسلسل يختلف حسب إصدار فيرموير المودم.",
+      "لا يُعمم على NR7102 أو NR5103."
+    ],
+    "riskLevel": "HIGH"
+  },
+  {
+    "recordId": "zyxel-nr5103e-web-ui-neighbor-cells-2026-10",
+    "manufacturer": "Zyxel",
+    "model": "NR5103E",
+    "featureId": "web-ui-neighbor-cells",
+    "claim": "دليل المستخدم يذكر قسم Neighbour Cells داخل System Monitor > Cellular WAN Status.",
+    "verification": {
+      "status": "DISCOVERED",
+      "checkedAt": "2026-10-23",
+      "reviewer": null,
+      "testNotes": "الرابط نسخة من الدليل على ManualsLib (ليس موقع Zyxel الرسمي) ولم يُفتح مباشرة؛ منقول من تقرير DeepSeek."
+    },
+    "evidence": [
+      {
+        "type": "other",
+        "reference": "https://www.manualslib.com/manual/3918813/Zyxel-Communications-Nr5103e.html?page=287",
+        "supports": "صفحة من دليل NR5103E فيها قسم Neighbour Cells (نسخة غير رسمية).",
+        "accessedAt": "2026-10-23"
+      }
+    ],
+    "limitations": [
+      "لا يوجد دليل على API لقراءة الأبراج المجاورة.",
+      "يُفضّل استبدال الرابط بالدليل الرسمي من zyxel.com.",
+      "مستخدم NR7101 أفاد بعدم ظهورها — لا يُعمم."
+    ],
+    "riskLevel": "LOW"
+  }
+]

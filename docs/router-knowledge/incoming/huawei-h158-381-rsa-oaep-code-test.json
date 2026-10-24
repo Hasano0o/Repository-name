@@ -1,0 +1,33 @@
+{
+  "recordId": "huawei.h158-381.rsa-oaep.code-test",
+  "manufacturer": "Huawei",
+  "model": "H158-381",
+  "softwareVersion": "4.0.0.5 (H3568SP1C983)",
+  "featureId": "security.rsa-oaep-encryption",
+  "claim": "نجح اختبار تشفير RSA-OAEP باستخدام SHA-1 وفك الناتج بالمفتاح الخاص التجريبي، مع الحفاظ على نص XML عربي.",
+  "verification": {
+    "status": "CODE_TESTED",
+    "checkedAt": "2026-10-23",
+    "reviewer": null,
+    "testNotes": "نجحت مجموعة اختبارات Bandly: 70/70. اختبار التشفير استخدم زوج مفاتيح RSA مولدًا للاختبار، وتحقق من استعادة النص الأصلي من كتل hex."
+  },
+  "evidence": [
+    {
+      "type": "source_code",
+      "reference": "src/drivers/huawei/rsaEnc.ts",
+      "supports": "تنفيذ تشفير الطلبات باستخدام RSA-OAEP وSHA-1 وتقسيم النص إلى كتل."
+    },
+    {
+      "type": "automated_test",
+      "reference": "tests/huaweiRsa.test.ts; node tests/run.cjs",
+      "supports": "اختبار فك التشفير بالمفتاح التجريبي والتحقق من مطابقة النص العربي وXML الأصلي."
+    }
+  ],
+  "limitations": [
+    "استخدم الاختبار مفتاح RSA تجريبيًا وليس المفتاح العام المستخرج من راوتر H158-381.",
+    "لم يُرسل أي طلب إلى الراوتر الفعلي.",
+    "لا يثبت الاختبار التوافق مع جميع إصدارات البرنامج الثابت أو واجهة الويب.",
+    "لا يجوز اعتبار الميزة معتمدة نهائيًا قبل اختبار الجهاز الفعلي."
+  ],
+  "riskLevel": "MEDIUM"
+}

@@ -1,0 +1,28 @@
+{
+  "recordId": "zte.advanced-router-panel.api-reference",
+  "manufacturer": "ZTE",
+  "featureId": "api-field-reference",
+  "claim": "يعرض مشروع ZTE Advanced Router Panel مفتوح المصدر مرجعًا برمجيًا لحقول قراءة حالة الشبكة والإشارة والتجميع والحرارة، كما يتضمن مسارات برمجية لقفل خلايا LTE و5G. لم يتم اختبار هذه الوظائف على جهاز ضمن مشروع Bandly.",
+  "verification": {
+    "status": "DISCOVERED",
+    "checkedAt": "2026-10-23",
+    "reviewer": null,
+    "testNotes": "مراجعة ساكنة لملف JavaScript محلي من المستودع. لم تُرسل طلبات إلى راوتر ولم تُختبر الميزات على جهاز فعلي."
+  },
+  "evidence": [
+    {
+      "type": "source_code",
+      "reference": "https://github.com/Cerix/zte-advanced-router-panel",
+      "supports": "وجود مسارات goform للقراءة والكتابة، وأسماء حقول LTE و5G والتجميع والحرارة، ودوال برمجية لقفل الخلايا داخل المصدر الذي تمت مراجعته.",
+      "accessedAt": "2026-10-23"
+    }
+  ],
+  "limitations": [
+    "لا يثبت السجل توافق أي طراز محدد أو إصدار Firmware.",
+    "لا يثبت أن حقول القراءة متوفرة أو دقيقة على جميع أجهزة ZTE.",
+    "لا توجد اختبارات فعلية على راوتر ضمن مشروع Bandly.",
+    "وظائف قفل الخلايا وتغيير الإعدادات مرجع بحثي فقط وغير معتمدة للتنفيذ.",
+    "يجب مراجعة الترخيص وإشعارات حقوق النشر قبل نسخ أي كود إلى Bandly."
+  ],
+  "riskLevel": "MEDIUM"
+}

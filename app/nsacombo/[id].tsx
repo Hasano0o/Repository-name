@@ -42,13 +42,22 @@ interface Row extends Combo {
   snap?: Snapshot | null;
 }
 
+/**
+ * التركيبات: أفضل 4G مع بعض + 5G (مثل B1+B3+n78) أول — التثبيت على 4G واحد يقطع دمج 4G
+ * فغالباً أبطأ. بعدها كل 4G لحاله مع 5G.
+ */
 function buildCombos(lteTop: number[], nrTop: number[]): Combo[] {
   const out: Combo[] = [];
-  for (const nr of nrTop) {
-    for (const lte of lteTop) {
-      out.push({ lte: [lte], nr: [nr] });
-    }
+  const seen = new Set<string>();
+  const add = (lte: number[], nr: number[]) => {
+    const k = comboName({ lte, nr });
+    if (!seen.has(k)) { seen.add(k); out.push({ lte, nr }); }
+  };
+  for (const nr of nrTop.slice(0, 2)) {
+    if (lteTop.length >= 2) add(lteTop.slice(0, 2), [nr]);
+    if (lteTop.length >= 3) add(lteTop.slice(0, 3), [nr]);
   }
+  for (const nr of nrTop) for (const lte of lteTop) add([lte], [nr]);
   return out.slice(0, 8);
 }
 
@@ -104,7 +113,9 @@ export default function NsaCombo() {
 
         // ترددات 5G من المدعومة (نأخذ الشائعة أول)
         const NR_PREF = [78, 41, 40, 77, 1, 3, 5, 8, 20, 28];
-        const nrList = NR_PREF.filter(b => c.nrSupported.includes(b)).slice(0, 3);
+        // اللي الراوتر يقبل تثبيته أول (nrPreferred) — قائمة «المدعومة» العامة فيها ترددات يرفضها ZTE
+        const nrPool = c.nrPreferred?.length ? c.nrPreferred : c.nrSupported;
+        const nrList = NR_PREF.filter(b => nrPool.includes(b)).slice(0, 3);
 
         setLteTop(lteList);
         setNrTop(nrList);

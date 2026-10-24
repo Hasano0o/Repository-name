@@ -1,0 +1,123 @@
+[
+  {
+    "recordId": "zte.mc888.community-telemetry-fields",
+    "manufacturer": "ZTE",
+    "model": "MC888",
+    "hardwareVersion": null,
+    "softwareVersion": null,
+    "featureId": "community-telemetry-fields",
+    "claim": "يصف مشروع ioBroker.zte-mc888 حقولًا لقراءة قياسات LTE و5G NSA، ومنها RSRP وRSRQ وSINR وRSSI وPCI والنطاق والقناة وبعض معلومات تجميع الخلايا. هذه أسماء حقول موثقة في مصدر مجتمعي وليست ضمانًا لتوفرها على كل إصدار.",
+    "verification": {
+      "status": "DISCOVERED",
+      "checkedAt": "2026-10-23",
+      "reviewer": null,
+      "testNotes": "مراجعة ساكنة لملفات المستودع. لم يتم الاتصال براوتر فعلي أو اختبار واجهاته من Bandly."
+    },
+    "evidence": [
+      {
+        "type": "source_code",
+        "reference": "https://github.com/iobroker-community-adapters/ioBroker.zte-mc888",
+        "supports": "وجود أسماء حقول وطلبات قراءة بيانات الشبكة في كود التكامل المجتمعي.",
+        "accessedAt": "2026-10-23"
+      }
+    ],
+    "limitations": [
+      "لم يُحدد إصدار Firmware لجهاز اختباري ضمن Bandly.",
+      "قد تتطلب بعض الحقول تسجيل الدخول وقد تختلف حسب البرنامج الثابت.",
+      "لا يثبت هذا السجل صحة القيم أو توفر جميع الحقول على MC888A أو أجهزة أخرى.",
+      "لم تُختبر واجهة القراءة على جهاز فعلي.",
+      "يجب مراجعة الترخيص وإشعارات المصدر قبل إعادة استخدام أي كود."
+    ],
+    "riskLevel": "LOW"
+  },
+  {
+    "recordId": "zte.mc889.community-cell-and-ca-reference",
+    "manufacturer": "ZTE",
+    "model": "MC889",
+    "hardwareVersion": null,
+    "softwareVersion": "WINDTREITMC889V1.0.0B10 / Web UI B08 (بيئة الاختبار المذكورة في المشروع)",
+    "featureId": "community-cell-ca-reference",
+    "claim": "يعرض مشروع ZTE Advanced Router Panel مرجعًا مجتمعيًا لقياسات الخلايا وبيانات LTE/NR وتجميع الترددات، كما يحتوي مسارات برمجية للتحكم في الخلية والنطاق. يذكر المشروع اختبارًا على إصدار محدد من MC889، ولا يثبت توافق الوظائف مع إصدارات أخرى.",
+    "verification": {
+      "status": "DISCOVERED",
+      "checkedAt": "2026-10-23",
+      "reviewer": null,
+      "testNotes": "تمت مراجعة المصدر محليًا فقط. لم يتم تنفيذ طلبات قراءة أو كتابة على الراوتر بواسطة Bandly."
+    },
+    "evidence": [
+      {
+        "type": "source_code",
+        "reference": "https://github.com/Cerix/zte-advanced-router-panel",
+        "supports": "وجود واجهات goform وحقول بيانات الخلايا والتجميع ومسارات تحكم في المصدر، مع وصف بيئة اختبار محددة في المشروع.",
+        "accessedAt": "2026-10-23"
+      }
+    ],
+    "limitations": [
+      "إصدار الاختبار المذكور في المشروع ليس اختبارًا أجراه Bandly.",
+      "لا يُفترض أن MC889A أو أي Firmware آخر يتصرف بالطريقة نفسها.",
+      "وظائف قفل الخلايا والنطاق لم تُختبر ولا يُسمح باعتبارها معتمدة.",
+      "يجب مراجعة الترخيص قبل نسخ أي كود أو دمجه."
+    ],
+    "riskLevel": "HIGH"
+  },
+  {
+    "recordId": "zte.g5-ultra.community-beta-controls",
+    "manufacturer": "ZTE",
+    "model": "G5 Ultra",
+    "hardwareVersion": null,
+    "softwareVersion": null,
+    "featureId": "community-beta-controls",
+    "claim": "يوثق مشروع ZTE Home Assistant المجتمعي تكاملًا مع عدة طرازات ZTE، ويذكر أن بعض وظائف G5 Ultra مثل قفل النطاق والخلية وتغيير وضع الشبكة ما زالت تجريبية أو مرتبطة بواجهات خاصة بالطراز والبرنامج الثابت.",
+    "verification": {
+      "status": "DISCOVERED",
+      "checkedAt": "2026-10-23",
+      "reviewer": null,
+      "testNotes": "مراجعة README والمصدر فقط. لم تُنفذ استدعاءات ubus أو أي عملية تغيير إعدادات."
+    },
+    "evidence": [
+      {
+        "type": "source_code",
+        "reference": "https://github.com/Kajkac/ZTE-MC-Home-assistant-repo",
+        "supports": "قائمة الطرازات المدعومة ووصف حدود الوظائف التجريبية في README والمصدر.",
+        "accessedAt": "2026-10-23"
+      }
+    ],
+    "limitations": [
+      "لا يثبت السجل دعم جميع أجهزة سلسلة G5 أو الأجهزة المعاد تسميتها.",
+      "الوظائف التجريبية قد تختلف بين إصدارات Firmware.",
+      "لم يتم اختبار التوافق على جهاز فعلي ضمن Bandly.",
+      "المستودع مرخص بـ GPL-3.0؛ لا تنسخ الكود أو تدمجه قبل مراجعة التزامات الترخيص."
+    ],
+    "riskLevel": "HIGH"
+  },
+  {
+    "recordId": "zyxel.nr7101.community-telemetry-fields",
+    "manufacturer": "Zyxel",
+    "model": "NR7101",
+    "hardwareVersion": null,
+    "softwareVersion": null,
+    "featureId": "community-telemetry-fields",
+    "claim": "يعرض مشروع nr7101 مرجعًا مجتمعيًا لقراءة بيانات LTE و5G NSA تشمل حالة الاتصال وRSSI وRSRP وRSRQ وSINR وPCI ومعرف الخلية والنطاق وعرض النطاق ومعلومات الخلايا الثانوية. المثال المنشور يوضح أسماء الحقول وقيمًا نموذجية فقط.",
+    "verification": {
+      "status": "DISCOVERED",
+      "checkedAt": "2026-10-23",
+      "reviewer": null,
+      "testNotes": "مراجعة README ومثال المخرجات فقط؛ لم يتم تسجيل الدخول إلى راوتر أو اختبار طلبات API من Bandly."
+    },
+    "evidence": [
+      {
+        "type": "source_code",
+        "reference": "https://github.com/pkorpine/nr7101",
+        "supports": "مثال المخرجات وأسماء حقول بيانات الاتصال والخلية والإشارة وNSA في README.",
+        "accessedAt": "2026-10-23"
+      }
+    ],
+    "limitations": [
+      "لم يتم تحديد إصدار Firmware لجهاز NR7101 اختُبر ضمن Bandly.",
+      "المثال لا يثبت توفر جميع الحقول على كل إصدار.",
+      "أداة المصدر تتضمن خيارات لإعادة التشغيل؛ لم يتم تشغيلها.",
+      "يجب التحقق من الترخيص الفعلي للمستودع قبل إعادة استخدام الكود."
+    ],
+    "riskLevel": "MEDIUM"
+  }
+]

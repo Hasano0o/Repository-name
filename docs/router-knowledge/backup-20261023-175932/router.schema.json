@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Bandly Router Knowledge Record",
+  "type": "object",
+  "required": ["recordId", "manufacturer", "featureId", "verification", "evidence", "limitations", "riskLevel"],
+  "properties": {
+    "recordId": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+    "manufacturer": {"type": "string", "minLength": 1},
+    "model": {"type": ["string", "null"]},
+    "hardwareVersion": {"type": ["string", "null"]},
+    "softwareVersion": {"type": ["string", "null"]},
+    "featureId": {"type": "string", "minLength": 1},
+    "claim": {"type": "string"},
+    "verification": {
+      "type": "object",
+      "required": ["status", "checkedAt"],
+      "properties": {
+        "status": {"enum": ["DISCOVERED", "CODE_TESTED", "DEVICE_TESTED", "APPROVED", "UNSUPPORTED"]},
+        "checkedAt": {"type": "string"},
+        "reviewer": {"type": ["string", "null"]},
+        "testNotes": {"type": ["string", "null"]}
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["type", "reference", "supports"],
+        "properties": {
+          "type": {"enum": ["official_documentation", "source_code", "automated_test", "physical_device_test", "other"]},
+          "reference": {"type": "string"},
+          "supports": {"type": "string"},
+          "accessedAt": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "limitations": {"type": "array", "items": {"type": "string"}},
+    "riskLevel": {"enum": ["LOW", "MEDIUM", "HIGH"]}
+  }
+}

@@ -1,0 +1,272 @@
+[
+  {
+    "recordId": "zte.mc801a.community-signal-telemetry",
+    "manufacturer": "ZTE",
+    "model": "MC801A",
+    "hardwareVersion": null,
+    "softwareVersion": null,
+    "featureId": "signal-telemetry",
+    "claim": "يصف مشروع cellsentry قراءة RSRP وRSRQ وSINR وحالة الاتصال، ويذكر أيضًا نوع الشبكة والحرارة ومعدل النقل.",
+    "verification": {
+      "status": "DISCOVERED",
+      "checkedAt": "2026-10-23",
+      "reviewer": null,
+      "testNotes": "مراجعة مصدر مجتمعي فقط؛ لم يجر اختبار هذا الموديل على جهاز فعلي ضمن Bandly."
+    },
+    "evidence": [
+      {
+        "type": "source_code",
+        "reference": "https://github.com/BluePerfectOne/cellsentry",
+        "supports": "توثيق المشروع لجمع بيانات الإشارة من MC801A؛ يذكر Firmware MC801A_Elisa3_B22 في بيئة الاختبار.",
+        "accessedAt": "2026-10-23"
+      }
+    ],
+    "limitations": [
+      "إصدار الاختبار المذكور هو MC801A_Elisa3_B22.",
+      "لا يثبت التوافق مع MC801A بإصدارات Firmware أخرى.",
+      "لم يختبر Bandly هذه الواجهات على جهاز فعلي.",
+      "المشروع مرخص MIT؛ راجع شروط الترخيص قبل إعادة استخدام الكود."
+    ],
+    "riskLevel": "LOW"
+  },
+  {
+    "recordId": "huawei.b535-232.community-api-reference",
+    "manufacturer": "Huawei",
+    "model": "B535-232",
+    "hardwareVersion": null,
+    "softwareVersion": null,
+    "featureId": "community-api-reference",
+    "claim": "يذكر مصدر huawei-lte-api الموديل B535-232 ضمن الأجهزة المختبرة في المشروع. هذا مرجع توافق من المصدر وليس اختبارًا نفذه Bandly.",
+    "verification": {
+      "status": "DISCOVERED",
+      "checkedAt": "2026-10-23",
+      "reviewer": null,
+      "testNotes": "مراجعة مصدر مجتمعي فقط؛ لم يجر اختبار هذا الموديل على جهاز فعلي ضمن Bandly."
+    },
+    "evidence": [
+      {
+        "type": "source_code",
+        "reference": "https://github.com/Salamek/huawei-lte-api",
+        "supports": "README للمكتبة يدرج الموديل ضمن الأجهزة المختبرة ويشرح وظائف API العامة لقراءة معلومات الشبكة والإشارة.",
+        "accessedAt": "2026-10-23"
+      }
+    ],
+    "limitations": [
+      "المصدر المجتمعي يذكر الموديل ضمن أجهزته المختبرة.",
+      "لم يُحدد Firmware خاص بجهاز اختُبر ضمن Bandly.",
+      "لا يثبت دعم كل واجهات API أو ميزات قفل الترددات.",
+      "المستودع مرخص LGPL-3.0؛ راجع التزامات الترخيص قبل إعادة الاستخدام."
+    ],
+    "riskLevel": "LOW"
+  },
+  {
+    "recordId": "huawei.b818-263.community-api-reference",
+    "manufacturer": "Huawei",
+    "model": "B818-263",
+    "hardwareVersion": null,
+    "softwareVersion": null,
+    "featureId": "community-api-reference",
+    "claim": "يذكر مصدر huawei-lte-api الموديل B818-263 ضمن الأجهزة المختبرة في المشروع. هذا مرجع توافق من المصدر وليس اختبارًا نفذه Bandly.",
+    "verification": {
+      "status": "DISCOVERED",
+      "checkedAt": "2026-10-23",
+      "reviewer": null,
+      "testNotes": "مراجعة مصدر مجتمعي فقط؛ لم يجر اختبار هذا الموديل على جهاز فعلي ضمن Bandly."
+    },
+    "evidence": [
+      {
+        "type": "source_code",
+        "reference": "https://github.com/Salamek/huawei-lte-api",
+        "supports": "README للمكتبة يدرج الموديل ضمن الأجهزة المختبرة ويشرح وظائف API العامة لقراءة معلومات الشبكة والإشارة.",
+        "accessedAt": "2026-10-23"
+      }
+    ],
+    "limitations": [
+      "المصدر المجتمعي يذكر الموديل ضمن أجهزته المختبرة.",
+      "لم يُحدد Firmware خاص بجهاز اختُبر ضمن Bandly.",
+      "لا يثبت دعم كل واجهات API أو ميزات قفل الترددات.",
+      "المستودع مرخص LGPL-3.0؛ راجع التزامات الترخيص قبل إعادة الاستخدام."
+    ],
+    "riskLevel": "LOW"
+  },
+  {
+    "recordId": "huawei.h112-372.community-api-reference",
+    "manufacturer": "Huawei",
+    "model": "H112-372",
+    "hardwareVersion": null,
+    "softwareVersion": null,
+    "featureId": "community-api-reference",
+    "claim": "يذكر مصدر huawei-lte-api الموديل H112-372 ضمن الأجهزة المختبرة في المشروع. هذا مرجع توافق من المصدر وليس اختبارًا نفذه Bandly.",
+    "verification": {
+      "status": "DISCOVERED",
+      "checkedAt": "2026-10-23",
+      "reviewer": null,
+      "testNotes": "مراجعة مصدر مجتمعي فقط؛ لم يجر اختبار هذا الموديل على جهاز فعلي ضمن Bandly."
+    },
+    "evidence": [
+      {
+        "type": "source_code",
+        "reference": "https://github.com/Salamek/huawei-lte-api",
+        "supports": "README للمكتبة يدرج الموديل ضمن الأجهزة المختبرة ويشرح وظائف API العامة لقراءة معلومات الشبكة والإشارة.",
+        "accessedAt": "2026-10-23"
+      }
+    ],
+    "limitations": [
+      "المصدر المجتمعي يذكر الموديل ضمن أجهزته المختبرة.",
+      "لم يُحدد Firmware خاص بجهاز اختُبر ضمن Bandly.",
+      "لا يثبت دعم كل واجهات API أو ميزات قفل الترددات.",
+      "المستودع مرخص LGPL-3.0؛ راجع التزامات الترخيص قبل إعادة الاستخدام."
+    ],
+    "riskLevel": "LOW"
+  },
+  {
+    "recordId": "zyxel.fwa710-5g-v2.community-compatibility-reference",
+    "manufacturer": "Zyxel",
+    "model": "FWA710 5G V2",
+    "hardwareVersion": null,
+    "softwareVersion": null,
+    "featureId": "community-compatibility-reference",
+    "claim": "يُدرج مشروع ha-zyxel موديل FWA710 5G V2 ضمن الأجهزة التي يذكر أن التكامل يعمل معها. تفاصيل كل ميزة تحتاج مراجعة مستقلة.",
+    "verification": {
+      "status": "DISCOVERED",
+      "checkedAt": "2026-10-23",
+      "reviewer": null,
+      "testNotes": "مراجعة مصدر مجتمعي فقط؛ لم يجر اختبار هذا الموديل على جهاز فعلي ضمن Bandly."
+    },
+    "evidence": [
+      {
+        "type": "source_code",
+        "reference": "https://github.com/zulufoxtrot/ha-zyxel",
+        "supports": "README للمشروع يدرج الموديل ضمن قائمة الأجهزة التي يؤكد المشروع عمل التكامل معها؛ لا يمثل ذلك اختبار Bandly.",
+        "accessedAt": "2026-10-23"
+      }
+    ],
+    "limitations": [
+      "هذا تأكيد توافق من مشروع مجتمعي وليس من Bandly.",
+      "لم يُحدد Firmware اختباري خاص بهذا الموديل في هذا السجل.",
+      "يجب فحص ملفات التكامل لتحديد حقول القراءة المدعومة فعلًا.",
+      "المستودع مرخص Apache-2.0؛ راجع الترخيص قبل إعادة استخدام الكود."
+    ],
+    "riskLevel": "MEDIUM"
+  },
+  {
+    "recordId": "zyxel.lte3202-m437.community-compatibility-reference",
+    "manufacturer": "Zyxel",
+    "model": "LTE3202-M437",
+    "hardwareVersion": null,
+    "softwareVersion": null,
+    "featureId": "community-compatibility-reference",
+    "claim": "يُدرج مشروع ha-zyxel موديل LTE3202-M437 ضمن الأجهزة التي يذكر أن التكامل يعمل معها. تفاصيل كل ميزة تحتاج مراجعة مستقلة.",
+    "verification": {
+      "status": "DISCOVERED",
+      "checkedAt": "2026-10-23",
+      "reviewer": null,
+      "testNotes": "مراجعة مصدر مجتمعي فقط؛ لم يجر اختبار هذا الموديل على جهاز فعلي ضمن Bandly."
+    },
+    "evidence": [
+      {
+        "type": "source_code",
+        "reference": "https://github.com/zulufoxtrot/ha-zyxel",
+        "supports": "README للمشروع يدرج الموديل ضمن قائمة الأجهزة التي يؤكد المشروع عمل التكامل معها؛ لا يمثل ذلك اختبار Bandly.",
+        "accessedAt": "2026-10-23"
+      }
+    ],
+    "limitations": [
+      "هذا تأكيد توافق من مشروع مجتمعي وليس من Bandly.",
+      "لم يُحدد Firmware اختباري خاص بهذا الموديل في هذا السجل.",
+      "يجب فحص ملفات التكامل لتحديد حقول القراءة المدعومة فعلًا.",
+      "المستودع مرخص Apache-2.0؛ راجع الترخيص قبل إعادة استخدام الكود."
+    ],
+    "riskLevel": "MEDIUM"
+  },
+  {
+    "recordId": "zyxel.lte7490-m904.community-compatibility-reference",
+    "manufacturer": "Zyxel",
+    "model": "LTE7490-M904",
+    "hardwareVersion": null,
+    "softwareVersion": null,
+    "featureId": "community-compatibility-reference",
+    "claim": "يُدرج مشروع ha-zyxel موديل LTE7490-M904 ضمن الأجهزة التي يذكر أن التكامل يعمل معها. تفاصيل كل ميزة تحتاج مراجعة مستقلة.",
+    "verification": {
+      "status": "DISCOVERED",
+      "checkedAt": "2026-10-23",
+      "reviewer": null,
+      "testNotes": "مراجعة مصدر مجتمعي فقط؛ لم يجر اختبار هذا الموديل على جهاز فعلي ضمن Bandly."
+    },
+    "evidence": [
+      {
+        "type": "source_code",
+        "reference": "https://github.com/zulufoxtrot/ha-zyxel",
+        "supports": "README للمشروع يدرج الموديل ضمن قائمة الأجهزة التي يؤكد المشروع عمل التكامل معها؛ لا يمثل ذلك اختبار Bandly.",
+        "accessedAt": "2026-10-23"
+      }
+    ],
+    "limitations": [
+      "هذا تأكيد توافق من مشروع مجتمعي وليس من Bandly.",
+      "لم يُحدد Firmware اختباري خاص بهذا الموديل في هذا السجل.",
+      "يجب فحص ملفات التكامل لتحديد حقول القراءة المدعومة فعلًا.",
+      "المستودع مرخص Apache-2.0؛ راجع الترخيص قبل إعادة استخدام الكود."
+    ],
+    "riskLevel": "MEDIUM"
+  },
+  {
+    "recordId": "zyxel.lte5398-m904.community-compatibility-reference",
+    "manufacturer": "Zyxel",
+    "model": "LTE5398-M904",
+    "hardwareVersion": null,
+    "softwareVersion": null,
+    "featureId": "community-compatibility-reference",
+    "claim": "يُدرج مشروع ha-zyxel موديل LTE5398-M904 ضمن الأجهزة التي يذكر أن التكامل يعمل معها. تفاصيل كل ميزة تحتاج مراجعة مستقلة.",
+    "verification": {
+      "status": "DISCOVERED",
+      "checkedAt": "2026-10-23",
+      "reviewer": null,
+      "testNotes": "مراجعة مصدر مجتمعي فقط؛ لم يجر اختبار هذا الموديل على جهاز فعلي ضمن Bandly."
+    },
+    "evidence": [
+      {
+        "type": "source_code",
+        "reference": "https://github.com/zulufoxtrot/ha-zyxel",
+        "supports": "README للمشروع يدرج الموديل ضمن قائمة الأجهزة التي يؤكد المشروع عمل التكامل معها؛ لا يمثل ذلك اختبار Bandly.",
+        "accessedAt": "2026-10-23"
+      }
+    ],
+    "limitations": [
+      "هذا تأكيد توافق من مشروع مجتمعي وليس من Bandly.",
+      "لم يُحدد Firmware اختباري خاص بهذا الموديل في هذا السجل.",
+      "يجب فحص ملفات التكامل لتحديد حقول القراءة المدعومة فعلًا.",
+      "المستودع مرخص Apache-2.0؛ راجع الترخيص قبل إعادة استخدام الكود."
+    ],
+    "riskLevel": "MEDIUM"
+  },
+  {
+    "recordId": "zyxel.nr5103e.community-compatibility-reference",
+    "manufacturer": "Zyxel",
+    "model": "NR5103E",
+    "hardwareVersion": null,
+    "softwareVersion": null,
+    "featureId": "community-compatibility-reference",
+    "claim": "يُدرج مشروع ha-zyxel موديل NR5103E ضمن الأجهزة التي يذكر أن التكامل يعمل معها. تفاصيل كل ميزة تحتاج مراجعة مستقلة.",
+    "verification": {
+      "status": "DISCOVERED",
+      "checkedAt": "2026-10-23",
+      "reviewer": null,
+      "testNotes": "مراجعة مصدر مجتمعي فقط؛ لم يجر اختبار هذا الموديل على جهاز فعلي ضمن Bandly."
+    },
+    "evidence": [
+      {
+        "type": "source_code",
+        "reference": "https://github.com/zulufoxtrot/ha-zyxel",
+        "supports": "README للمشروع يدرج الموديل ضمن قائمة الأجهزة التي يؤكد المشروع عمل التكامل معها؛ لا يمثل ذلك اختبار Bandly.",
+        "accessedAt": "2026-10-23"
+      }
+    ],
+    "limitations": [
+      "هذا تأكيد توافق من مشروع مجتمعي وليس من Bandly.",
+      "لم يُحدد Firmware اختباري خاص بهذا الموديل في هذا السجل.",
+      "يجب فحص ملفات التكامل لتحديد حقول القراءة المدعومة فعلًا.",
+      "المستودع مرخص Apache-2.0؛ راجع الترخيص قبل إعادة استخدام الكود."
+    ],
+    "riskLevel": "MEDIUM"
+  }
+]
