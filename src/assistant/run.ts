@@ -236,6 +236,7 @@ export async function runAction(id: ActionId, r: SavedRouter, say: (s: string) =
           open_ping: 'وأدوّر لك أقل بنق لسيرفر لعبتك — أسألك قبل أي تغيير.',
           open_speed: 'وأبدأ الاختبار على طول.',
           best_channel: 'وأجرّب قنوات الواي فاي وأثبّت الأنظف — الواي فاي بينقطع ثواني وأسألك قبل أبدأ.',
+          autopilot: 'وأضبط كل شي بنفسي: الترددات والأبراج وقناة الواي فاي — وأقارن قبل وبعد. أسألك قبل أبدأ.',
         };
         return {
           text: `أفتح لك «${a.screen}»${what[id] ? ` ${what[id]}` : '.'}`,

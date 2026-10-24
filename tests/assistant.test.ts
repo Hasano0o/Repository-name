@@ -35,6 +35,9 @@ test('فهم الطلبات الأساسية', () => {
   assert.equal(act('الراوتر حار'), 'temp');
   assert.equal(act('محسن الالعاب'), 'open_ping');
   assert.equal(act('اطفي الراوتر'), 'power_off');
+  assert.equal(act('اضبط لي كل شي'), 'autopilot');
+  assert.equal(act('دير جهازي بنفسك'), 'autopilot');
+  assert.equal(act('ظبطه لي'), 'autopilot');
 });
 
 test('الأوامر الخطرة ما تختلط بالعادية', () => {

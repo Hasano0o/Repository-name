@@ -903,6 +903,8 @@ export default function RouterDashboard() {
                 onPress={() => router.push(`/finder/${info.id}` as Href)} />
               <ToolTile wide icon="game" color={tFg('#ec4899')} title="مُحسّن الألعاب" sub="أقل بنق للعبتك"
                 onPress={() => router.push(`/ping/${info.id}` as Href)} />
+              <ToolTile wide icon="spark" color={tFg('#7c5cff')} title="🤖 اضبط لي كل شي" sub="تردد · برج · قناة — بنفسه"
+                onPress={() => router.push(`/autopilot/${info.id}` as Href)} />
               {assistantOn && (
                 <ToolTile wide icon="spark" color={tFg('#0e7d93')} title="مساعد Bandly" sub="جديد · اسأله بكلامك"
                   onPress={() => router.push(`/assistant/${info.id}` as Href)} />

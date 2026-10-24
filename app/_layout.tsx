@@ -69,6 +69,7 @@ const SCREENS: [string, string][] = [
   ['trials/[id]', 'وش نجح عندي'],
   ['assistant/[id]', 'مساعد Bandly'],
   ['setup', 'المساعد يدخّلك'],
+  ['autopilot/[id]', 'اضبط لي كل شي'],
   ['monitor', 'المراقبة والتنبيهات'],
   ['tech', 'وضع الفني'],
 ];

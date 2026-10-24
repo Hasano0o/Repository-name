@@ -63,7 +63,7 @@ export function pauseLeft(s: AssistantState, now = Date.now()): string {
 export type Risk = 'none' | 'read' | 'write' | 'danger';
 
 export type ActionId =
-  | 'help' | 'check_signal' | 'ping_now' | 'best_band' | 'best_tower' | 'best_channel' | 'my_band' | 'temp'
+  | 'help' | 'check_signal' | 'ping_now' | 'best_band' | 'best_tower' | 'best_channel' | 'my_band' | 'temp' | 'autopilot'
   | 'open_ping' | 'open_finder' | 'open_aim' | 'open_towers' | 'open_speed' | 'open_devices'
   | 'open_newip' | 'open_wifich' | 'open_control' | 'open_details' | 'open_bands'
   | 'reboot' | 'reboot_now' | 'factory_reset' | 'power_off' | 'power_on';
@@ -91,6 +91,7 @@ export const ACTIONS: Record<ActionId, ActionDef> = {
   ping_now: { id: 'ping_now', label: 'كم البنق عندي؟', risk: 'read' },
   best_band: { id: 'best_band', label: 'اختار لي أفضل تردد', risk: 'write', route: 'optimize', screen: 'المُحسِّن التلقائي', auto: true },
   best_tower: { id: 'best_tower', label: 'أفضل برج', risk: 'write', route: 'towers', screen: 'الأبراج', auto: true },
+  autopilot: { id: 'autopilot', label: 'اضبط لي كل شي', risk: 'write', route: 'autopilot', screen: 'اضبط لي كل شي', auto: true },
   best_channel: { id: 'best_channel', label: 'أفضل قناة واي فاي', risk: 'write', route: 'wifich', screen: 'قناة الواي فاي', auto: true },
   my_band: { id: 'my_band', label: 'ترددي الحالي', risk: 'read' },
   temp: { id: 'temp', label: 'حرارة الراوتر', risk: 'read' },
@@ -119,6 +120,7 @@ export const QUICK: ActionId[] = ['check_signal', 'best_band', 'best_tower', 'op
 /** شبكة الأزرار الملوّنة في شاشة المساعد — مرتّبة: اعرف وضعك ← حسّنه ← الراوتر */
 export const GRID: { title: string; items: ActionId[] }[] = [
   { title: 'اعرف وضعك', items: ['check_signal', 'my_band', 'temp', 'open_speed'] },
+  { title: '🤖 خلّني أسويها عنك', items: ['autopilot'] },
   { title: 'حسّن اتصالك', items: ['best_band', 'best_tower', 'best_channel', 'open_ping'] },
   { title: 'الراوتر', items: ['reboot', 'power_off'] },
 ];
@@ -148,6 +150,7 @@ const WORDS: [ActionId, string[]][] = [
   ['power_off', ['طفي الراوتر', 'اطفي الراوتر', 'طف الراوتر', 'سكر الراوتر', 'قفل الراوتر', 'اطفاء الراوتر', 'شيل الكهربا', 'power off']],
   ['best_band', ['افضل تردد', 'احسن تردد', 'اقوى تردد', 'التردد الافضل', 'اختار لي تردد', 'اختر لي تردد', 'اختار تردد', 'افضل باند', 'جرب الترددات', 'المحسن التلقائي']],
   ['best_tower', ['افضل برج', 'احسن برج', 'اقوى برج', 'البرج الافضل', 'اختار لي برج', 'اختر لي برج', 'اختار برج', 'جرب الابراج', 'بنق الابراج']],
+  ['autopilot', ['اضبط لي كل شي', 'اضبط كل شي', 'ظبط كل شي', 'ظبطه', 'اضبطه', 'سو كل شي', 'سوها عني', 'دير جهازي', 'ادير جهازي', 'دير الراوتر', 'حسن كل شي', 'اضبط لي الراوتر', 'اضبط الراوتر', 'رتب كل شي', 'اضبط لحالك', 'سويها بنفسك']],
   ['best_channel', ['افضل قناه', 'احسن قناه', 'انظف قناه', 'قناه الواي فاي', 'غير القناه', 'اختار قناه', 'اختار لي قناه']],
   ['my_band', ['ترددي', 'ترددي الحالي', 'وش ترددي', 'على اي تردد', 'وش التردد', 'التردد الحالي', 'اي باند', 'وش الباند']],
   ['temp', ['حراره', 'الحراره', 'حار', 'سخن', 'حراره الراوتر', 'حراره جهازي', 'درجه الحراره', 'حرارته']],

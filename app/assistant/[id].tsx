@@ -39,6 +39,7 @@ const PAUSES: { label: string; mins: number | null }[] = [
 
 /** لون وأيقونة كل زر — ألوان Bandly: أزرق أساسي، بنفسجي 5G/ذكي، أخضر قياس، وردي ألعاب، برتقالي تحذير */
 const LOOK: Partial<Record<ActionId, { icon: IconName; color: string; sub: string }>> = {
+  autopilot: { icon: 'spark', color: '#7c5cff', sub: 'أفحص وأختار أفضل تردد وبرج وقناة — وأرجّع أي شي صار أسوأ' },
   check_signal: { icon: 'antenna', color: '#2f6bff', sub: 'قوة وصفاء' },
   my_band: { icon: 'bands', color: '#7c5cff', sub: 'الأساسي والثانوي' },
   temp: { icon: 'sun', color: '#f97316', sub: 'هل هو حار؟' },
@@ -306,12 +307,12 @@ export default function AssistantScreen() {
                       const l = lookOf(a);
                       return (
                         <Pressable key={a} onPress={() => run(a)} disabled={busy} accessibilityRole="button"
-                          style={({ pressed }) => [s.tile, { borderColor: tBd(l.color + '38') }, (pressed || busy) && { opacity: pressed ? 0.75 : 0.55 }]}>
+                          style={({ pressed }) => [s.tile, g.items.length === 1 && s.tileWide, { borderColor: tBd(l.color + (g.items.length === 1 ? '77' : '38')) }, g.items.length === 1 && { backgroundColor: tBg(l.color + '10') }, (pressed || busy) && { opacity: pressed ? 0.75 : 0.55 }]}>
                           <View style={[s.tileIcon, { backgroundColor: tBg(l.color + '1c') }]}>
                             <Icon name={l.icon} size={21} color={tFg(l.color)} stroke={2.2} />
                           </View>
                           <Text style={s.tileTitle} numberOfLines={1}>{ACTIONS[a].label}</Text>
-                          {!!l.sub && <Text style={[s.tileSub, { color: tFg(l.color) }]} numberOfLines={1}>{l.sub}</Text>}
+                          {!!l.sub && <Text style={[s.tileSub, { color: tFg(l.color) }]} numberOfLines={g.items.length === 1 ? 2 : 1}>{l.sub}</Text>}
                         </Pressable>
                       );
                     })}
@@ -426,6 +427,7 @@ const s = sheet({
   groupTitle: { color: C.sub, fontSize: 12.5, fontWeight: '800', textAlign: 'center' },
   grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'center', gap: 10 },
   tile: { flexBasis: '47%', flexGrow: 1, maxWidth: '49%', alignItems: 'center', gap: 5, backgroundColor: C.card, borderWidth: 1.5, borderRadius: R.md, paddingVertical: 14, paddingHorizontal: 8 },
+  tileWide: { maxWidth: '100%', flexBasis: '100%', paddingVertical: 16 },
   tileIcon: { width: 46, height: 46, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   tileTitle: { color: C.text, fontWeight: '800', fontSize: 14, textAlign: 'center' },
   tileSub: { fontSize: 11.5, fontWeight: '700', textAlign: 'center' },
