@@ -372,4 +372,15 @@ export interface RouterDriver {
   factoryReset?(): Promise<void>;
   setAutoRecover?(on: boolean): Promise<void>;
   setWifiSleep?(mins: number): Promise<void>;
+  /** هواوي: الأنتنا الداخلية/الخارجية */
+  getAntenna?(): Promise<AntennaInfo | null>;
+  setAntenna?(mode: number): Promise<void>;
+  /** هواوي: كود USSD من شريحة الراوتر (رصيد الباقة) */
+  ussd?(code: string): Promise<string>;
+  /** هواوي: بنق من الراوتر نفسه */
+  routerPing?(host: string): Promise<RouterPingResult>;
 }
+
+/** mode: 0 داخلية · 1 خارجية (المنفذين) · 2 خارجية (منفذ ١) · 3 تلقائي */
+export interface AntennaInfo { mode?: number; canSet: boolean; raw: [string, string][] }
+export interface RouterPingResult { ok: boolean; ms?: number; raw: [string, string][] }

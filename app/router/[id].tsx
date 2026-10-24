@@ -987,6 +987,14 @@ export default function RouterDashboard() {
                   <Text style={s.moreLbl}>شارك الواي فاي</Text>
                 </Pressable>
               )}
+              {info.driverId === 'huawei-lte' && (
+                <Pressable style={[s.moreTile, { backgroundColor: tBg('#ea580c12'), borderColor: tBd('#ea580c30') }]} onPress={() => router.push(`/hwtools/${info.id}` as Href)}>
+                  <View style={[s.moreIcon, { backgroundColor: tBg('#ea580c') }]}>
+                    <Icon name="antenna" size={18} color={tFg('#fff')} />
+                  </View>
+                  <Text style={s.moreLbl}>الأنتنا والباقة</Text>
+                </Pressable>
+              )}
               {feat.sms && (
                 <Pressable style={[s.moreTile, { backgroundColor: tBg('#16a34a12'), borderColor: tBd('#16a34a30') }]} onPress={() => router.push(`/sms/${info.id}` as Href)}>
                   <View style={[s.moreIcon, { backgroundColor: tBg('#16a34a') }]}>

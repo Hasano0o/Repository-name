@@ -15,6 +15,7 @@ import { getApnProfiles, setApn, selectApn, getDns, setDns } from './apn-dns';
 import { carriersFrom } from './carriers';
 import { getWifiRadios, setWifiChannel, wifiDebug } from './wifi';
 import * as extras from './extras';
+import * as more from './more';
 import { parseTxPower, parseDlMcs, parseUlMcs } from '../../utils/linkHealth';
 import { buildSnapshot } from '../../utils/snapshot';
 import { noChange } from '../noChange';
@@ -1163,6 +1164,10 @@ export class HuaweiDriver implements RouterDriver {
   wifiDebug() { return wifiDebug(this.io()); }
   // ───── مركز التحكم (extras.ts) ─────
   getExtras() { return extras.getExtras(this.io()); }
+  getAntenna() { return more.getAntenna(this.io()); }
+  setAntenna(mode: number) { return more.setAntenna(this.io(), mode); }
+  ussd(code: string) { return more.ussd(this.io(), code); }
+  routerPing(host: string) { return more.routerPing(this.io(), host); }
   setNat(t: 'cone' | 'symmetric') { return extras.setNat(this.io(), t); }
   setUpnp(on: boolean) { return extras.setUpnp(this.io(), on); }
   setDmz(on: boolean, ip: string, mac?: string) { return extras.setDmz(this.io(), on, ip, mac); }
