@@ -17,7 +17,7 @@ import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import {
   RouterDriver, Capability, Signal, Carrier, SignalSnapshot, NetworkInfo, CellTower, DeviceTemp,
-  Traffic, Usage, BandConfig, ActiveLock, CellLockState, DeviceDetails,
+  Traffic, Usage, BandConfig, ActiveLock, CellLockState, DeviceDetails, WifiRadio,
 } from '../types';
 import { http } from '../http';
 import { buildSnapshot } from '../../utils/snapshot';
@@ -278,6 +278,35 @@ export class ZteNgDriver implements RouterDriver {
       if (/MU5250|U60/i.test(txt)) return MODELS.u60Pro;
     } catch {}
     return MODELS.zteNg;
+  }
+
+  // ─── قناة الواي فاي (نفس صفحة الراوتر: uci wireless/wifi0|wifi1 + zwrt_wlan.set) ───
+  private async wifiSection(sec: 'wifi0' | 'wifi1'): Promise<Record<string, unknown>> {
+    if (this.session === ZERO) await this.doLogin();
+    const r = await this.call('uci', 'get', { config: 'wireless', section: sec });
+    return ((r as any).values ?? r) as Record<string, unknown>;
+  }
+
+  async getWifiRadios(): Promise<WifiRadio[]> {
+    const CH24 = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13'];
+    const CH5 = ['36', '40', '44', '48', '52', '56', '60', '64', '100', '104', '108', '112', '116', '120', '124', '128', '132', '136', '140', '149', '153', '157', '161', '165'];
+    const out: WifiRadio[] = [];
+    for (const [sec, band] of [['wifi0', '2.4'], ['wifi1', '5']] as const) {
+      try {
+        const v = await this.wifiSection(sec);
+        const ch = str(v.channel);
+        if (!ch && !v.hwmode && !v.band) continue;
+        out.push({ band, channel: !ch || /auto/i.test(ch) ? '0' : ch, allowed: ['0', ...(band === '5' ? CH5 : CH24)], writable: true });
+      } catch {}
+    }
+    return out;
+  }
+
+  async setWifiChannel(band: '2.4' | '5', channel: string): Promise<void> {
+    const sec = band === '5' ? 'wifi1' : 'wifi0';
+    const val = channel === '0' ? 'auto' : channel;
+    // الواي فاي يعيد التشغيل — الجوال ينفصل ثواني، وشاشة القنوات تنتظر وتتأكد
+    await this.write('zwrt_wlan', 'set', { [sec]: { channel: val } });
   }
 
   async getSnapshot(): Promise<SignalSnapshot> {
