@@ -1317,6 +1317,8 @@ export class ZteDriver implements RouterDriver {
   }
 
   // ───── قنوات الواي فاي ─────
+  /** من وين جات القنوات: ap = queryAccessPointInfo (MU5001…)، legacy = حقل Channel القديم */
+  private wifiSrc: 'ap' | 'legacy' | null = null;
   private static readonly WIFI_FIELDS = ['Channel', 'wifi_band', 'WirelessMode', 'CountryCode', 'HT_MCS', 'wifi_11n_cap'];
   private static readonly WIFI5_FIELDS = ['m_Channel', 'Channel_5G', 'channel_5g', 'wifi_5g_channel'];
 
@@ -1324,7 +1326,9 @@ export class ZteDriver implements RouterDriver {
     await this.ensure();
     // الموديلات الجديدة (MU5001…): القنوات في queryAccessPointInfo لكل شريحة
     const fresh = await zteRadios(this.io()).catch(() => []);
-    if (fresh.length) return fresh;
+    if (fresh.length) { this.wifiSrc = 'ap'; return fresh; }
+    if (this.wifiSrc === 'ap') throw new Error('الراوتر ما رد على إعدادات الواي فاي — غالباً الواي فاي يعيد التشغيل. جرّب بعد ثواني.');
+    this.wifiSrc = 'legacy';
     const r = await this.get(ZteDriver.WIFI_FIELDS).catch(() => ({} as Record<string, string>));
     const out: WifiRadio[] = [];
     const ch = (r.Channel ?? '').trim();
@@ -1341,7 +1345,13 @@ export class ZteDriver implements RouterDriver {
 
   async setWifiChannel(band: '2.4' | '5', channel: string): Promise<void> {
     await this.ensure();
-    if ((await zteRadios(this.io()).catch(() => [])).length) return zteSetChannel(this.io(), band, channel);
+    // الواي فاي ممكن يكون يعيد التشغيل من تغيير قبل (أثناء «دوّر على أنظف قناة») — نعيد القراءة شوي
+    // قبل ما نقرر إن الراوتر من النوع القديم (كان يطلع «ما يسمح نغيّر قناة هذا النطاق» بالغلط على MU5001)
+    for (let i = 0; i < (this.wifiSrc === 'legacy' ? 1 : 4); i++) {
+      if ((await zteRadios(this.io()).catch(() => [])).length) { this.wifiSrc = 'ap'; return zteSetChannel(this.io(), band, channel); }
+      if (this.wifiSrc !== 'legacy') await sleep(2500);
+    }
+    if (this.wifiSrc === 'ap') throw new Error('الراوتر ما رد على إعدادات الواي فاي — غالباً الواي فاي يعيد التشغيل.');
     const r = await this.get(ZteDriver.WIFI_FIELDS);
     const five = /^a$|5/i.test(r.wifi_band ?? '') || Number(r.Channel) >= 36;
     if ((band === '5') !== five) throw new Error('هذا الراوتر ما يسمح نغيّر قناة هذا النطاق من التطبيق');
