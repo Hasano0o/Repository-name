@@ -21,6 +21,7 @@ export interface BandSample {
 export interface BandTestResult {
   tech: 'LTE' | 'NR';
   band: number;
+  lte?: number[]; nr?: number[];
   status: 'pending' | 'testing' | 'done' | 'failed';
   note?: string;
 

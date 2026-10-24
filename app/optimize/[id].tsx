@@ -8,7 +8,7 @@ import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { safeApply, trialMessage } from '../../src/utils/safeLock';
 import { BandConfig, CellTower } from '../../src/drivers/types';
-import { OptTarget, buildCandidates } from '../../src/utils/optimize';
+import { OptTarget, buildCandidates, targetName, targetKey } from '../../src/utils/optimize';
 import { bandLabel, freqLabel } from '../../src/utils/bands';
 import { saveProfile } from '../../src/store/profiles';
 import { C, tBg, tFg } from '../../src/ui/theme';
@@ -50,6 +50,14 @@ function rowDetail(r: BandTestResult): string {
   parts.push(`ثبات ${r.onlinePct}%`);
   return parts.join(' · ');
 }
+
+const isComboT = (t: OptTarget) => !!(t.lte || t.nr);
+const nameOf = (t: OptTarget) => (isComboT(t) ? targetName(t) : bandLabel(t.tech, t.band));
+/** يطبّق المرشّح: تردد واحد، أو دمج (4G كلها مع بعض، و5G لو محددة) */
+const applyTarget = (d: any, t: OptTarget) => (
+  isComboT(t) ? d.setBand!(t.lte ?? 'keep', t.nr)
+  : t.tech === 'NR' ? d.setBand!('keep', [t.band]) : d.setBand!([t.band], undefined)
+);
 
 export default function OptimizeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -128,17 +136,39 @@ export default function OptimizeScreen() {
     };
 
     let nrRejects = 0;
+    let combosAdded = false;
     try {
-      for (let i = 0; i < list.length; i++) {
+      for (let i = 0; i < list.length || !combosAdded; i++) {
         if (cancel.current) break;
+        // خلصنا الترددات المفردة ← نجرب الدمج: أفضل 4G مع بعض + أفضل 5G (مثل B1+B3+n78)
+        // التثبيت على تردد واحد يقطع الدمج (CA) — فالدمج غالباً أسرع بكثير
+        if (i >= list.length) {
+          combosAdded = true;
+          const singles = list.filter(r => r.status === 'done' && !r.lte && !r.nr);
+          const lteTop = singles.filter(r => r.tech === 'LTE').sort((a, b) => scoreResult(b) - scoreResult(a)).map(r => r.band).slice(0, 3);
+          const nrTop = singles.filter(r => r.tech === 'NR').sort((a, b) => scoreResult(b) - scoreResult(a)).map(r => r.band);
+          const nrBest = nrTop.length ? [nrTop[0]] : origNr; // [] = 5G على وضعه الأصلي
+          const combos: { lte: number[]; nr?: number[] }[] = [];
+          if (lteTop.length >= 2) combos.push({ lte: lteTop.slice(0, 2), nr: nrBest });
+          if (lteTop.length >= 3) combos.push({ lte: lteTop.slice(0, 3), nr: nrBest });
+          if (lteTop.length >= 2 && nrTop.length >= 2) combos.push({ lte: lteTop.slice(0, 2), nr: nrTop.slice(0, 2) });
+          for (const c of combos) {
+            const t: BandTestResult = {
+              tech: 'LTE', band: c.lte[0], lte: c.lte, nr: c.nr, status: 'pending',
+              disconnectCount: 0, totalSamples: 0, onlinePct: 100, pciChanges: 0, durationMs: 0, samples: [],
+            };
+            list.push(t);
+          }
+          if (combos.length && mounted.current) setRows([...list]);
+          if (i >= list.length) break;
+        }
         const { tech, band } = list[i];
-        // الراوتر رفض ترددين 5G ورا بعض = ما يسمح بقفل 5G على هالترددات — لا نقطع الاتصال على الفاضي
-        if (tech === 'NR' && nrRejects >= 2) { upd(i, { status: 'failed', note: 'تخطيناه — راوترك ما يسمح بتثبيت هذا التردد' }); continue; }
-        upd(i, { status: 'testing', note: 'نقفل التردد...' });
+        const isCombo = !!(list[i].lte || list[i].nr);
+        // الراوتر رفض ترددين 5G ورا بعض = ما يسمح بقفل 5G على هالترددات — بس n78/n41 نجربهم دايماً
+        if (!isCombo && tech === 'NR' && nrRejects >= 2 && band !== 78 && band !== 41) { upd(i, { status: 'failed', note: 'تخطيناه — راوترك ما يسمح بتثبيت هذا التردد' }); continue; }
+        upd(i, { status: 'testing', note: isCombo ? 'نجرب الدمج...' : 'نقفل التردد...' });
         try {
-          await withSession(info, d => (
-            tech === 'NR' ? d.setBand!('keep', [band]) : d.setBand!([band], undefined)
-          ), false);
+          await withSession(info, d => applyTarget(d, list[i]), false);
           upd(i, { note: 'ننتظر الاتصال...' });
           const ok = await waitOnline(info, 35000);
           if (cancel.current) { upd(i, { status: 'pending', note: undefined }); break; }
@@ -167,12 +197,15 @@ export default function OptimizeScreen() {
         } catch (e: any) {
           const msg = String(e?.message ?? '');
           if (/رفض/.test(msg)) {
-            if (tech === 'NR') nrRejects++;
-            upd(i, { status: 'failed', note: 'راوترك ما يقبل هذا التردد (ما تغيّر شي)' });
+            if (tech === 'NR' && !isCombo) nrRejects++;
+            // نخلي رد الراوتر ظاهر (بين القوسين) — يفيدنا لو أرسل لنا المستخدم صورة
+            const raw = (msg.match(/\(([^()]*)\)\s*$/) || [])[1];
+            upd(i, { status: 'failed', note: 'راوترك ما يقبل هذا التردد (ما تغيّر شي)' + (raw ? ` — ${raw}` : '') });
           } else {
             upd(i, { status: 'failed', note: msg || 'خطأ' });
           }
         }
+
       }
     } finally {
       // ترتيب النتائج
@@ -186,14 +219,14 @@ export default function OptimizeScreen() {
           try { await withSession(info, d => d.setBand!(origLte, origNr), false); } catch {}
           await waitOnline(info, 45000);
 
-          const label = `التثبيت على ${bandLabel(best.tech, best.band)}`;
+          const label = `التثبيت على ${nameOf(best)}`;
           const res = await safeApply({
             op,
             r: info,
-            key: `band:${best.tech}:${best.band}`,
+            key: `band:${targetKey(best)}`,
             label,
-            withNr: best.tech === 'NR',
-            apply: d => (best.tech === 'NR' ? d.setBand!('keep', [best.band]) : d.setBand!([best.band], undefined)),
+            withNr: best.tech === 'NR' || !!best.nr,
+            apply: d => applyTarget(d, best),
             revert: d => d.setBand!(origLte, origNr),
             onStatus: st => { if (mounted.current) setStatus(st); },
           });
@@ -207,9 +240,9 @@ export default function OptimizeScreen() {
           try {
             await saveProfile({
               routerId: info.id,
-              name: 'أفضل تردد — ' + bandLabel(best.tech, best.band),
-              bands: best.tech === 'NR' ? origLte : [best.band],
-              nrBands: best.tech === 'NR' ? [best.band] : origNr,
+              name: 'أفضل تردد — ' + nameOf(best),
+              bands: best.lte ?? (best.tech === 'NR' ? origLte : [best.band]),
+              nrBands: best.nr ?? (best.tech === 'NR' ? [best.band] : origNr),
               mode: cfg.mode,
             });
           } catch {}
@@ -218,7 +251,7 @@ export default function OptimizeScreen() {
             const why = verdictText(best, ranked[ranked.length - 1] ?? best);
             Alert.alert(
               'تم التحسين',
-              `ثبّتناك على ${bandLabel(best.tech, best.band)} — التقييم ${testLabel(best)} (${Math.round(sc * 100)}%).\n` +
+              `ثبّتناك على ${nameOf(best)} — التقييم ${testLabel(best)} (${Math.round(sc * 100)}%).\n` +
               (why ? `السبب: ${why}\n` : '') +
               'وحفظناه كملف تعريف.',
             );
@@ -264,7 +297,7 @@ export default function OptimizeScreen() {
           يجرب كل تردد متاح، يقيس القوة والنقاء والاستقرار والسرعة، ويثبّتك على الأفضل تلقائياً — ويحفظه كملف تعريف.
         </Text>
 
-        <Text style={s.sub}>المرشّحون: {cands.map(c => bandLabel(c.tech, c.band)).join('، ') || 'ما فيه'}</Text>
+        <Text style={s.sub}>المرشّحون: {cands.map(c => bandLabel(c.tech, c.band)).join('، ') || 'ما فيه'} — وبعدها نجرب دمج الأفضل مع بعض</Text>
 
         {/* اختيار نوع الفحص */}
         <View style={s.modeRow}>
@@ -318,11 +351,11 @@ export default function OptimizeScreen() {
         <GlassCard title="النتائج" icon="📊" tint={C.blue} collapsible={false}>
           {ranked.length > 0 && (
             <Text style={s.headline}>
-              🏆 الأفضل: {bandLabel(best.tech, best.band)} — {testLabel(best)} ({Math.round(scoreResult(best) * 100)}%)
+              🏆 الأفضل: {nameOf(best)} — {testLabel(best)} ({Math.round(scoreResult(best) * 100)}%)
             </Text>
           )}
           {rows.map((r, i) => {
-            const isBest = best && best.tech === r.tech && best.band === r.band;
+            const isBest = best && targetKey(best) === targetKey(r);
             const sc = r.status === 'done' ? scoreResult(r) : 0;
             const col = scoreColor(sc);
             return (
@@ -343,8 +376,8 @@ export default function OptimizeScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={s.rowTitle}>
-                    {bandLabel(r.tech, r.band)} {isBest ? '⭐' : ''}
-                    <Text style={s.rowSub}>  {freqLabel(r.tech, r.band)}</Text>
+                    {nameOf(r)} {isBest ? '⭐' : ''}
+                    <Text style={s.rowSub}>  {r.lte || r.nr ? 'دمج' : freqLabel(r.tech, r.band)}</Text>
                   </Text>
                   {r.status === 'done' ? (
                     <>
