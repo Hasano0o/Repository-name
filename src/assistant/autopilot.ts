@@ -14,9 +14,8 @@ import { withSession, withRouterLock, RouterOp } from '../store/sessions';
 import { driverById } from '../drivers/registry';
 import type { CellTower, CellLockState, BandConfig, Signal, WifiRadio } from '../drivers/types';
 import type { LockSnapshot } from '../drivers/lockSnapshot';
-import { readSnapOrStop, safeApply, waitOnline } from '../utils/safeLock';
-import { measureUrl, regionUrls, selectedRegion, gameScore, LatencyResult } from '../utils/latency';
-import { totalScore } from '../utils/optimize';
+import { readSnapOrStop, safeApply, waitOnline, snapshot } from '../utils/safeLock';
+import { measureUrl, regionUrls, selectedRegion, gameScore, gamingGrade, LatencyResult } from '../utils/latency';
 import { runTowerTrials, TrialTarget } from '../utils/towerTrial';
 import { groupTowers, loadConfirmed, bandName } from '../utils/towers';
 import { bandLabel, SCAN_PREFERRED } from '../utils/bands';
@@ -163,36 +162,53 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
         cands = cands.slice(0, 4);
         if (cands.length < 2) set('band', 'same', 'راوترك يدعم تردد واحد بس — ما فيه شي نجرّبه');
         else {
-          const lat0 = await latency(6);
-          const base = totalScore(before.rsrp, before.sinr, lat0 ?? undefined);
-          let best: { b: number; score: number } | null = null;
-          for (const [i, b] of cands.entries()) {
-            if (cancelled()) break;
-            o.onStatus(`أجرّب ${bandLabel('LTE', b)} (${i + 1}/${cands.length}) — النت بينقطع شوي`);
+          // الحكم بالسعة (عرض النطاق × الصفاء = السرعة الفعلية) + البنق — مو القوة بس:
+          // تردد لحاله نظيف ممكن يغلب دمج مشوّش، ودمج ترددين ممكن يغلب الاثنين
+          const judge = async (): Promise<{ score: number; cap: number; carriers: number } | null> => {
+            const [sn, l] = await Promise.all([snapshot(r, false, 2).catch(() => null), latency(6)]);
+            if (!sn) return null;
+            const lag = l?.samples ? gamingGrade(l).score : 0.6; // ٠..١
+            return { score: sn.cap * (0.55 + 0.45 * lag), cap: sn.cap, carriers: sn.carriers };
+          };
+          const base = await judge();
+          const label = (bs: number[]) => bs.map(b => bandLabel('LTE', b)).join(' + ');
+          const tried: { bands: number[]; score: number; carriers: number }[] = [];
+          const tryBands = async (bands: number[], what: string) => {
+            if (cancelled()) return;
+            o.onStatus(`${what} — النت بينقطع شوي`);
             try {
-              await withSession(r, d => d.setBand!([b], undefined), false);
-              if (!(await waitOnline(r, 120_000, cancelled))) continue;
-              const [s, l] = await Promise.all([readSig(r), latency(6)]);
-              const score = totalScore(s?.rsrp, s?.sinr, l ?? undefined);
-              if (!best || score > best.score) best = { b, score };
+              await withSession(r, d => d.setBand!(bands, undefined), false);
+              if (!(await waitOnline(r, 120_000, cancelled))) return;
+              const j = await judge();
+              if (j) tried.push({ bands, score: j.score, carriers: j.carriers });
             } catch {}
-          }
+          };
+          // ١) كل تردد لحاله
+          for (const [i, b] of cands.entries()) await tryBands([b], `أجرّب ${bandLabel('LTE', b)} لحاله (${i + 1}/${cands.length})`);
+          // ٢) دمج أفضل ترددين (وأفضل ثلاثة) — الراوتر يدمجها لو البرج يدعم
+          const singles = [...tried].sort((a, b) => b.score - a.score).map(x => x.bands[0]);
+          if (singles.length >= 2) await tryBands(singles.slice(0, 2), `أجرّب الدمج ${label(singles.slice(0, 2))}`);
+          if (singles.length >= 3) await tryBands(singles.slice(0, 3), `أجرّب الدمج ${label(singles.slice(0, 3))}`);
+          const best = [...tried].sort((a, b) => b.score - a.score)[0];
           o.onStatus('أرجّع إعدادك قبل ما أقرر…');
           await withSession(r, d => d.restoreLockState!(snap), false).catch(() => {});
           await waitOnline(r, 150_000, () => false);
           if (cancelled()) { set('band', 'skip', 'وقّفته — رجّعت إعدادك'); return; }
-          if (best && best.score >= base + 0.08) {
-            const name = bandLabel('LTE', best.b);
+          if (best && (!base || best.score >= base.score * 1.12)) {
+            const name = label(best.bands);
+            const merged = best.carriers >= 2;
             o.onStatus(`${name} أحسن — أثبّته بأمان وأتأكد…`);
             const res = await safeApply({
-              r, key: `pilot:band:${best.b}`, label: `تثبيت ${name}`, op,
-              apply: d => d.setBand!([best!.b], undefined),
+              r, key: `pilot:band:${best.bands.join('+')}`, label: `تثبيت ${name}`, op,
+              apply: d => d.setBand!(best.bands, undefined),
               revert: d => d.restoreLockState!(snap),
               onStatus: o.onStatus, isCancelled: cancelled,
             });
-            if (res.kept) { set('band', 'ok', `ثبّتت ${name}`); changed.push(`التردد ${name}`); }
-            else set('band', 'same', 'جرّبت الأفضل وما فرق — رجّعت إعدادك');
-          } else set('band', 'same', 'إعدادك الحالي هو الأفضل');
+            if (res.kept) {
+              set('band', 'ok', `ثبّتت ${name}${merged ? ` · مدموج (${best.carriers} نواقل)` : best.bands.length > 1 ? ' · البرج ما دمجها الحين' : ' · لحاله أنظف من الدمج'}`);
+              changed.push(`التردد ${name}`);
+            } else set('band', 'same', 'جرّبت الأفضل وما فرق — رجّعت إعدادك');
+          } else set('band', 'same', `إعدادك الحالي هو الأفضل${base && base.carriers >= 2 ? ` (مدموج ${base.carriers} نواقل)` : ''}`);
         }
       } catch (e) { set('band', 'fail', errText(e)); }
     }
