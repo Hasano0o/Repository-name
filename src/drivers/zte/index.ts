@@ -1065,8 +1065,13 @@ export class ZteDriver implements RouterDriver {
   /** أي أمر 5G قبله الراوتر: classic = WAN_PERFORM_NR5G_BAND_LOCK (MU5001)، sansa = الأحدث مع type */
   private nrCmd: 'classic' | 'sansa' | null = null;
   private async setNrBands(nrBands: number[]): Promise<void> {
-    const nr = nrBands.length ? nrBands : (this.baseNr() ?? SAFE_NR);
     const cur = (await this.readLocks()).nr;
+    // «أي 5G» (تلقائي) والراوتر ما فيه قفل 5G أصلاً (أو ما يعطيه): ما فيه شي نغيّره.
+    // قبل: نرسل قائمة افتراضية، والراوتر (4G بس / ما يقبل) يرفض ← «الراوتر رفض» ← إرجاع (تقرير ٢٥ أكتوبر، ZTE على Infinix)
+    if (!nrBands.length && !cur.length) return;
+    // الراوتر رفض كل أوامر 5G قبل (كل الصيغ + المطوّر + ubus) — ما نعيد ١٤ أمر كل ضغطة
+    if (this.nrDead) throw this.rejected('تثبيت ترددات 5G', 'failure');
+    const nr = nrBands.length ? nrBands : (this.baseNr() ?? SAFE_NR);
     const same = cur.length === nr.length && nr.every(b => cur.includes(b));
     if (same) return;
     { const ng = await this.ubusFirst(); if (ng) { try { await ng.setNrBandsTyped(nr, (await this.nrType()) === '1'); return; } catch (e) { this.log('ubus write failed → goform', (e as any)?.message); } } }
@@ -1093,9 +1098,11 @@ export class ZteDriver implements RouterDriver {
     if (!ok(o2)) {
       const ng = await this.ngWriter();
       if (ng) { await ng.setNrBandsTyped(nr, (await this.nrType()) === '1'); return; }
+      this.nrDead = true;
       throw this.rejected('تثبيت ترددات 5G', o2);
     }
   }
+  private nrDead = false;
 
   async getActiveLock(): Promise<ActiveLock | null> {
     const c = await this.getBandConfig();
@@ -1263,7 +1270,12 @@ export class ZteDriver implements RouterDriver {
       cellChanged = true;
     }
     if (cellChanged && rebootToApply.has(this.host)) await this.rebootAndWait();
-    const left = zteDiff(d, await read());
+    // الراوتر يحدّث lte_band_lock بعد لحظة من «success» — كنا نقرأ بعد ٥٠ms ونقول «ما رجع» (تقرير ٢٥ أكتوبر)
+    let left = zteDiff(d, await read());
+    for (let i = 0; i < 4 && left.length; i++) {
+      await new Promise(r => setTimeout(r, 1500));
+      left = zteDiff(d, await read());
+    }
     this.log('restore verify', left.join(',') || 'match');
     if (left.length) throw restoreMismatch(left.map(x => ZTE_PART_LABEL[x]));
   }
