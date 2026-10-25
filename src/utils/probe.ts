@@ -27,8 +27,8 @@ const TARGETS: Target[] = [
   { label: 'Nokia/Alcatel', path: '/cgi-bin/index.html', brand: 'nokia', match: /nokia|alcatel/i },
   // Green Packet (زين 5G — سيرفر beego، واجهة /web/v1/): روابط startup تنقرا قبل الدخول
   { label: 'Green Packet — المنتج', path: '/web/v1/startup/productinfo', brand: 'greenpacket', match: /product|model|version/i },
-  { label: 'Green Packet — حالة الدخول', path: '/web/v1/startup/usersstate', brand: 'greenpacket' },
-  { label: 'Green Packet — الواجهة', path: '/web/v1/startup/webui/visibilityinfo', brand: 'greenpacket' },
+  { label: 'Green Packet — حالة الدخول', path: '/web/v1/startup/usersstate', brand: 'greenpacket', match: /\{\s*"/ },
+  { label: 'Green Packet — الواجهة', path: '/web/v1/startup/webui/visibilityinfo', brand: 'greenpacket', match: /\{\s*"/ },
   { label: 'عام — status.json', path: '/status.json' },
   { label: 'عام — api/status', path: '/api/status' },
 ];
@@ -102,7 +102,9 @@ export async function runProbe(
     onStep?.(i, TARGETS.length, t.label);
     const st = await one(host, t, timeoutMs);
     steps.push(st);
-    if (typeof st.status === 'number' && st.status < 400 && st.size > 0) {
+    // راوترات ترجع الصفحة الرئيسية لأي رابط (200) — مو دليل على أي ماركة (تقرير SRT858M زين طلع «greenpacket» غلط)
+    const sameAsHome = i > 0 && steps[0]?.size > 0 && st.size === steps[0].size && st.sample === steps[0].sample;
+    if (typeof st.status === 'number' && st.status < 400 && st.size > 0 && !sameAsHome) {
       const hay = st.sample + ' ' + st.title;
       if (t.brand && (!t.match || t.match.test(hay))) score[t.brand] = (score[t.brand] || 0) + 2;
       for (const [b, re] of [
@@ -622,6 +624,9 @@ async function scanScripts(base: string, html: string): Promise<{ apis: string[]
     if (map) for (const m of map[0].matchAll(/"(chunk-[\w-]+)":"([0-9a-f]+)"/g)) urls.add('/' + prefix.replace(/^\//, '') + m[1] + '.' + m[2] + '.js');
   }
   const list = [...urls].filter(u => /\.js(\?|$)/i.test(u) && !/tinymce|jquery|jtopo|vendor|polyfill|chunk-libs|elementUI/i.test(u)).slice(0, 40);
+  // ملفات الدخول/التشفير أول، وملفات اللغات آخر (مليانة كلمة «login» كنص ترجمة)
+  const rank = (u: string) => (/encrypt|crypt|login|auth/i.test(u) ? 0 : /lang|i18n|locale/i.test(u) ? 2 : 1);
+  list.sort((a, b) => rank(a) - rank(b));
   const apis = new Set<string>();
   const hints = new Set<string>();
   const loginCode: string[] = [];
@@ -646,10 +651,10 @@ async function scanScripts(base: string, html: string): Promise<{ apis: string[]
       }
       // مقاطع كود الدخول: حول رابط الدخول وحول دوال التشفير (كود الصفحة العام نفسه — ما فيه أي بيانات للمستخدم)
       const file = u.split('/').pop() ?? u;
-      for (const re of [/user\/login|web_login|goformId=LOGIN|challenge_login|\/login["'`]/g, /setPublicKey|publicKey|encrypt\(|AES\.encrypt|CryptoJS\.\w+\(/g]) {
+      for (const re of [/login/gi, /encrypt|RSAKeyPair|setMaxDigits|publicKey|CryptoJS\.\w+|md5\(|sha256\(/gi]) {
         let hits = 0;
         for (const m of js.matchAll(re)) {
-          if (codeLen > 9000 || hits >= 3) break;
+          if (codeLen > 14000 || hits >= 3) break;
           const at = m.index ?? 0;
           if (loginCode.some(c => c.startsWith(`[${file}@${Math.floor(at / 1200)}]`))) continue;
           const snip = js.slice(Math.max(0, at - 600), at + 600).replace(/\s+/g, ' ');
