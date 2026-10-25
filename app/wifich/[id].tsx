@@ -94,7 +94,7 @@ async function measure(r: SavedRouter, band: Band, demo: DemoDriver | null, n = 
 
 /** ننتظر الواي فاي يرجع بعد تغيير القناة (الجوال يفصل ويرجع يتصل) */
 async function waitWifi(r: SavedRouter, band: Band, demo: DemoDriver | null, cancelled: () => boolean) {
-  const deadline = Date.now() + 120000; // بعض الجوالات (أندرويد خصوصاً) تتأخر ترجع للواي فاي بعد تغيير القناة
+  const deadline = Date.now() + 180000; // بعض الجوالات (أندرويد خصوصاً) تتأخر ترجع للواي فاي بعد تغيير القناة
   let ok = 0;
   await sleep(demo ? 1500 : 6000);
   while (Date.now() < deadline && !cancelled()) {
@@ -162,7 +162,11 @@ export default function WifiChannel() {
       if (!/network|abort|timeout|مهلة|ما رد/i.test(String(e?.message ?? e))) throw e;
     });
     const back = await waitWifi(r, b, demoRef.current, cancelled);
-    if (!back) throw new Error('الواي فاي ما رجع خلال دقيقتين. افتح إعدادات الواي فاي في جوالك واتصل بشبكة الراوتر يدوي — القناة تغيّرت والجوال أحياناً ما يرجع لحاله.');
+    if (!back) {
+      const e = new Error('الواي فاي ما رجع خلال ٣ دقايق. افتح إعدادات الواي فاي في جوالك واتصل بشبكة الراوتر يدوي — القناة تغيّرت والجوال أحياناً ما يرجع لحاله.');
+      (e as any).noReturn = true;
+      throw e;
+    }
     const now = await readChannel(r, b);
     if (now !== null && now !== ch) throw new Error(`الراوتر ما قبل تغيير القناة (باقي على ${chLabel(now)}).`);
   };
@@ -214,7 +218,17 @@ export default function WifiChannel() {
       const target = keep ? best.ch : orig;
       if (current !== target) {
         t.note(keep ? `نثبّت قناة ${target}` : 'نرجّع قناتك الأصلية');
-        await apply(r, b, target, cancelled);
+        try {
+          await apply(r, b, target, cancelled);
+        } catch (e: any) {
+          // الراوتر قبل القناة الأخيرة بس الجوال ما رجع لحاله (سامسونج خصوصاً بعد كذا تبديل) —
+          // مو فشل: ما نغيّر القناة مرة ثانية (يقطع الواي فاي من جديد)، نقول له يتصل يدوي
+          if (!e?.noReturn) throw e;
+          current = target;
+          if (mounted.current) setVerdict({ good: keep, text: `${keep ? `ثبّتنا قناة ${chLabel(target)}` : `رجّعنا قناتك الأصلية (${chLabel(orig)})`} — بس جوالك ما رجع للواي فاي لحاله. افتح إعدادات الواي فاي واتصل بشبكة الراوتر يدوي.` });
+          return;
+        }
+        current = target;
       }
       if (mounted.current) {
         setVerdict(keep
