@@ -10,12 +10,12 @@
  */
 import { isLanHost } from '../utils/host';
 import { LIVE_BASE } from './live';
-import { amdBaseOf, findAmdRefs } from './amdRefs';
+import { readAmdConfig, idToFile, findAmdIds, AmdConfig } from './amdRefs';
 
 const SKIP = /(jquery|vue(\.global|x|-router|-i18n)|element-plus|elementui|chunk-libs|echarts|tinymce|lottie|qrcode|axios\.min|jtopo|polyfill|bootstrap|font-?awesome|moment|lodash|highcharts|chart\.min|swiper|\.min\.js.*(forge|elliptic))/i;
 const MAX_FILE = 1_500_000;
 const MAX_TOTAL = 8_000_000;
-const MAX_FILES = 80;
+const MAX_FILES = 150; // صفحات RequireJS (ZTE) فيها موديول لكل شاشة
 const PART = 550_000; // كل طلب أقل من ١ ميقا (حد nginx الافتراضي)
 
 /** يحل رابط نسبي مقابل مسار الصفحة — بدون URL() (ناقص في RN) */
@@ -81,8 +81,8 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
   const queue: string[] = ['/'];
   let total = 0;
   let homeSample = '';
-  /** مسار RequireJS الأساسي (نسبةً لجذر الصفحة) — لو الصفحة تستخدمه */
-  let amdBase: string | null = null;
+  /** إعداد RequireJS (المسار الأساسي + paths) — لو الصفحة تستخدمه */
+  let amd: AmdConfig | null = null;
   while (queue.length && files.length < MAX_FILES && total < MAX_TOTAL) {
     const p = queue.shift()!;
     if (seen.has(p)) continue;
@@ -101,11 +101,11 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
       const rp = resolvePath(ref, p === '/' ? '/index.html' : p);
       if (rp && !seen.has(rp) && !queue.includes(rp)) queue.push(rp);
     }
-    const b = amdBaseOf(r.text);
-    if (b !== null && (amdBase === null || /baseUrl/.test(r.text))) amdBase = b;
-    if (amdBase !== null) {
-      for (const ref of findAmdRefs(r.text, amdBase)) {
-        const rp = resolvePath(ref, '/index.html');
+    amd = readAmdConfig(r.text, amd);
+    if (amd) {
+      for (const id of findAmdIds(r.text, p)) {
+        const f = idToFile(id, amd);
+        const rp = f ? resolvePath(f, '/index.html') : null;
         if (rp && !seen.has(rp) && !queue.includes(rp)) queue.push(rp);
       }
     }
