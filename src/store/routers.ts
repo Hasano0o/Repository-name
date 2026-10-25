@@ -62,7 +62,13 @@ export async function setWifi(id: string, w: SavedWifi | null): Promise<void> {
 export async function listRouters(): Promise<SavedRouter[]> {
   try {
     const raw = await AsyncStorage.getItem(KEY);
-    return raw ? JSON.parse(raw) : [];
+    const list: SavedRouter[] = raw ? JSON.parse(raw) : [];
+    // أسماء انحفظت غلط قبل ملف الموديل (مثل «ZTE U30Pr» بدل «ZTE U30 Pro» — ٢٥ أكتوبر)
+    for (const r of list) {
+      if (r.name === 'ZTE U30Pr') r.name = 'ZTE U30 Pro';
+      if ((r as any).driverName === 'ZTE U30Pr') (r as any).driverName = 'ZTE U30 Pro';
+    }
+    return list;
   } catch {
     return [];
   }
