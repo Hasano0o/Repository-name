@@ -86,7 +86,10 @@ export default function NewIp() {
         try { labOn = (await AsyncStorage.getItem(LAB_KEY)) === '1'; } catch {}
         if (!mounted.current) return;
         setLab(labOn);
-        setCanDetach(det && (/huawei/i.test(r.driverId) || (labOn && /zte/i.test(r.driverId))));
+        // الراوتر قال قبل إنه ما يقدر ينفصل (ما فيه 2G/3G/SA في قائمة الأوضاع) — ما نجرّب كل مرة
+        let noDetach = false;
+        try { noDetach = (await AsyncStorage.getItem(`newip.nodetach.${r.id}`)) === '1'; } catch {}
+        setCanDetach(!noDetach && det && (/huawei/i.test(r.driverId) || (labOn && /zte/i.test(r.driverId))));
         try { setSkipQuick((await AsyncStorage.getItem(`newip.reboot.${r.id}`)) === '1'); } catch {}
         try { setDetachFirst(labOn || (await AsyncStorage.getItem(`newip.detach.${r.id}`)) === '1'); } catch {}
         setCanReboot(reb && r.driverId !== 'device');
@@ -219,7 +222,12 @@ export default function NewIp() {
                   }
                 } catch (e2: any) {
                   // الفصل ما زبط على هالموديل — نعرض نتيجة القطع السريع وزر إعادة التشغيل بدل خطأ بس
-                  reportError('newip-detach', e2, info);
+                  // «ما يسمح بالفصل» = الموديل ما فيه وضع مؤقت (تقرير ٢٥ أكتوبر، هواوي 4G/5G) — مو عطل:
+                  // ما نرسله تقرير، ونتذكره عشان المرة الجاية نروح لإعادة التشغيل على طول
+                  if (/ما يسمح بالفصل/.test(String(e2?.message ?? e2))) {
+                    AsyncStorage.setItem(`newip.nodetach.${info.id}`, '1').catch(() => {});
+                    setCanDetach(false);
+                  } else reportError('newip-detach', e2, info);
                   // لو علق في الوضع المؤقت نرجّعه قبل أي شي
                   setStatus('نرجّع وضع الشبكة...');
                   await withSessionPatient(info, d => (d.wakeRadio ? d.wakeRadio() : Promise.resolve()), 60_000).catch(() => {});
