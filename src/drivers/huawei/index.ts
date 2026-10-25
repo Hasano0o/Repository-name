@@ -692,7 +692,7 @@ export class HuaweiDriver implements RouterDriver {
     try { modes = tagsAll(tag(await this.get('net/net-mode-list'), 'AccessList') ?? '', 'Access'); } catch {}
     // وضع مؤقت ما فيه خدمة عندنا: 3G/2G، ولو الراوتر ما يدعمها (H155) فـ 5G SA فقط
     const temp = ['01', '02', '08'].find(m => modes.includes(m) && m !== orig);
-    if (!temp) throw new Error('راوترك ما يسمح بالفصل عن البرج من التطبيق');
+    if (!temp) return this.reattachByBand(holdSecs);
     this.reattachOrig = orig;
     await this.writeNetMode({ mode: temp }).catch(() => {});
     try {
@@ -707,8 +707,39 @@ export class HuaweiDriver implements RouterDriver {
       this.reattachOrig = '';
     }
   }
+  /**
+   * فصل بدون 2G/3G/SA (تقرير ٢٥ أكتوبر: هواوي 4G/5G قائمته فيها 4G و5G بس — كان يروح لإعادة التشغيل ويطوّل):
+   * نثبّت 4G فقط على تردد «تنزيل بس» (SDL مثل B32) — المودم ما يقدر يتسجل عليه أبداً فينفصل عن البرج،
+   * وإذا ما فيه، تردد ما تستخدمه الشركات عندنا. بعدها نرجّع اللقطة كما كانت بالضبط (ونتأكد بالقراءة).
+   */
+  private reattachSnap: LockSnapshot | null = null;
+  private async reattachByBand(holdSecs: number) {
+    const cfg = await this.getBandConfig();
+    const PARK = [32, 75, 76, 29, 67, 13, 12, 17, 14, 66, 71, 2, 4, 25, 26, 18, 19, 21, 11];
+    const park = PARK.find(b => cfg.supported.includes(b));
+    if (!park) throw new Error('راوترك ما يسمح بالفصل عن البرج من التطبيق');
+    const snap = await this.readLockState();
+    this.reattachSnap = snap;
+    this.log('reattach: park on B' + park);
+    try {
+      await this.writeNetMode({ mode: '03', bands: [park] }).catch(e => this.log('park write:', (e as any)?.message ?? e));
+      await new Promise(r => setTimeout(r, holdSecs * 1000));
+    } finally {
+      let last: unknown;
+      for (let i = 0; i < 3; i++) {
+        try { await this.restoreLockState(snap); last = null; break; } catch (e) { last = e; await new Promise(r => setTimeout(r, 3000)); }
+      }
+      if (last) throw last instanceof Error ? last : new Error('ما قدرنا نرجّع إعدادك — اضغط «رجّع الإشارة»');
+      this.reattachSnap = null;
+    }
+  }
   /** لو الفصل علق في النص: نرجّع وضع الشبكة الأصلي */
   async wakeRadio() {
+    if (this.reattachSnap) {
+      await this.restoreLockState(this.reattachSnap);
+      this.reattachSnap = null;
+      return;
+    }
     if (!this.reattachOrig) return;
     const cur = tag(await this.get('net/net-mode'), 'NetworkMode');
     if (cur !== this.reattachOrig) await this.writeNetMode({ mode: this.reattachOrig });

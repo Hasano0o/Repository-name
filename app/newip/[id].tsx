@@ -86,9 +86,9 @@ export default function NewIp() {
         try { labOn = (await AsyncStorage.getItem(LAB_KEY)) === '1'; } catch {}
         if (!mounted.current) return;
         setLab(labOn);
-        // الراوتر قال قبل إنه ما يقدر ينفصل (ما فيه 2G/3G/SA في قائمة الأوضاع) — ما نجرّب كل مرة
+        // الراوتر قال قبل إنه ما يقدر ينفصل (لا وضع مؤقت ولا تردد نوقفه عليه) — ما نجرّب كل مرة
         let noDetach = false;
-        try { noDetach = (await AsyncStorage.getItem(`newip.nodetach.${r.id}`)) === '1'; } catch {}
+        try { noDetach = (await AsyncStorage.getItem(`newip.nodetach2.${r.id}`)) === '1'; } catch {}
         setCanDetach(!noDetach && det && (/huawei/i.test(r.driverId) || (labOn && /zte/i.test(r.driverId))));
         try { setSkipQuick((await AsyncStorage.getItem(`newip.reboot.${r.id}`)) === '1'); } catch {}
         try { setDetachFirst(labOn || (await AsyncStorage.getItem(`newip.detach.${r.id}`)) === '1'); } catch {}
@@ -225,7 +225,7 @@ export default function NewIp() {
                   // «ما يسمح بالفصل» = الموديل ما فيه وضع مؤقت (تقرير ٢٥ أكتوبر، هواوي 4G/5G) — مو عطل:
                   // ما نرسله تقرير، ونتذكره عشان المرة الجاية نروح لإعادة التشغيل على طول
                   if (/ما يسمح بالفصل/.test(String(e2?.message ?? e2))) {
-                    AsyncStorage.setItem(`newip.nodetach.${info.id}`, '1').catch(() => {});
+                    AsyncStorage.setItem(`newip.nodetach2.${info.id}`, '1').catch(() => {});
                     setCanDetach(false);
                   } else reportError('newip-detach', e2, info);
                   // لو علق في الوضع المؤقت نرجّعه قبل أي شي
