@@ -140,7 +140,11 @@ async function switchAp(io: ZteIo, chip: string, idx: string, on: boolean, extra
     const now = list.find(a => a.ChipIndex === chip && a.AccessPointIndex === idx);
     if (now?.AccessPointSwitchStatus === want) return;
   }
-  if (readOk) throw fail('تغيير الواي فاي', out);
+  if (!readOk) return;
+  // قبل: «الراوتر رفض … (success)» — يلخبط. الراوتر قبل الأمر وأعاد تشغيل الواي فاي بس المفتاح رجع مثل ما كان
+  // (U30 Pro، تقرير ٢٥ أكتوبر: شريحة ٢٫٤ «0» و٥ «1» بعد الأمر — غالباً جيب يشغّل نطاق واحد بالمرة)
+  if (ok(out)) throw new Error('الراوتر قبل الأمر وأعاد تشغيل الواي فاي، بس الشبكة رجعت مثل ما كانت — موديلك غالباً يغيّرها بطريقة ثانية (أو يشغّل نطاق واحد بالمرة). غيّرها من صفحة الراوتر، وأرسل «جهاز جديد» عشان نضيفها.');
+  throw fail('تغيير الواي فاي', out);
 }
 
 export const zteSetBandOn = (io: ZteIo, band: '2.4' | '5', on: boolean) => switchAp(io, band === '5' ? '1' : '0', '0', on);
