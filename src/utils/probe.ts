@@ -25,6 +25,10 @@ const TARGETS: Target[] = [
   { label: 'MikroTik — REST', path: '/rest/system/resource', brand: 'mikrotik', match: /routeros|version/i },
   { label: 'TP-Link', path: '/cgi-bin/luci/;stok=/login', brand: 'tplink', match: /tp-link|tplink|stok/i },
   { label: 'Nokia/Alcatel', path: '/cgi-bin/index.html', brand: 'nokia', match: /nokia|alcatel/i },
+  // Green Packet (زين 5G — سيرفر beego، واجهة /web/v1/): روابط startup تنقرا قبل الدخول
+  { label: 'Green Packet — المنتج', path: '/web/v1/startup/productinfo', brand: 'greenpacket', match: /product|model|version/i },
+  { label: 'Green Packet — حالة الدخول', path: '/web/v1/startup/usersstate', brand: 'greenpacket' },
+  { label: 'Green Packet — الواجهة', path: '/web/v1/startup/webui/visibilityinfo', brand: 'greenpacket' },
   { label: 'عام — status.json', path: '/status.json' },
   { label: 'عام — api/status', path: '/api/status' },
 ];
