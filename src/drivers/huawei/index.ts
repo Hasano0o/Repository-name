@@ -134,6 +134,8 @@ const isTokenError = (e: unknown) =>
 
 /** روابط موجودة في كل راوترات هواوي — لو ردّت 100003 فالجلسة فعلاً راحت */
 const CORE_GET = /^(device\/signal|monitoring\/status|device\/information|net\/net-mode)$/;
+/** أوامر حفظ بطيئة (المودم يعيد الاتصال وهو يطبّقها) — مهلتها أطول */
+const SLOW_POST = /^net\/(lock-freq|net-mode)$/;
 
 export class HuaweiDriver implements RouterDriver {
   id = 'huawei-lte';
@@ -254,6 +256,8 @@ export class HuaweiDriver implements RouterDriver {
       const k = await this.encKey();
       payload = huaweiEncrypt(xmlBody, k.n, k.e, n => Crypto.getRandomBytes(n));
     }
+    // net/lock-freq و net/net-mode ياخذون لين ٧٫٥ ث في H155/H158 5G (المودم يعيد الاتصال وهو يحفظ) —
+    // مهلة ٨ ث كانت تقطعهم ونحسبها «رفض» ونرجّع والراوتر لسا يطبّق (تقرير ٢٥ أكتوبر)
     const r = await this.http(this.url(p), {
       method: 'POST',
       headers: this.headers({
@@ -262,7 +266,7 @@ export class HuaweiDriver implements RouterDriver {
         __RequestVerificationToken: tok,
       }),
       body: payload,
-    });
+    }, SLOW_POST.test(p) ? 25_000 : undefined);
     this.captureTokens(r);
     const xml = await r.text();
     if (xml.includes('<error>')) {
@@ -277,6 +281,9 @@ export class HuaweiDriver implements RouterDriver {
       if (!retry && !token && (code === '125002' || code === '125003')) {
         this.queue = [];
         await new Promise(r => setTimeout(r, 1200));
+        // بعد أمر ما وصلنا رده، الراوتر ممكن غيّر SessionID في الرد اللي ضاع — الرموز بعدها كلها 125003
+        // لين نقرأ صفحة تجدد الكوكي (state-login يرسله). هذا اللي خلّى الأمر ينقبل بعد «الدخول» في التقرير
+        if (this.manualCookie) { try { await this.http(this.url('user/state-login'), { headers: this.headers() }).then(x => x.text()); } catch {} }
         return this.post(p, body, await this.freshToken(true), false, enc);
       }
       // الموديلات الجديدة (H158-381 / 5G CPE Pro 5) ترفض كتابة الواي فاي بدون تشفير: 9003 / 100005
@@ -853,6 +860,15 @@ export class HuaweiDriver implements RouterDriver {
       return { lte: [], nr: [], lteScell: [], nrScell: [] };
     }
   }
+  /** بعد أمر ما رد عليه: ننتظر الراوتر يرجع يرد (لين دقيقة) */
+  private async waitRouterBack(maxMs = 60_000): Promise<boolean> {
+    const until = Date.now() + maxMs;
+    while (Date.now() < until) {
+      await new Promise(r => setTimeout(r, 3000));
+      try { if ((await (await rawHttp(`http://${this.host}/api/webserver/SesTokInfo`, {}, 3000)).text()).includes('<TokInfo>')) return true; } catch {}
+    }
+    return false;
+  }
   private async readLockedBands(): Promise<number[]> {
     return (await this.readLockFreq()).lte;
   }
@@ -876,8 +892,25 @@ export class HuaweiDriver implements RouterDriver {
     }
     const body = await this.trimByMode(lteSection, nrSection);
     this.log('lock-freq sending', body);
-    await this.post('net/lock-freq', body);
+    let noReply = false;
+    try {
+      await this.post('net/lock-freq', body);
+    } catch (e) {
+      if (e instanceof HuaweiError) throw e;
+      // ما رد (مهلة/انقطاع) = غالباً قبل الأمر وهو يعيد اتصاله. ما نعيد الأمر بعمى — ننتظره ونتأكد بالقراءة
+      noReply = true;
+      this.queue = [];
+      this.log('lock-freq: no reply — waiting for router, verifying by read (no resend)');
+      await this.waitRouterBack();
+    }
     await new Promise(r => setTimeout(r, 2500));
+    if (noReply) {
+      try { await this.get('net/lock-freq'); } catch (e) {
+        const err = new Error('الراوتر استلم أمر الترددات وأعاد تشغيل اتصاله — ما نعيد الأمر بعمى، نرجّع إعدادك ونتأكد منه.');
+        (err as any).afterWrite = true;
+        throw err;
+      }
+    }
     const after = await this.readLockFreq();
     this.log('lock-freq readback lte', after.lte.join(',') || 'auto', 'nr', after.nr.join(',') || 'auto');
     const ok = (want: number[], got: number[]) => !want.length || want.every(b => got.includes(b));
@@ -1019,8 +1052,13 @@ export class HuaweiDriver implements RouterDriver {
       }
     }
     // التحقق: نقرأ من الراوتر نفسه — ما نصدّق «OK» من الطلب
-    const left = netModeDiff(d.netMode, parseNetModeFields(await this.get('net/net-mode')));
-    if (d.lockFreq) left.push(...lockDiffForMode(d.lockFreq, parseLockRaw(await this.get('net/lock-freq')), mode));
+    // فيه lock-freq: هو المرجع لترددات 4G، وLTEBand في net-mode نسخة يكتبها الراوتر بنفسه بعد إرجاع
+    // lock-freq (بصيغة «تلقائي» ثانية) — لو قفل 4G رجع مثل اللقطة ما نحاسب على LTEBand
+    const lfNow = d.lockFreq ? parseLockRaw(await this.get('net/lock-freq')) : null;
+    const lfLeft = d.lockFreq && lfNow ? lockDiffForMode(d.lockFreq, lfNow, mode) : [];
+    const skip = d.lockFreq && !lfLeft.some(x => x.startsWith('قفل 4G')) ? ['LTEBand'] : [];
+    const left = netModeDiff(d.netMode, parseNetModeFields(await this.get('net/net-mode')), skip);
+    left.push(...lfLeft);
     this.log('restore verify', left.join(',') || 'match');
     if (left.length) throw restoreMismatch(left);
   }

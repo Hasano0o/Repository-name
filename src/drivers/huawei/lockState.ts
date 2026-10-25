@@ -53,11 +53,16 @@ const NET_LABEL: Record<string, string> = {
   NetworkBand: 'ترددات 3G/2G',
 };
 
-/** الحقول اللي اختلفت عن اللقطة (أسماء بالعربي) — نقارن بس الحقول الموجودة في الاثنين */
-export function netModeDiff(snap: [string, string][], cur: [string, string][]): string[] {
+/**
+ * الحقول اللي اختلفت عن اللقطة (أسماء بالعربي) — نقارن بس الحقول الموجودة في الاثنين.
+ * skip: حقول ما نحاسب عليها (مثل LTEBand في الموديلات اللي فيها lock-freq: الراوتر نفسه يعيد كتابته
+ * بعد إرجاع lock-freq بصيغة «تلقائي» ثانية — H155/H158 5G، تقرير ٢٥ أكتوبر)
+ */
+export function netModeDiff(snap: [string, string][], cur: [string, string][], skip: string[] = []): string[] {
   const now = new Map(cur);
   const out: string[] = [];
   for (const [k, v] of snap) {
+    if (skip.includes(k)) continue;
     const c = now.get(k);
     if (c === undefined) continue;
     if (!sameField(k, v, c)) out.push(NET_LABEL[k] ?? k);

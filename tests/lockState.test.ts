@@ -84,6 +84,10 @@ test('هواوي: وضع الشبكة — الأقنعة بأصفار زايدة
   assert.deepEqual(netModeDiff(snap, trial), ['وضع الشبكة', 'ترددات 4G (وضع الشبكة)']);
   // جسم الإرجاع = نفس الحقول ← القراءة بعده تطابق
   assert.deepEqual(netModeDiff(snap, parseNetModeFields(resp(netModeBody(snap)))), []);
+  // lock-freq موجود: الراوتر يعيد كتابة LTEBand بعد إرجاع القفل — نتجاهله لو طلبنا
+  const rewritten = parseNetModeFields(resp(netModeBody(snap).replace(/<LTEBand>[^<]*<\/LTEBand>/, '<LTEBand>80000C5</LTEBand>')));
+  assert.deepEqual(netModeDiff(snap, rewritten), ['ترددات 4G (وضع الشبكة)']);
+  assert.deepEqual(netModeDiff(snap, rewritten, ['LTEBand']), []);
 });
 
 test('هواوي: وصف اللقطة', () => {
