@@ -25,3 +25,10 @@ test('MU5001 مقفول على المجرّب — بدون بدائل', () => {
   assert.deepEqual(p.pinned, { ad: 'wa+cr', lteMask: 'short', nrCmd: 'classic' });
   assert.equal(identifyZte('BD_XCBZHKMC801A ProV1.0.0B03', 'WEB_XCBZHKG5BV1.0.0B03').pinned, undefined);
 });
+
+test('ZTE U30 Pro: يتعرف من wa_inner_version بدون مسافة قبل Pro', () => {
+  const m = identifyZte('U30Pro_GEN_MEASV1.0.0B07', 'U30Pro_GEN_MEASV1.0.0B07');
+  assert.equal(m.id, 'u30-pro');
+  assert.equal(m.label, 'ZTE U30 Pro');
+  assert.equal(m.write, 'goform');
+});

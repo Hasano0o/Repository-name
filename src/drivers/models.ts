@@ -36,6 +36,8 @@ export const MODELS = {
   mc801a: P({ id: 'mc801a', label: 'ZTE MC801A', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
   mc888: P({ id: 'mc888', label: 'ZTE MC888', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
   mc889: P({ id: 'mc889', label: 'ZTE MC889', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
+  // U30 Pro (STC، U30Pro_GEN_MEASV1.0.0B07 · cr_version MU5358): صفحته goform القديمة (require.js) — تقرير ٢٥ أكتوبر، @Mjeeduk
+  u30Pro: P({ id: 'u30-pro', label: 'ZTE U30 Pro', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
   u10sPro: P({ id: 'u10s-pro', label: 'ZTE U10S Pro', brand: 'zte', tech: '4G', write: 'goform', nrLock: false, note: 'راوتر جيب 4G — ما فيه 5G' }),
   zteG5: P({ id: 'zte-g5', label: 'ZTE (G5)', brand: 'zte', tech: '5G', write: 'ubus', nrLock: true }),
   zte: P({ id: 'zte', label: 'ZTE', brand: 'zte', tech: '5G', write: 'goform' }),
@@ -50,6 +52,7 @@ export function identifyZte(wa?: string, web?: string, hw?: string): ModelProfil
   const s = `${wa ?? ''} ${hw ?? ''}`;
   if (/MU5001/i.test(s)) return MODELS.mu5001;
   if (/MU5250|U60/i.test(s)) return MODELS.u60Pro;
+  if (/U30\s*Pro|MU5358/i.test(s)) return MODELS.u30Pro;
   if (/U10S\s*Pro/i.test(s)) return MODELS.u10sPro;
   if (/MC801A\s*Pro/i.test(s)) return MODELS.mc801aPro;
   // صفحة G5 (WEB_…G5…) = عائلة جديدة: تقرا goform وتكتب ubus
