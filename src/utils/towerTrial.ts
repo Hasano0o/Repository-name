@@ -111,8 +111,12 @@ export async function runTowerTrials(r: SavedRouter, targets: TrialTarget[], pre
         } catch (e) {
           // رفض قبل أي أمر = ما تغيّر شي. غير كذا ممكن الراوتر تغيّر ← نرجّعه في الآخر
           if (!isNoChange(e)) touched.add(t.tech);
-          push({ t, outcome: 'rejected', samples: 0, note: 'ما قبل التثبيت' });
-          continue;
+          // الراوتر استلم الأمر وأعاد تشغيل اتصاله (هواوي H155/H158 Pro): غالباً تثبّت —
+          // نكمّل ننتظره ونقيس، والقياس نفسه يتأكد إنه على البرج المطلوب
+          if (!(e as any)?.afterWrite) {
+            push({ t, outcome: 'rejected', samples: 0, note: 'ما قبل التثبيت' });
+            continue;
+          }
         }
         step({ i: i + 1, n, name: t.name, step: 'ننتظر الاتصال...' });
         if (!(await waitOnline(r, 120000, cancelled))) {

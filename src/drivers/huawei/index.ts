@@ -1079,6 +1079,20 @@ export class HuaweiDriver implements RouterDriver {
       try {
         await this.post('net/lock-freq', body);
       } catch (e) {
+        // ما رد أبداً (مهلة/انقطاع): الراوتر غالباً قبل الأمر وأعاد تشغيل اتصاله (H155/H158 Pro يسوونها مع تثبيت البرج).
+        // قبل: كنا نرسل الصيغة اللي بعدها بعمى، وبعدها طبقة الجلسات تعيد الأمر كله — ٨ أوامر وراوتر يطيح ويقوم،
+        // وآخرها رسالة «تطبيق HUAWEI AI Life يطلّعك» وهو مو السبب. الحين: ننتظره يرجع ونوقف، والإرجاع يتأكد.
+        if (!(e instanceof HuaweiError)) {
+          this.log('cell-lock: no reply (router restarting?) — waiting, no resend');
+          const until = Date.now() + 60_000;
+          while (Date.now() < until) {
+            await new Promise(r => setTimeout(r, 3000));
+            try { if ((await (await rawHttp(`http://${this.host}/api/webserver/SesTokInfo`, {}, 3000)).text()).includes('<TokInfo>')) break; } catch {}
+          }
+          const err = new Error('الراوتر استلم أمر تثبيت البرج وأعاد تشغيل اتصاله (عادي في موديلك) — ما نعيد الأمر بعمى، نرجّع إعدادك ونتأكد منه.');
+          (err as any).afterWrite = true;
+          throw err;
+        }
         // الراوتر رد بخطأ صريح على هالصيغة — نجرّب الصيغة اللي بعدها
         if (!accepted && await this.lockFreqUnsupported(e)) throw noChange(UNSUPPORTED);
         lastErr = e;
