@@ -4,6 +4,7 @@
  * • فحص تلقائي للراوتر (اختياري) ينرفق مع الطلب — نفس «استكشاف جهاز» بدون كلمات مرور ولا MAC.
  * • ما فيه أيقونة جديدة: يفتح من «جهاز جديد · غير مدعوم؟» و«راوتري مو موجود» و«راوتري مو مدعوم؟».
  */
+import { collectRouterFiles, sendRouterFiles } from '../src/services/routerDump';
 import { ROUTER_HOSTS } from '../src/utils/routerHosts';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, Switch } from 'react-native';
@@ -130,6 +131,17 @@ export default function NewDeviceScreen() {
       probe || '(بدون فحص)',
     ].join('\n');
     const ok = await sendSupportReport('newdevice', text, { driverName: model.trim() });
+    // ملفات صفحة الراوتر كاملة (HTML + JS) — نعرف منها الدخول والروابط من أول طلب
+    if (ok && scan && found) {
+      try {
+        setBusy('أرسل ملفات صفحة الراوتر…');
+        const { files, skipped } = await collectRouterFiles(found, n => setBusy(`أجمع ملفات صفحة الراوتر… ${n}`));
+        if (files.length) {
+          setBusy(`أرسل ${files.length} ملف…`);
+          await sendRouterFiles(files, { model: model.trim(), host: found, skipped });
+        }
+      } catch {}
+    }
     setBusy('');
     if (ok) setSent(true);
     else Alert.alert('ما وصل', 'تأكد إن النت شغّال وجرّب مرة ثانية — أو كلّمنا على تليجرام مباشرة.', [

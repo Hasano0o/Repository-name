@@ -1208,6 +1208,76 @@ async def app_report(req: Request):
     return {"ok": True}
 
 
+# ═══════════════ ملفات صفحة راوتر جديد (طلب جهاز جديد) ═══════════════
+# التطبيق يرسل HTML + JS صفحة الراوتر العامة على دفعات (كل طلب < ١ ميقا) → نجمعها ونضغطها
+# ونرسلها للمالك في البوت كملف zip. ما فيها بيانات المستخدم (ملفات الصفحة قبل الدخول).
+DUMP_HITS: dict[str, list[float]] = {}
+DUMPS = DATA / "dumps"
+
+
+def _dump_name(p: str) -> str:
+    p = re.sub(r"[^\w./-]", "_", str(p or ""))[:160].lstrip("/")
+    parts = [x for x in p.split("/") if x not in ("", ".", "..")]
+    return "/".join(parts) or "file"
+
+
+@app.post("/live-api/app/dump")
+async def app_dump(req: Request):
+    import zipfile
+    ip = req.headers.get("x-real-ip") or (req.client.host if req.client else "?")
+    if not _limit(DUMP_HITS, ip, 120, 3600):
+        raise HTTPException(429, "كثير")
+    try:
+        b = await req.json()
+    except Exception:
+        raise HTTPException(400, "bad json")
+    did = re.sub(r"[^a-z0-9]", "", str(b.get("id") or ""))[:24]
+    if len(did) < 8:
+        raise HTTPException(400, "bad id")
+    d = DUMPS / did
+    d.mkdir(parents=True, exist_ok=True)
+    used = sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
+    for f in (b.get("files") or [])[:200]:
+        t = str(f.get("t") or "")
+        if used + len(t) > 20_000_000:
+            raise HTTPException(413, "كبير")
+        out = d / _dump_name(f.get("p"))
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(t, encoding="utf-8")
+        used += len(t)
+    if not b.get("done"):
+        return {"ok": True}
+    # نجمع الملفات المقسّمة (x.js.part1 + part2…) ونضغط الكل
+    parts: dict[str, list[Path]] = {}
+    for f in d.rglob("*.part*"):
+        m = re.match(r"(.+)\.part(\d+)$", f.name)
+        if m:
+            parts.setdefault(str(f.parent / m.group(1)), []).append(f)
+    for target, ps in parts.items():
+        ps.sort(key=lambda x: int(re.search(r"part(\d+)$", x.name).group(1)))
+        Path(target).write_text("".join(x.read_text(encoding="utf-8") for x in ps), encoding="utf-8")
+        for x in ps:
+            x.unlink()
+    model, host = _cl(b.get("model"), 60), _cl(b.get("host"), 40)
+    files = sorted(f for f in d.rglob("*") if f.is_file())
+    skipped = [str(x)[:80] for x in (b.get("skipped") or [])[:40]]
+    listing = "\n".join(f"{f.stat().st_size:>9,}  /{f.relative_to(d)}" for f in files)
+    readme = f"Bandly — ملفات صفحة الراوتر\nالموديل: {model}\nالعنوان: {host}\n\n{listing}\n\nمكتبات تخطيناها (معروفة):\n" + "\n".join(skipped)
+    zpath = DUMPS / f"router-{re.sub(r'[^A-Za-z0-9]+', '-', model)[:30] or 'x'}-{time.strftime('%m%d-%H%M')}.zip"
+    with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("README.txt", readme)
+        for f in files:
+            z.write(f, str(f.relative_to(d)))
+    shutil.rmtree(d, ignore_errors=True)
+    for old in sorted(DUMPS.glob("*.zip"))[:-40]:
+        old.unlink()
+    owner = _owner()
+    if owner:
+        cap = f"📦 ملفات صفحة راوتر جديد\n• الموديل: {model or '—'}\n• {len(files)} ملف · {zpath.stat().st_size // 1024} KB"
+        _tg("sendDocument", {"chat_id": owner, "caption": cap}, files={"document": (zpath.name, zpath.read_bytes())})
+    return {"ok": True, "files": len(files)}
+
+
 # ═══════════════ طلب فني من التطبيق ═══════════════
 # العميل يرسل مدينته ورقمه وش يحتاج → يوصل لكل الفنيين المعتمدين في مدينته (في البوت) وللمالك.
 REQ_HITS: dict[str, list[float]] = {}
