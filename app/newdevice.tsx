@@ -78,11 +78,15 @@ export default function NewDeviceScreen() {
         // الراوتر مدعوم أصلاً؟ (المستخدم ما عرف يضيفه) — نقوله بدل ما يرسل طلب على الفاضي
         setBusy('أتعرّف على راوترك…');
         const d = await detectDriver(found).catch(() => null);
-        const known = d && (d as any).id !== 'unknown' ? (d as any).name as string : null;
+        let known = d && (d as any).id !== 'unknown' ? (d as any).name as string : null;
+        if (known && d?.identify) {
+          // اسم الموديل الحقيقي من الراوتر نفسه — الملصق/العلبة أحياناً باسم ثاني (تقرير: «FiberHome LG6851F» وهو Huawei H155-381)
+          try { (d as any).host = found; const m = await d.identify(); if (m?.label && /\d/.test(m.label)) known = m.label; } catch {}
+        }
         if (known) {
           setBusy('');
           const go = await new Promise<'setup' | 'send' | 'cancel'>(res => Alert.alert('راوترك مدعوم أصلاً ✓',
-            `الراوتر اللي متصل فيه (${known}) يشتغل مع Bandly — ما يحتاج طلب.\n\nلو تقصد راوتر ثاني، اتصل بواي فايه أول وارجع هنا.`,
+            `الراوتر اللي متصل فيه هو ${known} — يشتغل مع Bandly وما يحتاج طلب.\n\nلو اسمه على العلبة أو الملصق غير كذا، عادي: الشركة تبيعه باسمها والراوتر من الداخل ${known}.\n\nلو تقصد راوتر ثاني، اتصل بواي فايه أول وارجع هنا.`,
             [
               { text: 'رجوع', style: 'cancel', onPress: () => res('cancel') },
               { text: 'أرسل على كل حال', onPress: () => res('send') },
