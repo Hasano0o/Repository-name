@@ -598,12 +598,14 @@ export interface Fingerprint {
   apis?: string[];
   /** كلمات تدل على طريقة الدخول/التشفير (sha256، md5، rsa…) */
   hints?: string[];
+  /** مقاطع من كود صفحة الراوتر العام حول الدخول/التشفير — عشان نعرف طريقة الدخول ونبني درايفر بدون لابتوب */
+  loginCode?: string[];
 }
 
 const ASSET_EXT = /\.(js|css|png|jpe?g|gif|svg|ico|woff2?|ttf|map|json|html?)$/i;
 
 /** يقرأ ملفات الجافاسكربت العامة للصفحة ويطلّع منها مسارات الـ API — هذي هي اللي نحتاجها لبناء درايفر */
-async function scanScripts(base: string, html: string): Promise<{ apis: string[]; hints: string[] }> {
+async function scanScripts(base: string, html: string): Promise<{ apis: string[]; hints: string[]; loginCode: string[] }> {
   const urls = new Set<string>();
   for (const m of html.matchAll(/<script[^>]+src=["']?([^"'\s>]+)/gi)) {
     const u = m[1].split('#')[0];
@@ -618,6 +620,8 @@ async function scanScripts(base: string, html: string): Promise<{ apis: string[]
   const list = [...urls].filter(u => /\.js(\?|$)/i.test(u) && !/tinymce|jquery|jtopo|vendor|polyfill|chunk-libs|elementUI/i.test(u)).slice(0, 40);
   const apis = new Set<string>();
   const hints = new Set<string>();
+  const loginCode: string[] = [];
+  let codeLen = 0;
   let total = 0;
   for (const u of list) {
     if (total > 8_000_000 || apis.size > 200) break;
@@ -636,12 +640,26 @@ async function scanScripts(base: string, html: string): Promise<{ apis: string[]
         const v = m[1];
         if (!ASSET_EXT.test(v) && !/^\/(static|node_modules|src)\//i.test(v)) apis.add(v);
       }
+      // مقاطع كود الدخول: حول رابط الدخول وحول دوال التشفير (كود الصفحة العام نفسه — ما فيه أي بيانات للمستخدم)
+      const file = u.split('/').pop() ?? u;
+      for (const re of [/user\/login|web_login|goformId=LOGIN|challenge_login|\/login["'`]/g, /setPublicKey|publicKey|encrypt\(|AES\.encrypt|CryptoJS\.\w+\(/g]) {
+        let hits = 0;
+        for (const m of js.matchAll(re)) {
+          if (codeLen > 9000 || hits >= 3) break;
+          const at = m.index ?? 0;
+          if (loginCode.some(c => c.startsWith(`[${file}@${Math.floor(at / 1200)}]`))) continue;
+          const snip = js.slice(Math.max(0, at - 600), at + 600).replace(/\s+/g, ' ');
+          loginCode.push(`[${file}@${Math.floor(at / 1200)}] ${snip}`);
+          codeLen += snip.length;
+          hits++;
+        }
+      }
       for (const k of ['sha256', 'sha1', 'md5', 'hmac', 'rsa', 'jsencrypt', 'aes', 'base64', 'pbkdf2', 'nonce', 'salt', 'token', 'csrf', 'websocket', 'mqtt']) {
         if (new RegExp(k, 'i').test(js)) hints.add(k);
       }
     } catch {} finally { clearTimeout(t); }
   }
-  return { apis: [...apis].sort().slice(0, 200), hints: [...hints] };
+  return { apis: [...apis].sort().slice(0, 200), hints: [...hints], loginCode };
 }
 
 export async function fingerprint(host: string): Promise<Fingerprint> {
@@ -661,7 +679,7 @@ export async function fingerprint(host: string): Promise<Fingerprint> {
         const html = (await res.text()).slice(0, 200_000);
         const uniq = (xs: string[]) => [...new Set(xs)];
         fp.scripts = uniq([...html.matchAll(/<script[^>]+src=["']?([^"'?#\s>]+)/gi)].map(m => m[1].split('/').slice(-2).join('/'))).slice(0, 15);
-        try { const sc = await scanScripts(base, html); if (sc.apis.length) fp.apis = sc.apis; if (sc.hints.length) fp.hints = sc.hints; } catch {}
+        try { const sc = await scanScripts(base, html); if (sc.apis.length) fp.apis = sc.apis; if (sc.hints.length) fp.hints = sc.hints; if (sc.loginCode.length) fp.loginCode = sc.loginCode; } catch {}
         // أسماء الخانات بس — ما ناخذ أي value
         fp.loginFields = uniq([...html.matchAll(/<input[^>]*>/gi)].map(m => {
           const tag = m[0];
@@ -687,5 +705,6 @@ export function fingerprintText(fp: Fingerprint): string[] {
     fp.lanMs !== undefined ? `رد الراوتر: ${fp.lanMs}ms` : '',
     fp.hints?.length ? `طريقة الدخول (تلميحات): ${fp.hints.join(' · ')}` : '',
     fp.apis?.length ? `مسارات API (${fp.apis.length}):\n    ${fp.apis.join('\n    ')}` : '',
+    fp.loginCode?.length ? `كود الدخول من صفحة الراوتر (${fp.loginCode.length} مقطع):\n    ${fp.loginCode.join('\n    ')}` : '',
   ].filter(Boolean);
 }
