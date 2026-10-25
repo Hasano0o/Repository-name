@@ -128,6 +128,8 @@ const inRange = (v: string | undefined, lo: number, hi: number): number | undefi
 const GOOD_FORMULA = new Map<string, string>();
 /** صيغة AD اللي نجحت لكل راوتر (بالذاكرة) */
 const AD_LEARNED = new Map<string, string>();
+/** راوترات جرّبنا عليها كل صيغ التوقيع وكلها انرفضت (MC801A) — ما نعيد ٩ محاولات كل مرة */
+const AD_ALL_FAILED = new Set<string>();
 
 /** تباعد الترددات الفرعية (SCS) لـ 5G — ترددات TDD العالية 30 والباقي 15 */
 const NR_SCS30 = new Set([34, 38, 39, 40, 41, 46, 47, 48, 77, 78, 79]);
@@ -574,10 +576,12 @@ export class ZteDriver implements RouterDriver {
     // نفس الرفض بعد الدخول = غالباً صيغة AD (مرة وحدة لكل راوتر — بعدها نعرف الصح)
     const prof = await this.identify();
     if (prof?.write === 'ubus') throw this.g5Error();
-    if (!this.adTried && !prof?.pinned) {
+    if (!this.adTried && !prof?.pinned && !AD_ALL_FAILED.has(this.host)) {
       this.adTried = true;
       const alt = await this.retryWithOtherAd(body);
       if (alt) return alt;
+      AD_ALL_FAILED.add(this.host);
+      this.log('AD: all formulas rejected');
     }
     return out;
   }
@@ -596,6 +600,9 @@ export class ZteDriver implements RouterDriver {
 
   private rejected(what: string, out: string): Error {
     const raw = (out || '').replace(/\s+/g, ' ').slice(0, 80);
+    if (AD_ALL_FAILED.has(this.host)) {
+      return new Error(`الراوتر رفض ${what} — راوترك يرفض كل أوامر التغيير من التطبيق (القراءة شغالة). نشتغل على دعم موديلك، أرسل تقرير من «الدعم» لو ما أرسلت (${raw || 'بدون رد'})`);
+    }
     return new Error(`الراوتر رفض ${what}. لو صفحة الراوتر مفتوحة في متصفح، سكّرها وجرّب (${raw || 'بدون رد'})`);
   }
 

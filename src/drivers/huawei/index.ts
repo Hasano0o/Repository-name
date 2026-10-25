@@ -767,6 +767,8 @@ export class HuaweiDriver implements RouterDriver {
       nrSupported,
       nrLocked,
       ...(has5g && !nrLockable ? { nrLockable: false } : {}),
+      // تثبيت ترددات 4G هنا يحوّل الراوتر لـ «4G فقط» (يطفي 5G) — الدمج مع 5G مستحيل على هالموديل
+      ...(has5g && !nrLockable && tag(cur, 'LTEBandOption') !== undefined ? { lteLockKills5g: true } : {}),
       // lock-freq يدعم «ثانوي بس» (Scell) لكل تردد
       ...(this.lockFreq && !this.lockFreqDead ? { bandRoles: true, lteScell, nrScell, lockKinds } : {}),
       mode: tag(cur, 'NetworkMode') ?? '00',
@@ -805,6 +807,20 @@ export class HuaweiDriver implements RouterDriver {
     this.log('net-mode readback', after.map(([k, v]) => `${k}=${v}`).join(' '));
     if (patch.mode !== undefined && getA('NetworkMode') !== patch.mode) {
       throw new Error('الراوتر قبل الطلب لكن ما غيّر نوع الشبكة');
+    }
+    // فك القفل وهو على وضع غير «4G فقط»: بعض الموديلات ترجع «OK» وتخلي القفل — نفكه على 4G فقط ونرجّع الوضع
+    if (patch.bands && !patch.bands.length && patch.mode === undefined && has('LTEBandOption')
+        && getA('LTEBandOption') === '1' && getA('NetworkMode') && getA('NetworkMode') !== '03') {
+      const back = getA('NetworkMode')!;
+      const f2 = after.map(([k, v]) => [k, k === 'NetworkMode' ? '03' : k === 'LTEBand' ? this.allLte : k === 'LTEBandOption' ? '0' : v] as [string, string]);
+      this.log('unlock via 4G-only', back);
+      await this.post('net/net-mode', f2.map(([k, v]) => `<${k}>${v}</${k}>`).join(''));
+      await new Promise(r => setTimeout(r, 1500));
+      const f3 = f2.map(([k, v]) => [k, k === 'NetworkMode' ? back : v] as [string, string]);
+      await this.post('net/net-mode', f3.map(([k, v]) => `<${k}>${v}</${k}>`).join(''));
+      await new Promise(r => setTimeout(r, 1500));
+      const fin = await this.readNetModeFields();
+      if (fin.find(f => f[0] === 'LTEBandOption')?.[1] === '1') throw new Error('الراوتر ما فك قفل ترددات 4G — افتح صفحة الراوتر وحوّل الشبكة لـ 4G واختر كل الترددات');
     }
     if (patch.bands && patch.bands.length && big(getA('LTEBand') ?? '') !== big(maskFromBands(patch.bands))) {
       throw new Error(getA('NetworkMode') === '00'
@@ -981,6 +997,17 @@ export class HuaweiDriver implements RouterDriver {
       this.log('restore net-mode', netModeBody(d.netMode));
       await this.post('net/net-mode', netModeBody(d.netMode));
       await new Promise(r => setTimeout(r, 2000));
+      // بعض الموديلات (H158 بدون lock-freq) ما تقبل تغيير ترددات 4G إلا وهي على «4G فقط»:
+      // ترجع نوع الشبكة وتخلي الترددات مقفلة. نرجّع الترددات على 4G فقط، وبعدها نوع الشبكة الأصلي
+      const stuck = netModeDiff(d.netMode, parseNetModeFields(await this.get('net/net-mode')));
+      if (mode && mode !== '03' && stuck.some(x => /4G/.test(x)) && d.netMode.some(f => f[0] === 'LTEBand')) {
+        const via03 = d.netMode.map(([k, v]) => [k, k === 'NetworkMode' ? '03' : v] as [string, string]);
+        this.log('restore net-mode via 4G-only', netModeBody(via03));
+        await this.post('net/net-mode', netModeBody(via03));
+        await new Promise(r => setTimeout(r, 2000));
+        await this.post('net/net-mode', netModeBody(d.netMode));
+        await new Promise(r => setTimeout(r, 2000));
+      }
     }
     if (d.lockFreq) {
       const cur = parseLockRaw(await this.get('net/lock-freq'));

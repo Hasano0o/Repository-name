@@ -141,6 +141,10 @@ export default function ComboScreen() {
     const origRoles = cfg.bandRoles ? { lteScell: cfg.lteScell ?? [], nrScell: cfg.nrScell ?? [] } : undefined;
     const label = `${lte.map(b => bandLabel('LTE', b)).join(' + ')}${nr === 'none' ? ' · بدون 5G' : Array.isArray(nr) ? ` + ${nr.map(b => bandLabel('NR', b)).join(' + ')}` : ' + أي 5G'}`;
     const orig = cfg;
+    if (nr !== 'none' && cfg.lteLockKills5g) {
+      Alert.alert('ما ينفع على راوترك', 'راوترك ما يثبّت ترددات 4G إلا وهو على «4G فقط» — يعني الـ 5G بيطفي، فدمج 4G مثبّت مع 5G مستحيل عليه.\n\nجرّب «بدون 5G»، أو خلّ 4G تلقائي والراوتر يدمج 5G لحاله.');
+      return;
+    }
     Alert.alert('طبّق الأساسي والثانوي', `${label}\n\nنقيس قبل وبعد، ولو صار أسوأ أو انقطع النت نرجّع إعدادك لحاله.`, [
       { text: 'إلغاء', style: 'cancel' },
       {
