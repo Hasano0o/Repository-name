@@ -12,7 +12,7 @@ import { isLanHost } from '../utils/host';
 import { LIVE_BASE } from './live';
 import { readAmdConfig, idToFile, findAmdIds, AmdConfig } from './amdRefs';
 
-const SKIP = /(jquery|vue(\.global|x|-router|-i18n)|element-plus|elementui|chunk-libs|echarts|tinymce|lottie|qrcode|axios\.min|jtopo|polyfill|bootstrap|font-?awesome|moment|lodash|highcharts|chart\.min|swiper|\.min\.js.*(forge|elliptic))/i;
+const SKIP = /(copyrightPage|opensource|privatePolicy|\/faq[\w-]*\.html|chunk-vendors|jquery|vue(\.global|x|-router|-i18n)|element-plus|elementui|chunk-libs|echarts|tinymce|lottie|qrcode|axios\.min|jtopo|polyfill|bootstrap|font-?awesome|moment|lodash|highcharts|chart\.min|swiper|\.min\.js.*(forge|elliptic))/i;
 const MAX_FILE = 1_500_000;
 const MAX_TOTAL = 8_000_000;
 const MAX_FILES = 150; // صفحات RequireJS (ZTE) فيها موديول لكل شاشة
@@ -39,6 +39,8 @@ export function resolvePath(ref: string, fromPath: string): string | null {
 export function findRefs(text: string): string[] {
   const refs = new Set<string>();
   for (const m of text.matchAll(/<script[^>]+src=["']?([^"'\s>]+)/gi)) refs.add(m[1]);
+  // Vue/Webpack: <link href=/js/chunk-xxxx.js rel=prefetch> (بدون علامات تنصيص) — فيها صفحات الإعدادات (OPPO T1a، ٢٦ أكتوبر)
+  for (const m of text.matchAll(/<link[^>]+href=["']?([^"'\s>]+\.js)(?:[?#][^"'\s>]*)?["']?/gi)) refs.add(m[1]);
   for (const m of text.matchAll(/["'`]([\w./-]{1,120}\.(?:js|html?))(?:[?#][^"'`]*)?["'`]/gi)) refs.add(m[1]);
   // Webpack: {"chunk-xxx":"hash"} + static/js/
   if (/static\/js\//.test(text)) {
