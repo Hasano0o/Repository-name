@@ -3,6 +3,7 @@ import { HuaweiDriver } from './huawei';
 import { ZteDriver } from './zte';
 import { ZteNgDriver } from './zteng';
 import { ZyxelDriver } from './zyxel';
+import { FiberhomeDriver } from './fiberhome';
 import { UnknownDriver } from './unknown';
 import { DeviceDriver } from './device';
 import { DemoDriver } from './demo';
@@ -23,6 +24,8 @@ const factories: (() => RouterDriver)[] = [
   () => new ZteNgDriver(),
   // زيكسل (صفحة Web-Based Configurator الجديدة) — قراءة بس للحين
   () => new ZyxelDriver(),
+  // FiberHome 5G CPE (واجهة Vue، /api/tmp/FHAPIS) — من ملفات صفحة حقيقية (٢٦ أكتوبر)، لسا ما انجرّب ميداني
+  () => new FiberhomeDriver(),
   () => new UnknownDriver(),
 ];
 

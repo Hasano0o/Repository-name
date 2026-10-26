@@ -9,7 +9,7 @@ export interface ModelProfile {
   id: string;
   /** الاسم اللي يشوفه المستخدم */
   label: string;
-  brand: 'zte' | 'huawei' | 'zyxel';
+  brand: 'zte' | 'huawei' | 'zyxel' | 'fiberhome';
   tech: '4G' | '5G';
   /** ZTE: طريقة الكتابة — goform (القديمة) أو ubus (أجهزة G5/الجيل الجديد) */
   write?: 'goform' | 'ubus';
