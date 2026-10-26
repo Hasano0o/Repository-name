@@ -153,3 +153,13 @@ test('FiberHome: لو جلب الأسماء فشل ← ملف خطأ واضح ب
   assert.ok(e);
   assert.match(e!.t, /is_encrypt: HTTP 403/);
 });
+
+test('جهاز جديد (Nokia — Angular): <base href="/web_whw/"> + قطع runtime', async () => {
+  const { baseHrefOf, angularChunks, resolvePath, findRefs } = require('../src/services/routerDump');
+  const html = '<base href="/web_whw/"><script src="runtime.d739df4d0fedb33c.js" type="module"></script><script src="main.da0b4dbf51457d52.js" type="module"></script>';
+  assert.equal(baseHrefOf(html), '/web_whw/');
+  assert.equal(baseHrefOf('<base href="/">'), null);
+  assert.deepEqual(findRefs(html).map((r: string) => resolvePath(r, '/web_whw/index.html')), ['/web_whw/runtime.d739df4d0fedb33c.js', '/web_whw/main.da0b4dbf51457d52.js']);
+  const rt = 'a.u=e=>(76===e?"common":e)+"."+{76:"0b3c3e1a2f4d5e6f",592:"a1b2c3d4e5f60718",common:"1122334455667788"}[e]+".js"';
+  assert.deepEqual(angularChunks(rt).sort(), ['592.a1b2c3d4e5f60718.js', '76.0b3c3e1a2f4d5e6f.js', 'common.1122334455667788.js']);
+});

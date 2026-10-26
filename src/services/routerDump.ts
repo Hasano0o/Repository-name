@@ -99,6 +99,26 @@ export function findRefs(text: string): string[] {
   return [...refs];
 }
 
+/** <base href="/web_whw/"> ← "/web_whw/" (محلي بس) */
+export function baseHrefOf(text: string): string | null {
+  const m = text.match(/<base[^>]+href=["']?([^"'\s>]+)/i);
+  if (!m || /^(https?:)?\/\//i.test(m[1])) return null;
+  const h = ('/' + m[1].replace(/^\/+/, '')).replace(/\/?$/, '/');
+  return h === '/' ? null : h;
+}
+/**
+ * Angular (runtime.*.js): الصفحات تنحمّل كقطع «<رقم>.<هاش>.js» من خريطة مثل {123:"0a1b2c3d4e5f6a7b",…}
+ * — نطلّع أسماء القطع عشان تنجمع (Nokia — تقرير ٢٧ أكتوبر).
+ */
+export function angularChunks(text: string): string[] {
+  if (!/\.u\s*=|"\.js"|\+"\.js"/.test(text)) return [];
+  const out = new Set<string>();
+  for (const map of text.matchAll(/\{((?:\s*(?:\d+|"[\w-]+"|[A-Za-z_$][\w$]*)\s*:\s*"[0-9a-f]{8,20}"\s*,?)+)\}/g)) {
+    for (const m of map[1].matchAll(/(\d+|"[\w-]+"|[A-Za-z_$][\w$]*)\s*:\s*"([0-9a-f]{8,20})"/g)) out.add(`${m[1].replace(/"/g, '')}.${m[2]}.js`);
+  }
+  return [...out].slice(0, 120);
+}
+
 /** احتياط: ما نرسل رموز جلسة أو قيم خانات حتى لو موجودة في الصفحة */
 export function scrub(text: string): string {
   return text
@@ -134,6 +154,8 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
   let homeSample = '';
   /** إعداد RequireJS (المسار الأساسي + paths) — لو الصفحة تستخدمه */
   let amd: AmdConfig | null = null;
+  /** مجلد <base href> لو الصفحة تحدده */
+  let appBase = '';
   while (queue.length && files.length < MAX_FILES && total < MAX_TOTAL) {
     const p = queue.shift()!;
     if (seen.has(p)) continue;
@@ -150,8 +172,13 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
     onStep?.(files.length);
     // FiberHome LG6851F: checkBrowser.js يحمّل polyfill.min.js (فيه $post والتشفير) بكود مخفي (hex) — ما يبان كرابط
     if (/_0xdx2|DO_WEB_LOGIN/.test(r.text) && !seen.has('/plugins/polyfill.min.js') && !queue.includes('/plugins/polyfill.min.js')) queue.push('/plugins/polyfill.min.js');
-    for (const ref of findRefs(r.text)) {
-      const rp = resolvePath(ref, p === '/' ? '/index.html' : p);
+    // <base href="/web_whw/"> (Nokia — Angular): الروابط النسبية تنحسب منه مو من مكان الصفحة
+    const bh = baseHrefOf(r.text);
+    if (bh) appBase = bh;
+    // ملفات السكربت داخل مجلد الـ base تحمّل قطعها من نفس المجلد (publicPath)
+    const from = bh ? bh + 'index.html' : p === '/' ? '/index.html' : p;
+    for (const ref of [...findRefs(r.text), ...angularChunks(r.text)]) {
+      const rp = resolvePath(ref, from);
       if (rp && !seen.has(rp) && !queue.includes(rp)) queue.push(rp);
     }
     amd = readAmdConfig(r.text, amd);
