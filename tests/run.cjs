@@ -34,6 +34,7 @@ const files = [
   'src/drivers/oppo/index.ts',
   'src/drivers/greenpacket/parse.ts',
   'src/drivers/greenpacket/index.ts',
+  'src/drivers/zteufi/index.ts',
   'src/services/amdRefs.ts',
   'src/drivers/zte/writeResult.ts',
   // درايفر ZTE كامل (للاختبار بالمحاكاة — AsyncStorage يتبدّل ببديل داخل الاختبار)

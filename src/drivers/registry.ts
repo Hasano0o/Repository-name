@@ -6,6 +6,7 @@ import { ZyxelDriver } from './zyxel';
 import { FiberhomeDriver } from './fiberhome';
 import { OppoDriver } from './oppo';
 import { GreenPacketDriver } from './greenpacket';
+import { ZteUfiDriver } from './zteufi';
 import { UnknownDriver } from './unknown';
 import { DeviceDriver } from './device';
 import { DemoDriver } from './demo';
@@ -24,6 +25,8 @@ const factories: (() => RouterDriver)[] = [
   () => new ZteDriver(),
   // ZTE الجيل الجديد (U60 Pro / MU5250 …) — ubus بدل goform. قراءة بس للحين
   () => new ZteNgDriver(),
+  // ZTE القديم (راوترات الجيب 4G «UFI» — بدون wa_inner_version، دخول بـ username) — درايفر لحاله عشان ما يلمس MU5001
+  () => new ZteUfiDriver(),
   // زيكسل (صفحة Web-Based Configurator الجديدة) — قراءة بس للحين
   () => new ZyxelDriver(),
   // FiberHome 5G CPE (واجهة Vue، /api/tmp/FHAPIS) — من ملفات صفحة حقيقية (٢٦ أكتوبر)، لسا ما انجرّب ميداني
