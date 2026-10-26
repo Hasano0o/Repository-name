@@ -939,7 +939,7 @@ export default function RouterDashboard() {
                   <Text style={s.moreLbl}>آي بي جديد</Text>
                 </Pressable>
               )}
-              {['huawei-lte', 'zte', 'demo'].includes(info.driverId) && (
+              {['huawei-lte', 'zte', 'fiberhome', 'demo'].includes(info.driverId) && (
                 <Pressable style={[s.moreTile, { backgroundColor: tBg('#4338ca12'), borderColor: tBd('#4338ca35') }]} onPress={() => router.push(`/control/${info.id}` as Href)}>
                   <View style={[s.moreIcon, { backgroundColor: tBg('#4338ca') }]}>
                     <Icon name="settings" size={18} color={tFg('#fff')} />

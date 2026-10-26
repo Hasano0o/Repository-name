@@ -313,7 +313,7 @@ export default function ControlCenter() {
     }
   };
 
-  const empty = ex && !ex.nat && ex.upnp === undefined && !ex.dmz && !ex.ledNight && !ex.autoReboot && !ex.guest && !ex.bands && !ex.timeRules && !ex.urlBlocks && ex.autoRecover === undefined && ex.wifiSleep === undefined && !ex.health;
+  const empty = ex && !ex.nat && ex.upnp === undefined && !ex.dmz && !ex.ledNight && ex.led === undefined && !ex.autoReboot && !ex.guest && !ex.bands && !ex.timeRules && !ex.urlBlocks && ex.autoRecover === undefined && ex.wifiSleep === undefined && !ex.health;
   const games = ex && (ex.nat || ex.upnp !== undefined || ex.dmz);
 
   return (
@@ -494,6 +494,15 @@ export default function ControlCenter() {
               </Section>
             )}
 
+            {ex?.led !== undefined && !ex?.ledNight && (
+              <Section icon="moon" title="الأنوار" caption="أنوار الراوتر — النت يشتغل عادي لو طفّيتها" colors={['#6366f1', '#312e81']}>
+                <Row title="أنوار الراوتر" last
+                  sub={ex.led ? 'شغّالة' : 'طافية — النت شغّال عادي'}
+                  right={<Toggle value={ex.led} busy={busy === 'led'} color="#4f46e5"
+                    onChange={v => apply('led', d => d.setLed(v), x => x.led === v)} />} />
+              </Section>
+            )}
+
             {ex?.ledNight && (
               <Section icon="moon" title="وضع الليل" caption="أنوار الراوتر تنطفي وقت النوم" colors={['#6366f1', '#312e81']}>
                 <Row title="إطفاء الأنوار بالليل" last
@@ -557,7 +566,9 @@ export default function ControlCenter() {
                 )}
                 {ex?.autoReboot && <Row title="إعادة تشغيل تلقائية" last
                   sub={ex.autoReboot.on
-                    ? `كل ${ex.autoReboot.everyDays} أيام، وقت ما أحد يستخدم النت (بين ${hhmm(ex.autoReboot.from)} و ${hhmm(ex.autoReboot.to)} الفجر).`
+                    ? (ex.autoReboot.from === ex.autoReboot.to
+                      ? `${ex.autoReboot.everyDays === 1 ? 'كل يوم' : `كل ${ex.autoReboot.everyDays} أيام تقريباً`} الساعة ${hhmm(ex.autoReboot.from)}.`
+                      : `كل ${ex.autoReboot.everyDays} أيام، وقت ما أحد يستخدم النت (بين ${hhmm(ex.autoReboot.from)} و ${hhmm(ex.autoReboot.to)} الفجر).`)
                     : 'طافية. ننصح تشغّلها — تنظّف ذاكرة الراوتر وتمنع البطء مع الأيام.'}
                   right={<Toggle value={ex.autoReboot.on} busy={busy === 'reboot'} color="#0f766e"
                     onChange={v => apply('reboot', d => d.setAutoReboot(v), x => x.autoReboot?.on === v)} />} />}

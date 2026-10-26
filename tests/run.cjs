@@ -27,6 +27,7 @@ const files = [
   'src/drivers/zyxel/crypto.ts',
   'src/drivers/fiberhome/crypto.ts',
   'src/drivers/fiberhome/nodes.ts',
+  'src/drivers/fiberhome/extras.ts',
   'src/drivers/fiberhome/index.ts',
   'src/services/amdRefs.ts',
   'src/drivers/zte/writeResult.ts',

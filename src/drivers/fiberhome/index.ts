@@ -7,10 +7,11 @@
  *   أسماء الإعدادات من get_xmlnode_js_file (./nodes).
  *
  * النسخة الأولى: الإشارة، الأبراج المجاورة، تثبيت الترددات (4G/5G)، وضع الشبكة، تثبيت البرج، إعادة التشغيل.
+ * مركز التحكم (./extras): NAT، UPnP، DMZ، الأنوار، إعادة التشغيل المجدولة، شبكات 2.4/5، اسم الواي فاي وكلمته، ضبط المصنع.
  * كل تغيير نتأكد منه بإعادة القراءة، وفيه لقطة + إرجاع متحقق منه (مثل هواوي و ZTE).
  * لسا ما انجرّب على راوتر حقيقي — أي رد غريب يطلع برسالة فيها اسم الأمر عشان يوصلنا في التقرير.
  */
-import { RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, BandConfig, ActiveLock, CellLockTarget, CellLockState, DeviceDetails } from '../types';
+import { RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, BandConfig, ActiveLock, CellLockTarget, CellLockState, DeviceDetails, RouterExtras } from '../types';
 import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { noChange } from '../noChange';
 import { http } from '../http';
@@ -21,6 +22,7 @@ import {
   parseNodeFile, missing, NEED, paths, RF_FIELDS, signalFrom, neighborsFrom,
   LTE_BANDS, NR_BANDS, parseBands, joinBands, FH_TO_CODE, CODE_TO_FH, MODES, loginError,
 } from './nodes';
+import { EX_FIELDS, EX_NEED, WEEK, wlanRows, extrasFrom, has5g, main5Index, ssidError, wifiPassError, isIPv4, WlanRow } from './extras';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 interface CellRow { idx: string; act: string; arfcn: string; pci: string }
@@ -369,5 +371,139 @@ export class FiberhomeDriver implements RouterDriver {
       { enable: '0', NetworkMode: '3', ENDC: b.endc },
     );
     try { await this.unlockCell(); } catch {}
+  }
+
+  // ═══ مركز التحكم (./extras — من صفحات الراوتر نفسها) ═══
+  private async setSingle(url: string, value: string) {
+    const r = await this.post('set_single_by_xmlnode', { url, value });
+    if (r && typeof r === 'object' && (r.success === 'false' || r.success === false)) throw new Error('set_single_by_xmlnode: الراوتر رفض');
+  }
+  /** قراءة كم خانة — لو الطلب المجمّع فشل نقرأها وحدة وحدة (خانة مو موجودة في موديل ما تطيّح الباقي) */
+  private async readMany(q: Record<string, string>): Promise<Record<string, unknown>> {
+    if (!Object.keys(q).length) return {};
+    try {
+      const r = await this.post('get_value_by_xmlnode', q);
+      if (r && typeof r === 'object') return r;
+    } catch {}
+    const out: Record<string, unknown> = {};
+    for (const [k, p] of Object.entries(q)) {
+      try { const r = await this.post('get_value_by_xmlnode', { [k]: p }); if (r && typeof r === 'object' && k in r) out[k] = r[k]; } catch {}
+    }
+    return out;
+  }
+  private async wlan(n: Record<string, string>): Promise<WlanRow[]> {
+    const r = await this.post('get_xml_childnode_value', {
+      url: n.x_WLANConfiguration_obj,
+      node: { RadioEnabled: n.x_wifi_RadioEnabled, SSID: n.x_wifi_SSID, BeaconType: n.x_wifi_BeaconType, Enable: n.x_wifi_Enable },
+    });
+    return wlanRows(r);
+  }
+  private async wifiCtx() {
+    const n = await this.need(EX_NEED.wifi, 'إعدادات الواي فاي');
+    const info = await this.deviceInfo().catch(() => ({} as Record<string, any>));
+    const extra: Record<string, string> = {};
+    if (n.x_MainSSIDIndex_58G_obj) extra.main5 = n.x_MainSSIDIndex_58G_obj;
+    if (n.x_wifi_WifiBandSteering_obj && n.x_BandSteering_Enable) extra.steer = n.x_wifi_WifiBandSteering_obj + n.x_BandSteering_Enable;
+    const v = await this.readMany(extra);
+    return { n, model: String(info.model_name ?? ''), wifi5: info.wifi5, main5: main5Index(v.main5), steer: String(v.steer ?? ''), rows: await this.wlan(n) };
+  }
+
+  async getExtras(): Promise<RouterExtras> {
+    const n = await this.loadNodes();
+    const info = await this.deviceInfo().catch(() => ({} as Record<string, any>));
+    const q = paths(n, EX_FIELDS);
+    if (n.x_MainSSIDIndex_58G_obj) q.main5 = n.x_MainSSIDIndex_58G_obj;
+    const v = await this.readMany(q);
+    let rows: WlanRow[] | null = null;
+    if (!missing(n, EX_NEED.wifi).length) { try { rows = await this.wlan(n); } catch {} }
+    let uptime: unknown;
+    try { uptime = (await this.post('get_cmd_result_web', { key: 'UPTIME' }))?.result; } catch {}
+    const ex = extrasFrom(v, rows, { model: String(info.model_name ?? ''), wifi5: info.wifi5, main5: v.main5, uptime });
+    // المنافذ المفتوحة: الصفحة تكتب Request أول (تحديث الجدول) ثم تقرأ
+    if (ex.upnp && !missing(n, EX_NEED.upnpRules).length) {
+      try {
+        await this.setValues({ Request: n.x_DeviceInfo_obj + n.x_UPNP_Request }, { Request: 'Request' });
+        const r = await this.post('get_xml_childnode_value', {
+          url: n.x_DeviceInfo_obj + n.x_UPNPRULE_Obj,
+          node: { IPAddress: n.x_UPNPRULE_IPAddress, Protocol: n.x_UPNPRULE_Protocol, ExternalPort: n.x_UPNPRULE_ExternalPort, Description: n.x_UPNPRULE_Description },
+        });
+        const arr: any[] = Array.isArray(r?.data) ? r.data : [];
+        ex.upnpMaps = arr.filter(e => e?.IPAddress).map(e => ({ app: String(e.Description ?? ''), ip: String(e.IPAddress), port: String(e.ExternalPort ?? ''), proto: String(e.Protocol ?? '') }));
+      } catch {}
+    }
+    return ex;
+  }
+
+  async setNat(t: 'cone' | 'symmetric'): Promise<void> {
+    const n = await this.need(EX_NEED.nat, 'نوع الـ NAT');
+    await this.setValues({ NATType: n.x_Firewall_obj + n.x_Firewall_NATType }, { NATType: t === 'cone' ? '2' : '1' });
+  }
+  async setUpnp(on: boolean): Promise<void> {
+    const n = await this.need(EX_NEED.upnp, 'UPnP');
+    await this.setValues({ upnp: n.x_DeviceInfo_obj + n.x_UPNP_Enable }, { upnp: on ? '1' : '0' });
+  }
+  async setDmz(on: boolean, ip: string): Promise<void> {
+    const n = await this.need(EX_NEED.dmz, 'DMZ');
+    const a = String(ip ?? '').trim();
+    if (on && !isIPv4(a)) throw noChange('عنوان الجهاز غير صحيح — ما غيّرنا شي.');
+    await this.setValues(
+      { DMZEnable: n.x_Firewall_obj + n.x_Firewall_DMZEnable, DMZIP: n.x_Firewall_obj + n.x_Firewall_DMZIP },
+      { DMZEnable: on ? '1' : '0', DMZIP: a },
+    );
+  }
+  async setLed(on: boolean): Promise<void> {
+    const n = await this.need(EX_NEED.led, 'أنوار الراوتر');
+    await this.setSingle(n.x_DeviceInfo_obj + n.x_DeviceInfo_LedSwitch, on ? '1' : '0');
+  }
+  async setAutoReboot(on: boolean): Promise<void> {
+    const n = await this.need(EX_NEED.reboot, 'إعادة التشغيل التلقائية');
+    const o = n.x_TimedReboot_obj;
+    if (!on) { await this.setValues({ Enable: o + n.x_TimedReboot_enable }, { Enable: '0' }); return; }
+    const cur = await this.readMany({ days: o + n.x_TimedReboot_repeatdays, time: o + n.x_TimedReboot_time });
+    const days = String(cur.days ?? '').split(',').map(x => x.trim()).filter(x => WEEK.includes(x));
+    const time = String(cur.time ?? '').trim();
+    // الافتراضي في الصفحة كل يوم 00:00 — وقت سهر عندنا، فنخليه ٤ الفجر لو ما اختار المستخدم وقت
+    await this.setValues(
+      { Enable: o + n.x_TimedReboot_enable, repeatDays: o + n.x_TimedReboot_repeatdays, time: o + n.x_TimedReboot_time },
+      { Enable: '1', repeatDays: (days.length ? days : WEEK).join(','), time: /^\d{1,2}:\d{2}$/.test(time) && time !== '00:00' ? time : '04:00' },
+    );
+  }
+  async setBandOn(band: '2.4' | '5', on: boolean): Promise<void> {
+    const c = await this.wifiCtx();
+    if (band === '5' && !has5g(c.model, c.wifi5)) throw noChange('راوترك ما فيه واي فاي ٥ جيجا.');
+    if (c.steer === '1') throw noChange('«دمج الشبكتين» شغّال في راوترك — صفحة الراوتر نفسها ما تسمح تطفي شبكة وهو شغّال. ما غيّرنا شي.');
+    const idx = band === '2.4' ? '1' : c.main5;
+    if (!c.rows.some(r => r.idx === idx)) throw noChange(`ما لقينا شبكة ${band === '5' ? '٥' : '٢.٤'} جيجا في إعدادات راوترك — ما غيّرنا شي.`);
+    await this.setSingle(c.n.x_WLANConfiguration_obj + idx + '.' + c.n.x_wifi_RadioEnabled, on ? '1' : '0');
+  }
+  async setWifiNames(names: { index: string; name: string }[], password?: string): Promise<void> {
+    const c = await this.wifiCtx();
+    const w = c.n.x_WLANConfiguration_obj;
+    const url: Record<string, string> = {}, value: Record<string, string> = {};
+    for (const x of names) {
+      const r = c.rows.find(y => y.idx === String(x.index));
+      if (!r) throw noChange('ما لقينا هالشبكة في راوترك — ما غيّرنا شي.');
+      const nm = x.name.trim();
+      if (nm === r.ssid) continue;
+      const err = ssidError(nm);
+      if (err) throw noChange(err + ' ما غيّرنا شي.');
+      url['SSID' + r.idx] = w + r.idx + '.' + c.n.x_wifi_SSID;
+      value['SSID' + r.idx] = nm;
+    }
+    if (password) {
+      const err = wifiPassError(password);
+      if (err) throw noChange(err + ' ما غيّرنا شي.');
+      if (!c.n.x_wifi_PreSharedKey) throw noChange('ما لقينا خانة كلمة مرور الواي فاي في إعدادات راوترك — ما غيّرنا شي.');
+      const sec = names.map(x => c.rows.find(y => y.idx === String(x.index))).filter((r): r is WlanRow => !!r && !!r.beacon && r.beacon !== 'None');
+      if (!sec.length) throw noChange('شبكتك مفتوحة بدون حماية — فعّل الحماية من صفحة الراوتر أول، وبعدها غيّر كلمة المرور من هنا. ما غيّرنا شي.');
+      for (const r of sec) { url['PSK' + r.idx] = w + r.idx + '.' + c.n.x_wifi_PreSharedKey; value['PSK' + r.idx] = password; }
+    }
+    if (!Object.keys(url).length) return;
+    await this.setValues(url, value);
+  }
+  async factoryReset(): Promise<void> {
+    try { await this.post('do_cmd_web', { key: 'RECORD_MESSAGE_WEB' }); } catch {}
+    const r = await this.post('do_cmd_web', { key: 'UBUS_RESTORE_MODE_2' });
+    if (r && typeof r === 'object' && (r.success === 'false' || r.success === false)) throw new Error('UBUS_RESTORE_MODE_2: الراوتر رفض ضبط المصنع');
   }
 }

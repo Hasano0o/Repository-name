@@ -51,6 +51,8 @@ export interface RouterExtras {
   nat?: 'cone' | 'symmetric';
   upnp?: boolean;
   dmz?: { on: boolean; ip: string };
+  /** أنوار الراوتر شغّالة؟ (تشغيل/إطفاء بدون جدول — FiberHome) */
+  led?: boolean;
   /** إطفاء أنوار الراوتر بالليل — الوقت HH:MM */
   ledNight?: { on: boolean; start: string; end: string };
   /** إعادة تشغيل تلقائية — from/to بالدقائق من منتصف الليل */
@@ -362,6 +364,7 @@ export interface RouterDriver {
   setUpnp?(on: boolean): Promise<void>;
   setDmz?(on: boolean, ip: string, mac?: string): Promise<void>;
   setLedNight?(on: boolean, start: string, end: string): Promise<void>;
+  setLed?(on: boolean): Promise<void>;
   setAutoReboot?(on: boolean): Promise<void>;
   setGuest?(on: boolean, offHours: number): Promise<void>;
   setBandOn?(band: '2.4' | '5', on: boolean): Promise<void>;
