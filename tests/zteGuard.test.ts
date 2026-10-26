@@ -104,3 +104,14 @@ test('safeApply: أمر انمنع قبل الإرسال ← ما فيه «رج�
   assert.equal(out.skipRevert, true, 'لازم يتخطى الإرجاع والفك — ما انرسل شي');
   assert.deepEqual(posts.filter(p => !['LOGIN', 'LOGOUT', 'GOFORM_LOGOUT'].includes(p)), []);
 });
+
+test('U30 Pro: الدخول والخروج مسموحة (ضرورية للجلسة) — وأمر التغيير ممنوع', async () => {
+  const posts = router('u30');
+  const d = await driver();
+  for (const id of ['LOGIN', 'LOGOUT', 'GOFORM_LOGOUT']) await d.assertWritable(id);
+  await d.logout();
+  assert.ok(posts.includes('LOGOUT'), `الخروج ما انرسل: ${posts.join(',')}`);
+  let err: any;
+  try { await d.assertWritable('BAND_SELECT'); } catch (e) { err = e; }
+  assert.equal(err?.noChange, true);
+});
