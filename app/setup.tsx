@@ -11,7 +11,7 @@
  */
 import { ROUTER_HOSTS } from '../src/utils/routerHosts';
 import { useEffect, useRef, useState, ReactNode } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform, ScrollView } from 'react-native';
 import { View, Text, TextInput, Pressable } from '../src/i18n/rn';
 import { router, Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,18 +24,30 @@ import { measureLatency, gameScore, scoreWord, selectedRegion } from '../src/uti
 import { Icon, IconName } from '../src/ui/Icon';
 import { C, R, S, tBg, tBd, tFg } from '../src/ui/theme';
 import { sheet } from '../src/i18n';
+import { reportError } from '../src/services/errors';
 
 /** العناوين المشهورة: هواوي · ZTE/تي بي لينك · أغلب الراوترات · بعض ZTE وزين · شاومي */
 const HOSTS = ROUTER_HOSTS;
 
 type Step = 'wifi' | 'search' | 'notfound' | 'hub' | 'password' | 'login' | 'done';
 
-/** فيه جهاز يرد على هالعنوان؟ (أي رد HTTP يكفي) — سريع، عشان ما ننتظر مهلة كل نوع راوتر على عنوان ميت */
-async function answers(host: string, ms = 2000): Promise<boolean> {
+/** فيه جهاز يرد على هالعنوان؟ (أي رد HTTP يكفي) — سريع، عشان ما ننتظر مهلة كل نوع راوتر على عنوان ميت.
+ *  نرجّع كمان كم أخذ وهل انقطع بالمهلة: لو كل العناوين «فشلت فوراً» في الآيفون = غالباً «الشبكة المحلية» مقفولة لـ Bandly */
+interface Probe { host: string; ok: boolean; ms: number; timedOut: boolean }
+async function probe(host: string, ms = 2500): Promise<Probe> {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), ms);
-  try { await fetch(`http://${host}/`, { signal: ctrl.signal }); return true; } catch { return false; } finally { clearTimeout(t); }
+  const t0 = Date.now();
+  let timedOut = false;
+  const t = setTimeout(() => { timedOut = true; ctrl.abort(); }, ms);
+  try { await fetch(`http://${host}/`, { signal: ctrl.signal }); return { host, ok: true, ms: Date.now() - t0, timedOut: false }; }
+  catch { return { host, ok: false, ms: Date.now() - t0, timedOut }; }
+  finally { clearTimeout(t); }
 }
+const answers = async (host: string, ms = 2000) => (await probe(host, ms)).ok;
+
+/** ليش ما لقينا الراوتر:
+ *  unknown = جهاز ردّ بس ما عرفنا نوعه (مو «مو متصل»!) · perm = آيفون والكل فشل فوراً (الشبكة المحلية مقفولة) · none = ولا رد */
+type Miss = { why: 'unknown' | 'perm' | 'none'; hosts: string[] };
 
 function Bubble({ children, tone }: { children: ReactNode; tone?: 'ok' | 'warn' }) {
   return (
@@ -68,6 +80,8 @@ export default function SetupScreen() {
   const [pw, setPw] = useState('');
   const [show, setShow] = useState(false);
   const [err, setErr] = useState('');
+  const [miss, setMiss] = useState<Miss>({ why: 'none', hosts: [] });
+  const reported = useRef(false);
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
 
@@ -76,7 +90,8 @@ export default function SetupScreen() {
     setStep('search'); setErr('');
     setStatus('أدوّر على راوترك…');
     // كل العناوين مع بعض (ثانيتين) ← بعدها نتعرّف على النوع بس في اللي ردّ
-    const alive2 = (await Promise.all(HOSTS.map(async h => ((await answers(h)) ? h : null)))).filter(Boolean) as string[];
+    const probes = await Promise.all(HOSTS.map(h => probe(h)));
+    const alive2 = probes.filter(p => p.ok).map(p => p.host);
     let unsupported = false;
     for (const h of alive2) {
       if (!alive.current) return;
@@ -92,8 +107,18 @@ export default function SetupScreen() {
       } catch {}
     }
     if (!alive.current) return;
-    setErr(unsupported ? 'لقيت راوتر، بس نوعه للحين مو مدعوم بالكامل — جرّب «راوتري مو مدعوم؟» تحت ونضيفه.' : '');
+    // الكل فشل بسرعة (بدون ما ينتظر المهلة) — في الآيفون هذا شكل «الشبكة المحلية» المقفولة
+    const fast = probes.every(p => !p.ok && !p.timedOut && p.ms < 1200);
+    const m: Miss = alive2.length ? { why: 'unknown', hosts: alive2 } : { why: Platform.OS === 'ios' && fast ? 'perm' : 'none', hosts: [] };
+    setMiss(m);
+    setErr(unsupported && !alive2.length ? 'لقيت راوتر، بس نوعه للحين مو مدعوم بالكامل — جرّب «راوتري مو مدعوم؟» تحت ونضيفه.' : '');
     setStep('notfound');
+    // تقرير مرة وحدة: وش ردّ ووش ما ردّ (عناوين وأوقات بس — بدون أي بيانات شخصية)
+    if (!reported.current) {
+      reported.current = true;
+      const slow = probes.filter(p => p.timedOut).length;
+      reportError('setup', `ما لقينا الراوتر: ${m.why} · ردّ: ${alive2.join(',') || 'ولا واحد'} · مهلة ${slow}/${probes.length} · فشل سريع ${fast ? 'كله' : 'لا'}`);
+    }
   };
 
   // ═══ ٤) الدخول والحفظ ═══
@@ -145,14 +170,15 @@ export default function SetupScreen() {
   useEffect(() => { search(); /* eslint-disable-next-line */ }, []);
   // مو متصل؟ نعيد الفحص كل ٥ ثواني — أول ما يتصل بالواي فاي يكمّل لحاله
   useEffect(() => {
-    if (step !== 'notfound') return;
+    // جهاز يرد بس ما عرفناه: إعادة البحث ما تفيد (ونفس النتيجة تتكرر) — ننتظر المستخدم يختار
+    if (step !== 'notfound' || miss.why === 'unknown') return;
     const t = setInterval(async () => {
       const any = (await Promise.all(HOSTS.map(h => answers(h, 1500)))).some(Boolean);
       if (any && alive.current) search();
     }, 5000);
     return () => clearInterval(t);
     // eslint-disable-next-line
-  }, [step]);
+  }, [step, miss.why]);
 
   const quickPing = async () => {
     setPinging(true);
@@ -211,12 +237,27 @@ export default function SetupScreen() {
         {step === 'notfound' && (
           <>
             {!!err && <Bubble tone="warn"><Text style={s.txt}>{err}</Text></Bubble>}
-            <View style={s.offline}>
-              <Icon name="wifi" size={34} color={C.red} />
-              <Text style={s.offTitle}>أنت مو متصل بواي فاي الراوتر</Text>
-              <Text style={s.offSub}>اتصل بشبكة راوترك من إعدادات الجوال — وأنا أكمّل لحالي أول ما تتصل</Text>
-              <View style={s.row}><ActivityIndicator size="small" color={C.sub} /><Text style={s.offWait}>أنتظرك…</Text></View>
-            </View>
+            {miss.why === 'unknown' ? (
+              <View style={s.offline}>
+                <Icon name="compass" size={34} color={tFg('#d97706')} />
+                <Text style={[s.offTitle, { color: tFg('#b45309') }]}>لقيت جهاز بس ما عرفت نوعه</Text>
+                <Text style={s.offSub}>أنت متصل ✓ — فيه جهاز يرد على {miss.hosts.join(' و ')}، بس Bandly ما تعرّف عليه للحين. أرسله لنا من «راوتري مو مدعوم؟» ونضيفه، أو أدخل بياناته بنفسك.</Text>
+              </View>
+            ) : (
+              <View style={s.offline}>
+                <Icon name="wifi" size={34} color={C.red} />
+                <Text style={s.offTitle}>{miss.why === 'perm' ? 'Bandly ما يقدر يوصل لراوترك' : 'ما لقيت راوترك'}</Text>
+                <Text style={s.offSub}>{miss.why === 'perm'
+                  ? 'غالباً صلاحية «الشبكة المحلية» مقفولة لـ Bandly في الآيفون — فعّلها من الزر تحت وارجع، أكمّل لحالي.'
+                  : 'تأكد إن جوالك متصل بواي فاي الراوتر (مو بيانات الجوال) — وأنا أكمّل لحالي أول ما يرد.'}</Text>
+                <View style={s.row}><ActivityIndicator size="small" color={C.sub} /><Text style={s.offWait}>أنتظرك…</Text></View>
+              </View>
+            )}
+            {Platform.OS === 'ios' && miss.why !== 'unknown' && (
+              <Big icon="settings" color={miss.why === 'perm' ? '#e5484d' : '#0e7d93'} title="فعّل «الشبكة المحلية» لـ Bandly"
+                sub="الإعدادات ← Bandly ← الشبكة المحلية (Local Network) ← شغّلها"
+                onPress={() => Linking.openSettings().catch(() => {})} />
+            )}
             <Big icon="phone" color="#12b76a" title="كيف أتصل بالواي فاي؟" sub="خطوة بخطوة"
               onPress={() => Alert.alert('اتصل بواي فاي الراوتر',
                 '١) افتح «الإعدادات» في جوالك ← «واي فاي».\n٢) اختر اسم شبكة راوترك — مكتوب على الملصق تحت الراوتر (جنب SSID أو WLAN).\n٣) اكتب كلمة سر الواي فاي اللي على الملصق.\n٤) ارجع لـ Bandly — أكمّل لحالي.')} />
