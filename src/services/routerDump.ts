@@ -2,7 +2,8 @@
  * «طلب جهاز جديد»: نرسل ملفات صفحة الراوتر كاملة (HTML + JS) للمطوّر بدل مقاطع مختارة —
  * عشان نعرف طريقة الدخول والروابط من أول تقرير، بدون ما نطلب من العضو يعيد كل شوي.
  *
- * • GET بس، على راوتر الشبكة المحلية بس (isLanHost) — ما ندخل ولا نرسل أي أمر للراوتر.
+ * • قراءة بس، على راوتر الشبكة المحلية بس (isLanHost) — ما ندخل ولا نرسل أي أمر تغيير.
+ *   (استثناء قراءة: FiberHome يعطي أسماء الإعدادات بطلب POST مشفّر «get_xmlnode_js_file» بدون دخول — نفس صفحته)
  * • ملفات الصفحة العامة (نفس اللي يحمّلها المتصفح قبل الدخول) — ما فيها بيانات العضو.
  *   للاحتياط نحجب رموز csrf وأي value في الخانات.
  * • نتخطى المكتبات المعروفة الكبيرة (jquery/vue/echarts…) — أسماؤها تكفي.
@@ -11,6 +12,7 @@
 import { isLanHost } from '../utils/host';
 import { LIVE_BASE } from './live';
 import { readAmdConfig, idToFile, findAmdIds, AmdConfig } from './amdRefs';
+import { fhBody, fhDecrypt, fhKey } from '../drivers/fiberhome/crypto';
 
 // مكتبات كبيرة ما تنعدّل — أسماؤها تكفي. ما نتخطى polyfill/vue-i18n/vue-router/axios/bootstrap بعد:
 // FiberHome يخبّي فيها RequireJS ودوال الاتصال ($post) وأسماء الإعدادات (تقرير ٢٦ أكتوبر) — صغيرة ونحتاجها
@@ -159,7 +161,55 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
       }
     }
   }
+  // FiberHome: أسماء الإعدادات (x_NetworkSettings_obj… ٥٩٢ اسم) ما هي ملف ثابت — الصفحة تطلبها وقت التشغيل
+  // بـ get_xmlnode_js_file (بدون دخول، «nocheck») وتسوي لها eval. نطلبها بنفس الطريقة ونحفظ النص بس.
+  if (files.some(f => /get_xmlnode_js_file/.test(f.t) && /FHNCAPIS/.test(f.t))) {
+    const r = await fiberhomeNodes(base);
+    files.push(r.ok ? { p: '/_bandly/xmlnode.js', t: scrub(r.text.slice(0, MAX_FILE)) } : { p: '/_bandly/xmlnode-error.txt', t: r.text });
+    onStep?.(files.length);
+  }
   return { files, skipped: [...new Set(skipped)] };
+}
+
+/**
+ * قراءة بس — نفس initPageConfigure في plugins/polyfill.min.js (بعد فك الـ packer):
+ *   ١. GET /api/tmp/FHNCAPIS?ajaxmethod=is_encrypt ← {enable}
+ *   ٢. GET /api/tmp/FHNCAPIS?ajaxmethod=get_refresh_sessionid ← {sessionid}
+ *   ٣. POST /api/tmp/FHNCAPIS {dataObj:null, ajaxmethod:"get_xmlnode_js_file", sessionid} (AES لو enable=1) ← {xml}
+ * ما نحفظ sessionid ولا نرسله — النص الراجع أسماء إعدادات عامة بس.
+ */
+export async function fiberhomeNodes(base: string): Promise<{ ok: boolean; text: string }> {
+  const H = { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json, text/javascript, */*; q=0.01' };
+  const step = async (name: string, url: string, init?: RequestInit) => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const r = await fetch(url, { ...init, headers: { ...H, ...(init?.headers as any) }, signal: ctrl.signal, cache: 'no-store' } as any);
+      const text = await r.text();
+      if (!r.ok) throw new Error(`${name}: HTTP ${r.status}`);
+      return text;
+    } catch (e: any) {
+      throw new Error(e?.message?.startsWith(name) ? e.message : `${name}: ${e?.name === 'AbortError' ? 'ما رد' : String(e?.message ?? e).slice(0, 80)}`);
+    } finally { clearTimeout(t); }
+  };
+  const api = `${base}/api/tmp/FHNCAPIS`;
+  try {
+    const enc = JSON.parse(await step('is_encrypt', `${api}?ajaxmethod=is_encrypt&_=${Math.random()}`));
+    const encrypt = String(enc?.enable) === '1';
+    const sid = String(JSON.parse(await step('get_refresh_sessionid', `${api}?ajaxmethod=get_refresh_sessionid&_=${Math.random()}`))?.sessionid ?? '');
+    if (encrypt && sid.length < 16) return { ok: false, text: `get_refresh_sessionid: sessionid قصير (${sid.length})` };
+    const raw = await step('get_xmlnode_js_file', `${api}?_${Math.random()}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: fhBody({ dataObj: null, ajaxmethod: 'get_xmlnode_js_file' }, sid, encrypt),
+    });
+    let obj: any;
+    try { obj = JSON.parse(encrypt ? fhDecrypt(raw, fhKey(sid)) : raw); } catch { return { ok: false, text: `get_xmlnode_js_file: ما قدرنا نفك الرد (encrypt=${encrypt ? 1 : 0}، طول ${raw.length})` }; }
+    const xml = typeof obj?.xml === 'string' ? obj.xml : '';
+    if (!xml) return { ok: false, text: `get_xmlnode_js_file: الرد بدون xml — مفاتيحه: ${Object.keys(obj ?? {}).join(',').slice(0, 120)}` };
+    return { ok: true, text: `// encrypt=${encrypt ? 1 : 0} — من get_xmlnode_js_file (Bandly)\n${xml}` };
+  } catch (e: any) {
+    return { ok: false, text: String(e?.message ?? e) };
+  }
 }
 
 /** يرسل الملفات على دفعات؛ السيرفر يضغطها ويرسلها للبوت مع وصف قصير */

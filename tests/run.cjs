@@ -25,6 +25,7 @@ const files = [
   'src/assistant/core.ts',
   'src/drivers/models.ts',
   'src/drivers/zyxel/crypto.ts',
+  'src/drivers/fiberhome/crypto.ts',
   'src/services/amdRefs.ts',
   'src/drivers/zte/writeResult.ts',
   // درايفر ZTE كامل (للاختبار بالمحاكاة — AsyncStorage يتبدّل ببديل داخل الاختبار)

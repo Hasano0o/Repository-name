@@ -102,3 +102,54 @@ test('FiberHome: polyfill.min.js و vue-i18n.min.js تنجمع (فيها $post �
   assert.ok(skipped.some(s => /jquery/.test(s)));
   assert.ok(skipped.some(s => /topo\.min/.test(s)));
 });
+
+declare const Buffer: any;
+import * as ncrypto from 'node:crypto';
+import { FH_IV } from '../src/drivers/fiberhome/crypto';
+
+test('FiberHome: «مو مدعوم؟» يجيب ملف أسماء الإعدادات (get_xmlnode_js_file) بالتشفير الصحيح — بدون sessionid في الحزمة', async () => {
+  const SID = 'S3SS10N0123456789abcdef';
+  const KEY = SID.slice(0, 16);
+  const aes = (mode: 'enc' | 'dec', data: string) => {
+    const c = mode === 'enc' ? (ncrypto as any).createCipheriv('aes-128-cbc', Buffer.from(KEY), Buffer.from(FH_IV)) : (ncrypto as any).createDecipheriv('aes-128-cbc', Buffer.from(KEY), Buffer.from(FH_IV));
+    return Buffer.concat([c.update(Buffer.from(data, mode === 'enc' ? 'utf8' : 'hex')), c.final()]).toString(mode === 'enc' ? 'hex' : 'utf8');
+  };
+  let posted: any;
+  (globalThis as any).fetch = async (url: string, init?: any) => {
+    const u = new URL(url);
+    const ok = (t: string) => ({ ok: true, status: 200, headers: { get: () => 'text/plain' }, text: async () => t } as any);
+    if (u.pathname === '/') return ok('<script src="/plugins/polyfill.min.js"></script>');
+    if (u.pathname === '/plugins/polyfill.min.js') return ok("'get_xmlnode_js_file|FHNCAPIS'");
+    if (u.pathname === '/api/tmp/FHNCAPIS' && init?.method !== 'POST') {
+      const m = u.searchParams.get('ajaxmethod');
+      if (m === 'is_encrypt') return ok('{"enable":1}');
+      if (m === 'get_refresh_sessionid') return ok(JSON.stringify({ sessionid: SID }));
+    }
+    if (u.pathname === '/api/tmp/FHNCAPIS' && init?.method === 'POST') {
+      posted = JSON.parse(aes('dec', init.body));
+      return ok(aes('enc', JSON.stringify({ xml: 'var x_NetworkSettings_obj="InternetGatewayDevice.X_FH_MobileNetwork.";var x_NetworkSet_LTELockBAND="LTELockBAND";' })));
+    }
+    return { ok: false, status: 404, headers: { get: () => '' }, text: async () => '' } as any;
+  };
+  const { files } = await collectRouterFiles('192.168.8.1');
+  assert.equal(posted.ajaxmethod, 'get_xmlnode_js_file');
+  assert.equal(posted.sessionid, SID);
+  const x = files.find(f => f.p === '/_bandly/xmlnode.js');
+  assert.ok(x, `ما انحفظ: ${files.map(f => f.p).join(' ')}`);
+  assert.match(x!.t, /x_NetworkSet_LTELockBAND/);
+  assert.ok(!files.some(f => f.t.includes(SID)), 'sessionid تسرّب للحزمة');
+});
+
+test('FiberHome: لو جلب الأسماء فشل ← ملف خطأ واضح بدل ما يضيع بصمت', async () => {
+  (globalThis as any).fetch = async (url: string) => {
+    const u = new URL(url);
+    const ok = (t: string) => ({ ok: true, status: 200, headers: { get: () => 'text/plain' }, text: async () => t } as any);
+    if (u.pathname === '/') return ok('<script src="/plugins/polyfill.min.js"></script>');
+    if (u.pathname === '/plugins/polyfill.min.js') return ok("'get_xmlnode_js_file|FHNCAPIS'");
+    return { ok: false, status: 403, headers: { get: () => '' }, text: async () => '' } as any;
+  };
+  const { files } = await collectRouterFiles('192.168.8.1');
+  const e = files.find(f => f.p === '/_bandly/xmlnode-error.txt');
+  assert.ok(e);
+  assert.match(e!.t, /is_encrypt: HTTP 403/);
+});
