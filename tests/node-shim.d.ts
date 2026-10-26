@@ -21,3 +21,10 @@ declare module 'node:crypto' {
   export function privateDecrypt(o: { key: string; padding: number }, data: Bytes): Bytes;
   export const constants: { RSA_PKCS1_PADDING: number };
 }
+declare module 'node:fs' {
+  export function readFileSync(path: string, enc: 'utf8'): string;
+}
+declare module 'node:path' {
+  export function join(...parts: string[]): string;
+}
+declare const process: { cwd(): string };

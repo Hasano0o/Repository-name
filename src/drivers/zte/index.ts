@@ -14,6 +14,7 @@ import {
 } from '../../utils/normalize';
 import { buildSnapshot } from '../../utils/snapshot';
 import { noChange, markNoChange } from '../noChange';
+import { classifyZteWrite, WRITE_ALLOWED_WHEN_UNVERIFIED } from './writeResult';
 
 import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { ZteNgDriver } from '../zteng';
@@ -568,7 +569,14 @@ export class ZteDriver implements RouterDriver {
   }
 
   private async act(body: Record<string, string>): Promise<string> {
+    // موديل كتابته ما انثبتت (U30 Pro): نوقف قبل أي أمر — ما نرسل تجارب لراوتر عضو
+    if (!WRITE_ALLOWED_WHEN_UNVERIFIED.has(body.goformId) && (await this.identify())?.writeUnverified) {
+      const e = noChange(`راوترك (${this.profile?.label ?? 'ZTE'}) نقرأ منه كل شي، بس أوامر التغيير فيه بصيغة خاصة لسا نضيفها — ما غيّرنا أي شي. أرسل «جهاز جديد» من الصفحة الرئيسية عشان نضيفها أسرع.`);
+      (e as any).unsupported = true;
+      throw e;
+    }
     let out = await this.post(body);
+    this.log('write', body.goformId, '→', classifyZteWrite(out));
     if (/success/i.test(out) || !this.password) return out;
     try { await this.login(this.host, '', this.password); } catch {}
     out = await this.post(body);

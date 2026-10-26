@@ -26,6 +26,12 @@ const files = [
   'src/drivers/models.ts',
   'src/drivers/zyxel/crypto.ts',
   'src/services/amdRefs.ts',
+  'src/drivers/zte/writeResult.ts',
+  'src/drivers/noChange.ts',
+  'src/services/routerDump.ts',
+  'src/services/live.ts',
+  'src/utils/host.ts',
+  'src/drivers/types.ts',
   ...fs.readdirSync(path.join(root, 'tests')).filter(f => f.endsWith('.test.ts')).map(f => `tests/${f}`),
 ];
 

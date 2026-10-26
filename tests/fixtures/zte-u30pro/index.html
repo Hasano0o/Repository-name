@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="renderer" content="webkit">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title></title>
+    <link href="" rel="stylesheet" id="loadCss"/>
+    <link href="" rel="stylesheet" id="loadCss2"/>
+    <link href="" rel="stylesheet" id="loadCss3"/>
+    <!--link type="text/css" href="theme/chosen.css?v=1763013806378" rel="stylesheet" />
+    <link type="text/css" href="theme/bootstrap.css?v=1763013806378" rel="stylesheet" />
+    <link type="text/css" href="theme/app.css?v=1763013806378" rel="stylesheet" /-->
+    <link href="favicon.ico" rel="shortcut icon" />
+
+    <script>
+        function sendRequest(){
+            var request = false;
+        
+            if(window.XMLHttpRequest) { 
+                request = new XMLHttpRequest();
+                if (request.overrideMimeType) {
+                    request.overrideMimeType("text/xml");
+                }
+            }else if (window.ActiveXObject) {
+                var MSXML = new Array('MSXML2.XMLHTTP','Microsoft.XMLHTTP','MSXML2.XMLHTTP.3.0','MSXML2.XMLHTTP.4.0','MSXML2.XMLHTTP5.0');
+                for(var i=0;i<MSXML.length;i++){
+                    try{
+                        request = new ActiveXObject(MSXML[i]);
+                        break;
+                    }catch(e){
+                        request = false;
+                    }
+                }
+            }
+            if (!request){
+                loadCss("en");
+            }else{
+                //loadCss("ar");
+                var url = "/goform/goform_get_cmd_process?cmd=Language&multi_data=1&isTest=false&_="+new Date().getTime();
+                request.open("GET", url, true);
+                request.onreadystatechange = function(){
+                    if (request.readyState == 4) {
+                        if (request.status == 200) {
+                            var result = request.responseText;			
+                            if(result.indexOf("ar")!=-1){
+                                result="ar";
+                            }else {
+                                result="en";
+                            }
+                            loadCss(result);
+                        } else {
+                            loadCss("en");
+                        }
+                    }
+                };
+                request.send(null);
+            }
+        }
+        function loadCss(currentLanguage){
+            var cssTag = document.getElementById('loadCss');
+            var css2Tag = document.getElementById('loadCss2');
+            var css3Tag = document.getElementById('loadCss3');
+            var head = document.getElementsByTagName('head').item(0);
+            if(cssTag){
+                cssTag.href = "./theme/"+(currentLanguage=="ar"?"bootstrap.rtl.css?v=1763013806378"+"?v="+new Date().getTime():"bootstrap.css?v=1763013806378"+"?v="+new Date().getTime());
+                css2Tag.href = "./theme/"+(currentLanguage=="ar"?"app.ar.css?v=1763013806378"+"?v="+new Date().getTime():"app.css?v=1763013806378"+"?v="+new Date().getTime());
+                css3Tag.href = "./theme/"+(currentLanguage=="ar"?"chosen_ar.css?v=1763013806378"+"?v="+new Date().getTime():"chosen.css?v=1763013806378"+"?v="+new Date().getTime());
+                
+                //head.removeChild(cssTag);
+            }else{
+                css = document.createElement('link');
+                css.href = "./theme/"+(currentLanguage=="ar"?"bootstrap.rtl.css?v=1763013806378"+"?v="+new Date().getTime():"bootstrap.css?v=1763013806378"+"?v="+new Date().getTime());
+                css.rel = 'stylesheet';
+                css.type = 'text/css';
+                css.id = 'loadCss';
+                head.appendChild(css);
+                css = document.createElement('link');
+                css.href = "./theme/"+(currentLanguage=="ar"?"app.ar.css?v=1763013806378"+"?v="+new Date().getTime():"app.css?v=1763013806378"+"?v="+new Date().getTime());
+                css.rel = 'stylesheet';
+                css.type = 'text/css';
+                css.id = 'loadCss2';
+                head.appendChild(css);
+                css = document.createElement('link');
+                css.href = "./theme/"+(currentLanguage=="ar"?"chosen_ar.css?v=1763013806378"+"?v="+new Date().getTime():"chosen.css?v=1763013806378"+"?v="+new Date().getTime());
+                css.rel = 'stylesheet';
+                css.type = 'text/css';
+                css.id = 'loadCss3';
+                head.appendChild(css);		
+            }
+            if(currentLanguage=="ar"){		
+                document.getElementsByTagName("html")[0].setAttribute("dir", "rtl");
+            }else{
+                document.getElementsByTagName("html")[0].setAttribute("dir", "ltr");
+
+            }
+        }
+    
+        
+        </script>
+
+
+
+</head>
+<body>
+    <header id="appHeader" class="navbar sticky-top flex-lg-nowrap p-0 " style="display: none;background-color: white;">
+        <button id="navbar-toggler-icon" class="start-0 d-lg-none" type="button" data-bs-toggle="offcanvas"
+            data-bs-target="#sidebarMenu" aria-controls="sidebarMenu" aria-expanded="false"
+            aria-label="Toggle navigation">
+        </button>
+        <a class="navbar-brand col-lg-3 col-lg-2 px-4 fs-6" href="#home"><img src="svg_img/logo_zte.png?v=1763013806379" height="30" alt=""></a>
+        <div class="navbar">
+            <div id="language" class="dropdown-center language-dropdown" data-bind="visible: showLanguage">
+                <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" data-bind="text: currentLanShow">
+                </button>
+                <ul class="dropdown-menu" data-bind="foreach:languages">
+                  <li><button class="dropdown-item" type="button" data-bind="text: name, click: $root.langChangeHandler"></button></li>
+                </ul>
+            </div>
+            <div id="statusBar" class="nav-item text-nowrap"></div>
+            <div id="logout" class="nav-item text-nowrap d-md-block d-none">
+                <img data-bs-toggle="tooltip" data-bs-custom-class="custom-tooltip" data-bs-placement="bottom" data-tooltip-trans="restart" class="icon-restart" src="svg_img/lock_restart.svg" alt="" data-bind="click:restart,visible:showLogout()" style="display: none;">
+                <img data-bs-toggle="tooltip" data-bs-custom-class="custom-tooltip" data-bs-placement="bottom" data-tooltip-trans="logout" class="icon-logout" src="svg_img/exit.svg" alt="" data-bind="click:logout,visible:showLogout()" style="display: none;">
+            </div>
+        </div>
+    </header>
+    <div class="container-fluid">
+        <div class="row"  style="position: relative;">
+            <div id="sidebarMenu" style="display: none !important;" class="d-lg-block offcanvas-lg offcanvas-start flex-grow-1 lg-hv hv-72" tabindex="-1" aria-labelledby="offcanvasLabel" data-bs-scroll="true">
+                <div class="offcanvas-header border-bottom">
+                    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close" data-bs-target="#sidebarMenu"></button>
+                </div>
+                <div id="leftMenu" class="display-table">
+                    <ul class="main-navigation-list">
+                        <li class="navigation-drawer -home">
+                            <a href="#home" class="parent-link link" data-trans="home"></a>
+                        </li>
+                        <li class="navigation-drawer -network">
+                            <a href="#mobile_network" class="parent-link link" data-trans="mobile_network"></a>
+                        </li>
+                        <li class="navigation-drawer -wifi-settings">
+                            <div class="label">
+                                <a href="#" class="parent-link" data-trans="wifi"></a>
+                            </div>
+                            <ul class="sub-navigation sub-hide">
+                                <li class="nav">
+                                    <a href="#wifi_main_ssid" class="children-link" data-trans="wifi_wireless_settings"></a>
+                                </li>
+                                <li class="nav">
+                                    <a href="#nfc_setting" class="children-link" data-trans="nfc_settings"></a>
+                                </li>
+                            </ul>
+                        </li>
+                        <li class="navigation-drawer -devices">
+                            <div class="label">
+                                <a href="#" class="parent-link" data-trans="devices"></a>
+                            </div>
+                            <ul class="sub-navigation sub-hide">
+                                <li class="nav">
+                                    <a href="#station_info" class="children-link" data-trans="station_info"></a>
+                                </li>
+
+                                <li class="nav">
+                                    <a href="#wireless_filter" class="children-link" data-trans="wireless_filter"></a>
+                                </li>
+                            </ul>
+                        </li>
+                        <li class="navigation-drawer -data_usage">
+                            <a href="#traffic_alert" class="parent-link link" data-trans="data_usage"></a>
+                        </li>
+                        <li class="navigation-drawer -router">
+                            <a href="#router_setting" class="parent-link link" data-trans="router_setting"></a>
+                        </li>
+                        <li class="navigation-drawer -sms">
+                            <a id="smsMenu" href="#sms" class="parent-link link" data-trans="sms"></a>                          
+                        </li>
+                        <li class="navigation-drawer -update">
+                            <a href="#ota_update" class="parent-link link"  data-bind="css: {'new-version': OTAStatus()}" data-trans="ota_update"></a>                          
+                        </li>
+                        <li class="navigation-drawer -system">
+                            <div class="label">
+                                <a href="#" class="parent-link" data-trans="system"></a>
+                            </div>
+                            <ul class="sub-navigation sub-hide">
+                                <li class="nav">
+                                    <a href="#network_info" class="children-link" data-trans="device_information"></a>
+                                </li>
+                                <li class="nav">
+                                    <a href="#pin_management" class="children-link" data-trans="pin_management"></a>
+                                </li>
+                                <li class="nav">
+                                    <a href="#diagnosis" class="children-link" data-trans="diagnosis"></a>
+                                </li>
+                                <li class="nav">
+                                    <a href="#password_management" class="children-link" data-trans="password_management"></a>
+                                </li>			
+                                <li class="nav" data-bind="visible: hasIndicatorLight">
+                                    <a href="#indicator_light" class="children-link" data-trans="led_light_setting"></a>
+                                </li>	
+								 <li class="nav">
+                                    <a href="#sleep_mode" class="children-link" data-trans="wifi_sleep"></a>
+                                </li>
+                                <li class="nav">
+                                    <a href="#battery_protection" class="children-link" data-trans="battery_protection"></a>
+                                </li>	
+                                <li class="nav">
+                                    <a href="#power_save" class="children-link" data-trans="power_saving_mode"></a>
+                                </li>	
+                                <li class="nav">
+                                    <a href="#power_supply" class="children-link" data-trans="power_supply"></a>
+                                </li>
+                                <li class="nav">
+                                    <a href="#usb_internet_protocol" class="children-link" data-trans="usb_internet_protocol"></a>
+                                </li>	
+                                <li class="nav">
+                                    <a href="#file_sharing" class="children-link" data-trans="samba_setting"></a>
+                                </li>
+                                <li class="nav">
+                                    <a href="#network_debug" class="children-link" data-trans="network_debug"></a>
+                                </li>
+                                <li class="nav">
+                                    <a href="#system_setting" class="children-link" data-trans="system_setting"></a>
+                                </li>	
+                                <li class="nav">
+                                    <a href="#elabelling" class="children-link" data-trans="elabelling"></a>
+                                </li>				
+                            </ul>
+                        </li>
+
+                    </ul>
+                </div>
+                <div id="mobileLogout" class="nav-item text-nowrap d-md-none d-block">
+                    <span data-bs-toggle="tooltip" data-bs-custom-class="custom-tooltip" height="24px" data-bs-placement="top" data-tooltip-trans="restart" class="restart-menu icon-restart" alt="" data-bind="click:restart"></span>
+                    <span data-bs-toggle="tooltip" data-bs-custom-class="custom-tooltip" height="24px" data-bs-placement="top" data-tooltip-trans="logout" class="logout-menu icon-logout" alt="" data-bind="click:logout"></span>
+                </div>
+            </div>
+            <main id="container-wrapper" class="ms-sm-auto hv-72">
+                <div id='container'></div>
+                <div class="copyright text-center mt-2 mb-sm-5 mb-lg-0">
+                        <span data-trans='copyright'></span>&nbsp; <span data-trans="vertical_bar"></span> &nbsp;<a href="https://opensource.ztedevices.com" target="_blank" data-trans="open_source_licenses" class="extendLink"></a>
+                        &nbsp; <span id="privacy_span" data-trans="vertical_bar"></span> &nbsp;<a id="privacy_a" href="https://www.ztedevices.com/en/Privacy-Policy/ZTESmartRouterPrivacyPolicy" target="_blank" data-trans="privacy_policy" class="extendLink"></a>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <div id="confirm" class="modal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" style="display: none;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+            <div class="modal-header">
+                <h5 id="popTitle" class="modal-title"></h5>
+            </div>
+            <div class="modal-body d-flex">
+                <div class='icon'><img id='confirmImg'/></div>
+                <div class="confirm-message">
+                    <div class='message word-break-word'></div>
+                    <div class='promptDiv'>
+                        <input name="promptInput" id="promptInput" type="text" maxlength="25" class="width190"/><br/>
+                        <label class="promptErrorLabel colorRed"></label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id='yesbtn' data-trans='yes'></button>
+                <button type="button" class="btn btn-secondary" id='nobtn' data-trans='no' data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id='okbtn' data-trans='ok'></button>
+            </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalLoading" class="modal text-center" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body">
+                    <div class="spinner-border m-3" role="status">
+                        <span class="visually-hidden"></span>
+                    </div>
+                    <div id="loadMsg"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id='result-overlay' class="modal text-center" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body">
+                    <div>
+                        <div id="result-image"></div>
+                    </div>
+                    <div id="result_wording"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="progress" class="modal text-center" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body">
+                    <div class='header'><span id="barMsg"></span></div>
+                    <br/>
+                    <div class="progress-content">
+                        <div class="progress-bar-container">
+                            <div id="bar" class="progress-bar"></div>
+                            <div id="barValue" class="progress-bar-value"></div>
+                        </div>
+                        <div id="progress_container" class="progress-prompt"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="buttom-bubble">
+    </div>
+    <script type="text/x-jquery-tmpl" id="newMessagePopTmpl">
+        <div class="bubbleItem ${report}" id="${mark}">
+            <h3>
+                <span data-trans="${titletrans}">${title}</span> ${name} <a href="javascript:void(0);" data-targetid="${mark}" class="bubbleCloseBtn"></a>
+            </h3>
+            <div class="bubbleContainer">
+                <div class="bubbleContent">${content}</div>
+                <div class="bubbleDatetime">${datetime}</div>
+            </div>
+        </div>
+    </script>
+    <script type="text/javascript" data-main="js/main" src="js/lib/require/require.js?v=1763013806379"></script>
+</body>
+
+</html>
+<script>
+	sendRequest();
+</script>

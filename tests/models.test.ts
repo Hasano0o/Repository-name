@@ -32,3 +32,11 @@ test('ZTE U30 Pro: يتعرف من wa_inner_version بدون مسافة قبل P
   assert.equal(m.label, 'ZTE U30 Pro');
   assert.equal(m.write, 'goform');
 });
+
+test('U30 Pro: القراءة مسموحة والكتابة موقوفة لين تنثبت — وباقي ZTE ما تأثرت', () => {
+  assert.equal(identifyZte('U30Pro_GEN_MEASV1.0.0B07').writeUnverified, true);
+  assert.equal(identifyZte('MU5358_GEN_MEASV1.0.0B07').id, 'u30-pro');
+  assert.ok(!identifyZte('BD_STCMU5001V1.0.2B04').writeUnverified);
+  assert.ok(!identifyZte('BD_MC888V1.0', '').writeUnverified);
+  assert.ok(!identifyZte('U10SProV1.02', '').writeUnverified);
+});

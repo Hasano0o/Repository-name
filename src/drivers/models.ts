@@ -20,6 +20,11 @@ export interface ModelProfile {
   /** جرّبناه مع مستخدم حقيقي */
   verified?: boolean;
   /**
+   * القراءة شغالة بس أوامر الكتابة ما انثبتت (ولا تجربة ناجحة ولا كود صفحة الراوتر).
+   * نوقف التغيير قبل ما يرسل أي أمر، برسالة واضحة — لين نضيف الأوامر الصحيحة من دليل.
+   */
+  writeUnverified?: boolean;
+  /**
    * مقفول على اللي ثبت إنه يشتغل عنده — بدون أي بدائل أو تجارب.
    * أي إصلاح لموديل ثاني ما يمر على هذا الموديل أبداً.
    */
@@ -37,7 +42,10 @@ export const MODELS = {
   mc888: P({ id: 'mc888', label: 'ZTE MC888', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
   mc889: P({ id: 'mc889', label: 'ZTE MC889', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
   // U30 Pro (STC، U30Pro_GEN_MEASV1.0.0B07 · cr_version MU5358): صفحته goform القديمة (require.js) — تقرير ٢٥ أكتوبر، @Mjeeduk
-  u30Pro: P({ id: 'u30-pro', label: 'ZTE U30 Pro', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
+  // الكتابة: BAND_SELECT يرد «{}» (ما فيه معالج) بتوقيع صحيح، وsetAccessPointInfo يقول success وما يتغيّر شي (٢٥–٢٦ أكتوبر)
+  // ← نوقف التغيير لين يوصل service.js من «جهاز جديد» ونضيف الأوامر الصحيحة منه
+  u30Pro: P({ id: 'u30-pro', label: 'ZTE U30 Pro', brand: 'zte', tech: '5G', write: 'goform', nrLock: true, writeUnverified: true,
+    note: 'القراءة شغالة — التغيير (الترددات، الواي فاي) نضيفه قريب' }),
   u10sPro: P({ id: 'u10s-pro', label: 'ZTE U10S Pro', brand: 'zte', tech: '4G', write: 'goform', nrLock: false, note: 'راوتر جيب 4G — ما فيه 5G' }),
   zteG5: P({ id: 'zte-g5', label: 'ZTE (G5)', brand: 'zte', tech: '5G', write: 'ubus', nrLock: true }),
   zte: P({ id: 'zte', label: 'ZTE', brand: 'zte', tech: '5G', write: 'goform' }),
