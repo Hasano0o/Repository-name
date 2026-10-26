@@ -13,9 +13,9 @@ test('تصنيف رد ZTE: HTTP 200 مو دليل نجاح', () => {
   assert.equal(classifyZteWrite('{"result":"0"}'), 'other'); // رد الدخول — مو حكم على أمر كتابة
 });
 
-test('الأوامر المسموحة لموديل كتابته ما انثبتت: دخول/خروج/إعادة تشغيل بس', () => {
-  for (const ok of ['LOGIN', 'LOGOUT', 'GOFORM_LOGOUT', 'REBOOT_DEVICE']) assert.ok(WRITE_ALLOWED_WHEN_UNVERIFIED.has(ok));
-  for (const no of ['BAND_SELECT', 'WAN_PERFORM_NR5G_BAND_LOCK', 'SET_BEARER_PREFERENCE', 'LTE_LOCK_CELL_SET', 'setAccessPointInfo', 'DEVELOPER_OPTION_LOGIN']) {
+test('الأوامر المسموحة لموديل كتابته ما انثبتت: دخول/خروج بس (إعادة التشغيل ممنوعة لين تنثبت)', () => {
+  for (const ok of ['LOGIN', 'LOGOUT', 'GOFORM_LOGOUT']) assert.ok(WRITE_ALLOWED_WHEN_UNVERIFIED.has(ok));
+  for (const no of ['BAND_SELECT', 'WAN_PERFORM_NR5G_BAND_LOCK', 'SET_BEARER_PREFERENCE', 'LTE_LOCK_CELL_SET', 'setAccessPointInfo', 'DEVELOPER_OPTION_LOGIN', 'REBOOT_DEVICE', 'SEND_SMS', 'DISCONNECT_NETWORK']) {
     assert.ok(!WRITE_ALLOWED_WHEN_UNVERIFIED.has(no), no);
   }
 });

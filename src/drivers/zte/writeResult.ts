@@ -22,4 +22,6 @@ export function classifyZteWrite(out: string): ZteWrite {
  * موديلات قراءتها مؤكدة وكتابتها لسا ما انثبتت بدليل (كود صفحة الراوتر أو تجربة ناجحة):
  * نمنع أوامر التغيير قبل ما تنرسل (بدل ١٦ أمر يرجع «{}» ويبان للعضو كأنه رفض)، ونخلي المسموح بس.
  */
-export const WRITE_ALLOWED_WHEN_UNVERIFIED = new Set(['LOGIN', 'LOGOUT', 'GOFORM_LOGOUT', 'REBOOT_DEVICE']);
+// REBOOT_DEVICE مو هنا: ما شفناه ينجح على U30 Pro (ولا مرة في السجلات)، والرد «{}» يخلي التطبيق ينتظر
+// إعادة تشغيل ما صارت. LOGIN/LOGOUT/GOFORM_LOGOUT ظاهرة في سجلاته وما تغيّر إعدادات.
+export const WRITE_ALLOWED_WHEN_UNVERIFIED = new Set(['LOGIN', 'LOGOUT', 'GOFORM_LOGOUT']);

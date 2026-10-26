@@ -297,7 +297,19 @@ export class ZteDriver implements RouterDriver {
     return null;
   }
 
+  /**
+   * موديل كتابته ما انثبتت (U30 Pro): نوقف قبل أي أمر تغيير — هنا في post نفسه، عشان يمسك كل المسارات
+   * (act، إعادة التشغيل، دخول المطوّر، الرسائل…) مو act بس. المسموح: الدخول والخروج (مجرّبة في السجل).
+   */
+  private async assertWritable(goformId: string): Promise<void> {
+    if (WRITE_ALLOWED_WHEN_UNVERIFIED.has(goformId)) return;
+    if (!(await this.identify())?.writeUnverified) return;
+    const e = noChange(`راوترك (${this.profile?.label ?? 'ZTE'}) نقرأ منه كل شي، بس أوامر التغيير فيه بصيغة خاصة لسا نضيفها — ما غيّرنا أي شي. أرسل «جهاز جديد» من الصفحة الرئيسية عشان نضيفها أسرع.`);
+    (e as any).unsupported = true;
+    throw e;
+  }
   private async post(body: Record<string, string>): Promise<string> {
+    await this.assertWritable(body.goformId);
     const extra: Record<string, string> = {};
     if (body.goformId !== 'LOGIN' && body.goformId !== 'SET_WEB_LANGUAGE') {
       const ad = await this.signAd();
@@ -569,12 +581,6 @@ export class ZteDriver implements RouterDriver {
   }
 
   private async act(body: Record<string, string>): Promise<string> {
-    // موديل كتابته ما انثبتت (U30 Pro): نوقف قبل أي أمر — ما نرسل تجارب لراوتر عضو
-    if (!WRITE_ALLOWED_WHEN_UNVERIFIED.has(body.goformId) && (await this.identify())?.writeUnverified) {
-      const e = noChange(`راوترك (${this.profile?.label ?? 'ZTE'}) نقرأ منه كل شي، بس أوامر التغيير فيه بصيغة خاصة لسا نضيفها — ما غيّرنا أي شي. أرسل «جهاز جديد» من الصفحة الرئيسية عشان نضيفها أسرع.`);
-      (e as any).unsupported = true;
-      throw e;
-    }
     let out = await this.post(body);
     this.log('write', body.goformId, '→', classifyZteWrite(out));
     if (/success/i.test(out) || !this.password) return out;
@@ -939,6 +945,7 @@ export class ZteDriver implements RouterDriver {
     this.log('restoreAll ok:', ok.join(','));
     if (!ok.length) throw new Error('الراوتر ما قبل أي أمر — تأكد إنك متصل بالواي فاي حقه وجرّب مرة ثانية');
     // ٥. إعادة تشغيل عشان كل شي يتطبّق
+    await this.assertWritable('REBOOT_DEVICE');
     try { await this.post({ goformId: 'REBOOT_DEVICE' }); } catch {}
   }
 
@@ -1220,6 +1227,7 @@ export class ZteDriver implements RouterDriver {
 
   /** يعيد تشغيل الراوتر وينتظره يرجع ويتصل (حتى ~٣ دقائق) */
   private async rebootAndWait(): Promise<void> {
+    await this.assertWritable('REBOOT_DEVICE');
     try { await this.post({ goformId: 'REBOOT_DEVICE' }); } catch {}
     await sleep(25000);
     const deadline = Date.now() + 150000;
@@ -1589,7 +1597,9 @@ export class ZteDriver implements RouterDriver {
     const a = await this.get([...ZteDriver.WIFI_FIELDS, ...ZteDriver.WIFI5_FIELDS, 'SSID1', 'wifi_chip1_ssid1_wifi_coverage']).catch(e => ({ err: String(e?.message ?? e) }));
     // MU5001 وغيره: القنوات في queryAccessPointInfo — نرسل شكله بدون أسماء الشبكات وكلماتها
     const ap = await this.getRaw('queryAccessPointInfo').catch(e => ({ err: String((e as any)?.message ?? e) }));
-    const clean = JSON.stringify(ap ?? null).replace(/"(SSID|Password|WPAPSK1?|KeyPassphrase|PreSharedKey|WEPKey\w*)"\s*:\s*"[^"]*"/gi, '"$1":"«محذوف»"');
-    return JSON.stringify(a, null, 1) + '\n\nqueryAccessPointInfo: ' + clean.slice(0, 3000);
+    const SECRET = /"(SSID\d*|Password|WPAPSK\d*|KeyPassphrase|PreSharedKey|WEPKey\w*|PasswordShow)"\s*:\s*"[^"]*"/gi;
+    const clean = JSON.stringify(ap ?? null).replace(SECRET, '"$1":"«محذوف»"');
+    // قبل: SSID1 (اسم الشبكة) كان يطلع كما هو في التقرير (تقرير U30 Pro ٢٥ أكتوبر)
+    return JSON.stringify(a, null, 1).replace(SECRET, '"$1": "«محذوف»"') + '\n\nqueryAccessPointInfo: ' + clean.slice(0, 3000);
   }
 }

@@ -66,7 +66,8 @@ export function findAmdIds(text: string, filePath: string): string[] {
   const p = text.match(/\b(?:require|requirejs)\.config\s*\(\s*\{[\s\S]{0,8000}?paths\s*:\s*\{([^}]{0,6000})\}/)?.[1];
   if (p) for (const m of p.matchAll(/["']?([\w./-]+)["']?\s*:\s*["'][^"']+["']/g)) ids.add(m[1]);
   // ZTE: "config/"+t.DEVICE+"/menu" — DEVICE ينكتب في config/config.js
-  const dev = text.match(/\bDEVICE\s*:\s*["']([\w.-]{1,40})["']/)?.[1];
+  // DEVICE:"ufi" (كائن) أو config.DEVICE = "ufi" (إسناد) — الشكلين موجودين في فيرمويرات ZTE
+  const dev = text.match(/\bDEVICE\s*[:=]\s*["']([\w./-]{1,40})["']/)?.[1];
   if (dev) for (const f of ['menu', 'config', 'menu_4ggateway', 'menu_bridge', 'menu_pppoe', 'menu_multiwan']) ids.add(`config/${dev}/${f}`);
   // ملفات القوائم: مسارات الصفحات نصوص مثل "wifi/ssid" أو "home"
   if (/\/menu[\w-]*\.js$/i.test(filePath)) {

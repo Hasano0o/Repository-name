@@ -38,3 +38,9 @@ test('ZTE: DEVICE في config.js ← قوائم الجهاز، وملف القا
   assert.ok(menu.includes('js/wifi/ssid.js'));
   assert.ok(menu.includes('js/home/home.js'));
 });
+
+test('ZTE: DEVICE بصيغة الإسناد (config.DEVICE = "...") بعد', () => {
+  const cfg = { base: 'js/', paths: {} };
+  const f = findAmdIds('define(["jquery"],function(){var config={};config.DEVICE = "u30pro";return config})', '/js/config/config.js').map(i => idToFile(i, cfg));
+  assert.ok(f.includes('js/config/u30pro/menu.js'));
+});
