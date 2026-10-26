@@ -1227,12 +1227,19 @@ async def app_dump(req: Request):
     ip = req.headers.get("x-real-ip") or (req.client.host if req.client else "?")
     if not _limit(DUMP_HITS, ip, 120, 3600):
         raise HTTPException(429, "كثير")
+    # نقرأ البايتات بأنفسنا: نص فيه UTF-8 خربان (نص رمز يتيم من ملف JS) كان يطيّح req.json() ← 400 وتضيع الحزمة كلها
+    raw = await req.body()
     try:
-        b = await req.json()
-    except Exception:
+        b = json.loads(raw.decode("utf-8", "replace"))
+    except Exception as e:
+        print(f"[dump] 400 bad json ip={ip} len={len(raw)} err={str(e)[:120]}", flush=True)
+        raise HTTPException(400, "bad json")
+    if not isinstance(b, dict):
+        print(f"[dump] 400 not object ip={ip}", flush=True)
         raise HTTPException(400, "bad json")
     did = re.sub(r"[^a-z0-9]", "", str(b.get("id") or ""))[:24]
     if len(did) < 8:
+        print(f"[dump] 400 bad id ip={ip} id={str(b.get('id'))[:30]!r}", flush=True)
         raise HTTPException(400, "bad id")
     d = DUMPS / did
     d.mkdir(parents=True, exist_ok=True)

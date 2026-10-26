@@ -43,3 +43,42 @@ test('U30 Pro: الجامع يوصل service.js والقوائم وصفحة ال
   // المكتبات المعروفة ما تنطلب
   assert.ok(!asked.some(p => /jquery-3\.6\.1/.test(p)));
 });
+
+import { sendRouterFiles, utf8Len, cleanText, splitBytes } from '../src/services/routerDump';
+
+test('الدفعات بالبايت: العربي يحسب ٢ بايت، والتقسيم ما يقص رمز', () => {
+  assert.equal(utf8Len('abc'), 3);
+  assert.equal(utf8Len('شرورة'), 10);
+  assert.equal(utf8Len('😀'), 4);
+  const parts = splitBytes('😀'.repeat(10), 9);
+  assert.ok(parts.every(p => utf8Len(p) <= 9));
+  assert.equal(parts.join(''), '😀'.repeat(10));
+});
+
+test('التنظيف: نص رمز يتيم وحروف تحكم ما تخرّب الطلب', () => {
+  assert.equal(cleanText('a\ud800b'), 'a�b');
+  assert.equal(cleanText('a\udc00b'), 'a�b');
+  assert.equal(cleanText('😀'), '😀');
+  assert.equal(cleanText('a\u0000b\tc\nd'), 'ab\tc\nd');
+});
+
+test('الإرسال: دفعة تنرفض ← نرسل ملفاتها واحد واحد، والخربان بس يضيع، و«done» تنرسل دايماً', async () => {
+  const got: any[] = [];
+  (globalThis as any).fetch = async (_u: string, init: any) => {
+    const b = JSON.parse(init.body);
+    got.push(b);
+    const bad = (b.files ?? []).some((f: any) => f.p === '/js/bad.js');
+    return { ok: !bad, status: bad ? 400 : 200 } as any;
+  };
+  const r = await sendRouterFiles(
+    [{ p: '/index.html', t: 'x' }, { p: '/js/bad.js', t: 'y' }, { p: '/js/service.js', t: 'z' }],
+    { model: 'ZTE U30 Pro', host: '192.168.0.1', skipped: [] },
+  );
+  assert.equal(r.ok, true);
+  assert.equal(r.sent, 2);
+  assert.deepEqual(r.failed, ['/js/bad.js']);
+  assert.equal(got[got.length - 1].done, true);
+  assert.ok(got[got.length - 1].skipped.some((x: string) => /bad\.js/.test(x)));
+  const delivered = got.filter(b => b.files && !b.files.some((f: any) => f.p === '/js/bad.js')).flatMap(b => b.files.map((f: any) => f.p));
+  assert.ok(delivered.includes('/js/service.js'));
+});

@@ -132,15 +132,30 @@ export default function NewDeviceScreen() {
     ].join('\n');
     const ok = await sendSupportReport('newdevice', text, { driverName: model.trim() });
     // ملفات صفحة الراوتر كاملة (HTML + JS) — نعرف منها الدخول والروابط من أول طلب
+    // قبل: أي خطأ هنا ينبلع بصمت (تقرير ٢٦ أكتوبر: U30 Pro — الطلب وصل والـ zip ما وصل وما أحد درى)
+    let dumpNote = '';
     if (ok && scan && found) {
       try {
-        setBusy('أرسل ملفات صفحة الراوتر…');
-        const { files, skipped } = await collectRouterFiles(found, n => setBusy(`أجمع ملفات صفحة الراوتر… ${n}`));
+        setBusy('أجمع ملفات صفحة الراوتر — لا تطلع من الشاشة…');
+        const { files, skipped } = await collectRouterFiles(found, n => setBusy(`أجمع ملفات صفحة الراوتر… ${n} — لا تطلع من الشاشة`));
         if (files.length) {
-          setBusy(`أرسل ${files.length} ملف…`);
-          await sendRouterFiles(files, { model: model.trim(), host: found, skipped });
+          setBusy(`أرسل ${files.length} ملف — لا تطلع من الشاشة…`);
+          const r = await sendRouterFiles(files, { model: model.trim(), host: found, skipped });
+          if (!r.ok || r.failed.length) {
+            dumpNote = r.ok ? `وصل ${r.sent} ملف وما وصل ${r.failed.length}` : `ما وصلت الملفات (رد السيرفر ${r.status ?? '—'})`;
+            await sendSupportReport('newdevice-dump', `📦 ملفات الصفحة: ${dumpNote}
+• الموديل: ${model.trim()}
+• جمعنا ${files.length} ملف
+${r.failed.slice(0, 20).map(f => `  ✗ ${f}`).join('\n')}`, { driverName: model.trim() }).catch(() => false);
+          }
+        } else {
+          dumpNote = 'ما قدرنا نجمع ملفات الصفحة';
+          await sendSupportReport('newdevice-dump', `📦 ${dumpNote} — الموديل: ${model.trim()} · ${found}`, { driverName: model.trim() }).catch(() => false);
         }
-      } catch {}
+      } catch (e) {
+        dumpNote = 'تعطّل جمع الملفات';
+        await sendSupportReport('newdevice-dump', `📦 ${dumpNote}: ${String((e as any)?.message ?? e).slice(0, 120)} — ${model.trim()}`, { driverName: model.trim() }).catch(() => false);
+      }
     }
     setBusy('');
     if (ok) setSent(true);

@@ -16,7 +16,52 @@ const SKIP = /(copyrightPage|opensource|privatePolicy|\/faq[\w-]*\.html|chunk-ve
 const MAX_FILE = 1_500_000;
 const MAX_TOTAL = 8_000_000;
 const MAX_FILES = 150; // صفحات RequireJS (ZTE) فيها موديول لكل شاشة
-const PART = 550_000; // كل طلب أقل من ١ ميقا (حد nginx الافتراضي)
+// الحد بالبايت (UTF-8) مو بالحرف — العربي ٢–٣ بايت للحرف. ٣٠٠ ك ← بعيد عن حد nginx (١ ميقا)
+const PART = 300_000;
+/** طول النص بالبايت (UTF-8) — بدون TextEncoder (ناقص في بعض نسخ RN) */
+export function utf8Len(s: string): number {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xd800 && c <= 0xdbff && i + 1 < s.length) { n += 4; i++; }
+    else n += 3;
+  }
+  return n;
+}
+/** ننظف النص من اللي يخرّب الطلب: أنصاف رموز UTF-16 يتيمة، وحروف تحكم (غير السطر/التاب) */
+export function cleanText(s: string): string {
+  // بدون lookbehind في الـ regex (احتياط لمحرك Hermes) — حلقة بسيطة
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c >= 0xd800 && c <= 0xdbff) {
+      const d = i + 1 < s.length ? s.charCodeAt(i + 1) : 0;
+      if (d >= 0xdc00 && d <= 0xdfff) { out += s[i] + s[i + 1]; i++; } else out += '\ufffd';
+      continue;
+    }
+    if (c >= 0xdc00 && c <= 0xdfff) { out += '\ufffd'; continue; }
+    if ((c < 0x20 && c !== 9 && c !== 10 && c !== 13) || c === 0x7f) continue;
+    out += s[i];
+  }
+  return out;
+}
+/** نقسم نص على حد بايتات (بدون ما نقص رمز بالنص) */
+export function splitBytes(s: string, max: number): string[] {
+  const out: string[] = [];
+  let start = 0, bytes = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    const pair = c >= 0xd800 && c <= 0xdbff && i + 1 < s.length;
+    const b = c < 0x80 ? 1 : c < 0x800 ? 2 : pair ? 4 : 3;
+    if (bytes + b > max && i > start) { out.push(s.slice(start, i)); start = i; bytes = 0; }
+    bytes += b;
+    if (pair) i++;
+  }
+  out.push(s.slice(start));
+  return out;
+}
 
 /** يحل رابط نسبي مقابل مسار الصفحة — بدون URL() (ناقص في RN) */
 export function resolvePath(ref: string, fromPath: string): string | null {
@@ -116,31 +161,55 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
 }
 
 /** يرسل الملفات على دفعات؛ السيرفر يضغطها ويرسلها للبوت مع وصف قصير */
-export async function sendRouterFiles(files: DumpFile[], meta: { model: string; host: string; skipped: string[] }): Promise<boolean> {
+export interface SendResult { ok: boolean; sent: number; failed: string[]; status?: number }
+
+/**
+ * يرسل الملفات على دفعات؛ السيرفر يضغطها ويرسلها للبوت.
+ * تقرير ٢٦ أكتوبر (U30 Pro): أول دفعة انرفضت (400) فوقف كل شي بصمت — لا zip ولا خبر.
+ * الحين: الدفعة بالبايت، كل طلب يتعاد مرة، والدفعة اللي تنرفض نرسل ملفاتها واحد واحد ونتخطى الخربان بس،
+ * وفي الآخر «done» دايماً (حتى لو فيه ملفات فشلت) مع قائمة اللي ما وصل.
+ */
+export async function sendRouterFiles(files: DumpFile[], meta: { model: string; host: string; skipped: string[] }): Promise<SendResult> {
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  const post = async (body: object) => {
+  let status: number | undefined;
+  const once = async (body: object): Promise<boolean> => {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 30000);
     try {
       const r = await fetch(`${LIVE_BASE}/live-api/app/dump`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal, body: JSON.stringify(body),
+        method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8' }, signal: ctrl.signal, body: JSON.stringify(body),
       });
+      if (!r.ok) status = r.status;
       return r.ok;
-    } catch { return false; } finally { clearTimeout(t); }
+    } catch { status = 0; return false; } finally { clearTimeout(t); }
+  };
+  const post = async (body: object) => (await once(body)) || (await new Promise(r => setTimeout(r, 1500)), await once(body));
+  const failed: string[] = [];
+  let sent = 0;
+  const flush = async (batch: DumpFile[]) => {
+    if (!batch.length) return;
+    if (await post({ id, files: batch })) { sent += batch.length; return; }
+    if (batch.length === 1) { failed.push(batch[0].p); return; }
+    for (const f of batch) {
+      if (await once({ id, files: [f] })) sent++; else failed.push(f.p);
+    }
   };
   let batch: DumpFile[] = [];
   let size = 0;
   for (const f of files) {
-    // ملف أكبر من الدفعة: نقسّمه
-    const pieces = f.t.length > PART ? Array.from({ length: Math.ceil(f.t.length / PART) }, (_, i) => ({ p: `${f.p}.part${i + 1}`, t: f.t.slice(i * PART, (i + 1) * PART) })) : [f];
+    const t = cleanText(f.t);
+    const parts = utf8Len(t) > PART ? splitBytes(t, PART) : [t];
+    const pieces = parts.length > 1 ? parts.map((x, i) => ({ p: `${f.p}.part${i + 1}`, t: x })) : [{ p: f.p, t }];
     for (const pc of pieces) {
-      if (size + pc.t.length > PART && batch.length) {
-        if (!(await post({ id, files: batch }))) return false;
-        batch = []; size = 0;
-      }
-      batch.push(pc); size += pc.t.length;
+      const b = utf8Len(pc.t);
+      if (size + b > PART && batch.length) { await flush(batch); batch = []; size = 0; }
+      batch.push(pc); size += b;
     }
   }
-  if (batch.length && !(await post({ id, files: batch }))) return false;
-  return post({ id, done: true, model: meta.model.slice(0, 60), host: meta.host.slice(0, 40), skipped: meta.skipped.slice(0, 40) });
+  await flush(batch);
+  const done = await post({
+    id, done: true, model: meta.model.slice(0, 60), host: meta.host.slice(0, 40),
+    skipped: [...meta.skipped, ...failed.map(f => `✗ ما وصل: ${f}`)].slice(0, 40),
+  });
+  return { ok: done && sent > 0, sent, failed, status };
 }
