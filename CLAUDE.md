@@ -10,6 +10,10 @@
 ## التطبيق
 Bandly: تطبيق Expo (SDK 57، expo-router، TypeScript strict) يدير راوترات 4G/5G (هواوي و ZTE): توجيه الأنتنا، الأبراج وتثبيت الخلية، الترددات، مُحسّن الألعاب، كاشف اللاق، وضع الفني، المراقبة بالخلفية.
 - الدرايفرات: `src/drivers/{huawei,zte,...}` — الواجهة الموحدة في `src/drivers/types.ts`.
+- الدرايفرات المسجّلة في `src/drivers/registry.ts`: هواوي، ZTE (goform)، ZTE الجيل الجديد (ubus)، زيكسل، **FiberHome** (`src/drivers/fiberhome/`، من ٢٦ أكتوبر — LG6121D اشتغل عند عضو؛ بدون مركز التحكم).
+- **ZTE U30 Pro**: القراءة شغالة، والكتابة موقوفة عمداً (`writeUnverified` في `models.ts`) لين يوصل `service.js` من «مو مدعوم؟». لا ترسل أوامر تخمينية لراوتر عضو.
+- «مو مدعوم؟» (`app/newdevice.tsx` + `src/services/routerDump.ts`): يجمع ملفات صفحة الراوتر ويرسلها zip للبوت؛ لو فشل الإرسال يوصل تقرير `newdevice-dump`. الحزم على السيرفر في `/root/bandly-live/data/dumps/`.
+- الاختبارات: `node tests/run.cjs` (لازم كلها تنجح قبل الدمج).
 - الشاشات: `app/<name>/[id].tsx` — وعناوينها في مصفوفة `SCREENS` داخل `app/_layout.tsx` (أي شاشة جديدة تنضاف هناك).
 - البنق: `src/utils/latency.ts` — يقيس لدولة سيرفر اللعبة المختارة (المفتاح `bandly.gameRegion`). **منطقة AWS البحرين (me-south-1) متوقفة** — لا ترجعها.
 - المجتمع والإحصائيات: `src/services/community.ts` + السيرفر `live-server/community.py`.
