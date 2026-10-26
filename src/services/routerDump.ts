@@ -12,7 +12,9 @@ import { isLanHost } from '../utils/host';
 import { LIVE_BASE } from './live';
 import { readAmdConfig, idToFile, findAmdIds, AmdConfig } from './amdRefs';
 
-const SKIP = /(copyrightPage|opensource|privatePolicy|\/faq[\w-]*\.html|chunk-vendors|jquery|vue(\.global|x|-router|-i18n)|element-plus|elementui|chunk-libs|echarts|tinymce|lottie|qrcode|axios\.min|jtopo|polyfill|bootstrap|font-?awesome|moment|lodash|highcharts|chart\.min|swiper|\.min\.js.*(forge|elliptic))/i;
+// مكتبات كبيرة ما تنعدّل — أسماؤها تكفي. ما نتخطى polyfill/vue-i18n/vue-router/axios/bootstrap بعد:
+// FiberHome يخبّي فيها RequireJS ودوال الاتصال ($post) وأسماء الإعدادات (تقرير ٢٦ أكتوبر) — صغيرة ونحتاجها
+const SKIP = /(copyrightPage|opensource|privatePolicy|\/faq[\w-]*\.html|chunk-vendors|jquery|element-plus|elementui|chunk-libs|echarts|tinymce|lottie|jtopo|topo\.min|\/element(\.min)?\.js|font-?awesome|moment|lodash|highcharts|chart\.min|swiper|\.min\.js.*(forge|elliptic))/i;
 const MAX_FILE = 1_500_000;
 const MAX_TOTAL = 8_000_000;
 const MAX_FILES = 150; // صفحات RequireJS (ZTE) فيها موديول لكل شاشة

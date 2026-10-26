@@ -82,3 +82,23 @@ test('الإرسال: دفعة تنرفض ← نرسل ملفاتها واحد �
   const delivered = got.filter(b => b.files && !b.files.some((f: any) => f.p === '/js/bad.js')).flatMap(b => b.files.map((f: any) => f.p));
   assert.ok(delivered.includes('/js/service.js'));
 });
+
+test('FiberHome: polyfill.min.js و vue-i18n.min.js تنجمع (فيها $post وأسماء الإعدادات)، والمكتبات الكبيرة لا', async () => {
+  const asked: string[] = [];
+  (globalThis as any).fetch = async (url: string) => {
+    const p = url.replace(/^http:\/\/[^/]+/, '').split('?')[0];
+    asked.push(p);
+    const files: Record<string, string> = {
+      '/': '<script src="/plugins/vue.min.js"></script><script src="/plugins/vue-i18n.min.js"></script><script src="/plugins/polyfill.min.js"></script><script src="/js/jquery-3.5.1.min.js"></script><script src="/plugins/topo.min.js"></script>',
+      '/plugins/vue.min.js': 'v', '/plugins/vue-i18n.min.js': 'i18n', '/plugins/polyfill.min.js': 'function $post(){}',
+    };
+    const b = files[p];
+    return { ok: b !== undefined, headers: { get: () => 'text/plain' }, text: async () => b ?? '' } as any;
+  };
+  const { files, skipped } = await collectRouterFiles('192.168.8.1');
+  const got = files.map(f => f.p);
+  assert.ok(got.includes('/plugins/polyfill.min.js'));
+  assert.ok(got.includes('/plugins/vue-i18n.min.js'));
+  assert.ok(skipped.some(s => /jquery/.test(s)));
+  assert.ok(skipped.some(s => /topo\.min/.test(s)));
+});
