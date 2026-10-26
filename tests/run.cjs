@@ -29,6 +29,9 @@ const files = [
   'src/drivers/fiberhome/nodes.ts',
   'src/drivers/fiberhome/extras.ts',
   'src/drivers/fiberhome/index.ts',
+  'src/drivers/oppo/crypto.ts',
+  'src/drivers/oppo/parse.ts',
+  'src/drivers/oppo/index.ts',
   'src/services/amdRefs.ts',
   'src/drivers/zte/writeResult.ts',
   // درايفر ZTE كامل (للاختبار بالمحاكاة — AsyncStorage يتبدّل ببديل داخل الاختبار)

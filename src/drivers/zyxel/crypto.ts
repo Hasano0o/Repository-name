@@ -73,6 +73,12 @@ function decBlock(b: Uint8Array, rk: Uint8Array[]): Uint8Array {
   return s;
 }
 
+/** مشفّر بلوك AES واحد (للأوضاع اللي نبنيها فوقه مثل CTR — OPPO) */
+export function aesBlockEncryptor(key: Uint8Array): (block: Uint8Array) => Uint8Array {
+  const rk = expandKey(key);
+  return b => encBlock(b, rk);
+}
+
 export function aesCbcEncrypt(key: Uint8Array, iv: Uint8Array, data: Uint8Array): Uint8Array {
   const rk = expandKey(key);
   const pad = 16 - (data.length % 16);

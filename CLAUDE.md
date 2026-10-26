@@ -10,7 +10,7 @@
 ## التطبيق
 Bandly: تطبيق Expo (SDK 57، expo-router، TypeScript strict) يدير راوترات 4G/5G (هواوي و ZTE): توجيه الأنتنا، الأبراج وتثبيت الخلية، الترددات، مُحسّن الألعاب، كاشف اللاق، وضع الفني، المراقبة بالخلفية.
 - الدرايفرات: `src/drivers/{huawei,zte,...}` — الواجهة الموحدة في `src/drivers/types.ts`.
-- الدرايفرات المسجّلة في `src/drivers/registry.ts`: هواوي، ZTE (goform)، ZTE الجيل الجديد (ubus)، زيكسل، **FiberHome** (`src/drivers/fiberhome/`، من ٢٦ أكتوبر — LG6121D اشتغل عند عضو؛ مركز التحكم في `fiberhome/extras.ts` من ٢٦ أكتوبر — لسا ما انجرّب ميداني).
+- الدرايفرات المسجّلة في `src/drivers/registry.ts`: هواوي، ZTE (goform)، ZTE الجيل الجديد (ubus)، زيكسل، **FiberHome** (`src/drivers/fiberhome/`، من ٢٦ أكتوبر — LG6121D اشتغل عند عضو؛ مركز التحكم في `fiberhome/extras.ts` من ٢٦ أكتوبر — لسا ما انجرّب ميداني)، **OPPO 5G CPE** (`src/drivers/oppo/`، T1a زين، من ٢٦ أكتوبر — تشفير AES-CTR + RSA-OAEP مع رجوع لـ PKCS#1؛ إشارة، وضع الشبكة، أجهزة وحظر، رسائل، مركز التحكم، قناة الواي فاي. **ما فيه تثبيت ترددات ولا برج في صفحته** — setBand يوقف بـ noChange، وشاشة الترددات تعرض وضع الشبكة بس. لسا ما انجرّب ميداني).
 - **ZTE U30 Pro**: القراءة شغالة، والكتابة موقوفة عمداً (`writeUnverified` في `models.ts`) لين يوصل `service.js` من «مو مدعوم؟». لا ترسل أوامر تخمينية لراوتر عضو.
 - «مو مدعوم؟» (`app/newdevice.tsx` + `src/services/routerDump.ts`): يجمع ملفات صفحة الراوتر ويرسلها zip للبوت؛ لو فشل الإرسال يوصل تقرير `newdevice-dump`. الحزم على السيرفر في `/root/bandly-live/data/dumps/`.
 - الاختبارات: `node tests/run.cjs` (لازم كلها تنجح قبل الدمج).

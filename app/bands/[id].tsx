@@ -65,6 +65,8 @@ export default function BandsScreen() {
   const [info, setInfo] = useState<SavedRouter | null>(null);
   const op = useOperatorBands(id);
   const [cfg, setCfg] = useState<BandConfig | null>(null);
+  /** الراوتر ما يسمح بتثبيت أي تردد (OPPO) — نخفي اختيار الترددات والفحص ونخلي وضع الشبكة */
+  const noLock = !!cfg && !cfg.supported.length && !cfg.nrSupported.length;
   const [signal, setSignal] = useState<Signal | null>(null);
   const [selected, setSelected] = useState<number[]>([]);
   const [seen, setSeen] = useState<number[]>([]);
@@ -743,8 +745,16 @@ export default function BandsScreen() {
           </View>
         )}
 
+        {/* راوتر ما يسمح بتثبيت الترددات أصلاً (مثل OPPO) — نعرض وضع الشبكة بس */}
+        {!loading && noLock && (
+          <MetricCard>
+            <Text style={s.blockTitle}>تثبيت الترددات مو متاح في راوترك</Text>
+            <Text style={s.hint}>صفحة الراوتر نفسها ما فيها هالخيار. تقدر تغيّر «وضع الشبكة» تحت (مثلاً 4G فقط أو 5G SA فقط) — نتأكد إنه انحفظ.</Text>
+          </MetricCard>
+        )}
+
         {/* ═════ المرحلة ١ — اختيار الترددات ═════ */}
-        {!loading && cfg && (
+        {!loading && cfg && !noLock && (
           <Stage n={1} title="ترددات راوترك" sub={verdict}>
             <BandPicker
               cfg={cfg}
@@ -784,7 +794,7 @@ export default function BandsScreen() {
         )}
 
         {/* ═════ المرحلة ٢ — اكتشاف أفضل تردد ═════ */}
-        {!loading && cfg && (
+        {!loading && cfg && !noLock && (
           <Stage
             n={2}
             title="اكتشاف أفضل تردد"
@@ -900,7 +910,7 @@ export default function BandsScreen() {
               </Pressable>
             }
           >
-            {!advanced ? (
+            {!advanced && !noLock ? (
               <Pressable style={s.collapsed} onPress={() => setAdvanced(true)}>
                 <Text style={s.collapsedText}>
                   وضع الشبكة{modeLabel ? ` (${modeLabel})` : ''} · الفحص الدقيق

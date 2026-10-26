@@ -4,6 +4,7 @@ import { ZteDriver } from './zte';
 import { ZteNgDriver } from './zteng';
 import { ZyxelDriver } from './zyxel';
 import { FiberhomeDriver } from './fiberhome';
+import { OppoDriver } from './oppo';
 import { UnknownDriver } from './unknown';
 import { DeviceDriver } from './device';
 import { DemoDriver } from './demo';
@@ -26,6 +27,8 @@ const factories: (() => RouterDriver)[] = [
   () => new ZyxelDriver(),
   // FiberHome 5G CPE (واجهة Vue، /api/tmp/FHAPIS) — من ملفات صفحة حقيقية (٢٦ أكتوبر)، لسا ما انجرّب ميداني
   () => new FiberhomeDriver(),
+  // OPPO 5G CPE (T1a — زين، /api/... مشفّر AES-CTR + RSA) — من ملفات صفحة حقيقية (٢٦ أكتوبر)، لسا ما انجرّب ميداني
+  () => new OppoDriver(),
   () => new UnknownDriver(),
 ];
 
