@@ -148,6 +148,8 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
     files.push({ p: p === '/' ? '/index.html' : p, t });
     total += t.length;
     onStep?.(files.length);
+    // FiberHome LG6851F: checkBrowser.js يحمّل polyfill.min.js (فيه $post والتشفير) بكود مخفي (hex) — ما يبان كرابط
+    if (/_0xdx2|DO_WEB_LOGIN/.test(r.text) && !seen.has('/plugins/polyfill.min.js') && !queue.includes('/plugins/polyfill.min.js')) queue.push('/plugins/polyfill.min.js');
     for (const ref of findRefs(r.text)) {
       const rp = resolvePath(ref, p === '/' ? '/index.html' : p);
       if (rp && !seen.has(rp) && !queue.includes(rp)) queue.push(rp);
@@ -163,9 +165,17 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
   }
   // FiberHome: أسماء الإعدادات (x_NetworkSettings_obj… ٥٩٢ اسم) ما هي ملف ثابت — الصفحة تطلبها وقت التشغيل
   // بـ get_xmlnode_js_file (بدون دخول، «nocheck») وتسوي لها eval. نطلبها بنفس الطريقة ونحفظ النص بس.
-  if (files.some(f => /get_xmlnode_js_file/.test(f.t) && /FHNCAPIS/.test(f.t))) {
+  const fh = files.some(f => (/get_xmlnode_js_file/.test(f.t) && /FHNCAPIS/.test(f.t)) || /DO_WEB_LOGIN/.test(f.t));
+  if (fh) {
     const r = await fiberhomeNodes(base);
     files.push(r.ok ? { p: '/_bandly/xmlnode.js', t: scrub(r.text.slice(0, MAX_FILE)) } : { p: '/_bandly/xmlnode-error.txt', t: r.text });
+    // وش يرد الراوتر على أوامر التعرّف (بدون دخول) — عشان نعرف ليش التطبيق ما تعرّف عليه
+    const probe: string[] = [];
+    for (const q of ['is_encrypt', 'get_refresh_sessionid']) {
+      const x = await get(`${base}/api/tmp/FHNCAPIS?ajaxmethod=${q}&_=${Math.random()}`);
+      probe.push(`GET FHNCAPIS ${q} → ${x.ok ? 'ok' : 'فشل'} ${x.type} · ${x.text.slice(0, 160).replace(/"sessionid"\s*:\s*"[^"]*"/, '"sessionid":"«محذوف»"')}`);
+    }
+    files.push({ p: '/_bandly/probe.txt', t: probe.join('\n') });
     onStep?.(files.length);
   }
   return { files, skipped: [...new Set(skipped)] };

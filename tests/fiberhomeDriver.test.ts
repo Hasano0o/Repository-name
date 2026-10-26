@@ -27,7 +27,7 @@ var x_Temperature_obj="IGD.X_FH_Temperature.";var x_Modem5GTemperature="Modem5G"
 var x_WLANConfiguration_obj="IGD.LANDevice.1.WLANConfiguration.";var x_wifi_RadioEnabled="RadioEnabled",x_wifi_SSID="SSID",x_wifi_BeaconType="BeaconType",x_wifi_Enable="Enable",x_wifi_PreSharedKey="PreSharedKey.1.PreSharedKey";
 var x_MainSSIDIndex_58G_obj="IGD.X_FH_MainSSIDIndex_58G";var x_wifi_WifiBandSteering_obj="IGD.X_FH_BandSteering.";var x_BandSteering_Enable="Enable";`;
 
-function router(opts: { password?: string; ignoreWrites?: boolean; model?: string } = {}) {
+function router(opts: { password?: string; ignoreWrites?: boolean; model?: string; noEncryptApi?: boolean } = {}) {
   const db: Record<string, string> = {
     'IGD.X_FH_MobileNetwork.NetworkSettings.LTELockBAND': '', 'IGD.X_FH_MobileNetwork.NetworkSettings.NRLockBAND': '',
     'IGD.X_FH_MobileNetwork.NetworkSettings.LockBandEnable': '0', 'IGD.X_FH_MobileNetwork.NetworkSettings.NetworkMode': '3',
@@ -60,7 +60,8 @@ function router(opts: { password?: string; ignoreWrites?: boolean; model?: strin
     const u = new URL(url);
     if (init?.method !== 'POST') {
       const m = u.searchParams.get('ajaxmethod');
-      if (m === 'is_encrypt') return res(200, '{"enable":1}');
+      if (u.pathname === '/login.html') return res(200, '<script src="/plugins/checkBrowser.js"></script><script src="lang/login_res.js"></script><script>_0xdx2m04ej1p623_("/js/login.js")</script>');
+      if (m === 'is_encrypt') return opts.noEncryptApi ? res(404, '') : res(200, '{"enable":1}');
       if (m === 'get_refresh_sessionid') { sid = Math.random().toString(36).slice(2).padEnd(20, 'x'); return res(200, JSON.stringify({ sessionid: sid })); }
       if (m === 'set_developer_mode') return res(200, '{}');
       return res(404, '');
@@ -297,4 +298,19 @@ test('FiberHome مركز التحكم: ضبط المصنع بنفس أوامر �
   await d.login('192.168.8.1', 'admin', 'pw');
   await d.factoryReset();
   assert.deepEqual(r.cmds, ['RECORD_MESSAGE_WEB', 'UBUS_RESTORE_MODE_2']);
+});
+
+test('FiberHome LG6851F: is_encrypt ما رد ← نتعرّف عليه من صفحة الدخول ونفترض التشفير، والدخول يشتغل', async () => {
+  router({ noEncryptApi: true, model: 'LG6851F' });
+  const d = await driver();
+  assert.equal(await d.detect('192.168.8.1'), true);
+  assert.equal((await d.identify()).label, 'FiberHome LG6851F');
+  await d.login('192.168.8.1', 'admin', 'pw');
+  assert.equal((await d.getSignal()).band, 'B3');
+});
+
+test('FiberHome: جهاز ثاني (مو FiberHome) ما ينحسب FiberHome', async () => {
+  (globalThis as any).fetch = async () => ({ ok: false, status: 404, url: 'http://192.168.8.1/', headers: { get: () => null }, text: async () => '<html>Huawei</html>' });
+  const d = await driver();
+  assert.equal(await d.detect('192.168.8.1'), false);
 });

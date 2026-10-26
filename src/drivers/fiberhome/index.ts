@@ -83,8 +83,23 @@ export class FiberhomeDriver implements RouterDriver {
     this.host = host;
     try {
       const j = await this.getQ('is_encrypt', true);
-      return !!j && typeof j === 'object' && 'enable' in j;
+      if (j && typeof j === 'object' && 'enable' in j) return true;
+    } catch {}
+    // احتياط (LG6851F — تقرير ٢٦ أكتوبر: التطبيق قال «مو مدعوم»): بصمة صفحة الدخول نفسها
+    // checkBrowser.js + lang/login_res.js + المحمّل المخفي اللي يجيب polyfill.min.js
+    try {
+      const r = await http(`${this.base()}/login.html?${Math.random().toString().slice(-4)}`, { headers: { Accept: 'text/html,*/*' } }, 6000);
+      const t = await r.text();
+      return /checkBrowser\.js/.test(t) && (/_0xdx2m04ej1p623_|login_res\.js/.test(t));
     } catch { return false; }
+  }
+  /** is_encrypt — لو ما رد بشكل مفهوم نفترض التشفير شغّال (الافتراضي في polyfill) */
+  private async readEncrypt(): Promise<boolean> {
+    try {
+      const enc = await this.getQ('is_encrypt', true);
+      if (enc && typeof enc === 'object' && 'enable' in enc) return String(enc.enable) === '1';
+    } catch {}
+    return true;
   }
 
   private async deviceInfo(): Promise<Record<string, any>> {
@@ -96,8 +111,7 @@ export class FiberhomeDriver implements RouterDriver {
 
   async identify(): Promise<ModelProfile | null> {
     try {
-      const enc = await this.getQ('is_encrypt', true);
-      this.encrypt = String(enc?.enable) === '1';
+      this.encrypt = await this.readEncrypt();
       const m = String((await this.deviceInfo()).model_name ?? '').trim();
       return { id: 'fiberhome' + (m ? '-' + m.toLowerCase() : ''), label: 'FiberHome' + (m ? ' ' + m : ''), brand: 'fiberhome', tech: '5G' };
     } catch { return null; }
@@ -107,8 +121,7 @@ export class FiberhomeDriver implements RouterDriver {
     this.host = host;
     this.user = (username || '').trim() || 'admin';
     this.password = password;
-    const enc = await this.getQ('is_encrypt', true);
-    this.encrypt = String(enc?.enable) === '1';
+    this.encrypt = await this.readEncrypt();
     const res = await this.post('DO_WEB_LOGIN', { username: this.user, password }, { sign: true });
     const err = loginError(typeof res === 'string' ? res : JSON.stringify(res));
     if (err) throw new Error(err);
