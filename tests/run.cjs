@@ -37,6 +37,7 @@ const files = [
   'src/drivers/zteufi/index.ts',
   'src/services/amdRefs.ts',
   'src/drivers/zte/writeResult.ts',
+  'src/drivers/zte/u30.ts',
   // درايفر ZTE كامل (للاختبار بالمحاكاة — AsyncStorage يتبدّل ببديل داخل الاختبار)
   'src/drivers/zte/index.ts',
   'src/drivers/zte/extras.ts',

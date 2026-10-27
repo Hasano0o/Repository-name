@@ -35,6 +35,13 @@ test('ZTE U30 Pro: يتعرف من wa_inner_version بدون مسافة قبل P
 
 test('U30 Pro: القراءة مسموحة والكتابة موقوفة لين تنثبت — وباقي ZTE ما تأثرت', () => {
   assert.equal(identifyZte('U30Pro_GEN_MEASV1.0.0B07').writeUnverified, true);
+  // من كود صفحته (٢٧ أكتوبر): أوامر الترددات مسموحة، والواي فاي لا
+  const u = identifyZte('U30Pro_GEN_MEASV1.0.0B07');
+  assert.equal(u.cmdSet, 'u30');
+  assert.ok(u.writeAllow?.includes('LTE_BAND_LOCK'));
+  assert.ok(!u.writeAllow?.includes('setAccessPointInfo'));
+  assert.ok(!u.writeAllow?.includes('BAND_SELECT'));
+  assert.ok(!identifyZte('BD_STCMU5001V1.0.2B04').cmdSet, 'MU5001 ما يمر على أوامر U30');
   assert.equal(identifyZte('MU5358_GEN_MEASV1.0.0B07').id, 'u30-pro');
   assert.ok(!identifyZte('BD_STCMU5001V1.0.2B04').writeUnverified);
   assert.ok(!identifyZte('BD_MC888V1.0', '').writeUnverified);

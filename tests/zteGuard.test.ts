@@ -1,6 +1,7 @@
 /**
  * درايفر ZTE كامل على راوتر محاكى — نتأكد بالطلبات الفعلية (مو بالكلام):
- *  ١. U30 Pro: ولا أمر تغيير يطلع للراوتر (ترددات، 5G، وضع الشبكة، إعادة التشغيل، الواي فاي)، والخطأ «ما تغيّر شي»
+ *  ١. U30 Pro: أوامر الواي فاي (اللي ما انثبتت) ما تطلع للراوتر، والخطأ «ما تغيّر شي»
+ *     (الترددات/الوضع/إعادة التشغيل صارت بأوامر صفحته الحقيقية — اختباراتها في zteU30.test.ts)
  *  ٢. MU5001 (موديل ثاني): نفس الأمر يوصل للراوتر عادي — يعني القفل ما يمس غير U30 Pro
  */
 import { test } from 'node:test';
@@ -62,10 +63,6 @@ async function driver() {
 }
 
 const WRITES: [string, (d: any) => Promise<unknown>][] = [
-  ['ترددات 4G', d => d.setBand([3])],
-  ['ترددات 5G', d => d.setBand('keep', [78])],
-  ['وضع الشبكة', d => d.setNetworkMode('WL_AND_5G')],
-  ['إعادة التشغيل', d => d.reboot()],
   ['تشغيل الواي فاي', d => d.setBandOn('2.4', true)],
 ];
 
@@ -96,7 +93,7 @@ test('safeApply: أمر انمنع قبل الإرسال ← ما فيه «رج�
   let wrote = false;
   const out = await runApply({
     session: (fn: (x: any) => Promise<void>) => fn(d),
-    apply: (x: any) => x.setBand([3]),
+    apply: (x: any) => x.setBandOn('2.4', true),
     changed: () => wrote,
     firstMs: 5000, extraMs: 5000,
   });

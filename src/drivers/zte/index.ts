@@ -19,6 +19,7 @@ import { classifyZteWrite, WRITE_ALLOWED_WHEN_UNVERIFIED } from './writeResult';
 import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { ZteNgDriver } from '../zteng';
 import { identifyZte, ModelProfile } from '../models';
+import { u30SetBands, u30ReadLock, u30Supported, u30Locked, u30CellLocks, u30UnlockAll, u30Neighbors, u30Summary, u30Diff, U30Lock } from './u30';
 import { ZTE_LOCK_KEYS, ZteLockData, checkComplete, zteDiff, zteSummary, ZTE_PART_LABEL, lteBands, nrBands, lteCell, nrCell } from './lockState';
 const sha256Upper = (s: string) => bytesToHex(sha256(utf8ToBytes(s))).toUpperCase();
 const sha256Hex = (s: string) => bytesToHex(sha256(utf8ToBytes(s)));
@@ -303,7 +304,9 @@ export class ZteDriver implements RouterDriver {
    */
   private async assertWritable(goformId: string): Promise<void> {
     if (WRITE_ALLOWED_WHEN_UNVERIFIED.has(goformId)) return;
-    if (!(await this.identify())?.writeUnverified) return;
+    const prof = await this.identify();
+    if (!prof?.writeUnverified) return;
+    if (prof.writeAllow?.includes(goformId)) return;
     const e = noChange(`راوترك (${this.profile?.label ?? 'ZTE'}) نقرأ منه كل شي، بس أوامر التغيير فيه بصيغة خاصة لسا نضيفها — ما غيّرنا أي شي. أرسل «جهاز جديد» من الصفحة الرئيسية عشان نضيفها أسرع.`);
     (e as any).unsupported = true;
     throw e;
@@ -855,6 +858,14 @@ export class ZteDriver implements RouterDriver {
         out.push({ kind: 'secondary', tech: c.tech, band: c.band, arfcn: c.arfcn });
       }
     }
+    // U30 Pro: neighbor_cell_info مصفوفة JSON (band/earfcn/pci/rsrp/rsrq/sinr)
+    if (await this.isU30()) {
+      for (const c of await u30Neighbors(this.io()).catch(() => [])) {
+        if (c.pci === s.pci && c.arfcn === s.earfcn) continue;
+        out.push({ kind: 'neighbor', tech: 'LTE', arfcn: c.arfcn, band: c.band ?? lteBandOf(num(c.arfcn)), pci: c.pci, rsrp: c.rsrp, rsrq: c.rsrq, sinr: c.sinr });
+      }
+      return out;
+    }
     // الأبراج المجاورة (MU5001): "earfcn,pci,rsrq,rsrp,rssi;..." — PCI هنا عشري،
     // وأول سطر غالباً هو البرج الحالي نفسه فنتخطاه
     try {
@@ -887,6 +898,13 @@ export class ZteDriver implements RouterDriver {
 
   async readBaseline(): Promise<Record<string, string> | null> {
     await this.ensure();
+    if (await this.isU30()) {
+      const [cur, sup] = [await u30ReadLock(this.io()), await u30Supported(this.io())];
+      if (u30Locked(cur.lte, sup.lte).length || u30Locked(cur.nr, sup.nr).length) return null;
+      if ((await u30CellLocks(this.io()).catch(() => [])).length) return null;
+      if (cur.mode === 'Only_LTE' || cur.mode === 'Only_5G') return null;
+      return { u30_lte: cur.lte.join(','), u30_nr: cur.nr.join(','), net_select: cur.mode };
+    }
     const r = await this.get([
       'lte_band_lock', 'nr5g_nsa_band_lock', 'nr5g_sa_band_lock', 'nr5g_band_lock', 'net_select',
       'lte_pci_lock', 'lte_earfcn_lock', 'nr5g_cell_lock',
@@ -909,6 +927,7 @@ export class ZteDriver implements RouterDriver {
   async restoreAll(baseline: Record<string, string> | null): Promise<void> {
     if (baseline) this.orig = baseline;
     await this.ensure();
+    if (await this.isU30()) return this.u30RestoreAll(baseline);
     const ok: string[] = [];
     const step = async (name: string, fn: () => Promise<string>) => {
       try { if (/success/i.test(await fn())) ok.push(name); } catch (e) { this.log('restore', name, 'failed', (e as any)?.message); }
@@ -959,6 +978,7 @@ export class ZteDriver implements RouterDriver {
 
   async getBandConfig(): Promise<BandConfig> {
     await this.ensure();
+    if (await this.isU30()) return this.u30BandConfig();
     const { lte, nr } = await this.readLocks();
     const bl = this.baseLte();
     const bn = this.baseNr();
@@ -1007,6 +1027,11 @@ export class ZteDriver implements RouterDriver {
 
   async setBand(bands: number[] | 'keep', nrBands?: number[]): Promise<void> {
     await this.ensure();
+    if (await this.isU30()) {
+      // صفحة الراوتر نفسها تعيد التشغيل بعد تغيير الترددات — بدونها ما يتطبّق
+      if (await u30SetBands(this.io(), bands, nrBands)) await this.rebootAndWait();
+      return;
+    }
     if (bands !== 'keep') await this.setLteBands(bands);
     if (nrBands) await this.setNrBands(nrBands);
   }
@@ -1197,6 +1222,7 @@ export class ZteDriver implements RouterDriver {
 
   async getCellLocks(): Promise<CellLockState[]> {
     await this.ensure();
+    if (await this.isU30()) return (await u30CellLocks(this.io())).map(c => ({ tech: c.tech, pci: c.pci, arfcn: c.arfcn, band: c.tech === 'LTE' ? lteBandOf(num(c.arfcn)) : undefined }));
     const r = await this.get(['lte_pci_lock', 'lte_earfcn_lock', 'nr5g_cell_lock']);
     const out: CellLockState[] = [];
     const pci = (r.lte_pci_lock || '').trim();
@@ -1243,6 +1269,11 @@ export class ZteDriver implements RouterDriver {
   /** لقطة إعدادات القفل قبل التجربة (قراءة فقط) — ترمي لو القراءة ناقصة */
   async readLockState(): Promise<LockSnapshot> {
     await this.ensure();
+    if (await this.isU30()) {
+      const d = await u30ReadLock(this.io());
+      if (!d.lte.length) throw new Error('ما قدرنا نقرأ ترددات الراوتر كاملة — ما غيّرنا شي');
+      return { driver: this.id, at: Date.now(), summary: u30Summary(d), data: { u30: d } };
+    }
     const r = await this.get([...ZTE_LOCK_KEYS]);
     const data: ZteLockData = {};
     for (const k of ZTE_LOCK_KEYS) data[k] = (r[k] ?? '').trim();
@@ -1255,8 +1286,10 @@ export class ZteDriver implements RouterDriver {
    */
   async restoreLockState(snap: LockSnapshot): Promise<void> {
     if (snap.driver !== this.id) throw new Error('اللقطة من نوع راوتر ثاني — ما نرجّعها');
-    const d = snap.data as ZteLockData;
     await this.ensure();
+    const u = (snap.data as { u30?: U30Lock })?.u30;
+    if (u) return this.u30Restore(u);
+    const d = snap.data as ZteLockData;
     const read = async () => {
       const r = await this.get([...ZTE_LOCK_KEYS]);
       const o: ZteLockData = {};
@@ -1344,6 +1377,8 @@ export class ZteDriver implements RouterDriver {
 
   async unlockCell(tech?: 'LTE' | 'NR'): Promise<void> {
     await this.ensure();
+    // U30: أمر وحيد يفك الكل (UNLOCK_ALL_CELL) وصفحته تعيد التشغيل بعده
+    if (await this.isU30()) { if (await u30UnlockAll(this.io())) await this.rebootAndWait(); return; }
     const had = (await this.getCellLocks().catch(() => [] as CellLockState[])).filter(h => !tech || h.tech === tech);
     let o1 = '', o2 = '';
     if (!tech || tech === 'LTE') o1 = await this.clearLteCell();
@@ -1532,6 +1567,51 @@ export class ZteDriver implements RouterDriver {
   }
 
   // ───── مركز التحكم ─────
+  // ─── ZTE U30 Pro (zte/u30.ts) — يمر هنا بس لو الموديل u30Pro ───
+  private async isU30(): Promise<boolean> { return (await this.identify())?.cmdSet === 'u30'; }
+  private async u30BandConfig(): Promise<BandConfig> {
+    const io = this.io();
+    const [cur, sup] = [await u30ReadLock(io), await u30Supported(io)];
+    const supported = [...new Set([...sup.lte, ...cur.lte])].sort((a, b) => a - b);
+    const nrSupported = [...new Set([...sup.nr, ...cur.nr])].sort((a, b) => a - b);
+    return {
+      supported, locked: u30Locked(cur.lte, sup.lte),
+      nrSupported, nrLocked: u30Locked(cur.nr, sup.nr), nrPreferred: nrSupported,
+      mode: ZTE_TO_CODE[cur.mode] ?? (cur.mode || 'auto'),
+      modes: [
+        { value: '00', label: 'تلقائي' },
+        { value: '0803', label: '4G + 5G' },
+        { value: '03', label: '4G فقط' },
+        { value: '08', label: '5G فقط (SA)' },
+      ],
+    };
+  }
+  private async u30Restore(u: U30Lock): Promise<void> {
+    const io = this.io();
+    const cur = await u30ReadLock(io);
+    if (u.mode && u.mode !== cur.mode) await this.setNetworkMode(u.mode);
+    const changed = await u30SetBands(io, u.lte.length ? u.lte : 'keep', u.nr.length ? u.nr : undefined);
+    if (changed) await this.rebootAndWait();
+    let left = u30Diff({ ...u, lte: u.lte.length ? u.lte : cur.lte, nr: u.nr.length ? u.nr : cur.nr }, await u30ReadLock(io));
+    for (let i = 0; i < 3 && left.length; i++) {
+      await sleep(1500);
+      left = u30Diff({ ...u, lte: u.lte.length ? u.lte : cur.lte, nr: u.nr.length ? u.nr : cur.nr }, await u30ReadLock(io));
+    }
+    if (left.length) throw restoreMismatch(left);
+  }
+  private async u30RestoreAll(baseline: Record<string, string> | null): Promise<void> {
+    const io = this.io();
+    let changed = await u30UnlockAll(io).catch(e => { this.log('u30 unlock', (e as any)?.message); return false; });
+    const lte = (baseline?.u30_lte || '').split(',').map(Number).filter(Boolean);
+    const nr = (baseline?.u30_nr || '').split(',').map(Number).filter(Boolean);
+    // الأصلي لو نعرفه، وإلا كل المدعوم ([] = الكل)
+    if (await u30SetBands(io, lte, nr)) changed = true;
+    const origMode = (baseline?.net_select || '').trim();
+    const mode = origMode && !/^WL|WCDMA|GSM/i.test(origMode) ? origMode : CODE_TO_ZTE['0803'];
+    try { await this.act({ goformId: 'SET_BEARER_PREFERENCE', BearerPreference: mode }); } catch {}
+    if (changed) await this.rebootAndWait();
+  }
+
   private io(): ZteIo {
     return { get: f => this.get(f), getRaw: f => this.getRaw(f), act: b => this.act(b) };
   }

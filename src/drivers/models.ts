@@ -24,12 +24,18 @@ export interface ModelProfile {
    * نوقف التغيير قبل ما يرسل أي أمر، برسالة واضحة — لين نضيف الأوامر الصحيحة من دليل.
    */
   writeUnverified?: boolean;
+  /** مع writeUnverified: الأوامر اللي ثبتت من كود صفحة الراوتر نفسه — تنرسل، وغيرها يبقى محجوب */
+  writeAllow?: string[];
+  /** ZTE: مجموعة أوامر ترددات خاصة بالموديل (u30 = LTE_BAND_LOCK/NR_BAND_LOCK بقوائم أرقام) */
+  cmdSet?: 'u30';
   /**
    * مقفول على اللي ثبت إنه يشتغل عنده — بدون أي بدائل أو تجارب.
    * أي إصلاح لموديل ثاني ما يمر على هذا الموديل أبداً.
    */
   pinned?: { ad: string; lteMask: 'short' | 'padded'; nrCmd: 'classic' | 'sansa' };
 }
+
+import { U30_WRITES } from './zte/u30';
 
 const P = (p: ModelProfile) => p;
 
@@ -43,9 +49,11 @@ export const MODELS = {
   mc889: P({ id: 'mc889', label: 'ZTE MC889', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
   // U30 Pro (STC، U30Pro_GEN_MEASV1.0.0B07 · cr_version MU5358): صفحته goform القديمة (require.js) — تقرير ٢٥ أكتوبر، @Mjeeduk
   // الكتابة: BAND_SELECT يرد «{}» (ما فيه معالج) بتوقيع صحيح، وsetAccessPointInfo يقول success وما يتغيّر شي (٢٥–٢٦ أكتوبر)
-  // ← نوقف التغيير لين يوصل service.js من «جهاز جديد» ونضيف الأوامر الصحيحة منه
+  // ٢٧ أكتوبر: وصل service.js (صفحة UFI mu3351) — الترددات بأوامر ثانية (LTE_BAND_LOCK/NR_BAND_LOCK) وتوقيع SHA256.
+  // نسمح بس بالأوامر اللي في كود الصفحة (zte/u30.ts)؛ الواي فاي يبقى محجوب (كلماته مشفّرة AES-GCM في هالفيرموير)
   u30Pro: P({ id: 'u30-pro', label: 'ZTE U30 Pro', brand: 'zte', tech: '5G', write: 'goform', nrLock: true, writeUnverified: true,
-    note: 'القراءة شغالة — التغيير (الترددات، الواي فاي) نضيفه قريب' }),
+    writeAllow: U30_WRITES, cmdSet: 'u30',
+    note: 'الترددات ووضع الشبكة وإعادة التشغيل — من كود صفحة الراوتر (لسا ما انجرّبت ميداني). الواي فاي نضيفه قريب' }),
   u10sPro: P({ id: 'u10s-pro', label: 'ZTE U10S Pro', brand: 'zte', tech: '4G', write: 'goform', nrLock: false, note: 'راوتر جيب 4G — ما فيه 5G' }),
   zteG5: P({ id: 'zte-g5', label: 'ZTE (G5)', brand: 'zte', tech: '5G', write: 'ubus', nrLock: true }),
   zte: P({ id: 'zte', label: 'ZTE', brand: 'zte', tech: '5G', write: 'goform' }),
@@ -60,7 +68,8 @@ export function identifyZte(wa?: string, web?: string, hw?: string): ModelProfil
   const s = `${wa ?? ''} ${hw ?? ''}`;
   if (/MU5001/i.test(s)) return MODELS.mu5001;
   if (/MU5250|U60/i.test(s)) return MODELS.u60Pro;
-  if (/U30\s*Pro|MU5358/i.test(s)) return MODELS.u30Pro;
+  // MU3351 = منصة صفحة U30 Pro (config.js: DEVICE "ufi/mu3351") — تقرير ٢٧ أكتوبر
+  if (/U30\s*Pro|MU5358|MU3351/i.test(s)) return MODELS.u30Pro;
   if (/U10S\s*Pro/i.test(s)) return MODELS.u10sPro;
   if (/MC801A\s*Pro/i.test(s)) return MODELS.mc801aPro;
   // صفحة G5 (WEB_…G5…) = عائلة جديدة: تقرا goform وتكتب ubus
