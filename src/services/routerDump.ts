@@ -103,6 +103,21 @@ export function findRefs(text: string): string[] {
   return [...refs];
 }
 
+/**
+ * Webpack بأسماء القطع (هواوي H155-383 — Vue): A.p+"js/"+({0:"common",55:"lockband",70:"networkmode",…}[e]||e)+".js"
+ * — صفحات الترددات ووضع الشبكة والأبراج ما تبان كروابط، فنطلّعها من الخريطة.
+ * صفحات الشبكة أول (الحد ١٥٠ ملف)، والباقي بعدها.
+ */
+const NET_CHUNK = /band|net|mode|cell|lock|signal|freq|developer|antenna|common|login|device/i;
+export function namedChunks(text: string): string[] {
+  const out: string[] = [];
+  for (const m of text.matchAll(/["']([\w./-]*js\/)["']\s*\+\s*\(\{([^{}]{1,30000})\}\[\w+\]\s*\|\|\s*\w+\)\s*\+\s*["']\.js/g)) {
+    for (const n of m[2].matchAll(/(?:\d+|"[\w-]+")\s*:\s*"([\w.-]+)"/g)) out.push(m[1] + n[1] + '.js');
+  }
+  const uniq = [...new Set(out)];
+  return [...uniq.filter(f => NET_CHUNK.test(f)), ...uniq.filter(f => !NET_CHUNK.test(f))].slice(0, 120);
+}
+
 /** <base href="/web_whw/"> ← "/web_whw/" (محلي بس) */
 export function baseHrefOf(text: string): string | null {
   const m = text.match(/<base[^>]+href=["']?([^"'\s>]+)/i);
@@ -191,6 +206,11 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
     const from = bh ? bh + 'index.html' : p === '/' ? '/index.html' : p;
     for (const ref of [...findRefs(r.text), ...angularChunks(r.text)]) {
       const rp = resolvePath(ref, from);
+      if (rp && !seen.has(rp) && !queue.includes(rp)) queue.push(rp);
+    }
+    // قطع Webpack بالأسماء: المسار من publicPath (مجلد الصفحة) مو من مكان main.js — "js/lockband.js" ← /js/lockband.js
+    for (const ref of namedChunks(r.text)) {
+      const rp = resolvePath(ref, (appBase || '/') + 'index.html');
       if (rp && !seen.has(rp) && !queue.includes(rp)) queue.push(rp);
     }
     amd = readAmdConfig(r.text, amd);

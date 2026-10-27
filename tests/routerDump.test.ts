@@ -190,3 +190,33 @@ test('TP-Link MR600 (٢٧ أكتوبر): الملفات تنطلب مع Referer�
   assert.ok(probe && /POST \/cgi\/getParm → ok .*"nn":"C0FFEE"/.test(probe.t));
   assert.ok(asked.some(a => a.p === '/cgi/getParm' && a.m === 'POST'));
 });
+
+import { namedChunks } from '../src/services/routerDump';
+test('هواوي H155-383: قطع Webpack بالأسماء (lockband/networkmode) تنجمع، وصفحات الشبكة أول', () => {
+  const main = 'c.src=function(e){return A.p+"js/"+({0:"common",4:"login",20:"bridgemode-bridgemode-vue",55:"lockband",70:"networkmode",142:"wifisecurity-wifisecurity-vue"}[e]||e)+".js?r=1"}';
+  const got = namedChunks(main);
+  assert.ok(got.includes('js/lockband.js'));
+  assert.ok(got.includes('js/networkmode.js'));
+  assert.ok(got.indexOf('js/lockband.js') < got.indexOf('js/wifisecurity-wifisecurity-vue.js'));
+  assert.deepEqual(namedChunks('var x = 1;'), []);
+});
+
+test('هواوي H155-383: الجامع يطلب /js/lockband.js (مو /js/js/…)', async () => {
+  const asked: string[] = [];
+  (globalThis as any).fetch = async (url: string) => {
+    const p = url.replace(/^http:\/\/[^/]+/, '').split('?')[0];
+    asked.push(p);
+    const files: Record<string, string> = {
+      '/': '<script src="../js/main.js?r=1"></script>',
+      '/js/main.js': 'c.src=function(e){return A.p+"js/"+({55:"lockband",70:"networkmode"}[e]||e)+".js?r=1"}',
+      '/js/lockband.js': 'lock-freq', '/js/networkmode.js': 'LTEBandOption',
+    };
+    const b = files[p];
+    return { ok: b !== undefined, headers: { get: () => 'text/plain' }, text: async () => b ?? '' } as any;
+  };
+  const { files } = await collectRouterFiles('192.168.8.1');
+  const got = files.map(f => f.p);
+  assert.ok(got.includes('/js/lockband.js'));
+  assert.ok(got.includes('/js/networkmode.js'));
+  assert.ok(!asked.includes('/js/js/lockband.js'));
+});

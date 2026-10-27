@@ -40,6 +40,11 @@ const num = (v?: string) => {
   return Number.isFinite(n) ? n : undefined;
 };
 const ALL_LTE = '7FFFFFFFFFFFFFFF';
+/**
+ * راوترات (العنوان) اللي تأكدنا إن net-mode فيها ما يثبّت تردد 4G معيّن (WebUI 4.0 بدون lock-freq):
+ * الراوتر يرجّع LTEBand = كل ترددات FDD/TDD مهما طلبنا. ما نعيد التجربة كل ضغطة (تقرير ٢٧ أكتوبر).
+ */
+const netModeBandDead = new Set<string>();
 
 function parseDataLimit(v?: string): number {
   if (!v) return 0;
@@ -838,6 +843,8 @@ export class HuaweiDriver implements RouterDriver {
     // فما نعرض ترددات 5G للاختيار أصلاً، بدل ما المستخدم يختار والراوتر يتجاهلها بصمت
     const nrLockable = this.lockFreq && !this.lockFreqDead;
     const nrSupported = has5g && nrLockable ? DEFAULT_NR_BANDS : [];
+    // جرّبنا وتأكدنا إن net-mode ما يثبّت تردد معيّن ← الشاشة تعرض «وضع الشبكة» بس (مثل OPPO)
+    if (!nrLockable && netModeBandDead.has(this.host)) supported = [];
     return {
       supported,
       locked,
@@ -870,7 +877,12 @@ export class HuaweiDriver implements RouterDriver {
     if (patch.bands !== undefined) {
       const lock = patch.bands.length > 0;
       setF('LTEBand', lock ? maskFromBands(patch.bands) : this.allLte);
-      if (has('LTEBandOption')) setF('LTEBandOption', lock ? '1' : '0');
+      // WebUI 4.0 (فيه networkOption — H155/H158 5G…): LTEBandOption مو «ترددات مخصصة»، معناه
+      // 0 = كل 4G · 1 = 4G FDD فقط · 2 = 4G TDD فقط (networkmode.js في صفحة الراوتر).
+      // كنا نرسل 1 مع القفل ← الراوتر يحوّل لـ «FDD فقط» ويرجّع LTEBand = كل ترددات FDD
+      // (B1+B3+B5+B7+B8+B20+B28+B32) = «قبل الطلب لكن ما غيّر التردد» على كل تردد وتركيبة.
+      const webui4 = has('networkOption');
+      if (has('LTEBandOption')) setF('LTEBandOption', lock && !webui4 ? '1' : '0');
       if (lock && patch.mode === undefined && has('LTEBandOption')) {
         setF('NetworkMode', '03');
       }
@@ -918,6 +930,10 @@ export class HuaweiDriver implements RouterDriver {
       // التفاصيل في الرسالة عشان توصلنا في التقرير: وش طلبنا ووش رجّع الراوتر
       const got = bandsFromMask(big(getA('LTEBand') ?? '0')).map(b => 'B' + b).join('+') || '—';
       const why = ` (طلبنا ${patch.bands.map(b => 'B' + b).join('+')} · الراوتر: ${got} · الشبكة ${getA('NetworkMode') ?? '؟'} · خيار ${getA('LTEBandOption') ?? '—'})`;
+      if (has('networkOption')) {
+        netModeBandDead.add(this.host);
+        throw new Error('راوترك ما يقبل تثبيت تردد 4G معيّن من وضع الشبكة — صفحته تسمح بس بـ «4G FDD» أو «4G TDD» كامل. استخدم «وضع الشبكة» تحت.' + why);
+      }
       throw new Error((getA('NetworkMode') === '00'
         ? 'الراوتر ما طبّق القفل — جرّب تحول نوع الشبكة إلى 4G ثم أعد القفل'
         : 'الراوتر قبل الطلب لكن ما غيّر التردد') + why);
@@ -1039,6 +1055,9 @@ export class HuaweiDriver implements RouterDriver {
       throw noChange('راوترك ما يسمح نثبّت ترددات 5G (يقبل تثبيت ترددات 4G بس) — ما غيّرنا أي شي. خلّ 5G على «تلقائي» وجرّب.');
     }
     if (bands === 'keep') return; // 5G بس (وفاضي) وما فيه شي 4G نغيّره
+    if (bands.length && netModeBandDead.has(this.host)) {
+      throw noChange('راوترك ما يقبل تثبيت تردد 4G معيّن (جرّبناه وما طبّقه) — ما غيّرنا شي. استخدم «وضع الشبكة»: 4G FDD أو TDD.');
+    }
     await this.writeNetMode({ bands });
   }
   /** مثل صفحة الراوتر نفسها: وضع 4G فقط (03) ما يرسل قسم 5G، ووضع 5G فقط (08) ما يرسل قسم 4G */
