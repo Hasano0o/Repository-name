@@ -39,7 +39,7 @@ interface Status {
 }
 
 /** الخطأ جا من الراوتر نفسه (رمز رقمي أو رفض كلمة) — يعني الاتصال شغال */
-const routerSaid = (e: string) => /\(\d{3,6}\)|كلمة|المستخدم|محاولات|رفض/.test(e);
+const routerSaid = (e: string) => /\(\d{3,6}\)|كلمة|المستخدم|محاولات|رفض الكلمة/.test(e) && !/تعذر الاتصال|ما رد/.test(e);
 
 export default function RoutersList() {
   const [items, setItems] = useState<SavedRouter[]>([]);

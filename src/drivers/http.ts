@@ -85,7 +85,8 @@ export async function http(
     if (e?.message === 'رفض: redirect خارجي' || e?.message === 'رفض: عنوان غير محلي') {
       throw e;
     }
-    throw new Error('تعذر الاتصال بالراوتر');
+    // نذكر الطلب اللي انقطع (المسار بس، بدون أي قيم) — الراوتر يرد على غيره، فنعرف وش اللي يقطعه بالضبط
+    throw new Error(`تعذر الاتصال بالراوتر (${what.split(' ').slice(0, 2).join(' ')})`);
   } finally {
     clearTimeout(t);
   }
