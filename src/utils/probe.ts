@@ -27,6 +27,8 @@ const TARGETS: Target[] = [
   { label: 'MikroTik — REST', path: '/rest/system/resource', brand: 'mikrotik', match: /routeros|version/i },
   { label: 'TP-Link', path: '/cgi-bin/luci/;stok=/login', brand: 'tplink', match: /tp-link|tplink|stok/i },
   { label: 'Nokia/Alcatel', path: '/cgi-bin/index.html', brand: 'nokia', match: /nokia|alcatel/i },
+  // Nokia FastMile 5G Gateway (Angular /web_whw/): شكل رد الدخول (nonce/pubkey/randomKey/iterations) — بدون دخول، والقيم تنحذف
+  { label: 'Nokia FastMile — دخول', path: '/login_web_app.cgi?nonce', brand: 'nokia', match: /nonce|pubkey/i },
   // Green Packet (زين 5G — سيرفر beego، واجهة /web/v1/): روابط startup تنقرا قبل الدخول
   { label: 'Green Packet — المنتج', path: '/web/v1/startup/productinfo', brand: 'greenpacket', match: /product|model|version/i },
   { label: 'Green Packet — حالة الدخول', path: '/web/v1/startup/usersstate', brand: 'greenpacket', match: /\{\s*"/ },

@@ -17,8 +17,12 @@ import { fhBody, fhDecrypt, fhKey } from '../drivers/fiberhome/crypto';
 // مكتبات كبيرة ما تنعدّل — أسماؤها تكفي. ما نتخطى polyfill/vue-i18n/vue-router/axios/bootstrap بعد:
 // FiberHome يخبّي فيها RequireJS ودوال الاتصال ($post) وأسماء الإعدادات (تقرير ٢٦ أكتوبر) — صغيرة ونحتاجها
 const SKIP = /(copyrightPage|opensource|privatePolicy|\/faq[\w-]*\.html|chunk-vendors|jquery|element-plus|elementui|chunk-libs|echarts|tinymce|lottie|jtopo|topo\.min|\/element(\.min)?\.js|font-?awesome|moment|lodash|highcharts|chart\.min|swiper|\.min\.js.*(forge|elliptic))/i;
-const MAX_FILE = 1_500_000;
-const MAX_TOTAL = 8_000_000;
+// Nokia FastMile 3.1 (تقرير ٢٧ أكتوبر): main-es2015.js (Angular) أكبر من ١٫٥ ميقا — انقطع قبل شاشة الدخول والترددات.
+// الملفات الكبيرة تنقسم أجزاء ٣٠٠ك على الإرسال، والسيرفر يجمعها (حده ٢٠ ميقا للتقرير)
+const MAX_FILE = 6_000_000;
+const MAX_TOTAL = 14_000_000;
+/** Angular يبني نسختين من نفس الكود (es2015 + es5 للمتصفحات القديمة) — نسحب وحدة بس */
+const ES5_TWIN = /-es5\.[0-9a-f]{16,}\.js$/i;
 const MAX_FILES = 150; // صفحات RequireJS (ZTE) فيها موديول لكل شاشة
 // الحد بالبايت (UTF-8) مو بالحرف — العربي ٢–٣ بايت للحرف. ٣٠٠ ك ← بعيد عن حد nginx (١ ميقا)
 const PART = 300_000;
@@ -161,6 +165,7 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
     if (seen.has(p)) continue;
     seen.add(p);
     if (SKIP.test(p)) { skipped.push(p); continue; }
+    if (ES5_TWIN.test(p) && (seen.has(p.replace(/-es5\./i, '-es2015.')) || queue.includes(p.replace(/-es5\./i, '-es2015.')))) { skipped.push(p); continue; }
     const r = await get(base + p);
     if (!r.ok || !r.text) continue;
     // راوترات ترجع الصفحة الرئيسية لأي رابط مو موجود — ما نكررها
