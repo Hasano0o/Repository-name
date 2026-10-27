@@ -16,6 +16,8 @@ const TARGETS: Target[] = [
   { label: 'الصفحة الرئيسية', path: '/' },
   { label: 'هواوي — جلسة', path: '/api/webserver/SesTokInfo', brand: 'huawei', match: /SesInfo|TokInfo/i },
   { label: 'هواوي — معلومات', path: '/api/device/basic_information', brand: 'huawei', match: /devicename|classify/i },
+  // طريقة الدخول (password_type 0/4) وهل فيه SCRAM/RSA — تنقرا بدون دخول، تفرق «الكلمة غلط» عن «طريقتنا غلط»
+  { label: 'هواوي — حالة الدخول', path: '/api/user/state-login', brand: 'huawei', match: /password_type|State/i },
   { label: 'ZTE — حالة', path: '/goform/goform_get_cmd_process?isTest=false&cmd=modem_main_state,network_type,signalbar', brand: 'zte', match: /modem_main_state|network_type/i },
   { label: 'ZTE — إشارة', path: '/goform/goform_get_cmd_process?isTest=false&multi_data=1&cmd=rssi,rsrp,rsrq,lte_snr,lte_band,lte_pci,cell_id,Z5g_rsrp,Z5g_SINR,Z5g_dlEarfcn,nr5g_pci,nr5g_action_band,ngbr_cell_info,wan_active_band', brand: 'zte', match: /rsrp|Z5g/i },
   { label: 'ZTE — إصدار', path: '/goform/goform_get_cmd_process?isTest=false&multi_data=1&cmd=cr_version,wa_inner_version,web_version', brand: 'zte', match: /version/i },
