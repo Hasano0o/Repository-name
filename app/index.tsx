@@ -38,6 +38,9 @@ interface Status {
   hasPw?: boolean;
 }
 
+/** الخطأ جا من الراوتر نفسه (رمز رقمي أو رفض كلمة) — يعني الاتصال شغال */
+const routerSaid = (e: string) => /\(\d{3,6}\)|كلمة|المستخدم|محاولات|رفض/.test(e);
+
 export default function RoutersList() {
   const [items, setItems] = useState<SavedRouter[]>([]);
   const [status, setStatus] = useState<Record<string, Status>>({});
@@ -225,6 +228,8 @@ export default function RoutersList() {
     }
     if (down) return { score: 0, tone: 'down' as HeaderTone, loading: false, lead: 'الراوتر', word: 'بلا شبكة', chips: [{ text: 'الأبراج منقطعة', tone: 'red' as const }] };
     if (anyLoading) return { score: 0, tone: 'unknown' as HeaderTone, loading: true, lead: '', word: 'نقرأ الإشارة…', chips };
+    const said = items.map(r => status[r.id]?.error).find(e => e && routerSaid(e));
+    if (said) return { score: 0, tone: 'unknown' as HeaderTone, loading: false, lead: 'الراوتر', word: 'رفض الدخول', chips: [{ text: 'اضغط الراوتر وصحّح الكلمة' }] };
     return { score: 0, tone: 'unknown' as HeaderTone, loading: false, lead: '', word: 'تعذّر الوصول للراوتر', chips: [{ text: 'تأكد إنك على شبكته' }] };
   })();
 
@@ -264,12 +269,13 @@ export default function RoutersList() {
           const noService = !st?.error && !loading && isNoService(sig, st?.online, st?.mode);
           const tone = loading && !sig ? P.sub : st?.error || noService ? P.red : sig ? color : P.sub;
           const tech = noService ? undefined : hasNr ? '5G' : sig ? (sig.network?.match(/\b[2-5]G\b/)?.[0] ?? '4G') : undefined;
-          const line = st?.error ? 'تعذّر الوصول — تأكد إنك على واي فاي الراوتر'
+          // الراوتر رد بس رفض (كلمة غلط/قفل/رمز خطأ) — نعرض سببه الحقيقي بدل «تعذّر الوصول» اللي يوهم إنه مو متصل
+          const line = st?.error ? (routerSaid(st.error) ? st.error : 'تعذّر الوصول — تأكد إنك على واي فاي الراوتر')
             : noService ? 'بلا شبكة — اضغط ورجّع الإشارة'
             : sig ? ['متصل', tech, band.slice(0, 3).join(' + ')].filter(Boolean).join(' · ')
             : loading ? 'نقرأ الإشارة…' : '—';
           return (
-            <Pressable onPress={() => (hasPw ? open(item.id) : edit(item.id))}
+            <Pressable onPress={() => (hasPw && !/\(1080\d\d\)|كلمة/.test(st?.error ?? '') ? open(item.id) : edit(item.id))}
               style={({ pressed }) => [s.card, s.cardSlim, pressed && { opacity: 0.9 }]}>
               <View style={s.row}>
                 <LinearGradient
