@@ -241,7 +241,7 @@ export default function SetupScreen() {
               <View style={s.offline}>
                 <Icon name="compass" size={34} color={tFg('#d97706')} />
                 <Text style={[s.offTitle, { color: tFg('#b45309') }]}>لقيت جهاز بس ما عرفت نوعه</Text>
-                <Text style={s.offSub}>أنت متصل ✓ — فيه جهاز يرد على {miss.hosts.join(' و ')}، بس Bandly ما تعرّف عليه للحين. أرسله لنا من «راوتري مو مدعوم؟» ونضيفه، أو أدخل بياناته بنفسك.</Text>
+                <Text style={s.offSub}>أنت متصل ✓ — فيه جهاز يرد على {miss.hosts.join(' و ')}، بس Bandly ما تعرّف عليه للحين. أرسله لنا من «راوتري مو مدعوم؟» ونضيفه، أو أدخل بياناته بنفسك.{miss.hosts.includes('192.168.100.1') ? '\n\nلو جهازك راوتر فايبر (ألياف بصرية) — Bandly لراوترات الشريحة 4G/5G، بس السرعة والبنق يشتغلون لك بدون إضافة.' : ''}</Text>
               </View>
             ) : (
               <View style={s.offline}>

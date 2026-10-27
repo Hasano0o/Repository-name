@@ -840,7 +840,22 @@ export class HuaweiDriver implements RouterDriver {
     this.log('net-mode sending', body);
     await this.post('net/net-mode', body);
     await new Promise(r => setTimeout(r, 1500));
-    const after = await this.readNetModeFields();
+    let after = await this.readNetModeFields();
+    // بعض الموديلات تطبّق القفل بعد ثواني — نعيد القراءة قبل ما نحكم إنه «ما تغيّر» (تقرير ٢٧ أكتوبر: مرساة 5G
+    // B1/B3/B20 كلها «قبل الطلب لكن ما غيّر» على آيفون). والمقارنة على الترددات اللي الراوتر يدعمها بس
+    const supMask = big(this.allLte);
+    const sameBands = (mask: string, want: number[]) => {
+      const got = bandsFromMask(big(mask) & supMask).sort((a, b) => a - b).join(',');
+      const w = bandsFromMask(big(maskFromBands(want)) & supMask).sort((a, b) => a - b).join(',');
+      return got === w;
+    };
+    if (patch.bands && patch.bands.length) {
+      for (const wait of [2500, 4000]) {
+        if (sameBands(after.find(f => f[0] === 'LTEBand')?.[1] ?? '', patch.bands)) break;
+        await new Promise(r => setTimeout(r, wait));
+        after = await this.readNetModeFields();
+      }
+    }
     const getA = (k: string) => after.find(f => f[0] === k)?.[1];
     this.log('net-mode readback', after.map(([k, v]) => `${k}=${v}`).join(' '));
     if (patch.mode !== undefined && getA('NetworkMode') !== patch.mode) {
@@ -860,10 +875,13 @@ export class HuaweiDriver implements RouterDriver {
       const fin = await this.readNetModeFields();
       if (fin.find(f => f[0] === 'LTEBandOption')?.[1] === '1') throw new Error('الراوتر ما فك قفل ترددات 4G — افتح صفحة الراوتر وحوّل الشبكة لـ 4G واختر كل الترددات');
     }
-    if (patch.bands && patch.bands.length && big(getA('LTEBand') ?? '') !== big(maskFromBands(patch.bands))) {
-      throw new Error(getA('NetworkMode') === '00'
+    if (patch.bands && patch.bands.length && !sameBands(getA('LTEBand') ?? '', patch.bands)) {
+      // التفاصيل في الرسالة عشان توصلنا في التقرير: وش طلبنا ووش رجّع الراوتر
+      const got = bandsFromMask(big(getA('LTEBand') ?? '0')).map(b => 'B' + b).join('+') || '—';
+      const why = ` (طلبنا ${patch.bands.map(b => 'B' + b).join('+')} · الراوتر: ${got} · الشبكة ${getA('NetworkMode') ?? '؟'} · خيار ${getA('LTEBandOption') ?? '—'})`;
+      throw new Error((getA('NetworkMode') === '00'
         ? 'الراوتر ما طبّق القفل — جرّب تحول نوع الشبكة إلى 4G ثم أعد القفل'
-        : 'الراوتر قبل الطلب لكن ما غيّر التردد');
+        : 'الراوتر قبل الطلب لكن ما غيّر التردد') + why);
     }
   }
   /**
