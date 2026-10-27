@@ -38,6 +38,10 @@ const TARGETS: Target[] = [
 const SENSITIVE =
   /(tok|ses|nonce|proof|salt|challenge|ssid|wlan|wifi|pass|pwd|passwd|token|cookie|session|secret|key|auth|imei|imsi|iccid|meid|msisdn|phone|number|sn\b|serial|ssid|wifi_?name|mac|username|user_?name|login|apn_?user|pin|puk|content|message|sms)/i;
 const MASK = '«محذوف»';
+// أعلام هواوي في state-login: اسمها فيه pwd/login لكن قيمتها رقم صغير (نوع/علم) — مو سر، ونحتاجها نفرق
+// «الكلمة غلط» عن «طريقة الدخول غلط» (H122: wifipwdsamewithwebpwd = كلمة الويب هي كلمة الواي فاي)
+const SAFE_FLAGS = /^(password_type|extern_password_type|history_login_flag|guidemodifypwdpageflag|accounts_number|wifipwdsamewithwebpwd|firstlogin)$/i;
+const isFlag = (tag: string, v: string) => SAFE_FLAGS.test(tag) && /^-?\d{1,2}$/.test(v.trim());
 
 export function sanitizeField(key: string, value: string): string {
   if (SENSITIVE.test(key)) return MASK;
@@ -46,8 +50,8 @@ export function sanitizeField(key: string, value: string): string {
 
 export function sanitize(raw: string): string {
   let t = raw;
-  t = t.replace(/<([A-Za-z_][\w.\-]*)>([^<]{1,4000})<\/\1>/g, (m, tag) =>
-    SENSITIVE.test(tag) ? '<' + tag + '>' + MASK + '</' + tag + '>' : m);
+  t = t.replace(/<([A-Za-z_][\w.\-]*)>([^<]{1,4000})<\/\1>/g, (m, tag, v) =>
+    SENSITIVE.test(tag) && !isFlag(tag, v) ? '<' + tag + '>' + MASK + '</' + tag + '>' : m);
   t = t.replace(/"([\w.\-]+)"\s*:\s*"([^"]{0,4000})"/g, (m, k) =>
     SENSITIVE.test(k) ? '"' + k + '":"' + MASK + '"' : m);
   t = t.replace(/([\w.\-]{2,40})\s*[:=]\s*(["']?)([^\s;,&"'<>]{1,400})\2/g,

@@ -310,6 +310,20 @@ export class HuaweiDriver implements RouterDriver {
     const state = await this.get('user/state-login');
     const type = tag(state, 'password_type');
     this.log('state', tag(state, 'State'), 'password_type', type);
+    // H122 (5G CPE Pro 2) وغيره: wifipwdsamewithwebpwd=1 ← كلمة دخول الراوتر هي نفسها كلمة الواي فاي،
+    // مو الكلمة المطبوعة تحت IP. فلو رفض الكلمة نقول للمستخدم يجرّب كلمة الواي فاي
+    const samePwd = tag(state, 'wifipwdsamewithwebpwd') === '1';
+    try {
+      return await this.loginWith(host, type, state, username, password, opts);
+    } catch (e) {
+      if (samePwd && e instanceof HuaweiError && /^10800[126]$/.test(e.code)) {
+        e.message = `الراوتر رفض الكلمة (${e.code}). في هذا الجهاز كلمة الدخول هي نفسها كلمة الواي فاي — جرّب كلمة الواي فاي (اللي تتصل فيها بالشبكة)`;
+      }
+      throw e;
+    }
+  }
+  private async loginWith(host: string, type: string | undefined, state: string, username: string, password: string,
+    opts?: { lastTry?: boolean; fresh?: boolean }): Promise<void> {
     if (tag(state, 'State') === '0') {
       // بعض الموديلات (H155) بعد تغيير الإعدادات: state-login يقول «داخل» والأوامر ترد 100003 —
       // كنا نصدّقه ونعلق بحلقة طرد. الحين: لو انطردنا، نطلع ونفتح جلسة جديدة فعلاً
