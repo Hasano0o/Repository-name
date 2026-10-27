@@ -163,3 +163,30 @@ test('جهاز جديد (Nokia — Angular): <base href="/web_whw/"> + قطع ru
   const rt = 'a.u=e=>(76===e?"common":e)+"."+{76:"0b3c3e1a2f4d5e6f",592:"a1b2c3d4e5f60718",common:"1122334455667788"}[e]+".js"';
   assert.deepEqual(angularChunks(rt).sort(), ['592.a1b2c3d4e5f60718.js', '76.0b3c3e1a2f4d5e6f.js', 'common.1122334455667788.js']);
 });
+
+test('TP-Link MR600 (٢٧ أكتوبر): الملفات تنطلب مع Referer، jquery.tp.min.js ينجمع (فيه $.act والتشفير)، وردود getParm/getBusy في probe.txt', async () => {
+  const asked: { p: string; m: string }[] = [];
+  const login = '<html><script src="../js/jquery-1.8.3.min.js"></script><script src="../js/oid_str.js"></script><script src="../js/encrypt.js"></script><script src="../js/lib.js"></script>'
+    + '<script>INCLUDE_LOGIN_GDPR_ENCRYPT&&($.loadScript("../js/cryptoJS.min.js"),$.loadScript("../js/tpEncrypt.js"))</script><script src="../js/jquery.tp.min.js"></script>'
+    + '<script>x.open("POST",window.location.protocol+"//"+window.location.host+"/cgi/getParm",!1)</script></html>';
+  (globalThis as any).fetch = async (url: string, init: any = {}) => {
+    const p = url.replace(/^http:\/\/[^/]+/, '').split('?')[0];
+    asked.push({ p, m: init.method ?? 'GET' });
+    // مثل الراوتر: بدون Referer يرجّع صفحة الدخول لأي ملف
+    const ref = init.headers?.Referer;
+    const files: Record<string, string> = {
+      '/': login, '/js/oid_str.js': 'var LTE_NET_STATUS="x";', '/js/encrypt.js': 'rsa', '/js/lib.js': 'lib',
+      '/js/cryptoJS.min.js': 'cj', '/js/tpEncrypt.js': 'Iencryptor', '/js/jquery.tp.min.js': '$.act=function(){}',
+      '/cgi/getParm': '{"nn":"C0FFEE","ee":"010001","seq":"123","userSetting":1}', '/cgi/getBusy': '{"isLogined":0,"isBusy":0}',
+    };
+    const b = p !== '/' && ref !== 'http://192.168.1.1/' ? login : files[p];
+    return { ok: b !== undefined, headers: { get: () => 'text/plain' }, text: async () => b ?? '' } as any;
+  };
+  const { files, skipped } = await collectRouterFiles('192.168.1.1');
+  const got = files.map(f => f.p);
+  for (const f of ['/js/oid_str.js', '/js/encrypt.js', '/js/lib.js', '/js/tpEncrypt.js', '/js/jquery.tp.min.js']) assert.ok(got.includes(f), f);
+  assert.ok(skipped.includes('/js/jquery-1.8.3.min.js'));
+  const probe = files.find(f => f.p === '/_bandly/probe.txt');
+  assert.ok(probe && /POST \/cgi\/getParm → ok .*"nn":"C0FFEE"/.test(probe.t));
+  assert.ok(asked.some(a => a.p === '/cgi/getParm' && a.m === 'POST'));
+});

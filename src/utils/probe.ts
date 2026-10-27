@@ -10,11 +10,13 @@ export interface ProbeStep {
 export interface ProbeReport {
   schema: 1; at: string; guess: string; hints: string[]; steps: ProbeStep[];
 }
-interface Target { label: string; path: string; brand?: string; match?: RegExp }
+interface Target { label: string; path: string; brand?: string; match?: RegExp; method?: 'GET' | 'POST' }
 
 const TARGETS: Target[] = [
   { label: 'الصفحة الرئيسية', path: '/' },
   { label: 'هواوي — جلسة', path: '/api/webserver/SesTokInfo', brand: 'huawei', match: /SesInfo|TokInfo/i },
+  // فيرموير Vue ٢٠٢٥ (H155-383): ما فيها SesTokInfo — الرمز من webserver/token (قيمته تنحذف)
+  { label: 'هواوي — رمز (جديد)', path: '/api/webserver/token', brand: 'huawei', match: /<token>/i },
   { label: 'هواوي — معلومات', path: '/api/device/basic_information', brand: 'huawei', match: /devicename|classify/i },
   // طريقة الدخول (password_type 0/4) وهل فيه SCRAM/RSA — تنقرا بدون دخول، تفرق «الكلمة غلط» عن «طريقتنا غلط»
   { label: 'هواوي — حالة الدخول', path: '/api/user/state-login', brand: 'huawei', match: /password_type|State/i },
@@ -26,6 +28,9 @@ const TARGETS: Target[] = [
   { label: 'MikroTik — webfig', path: '/webfig/', brand: 'mikrotik', match: /mikrotik|routeros|webfig/i },
   { label: 'MikroTik — REST', path: '/rest/system/resource', brand: 'mikrotik', match: /routeros|version/i },
   { label: 'TP-Link', path: '/cgi-bin/luci/;stok=/login', brand: 'tplink', match: /tp-link|tplink|stok/i },
+  // TP-Link 4G (Archer MR600 — ٢٧ أكتوبر): /cgi/getParm يرجّع المفتاح العام nn/ee وseq (JSON أو var) — قراءة بدون دخول
+  { label: 'TP-Link MR — المفتاح', path: '/cgi/getParm', method: 'POST', brand: 'tplink', match: /\bnn\b|\bee\b|seq/i },
+  { label: 'TP-Link MR — حالة', path: '/cgi/getBusy', method: 'POST', brand: 'tplink', match: /isLogined|isBusy/i },
   { label: 'Nokia/Alcatel', path: '/cgi-bin/index.html', brand: 'nokia', match: /nokia|alcatel/i },
   // Nokia FastMile 5G Gateway (Angular /web_whw/): شكل رد الدخول (nonce/pubkey/randomKey/iterations) — بدون دخول، والقيم تنحذف
   { label: 'Nokia FastMile — دخول', path: '/login_web_app.cgi?nonce', brand: 'nokia', match: /nonce|pubkey/i },
@@ -80,7 +85,7 @@ async function one(host: string, t: Target, timeoutMs: number): Promise<ProbeSte
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
-      method: 'GET', credentials: 'include', signal: ctrl.signal,
+      method: t.method ?? 'GET', credentials: 'include', signal: ctrl.signal,
       headers: { Referer: base + '/', 'X-Requested-With': 'XMLHttpRequest' },
     });
     const body = await res.text();
@@ -432,7 +437,7 @@ const EXTRA_SCRIPTS = [
   '/api/device/information', '/api/device/signal',
   '/api/monitoring/status', '/api/monitoring/traffic-statistics',
   '/api/net/current-plmn', '/api/net/net-mode',
-  '/api/user/state-login', '/api/webserver/SesTokInfo',
+  '/api/user/state-login', '/api/webserver/SesTokInfo', '/api/webserver/token',
 ];
 
 /** يسحب ملفات الواجهة ويستخرج منها أسماء الأوامر الحقيقية */

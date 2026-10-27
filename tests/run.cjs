@@ -14,6 +14,7 @@ const out = fs.mkdtempSync(path.join(os.tmpdir(), 'bandly-tests-'));
 const files = [
   'src/drivers/noChange.ts',
   'src/drivers/huawei/cellLock.ts',
+  'src/drivers/huawei/session.ts',
   'src/utils/applyGuard.ts',
   'src/utils/bands.ts',
   'src/utils/advisor.ts',

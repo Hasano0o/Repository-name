@@ -16,7 +16,7 @@ import { fhBody, fhDecrypt, fhKey } from '../drivers/fiberhome/crypto';
 
 // مكتبات كبيرة ما تنعدّل — أسماؤها تكفي. ما نتخطى polyfill/vue-i18n/vue-router/axios/bootstrap بعد:
 // FiberHome يخبّي فيها RequireJS ودوال الاتصال ($post) وأسماء الإعدادات (تقرير ٢٦ أكتوبر) — صغيرة ونحتاجها
-const SKIP = /(copyrightPage|opensource|privatePolicy|\/faq[\w-]*\.html|chunk-vendors|jquery|element-plus|elementui|chunk-libs|echarts|tinymce|lottie|jtopo|topo\.min|\/element(\.min)?\.js|font-?awesome|moment|lodash|highcharts|chart\.min|swiper|\.min\.js.*(forge|elliptic))/i;
+const SKIP = /(copyrightPage|opensource|privatePolicy|\/faq[\w-]*\.html|chunk-vendors|jquery(?!\.tp)|element-plus|elementui|chunk-libs|echarts|tinymce|lottie|jtopo|topo\.min|\/element(\.min)?\.js|font-?awesome|moment|lodash|highcharts|chart\.min|swiper|\.min\.js.*(forge|elliptic))/i;
 // Nokia FastMile 3.1 (تقرير ٢٧ أكتوبر): main-es2015.js (Angular) أكبر من ١٫٥ ميقا — انقطع قبل شاشة الدخول والترددات.
 // الملفات الكبيرة تنقسم أجزاء ٣٠٠ك على الإرسال، والسيرفر يجمعها (حده ٢٠ ميقا للتقرير)
 const MAX_FILE = 6_000_000;
@@ -130,11 +130,18 @@ export function scrub(text: string): string {
     .replace(/(<input[^>]*\svalue=)["'][^"']*["']/gi, '$1"«محذوف»"');
 }
 
-async function get(url: string, ms = 6000): Promise<{ ok: boolean; text: string; type: string }> {
+/** أصل الرابط (http://host) — للـ Referer */
+export function originOf(url: string): string {
+  return url.match(/^https?:\/\/[^/]+/i)?.[0] ?? '';
+}
+
+async function get(url: string, ms = 6000, method: 'GET' | 'POST' = 'GET'): Promise<{ ok: boolean; text: string; type: string }> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
   try {
-    const r = await fetch(url, { signal: ctrl.signal, cache: 'no-store' } as any);
+    // Referer = صفحة الراوتر نفسها: TP-Link (Archer MR600 — ٢٧ أكتوبر) يرفض/يرجّع صفحة الدخول لأي ملف بدونه،
+    // فوصلنا index.html بس وضاعت encrypt.js / lib.js / oid_str.js / jquery.tp.min.js
+    const r = await fetch(url, { method, signal: ctrl.signal, cache: 'no-store', headers: { Referer: originOf(url) + '/' } } as any);
     const type = r.headers.get('content-type') || '';
     const text = await r.text();
     return { ok: r.ok, text, type };
@@ -206,6 +213,17 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
     for (const q of ['is_encrypt', 'get_refresh_sessionid']) {
       const x = await get(`${base}/api/tmp/FHNCAPIS?ajaxmethod=${q}&_=${Math.random()}`);
       probe.push(`GET FHNCAPIS ${q} → ${x.ok ? 'ok' : 'فشل'} ${x.type} · ${x.text.slice(0, 160).replace(/"sessionid"\s*:\s*"[^"]*"/, '"sessionid":"«محذوف»"')}`);
+    }
+    files.push({ p: '/_bandly/probe.txt', t: probe.join('\n') });
+    onStep?.(files.length);
+  }
+  // TP-Link 4G (Archer MR…): المفتاح العام nn/ee وseq وحالة الدخول — الصفحة تطلبها POST بدون دخول.
+  // نحتاج شكل الرد (JSON ولا var nn=…) عشان نعرف أي نسخة تشفير عنده — المفتاح عام مو سر
+  if (files.some(f => /\/cgi\/getParm/.test(f.t))) {
+    const probe: string[] = [];
+    for (const q of ['/cgi/getParm', '/cgi/getBusy', '/cgi/getGDPRParm']) {
+      const x = await get(base + q, 6000, 'POST');
+      probe.push(`POST ${q} → ${x.ok ? 'ok' : 'فشل'} ${x.type} · ${x.text.slice(0, 600)}`);
     }
     files.push({ p: '/_bandly/probe.txt', t: probe.join('\n') });
     onStep?.(files.length);

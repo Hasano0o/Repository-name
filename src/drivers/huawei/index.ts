@@ -9,6 +9,7 @@ import {
   BandConfig, SmsMessage, DeviceDetails, CellTower, CellLockTarget, CellLockState, DataPlan, ActiveLock,
   ApnProfile, DnsConfig, Carrier, SignalSnapshot, TimeRule, BandRoles } from '../types';
 import { http as rawHttp } from '../http';
+import { hasSesTok, tokenFromReply, isHuaweiSessionReply } from './session';
 import { Platform } from 'react-native';
 import { trafficBurst } from '../../utils/nrprobe';
 import { getApnProfiles, setApn, selectApn, getDns, setDns } from './apn-dns';
@@ -189,8 +190,23 @@ export class HuaweiDriver implements RouterDriver {
     const ses = tag(x, 'SesInfo') ?? '';
     const m = ses.match(/SessionID=([^;,\s]+)/);
     if (m) this.cookie = `SessionID=${m[1]}`;
-    else if (!this.cookie) this.manualCookie = false;
+    // H155-383 (فيرموير Vue ٢٠٢٥): ما فيه SesTokInfo — الكوكي يجي من رأس set-cookie والرمز من webserver/token
+    if (!hasSesTok(x)) {
+      try {
+        const t = await this.http(this.url('webserver/token'), { headers: this.headers() });
+        const tok = tokenFromReply(await t.text());
+        if (!this.cookie) this.manualCookie = false;
+        return tok;
+      } catch {}
+    }
+    if (!m && !this.cookie) this.manualCookie = false;
     return tag(x, 'TokInfo') ?? '';
+  }
+  /** الراوتر يرد؟ (بعد إعادة اتصال/تشغيل) — SesTokInfo أو webserver/token للفيرموير الجديدة */
+  private async answers(): Promise<boolean> {
+    try { if (isHuaweiSessionReply(await (await rawHttp(this.url('webserver/SesTokInfo'), {}, 3000)).text())) return true; } catch {}
+    try { if (isHuaweiSessionReply(await (await rawHttp(this.url('webserver/token'), {}, 3000)).text())) return true; } catch {}
+    return false;
   }
 
   private log(...a: unknown[]) {
@@ -220,11 +236,15 @@ export class HuaweiDriver implements RouterDriver {
   private async freshToken(viaSes = false): Promise<string> {
     if (!viaSes) try {
       const r = await this.http(this.url('webserver/token'), { headers: this.headers() });
-      const t = tag(await r.text(), 'token');
-      if (t) return t.length > 32 ? t.slice(32) : t;
+      const t = tokenFromReply(await r.text());
+      if (t) return t;
     } catch {}
     const r = await this.http(this.url('webserver/SesTokInfo'), { headers: this.headers() });
-    return tag(await r.text(), 'TokInfo') ?? '';
+    const x = await r.text();
+    if (hasSesTok(x)) return tag(x, 'TokInfo') ?? '';
+    // H155-383: ما فيه SesTokInfo — نرجع لـ webserver/token (حتى لو طُلب viaSes)
+    const t = await this.http(this.url('webserver/token'), { headers: this.headers() });
+    return tokenFromReply(await t.text());
   }
   private async get(p: string) {
     const r = await this.http(this.url(p), { headers: this.headers() });
@@ -300,8 +320,13 @@ export class HuaweiDriver implements RouterDriver {
     return xml;
   }
   async detect(host: string) {
-    const r = await rawHttp(`http://${host}/api/webserver/SesTokInfo`, {}, 3000);
-    return (await r.text()).includes('<TokInfo>');
+    try {
+      const r = await rawHttp(`http://${host}/api/webserver/SesTokInfo`, {}, 3000);
+      if (hasSesTok(await r.text())) return true;
+    } catch {}
+    // فيرموير Vue ٢٠٢٥ (H155-383 — «مو مدعوم» ٢٧ أكتوبر): SesTokInfo مشال، والصفحة تاخذ الرمز من webserver/token
+    const t = await rawHttp(`http://${host}/api/webserver/token`, {}, 3000);
+    return isHuaweiSessionReply(await t.text());
   }
   async login(host: string, username: string, password: string, opts?: { lastTry?: boolean; fresh?: boolean }): Promise<void> {
     this.host = host;
@@ -928,7 +953,7 @@ export class HuaweiDriver implements RouterDriver {
     const until = Date.now() + maxMs;
     while (Date.now() < until) {
       await new Promise(r => setTimeout(r, 3000));
-      try { if ((await (await rawHttp(`http://${this.host}/api/webserver/SesTokInfo`, {}, 3000)).text()).includes('<TokInfo>')) return true; } catch {}
+      if (await this.answers()) return true;
     }
     return false;
   }
@@ -1188,7 +1213,7 @@ export class HuaweiDriver implements RouterDriver {
           const until = Date.now() + 60_000;
           while (Date.now() < until) {
             await new Promise(r => setTimeout(r, 3000));
-            try { if ((await (await rawHttp(`http://${this.host}/api/webserver/SesTokInfo`, {}, 3000)).text()).includes('<TokInfo>')) break; } catch {}
+            if (await this.answers()) break;
           }
           const err = new Error('الراوتر استلم أمر تثبيت البرج وأعاد تشغيل اتصاله (عادي في موديلك) — ما نعيد الأمر بعمى، نرجّع إعدادك ونتأكد منه.');
           (err as any).afterWrite = true;
