@@ -45,6 +45,8 @@ const ALL_LTE = '7FFFFFFFFFFFFFFF';
  * الراوتر يرجّع LTEBand = كل ترددات FDD/TDD مهما طلبنا. ما نعيد التجربة كل ضغطة (تقرير ٢٧ أكتوبر).
  */
 const netModeBandDead = new Set<string>();
+/** روابط صفحة «تحديد النطاق» (وضع المطوّر) — تحتاج جلسة loginflag=2 في الفيرموير الجديدة */
+const DEV_ONLY = /^net\/(lock-freq|celllock)/;
 
 function parseDataLimit(v?: string): number {
   if (!v) return 0;
@@ -154,6 +156,43 @@ export class HuaweiDriver implements RouterDriver {
   private lockFreq: boolean | null = null;
   /** net/lock-freq يرد 100003 والجلسة شغالة = الموديل ما يدعمه (H158 مثلاً) — نتوقف عن استدعائه */
   private lockFreqDead = false;
+  /**
+   * فيرموير هواوي الجديدة (H155/H158 Vue …): صفحة «تحديد النطاق» (lockband) مخفية في وضع المطوّر —
+   * تظهر لما developer/developermode-featureswitch يقول lockband_enable=1، حتى لو net-feature-switch
+   * يقول lock_freq_switch=0. وصفحة المطوّر تدخل بـ SCRAM مع loginflag=2 (main.js). كنا نشوف 0 ونروح
+   * لـ net-mode اللي ما يثبّت تردد معيّن في هالفيرموير ← «جرّبناه وما طبّقه» على كل تردد (تقارير ٢٧ أكتوبر).
+   */
+  private devLockband: boolean | null = null;
+  private devTried = false;
+  private creds: { u: string; p: string } | null = null;
+  private async devLockbandOn(): Promise<boolean> {
+    if (this.devLockband !== null) return this.devLockband;
+    try {
+      const x = await this.get('developer/developermode-featureswitch', false);
+      this.devLockband = tag(x, 'lockband_enable') === '1';
+    } catch { this.devLockband = false; }
+    return this.devLockband;
+  }
+  /** دخول جلسة المطوّر (نفس الكلمة + loginflag=2) — مرة وحدة بس، ولو فشل نرجع للجلسة العادية */
+  private async devRelogin(): Promise<boolean> {
+    if (this.devTried || !this.creds || this.scram === false || !(await this.devLockbandOn())) return false;
+    this.devTried = true;
+    const { u, p } = this.creds;
+    this.log('lock-freq 100003 — retrying with developer-mode login (loginflag=2)');
+    try { await this.post('user/logout', '<Logout>1</Logout>', undefined, false); } catch {}
+    this.queue = [];
+    try { await this.http(`http://${this.host}/html/home.html`, { headers: this.headers() }); } catch {}
+    if (this.manualCookie) { try { await this.sesTok(); } catch {} }
+    try {
+      await this.loginScram(u, p, true);
+      return true;
+    } catch (e) {
+      this.log('developer login failed:', (e as any)?.message ?? String(e));
+      this.queue = [];
+      try { await this.loginScram(u, p); } catch {}
+      return false;
+    }
+  }
   private async lockFreqUnsupported(e: unknown): Promise<boolean> {
     if (!(e instanceof HuaweiError) || e.code !== '100003') return false;
     try { await this.get('net/net-mode'); } catch { return false; }
@@ -251,12 +290,14 @@ export class HuaweiDriver implements RouterDriver {
     const t = await this.http(this.url('webserver/token'), { headers: this.headers() });
     return tokenFromReply(await t.text());
   }
-  private async get(p: string) {
+  private async get(p: string, retry = true): Promise<string> {
     const r = await this.http(this.url(p), { headers: this.headers() });
     const xml = await r.text();
     if (xml.includes('<error>')) {
       const code = tag(xml, 'code') ?? '0';
       this.log('GET', p, 'error', code);
+      // صفحة «تحديد النطاق» في وضع المطوّر: الجلسة العادية ترد 100003 — ندخل بجلسة المطوّر ونعيد مرة
+      if (retry && code === '100003' && DEV_ONLY.test(p) && await this.devRelogin()) return this.get(p, false);
       // 100003 على رابط أساسي = انطردنا. على رابط اختياري (مثل net/lock-freq في H158) = غير مدعوم — مو طرد
       if (code === '100003' && CORE_GET.test(p)) this.stale = true;
       throw new HuaweiError(code);
@@ -316,6 +357,9 @@ export class HuaweiDriver implements RouterDriver {
         this.log('POST', p, 'needs encryption — retrying with ;enc');
         return this.post(p, body, undefined, true, true);
       }
+      if (retry && !enc && code === '100003' && DEV_ONLY.test(p) && await this.devRelogin()) {
+        return this.post(p, body, undefined, false, enc);
+      }
       // POST: ما نعلّم الجلسة خربانة هنا — 100003 على أمر حفظ غالباً «غير مدعوم» (مثل net/lock-freq في H158)
       const err = new HuaweiError(code);
       // في التقارير يبان إن المحاولة المشفّرة نفسها انرفضت (مو بس العادية)
@@ -336,6 +380,8 @@ export class HuaweiDriver implements RouterDriver {
   async login(host: string, username: string, password: string, opts?: { lastTry?: boolean; fresh?: boolean }): Promise<void> {
     this.host = host;
     this.queue = [];
+    this.creds = { u: username, p: password };
+    this.devTried = false;
     try { await this.http(`http://${host}/html/home.html`, { headers: this.headers() }); } catch {}
     const state = await this.get('user/state-login');
     const type = tag(state, 'password_type');
@@ -433,10 +479,12 @@ export class HuaweiDriver implements RouterDriver {
       `<Username>${esc(username)}</Username><Password>${hashed}</Password><password_type>4</password_type>`,
       token);
   }
-  private async loginScram(username: string, password: string) {
+  private async loginScram(username: string, password: string, dev = false) {
     const firstNonce = bytesToHex(Crypto.getRandomBytes(32));
+    // dev: نفس صفحة المطوّر (main.js: route developermode ← loginflag "2" في الطلبين)
+    const flag = dev ? '<loginflag>2</loginflag>' : '';
     const ch = await this.post('user/challenge_login',
-      `<username>${esc(username)}</username><firstnonce>${firstNonce}</firstnonce><mode>1</mode>`);
+      `<username>${esc(username)}</username><firstnonce>${firstNonce}</firstnonce><mode>1</mode>${flag}`);
     const salt = tag(ch, 'salt');
     const serverNonce = tag(ch, 'servernonce');
     const iterations = parseInt(tag(ch, 'iterations') ?? '0', 10);
@@ -448,7 +496,7 @@ export class HuaweiDriver implements RouterDriver {
     const signature = hmac(sha256, utf8ToBytes(msg), storedKey);
     const proof = clientKey.map((b, i) => b ^ signature[i]);
     await this.post('user/authentication_login',
-      `<clientproof>${bytesToHex(proof)}</clientproof><finalnonce>${serverNonce}</finalnonce>`);
+      `<clientproof>${bytesToHex(proof)}</clientproof><finalnonce>${serverNonce}</finalnonce>${flag}`);
   }
   async logout() {
     try { await this.post('user/logout', '<Logout>1</Logout>'); } catch {}
@@ -813,8 +861,8 @@ export class HuaweiDriver implements RouterDriver {
     if (!modes.length) modes = ['00', '03', '02'];
     try {
       const fsw = await this.get('net/net-feature-switch');
-      this.lockFreq = (num(tag(fsw, 'lock_freq_switch')) ?? 0) > 0;
-      this.log('feature lock_freq', tag(fsw, 'lock_freq_switch'), 'lteband', tag(fsw, 'lteband_switch'));
+      this.lockFreq = (num(tag(fsw, 'lock_freq_switch')) ?? 0) > 0 || await this.devLockbandOn();
+      this.log('feature lock_freq', tag(fsw, 'lock_freq_switch'), 'lteband', tag(fsw, 'lteband_switch'), 'dev lockband', this.devLockband);
     } catch {
       this.lockFreq = false;
     }
@@ -1034,7 +1082,7 @@ export class HuaweiDriver implements RouterDriver {
     if (this.lockFreq === null) {
       try {
         const fsw = await this.get('net/net-feature-switch');
-        this.lockFreq = (num(tag(fsw, 'lock_freq_switch')) ?? 0) > 0;
+        this.lockFreq = (num(tag(fsw, 'lock_freq_switch')) ?? 0) > 0 || await this.devLockbandOn();
       } catch {
         this.lockFreq = false;
       }
@@ -1106,7 +1154,7 @@ export class HuaweiDriver implements RouterDriver {
       // lock-freq، الترددات كلها في net-mode اللي قرأناه). انقطاع/مهلة = ما نعرف ← نوقف التجربة
       try {
         const fsw = await this.get('net/net-feature-switch');
-        this.lockFreq = (num(tag(fsw, 'lock_freq_switch')) ?? 0) > 0;
+        this.lockFreq = (num(tag(fsw, 'lock_freq_switch')) ?? 0) > 0 || await this.devLockbandOn();
       } catch (e) {
         // 100003/12500x = جلسة انتهت (مو «غير موجود») — نرميه وطبقة الجلسات تدخل من جديد
         if (!(e instanceof HuaweiError) || ['100003', '125002', '125003'].includes(e.code)) throw e;

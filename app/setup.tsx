@@ -78,6 +78,9 @@ export default function SetupScreen() {
   const [status, setStatus] = useState('');
   const [found, setFound] = useState<{ host: string; d: RouterDriver; model?: string } | null>(null);
   const [pw, setPw] = useState('');
+  // اسم المستخدم: admin افتراضياً، بس بعض الملصقات فيها اسم ثاني (user / telecomadmin…) — كان مقفول على admin
+  const [userName, setUserName] = useState('admin');
+  const [showUser, setShowUser] = useState(false);
   const [show, setShow] = useState(false);
   const [err, setErr] = useState('');
   const [miss, setMiss] = useState<Miss>({ why: 'none', hosts: [] });
@@ -126,7 +129,7 @@ export default function SetupScreen() {
     if (!found || !pw) return;
     setStep('login'); setErr('');
     const { host, d } = found;
-    const user = 'admin';
+    const user = userName.trim() || 'admin';
     try {
       setStatus('أسجّل الدخول عنك…');
       await d.login(host, user, pw, { fresh: true, lastTry });
@@ -142,9 +145,14 @@ export default function SetupScreen() {
           ]);
         return;
       }
-      setErr(/كلمة المرور|108006|108002|غلط/.test(msg)
-        ? 'كلمة المرور ما ضبطت. تأكد منها من الملصق (حروف كبيرة وصغيرة تفرق، و0 غير O).'
+      const wrongPw = /كلمة المرور|108006|108002|غلط/.test(msg);
+      setErr(wrongPw
+        ? `كلمة المرور ما ضبطت مع اسم المستخدم «${user}». تأكد منها من الملصق (حروف كبيرة وصغيرة تفرق، و0 غير O) — ولو الملصق فيه اسم مستخدم (Username) غير ${user} اكتبه تحت.\n\nرد الراوتر: ${msg}`
         : msg);
+      if (wrongPw) setShowUser(true);
+      // تقرير: الموديل ورد الراوتر بس (بدون الكلمة) — عشان نعرف أسباب رفض الدخول الحقيقية
+      const dd = d as unknown as { id?: string; name?: string };
+      reportError('setup-login', `${found.model ?? dd.name ?? '؟'} (${dd.id ?? '؟'}) · مستخدم ${user === 'admin' ? 'admin' : 'مخصص'} · طول الكلمة ${pw.length} · ${msg.slice(0, 300)}`);
       setStep('password');
       return;
     }
@@ -304,6 +312,19 @@ export default function SetupScreen() {
                 <Icon name={show ? 'eye-off' : 'eye'} size={20} color={C.sub} />
               </Pressable>
             </View>
+            {showUser ? (
+              <View style={s.pwRow}>
+                <TextInput
+                  value={userName} onChangeText={t => { setUserName(t); setErr(''); }}
+                  placeholder="اسم المستخدم (Username)" placeholderTextColor={C.muted}
+                  autoCapitalize="none" autoCorrect={false} style={s.pw}
+                />
+              </View>
+            ) : (
+              <Pressable onPress={() => setShowUser(true)} style={s.link}>
+                <Text style={[s.txt, { color: C.blue }]}>الملصق فيه اسم مستخدم غير admin؟</Text>
+              </Pressable>
+            )}
             <Big icon="login" color="#2f6bff" title="دخّلني" onPress={() => login()} disabled={!pw} />
             {Platform.OS !== 'web' && (
               <Big icon="camera" color="#12b76a" title="صوّر الملصق بدالي" sub="أقرأ الكلمة من الصورة" onPress={() => router.replace('/add-router?scan=1' as Href)} />
