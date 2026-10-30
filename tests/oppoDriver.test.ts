@@ -125,7 +125,7 @@ function router(opts: { password?: string; pkcs1Only?: boolean } = {}) {
     let k = keys.get(body.AES);
     if (!k) {
       try {
-        const plain = (ncrypto as any).privateDecrypt(
+        const plain = testPrivateDecrypt(
           opts.pkcs1Only ? { key: kp.privateKey, padding: (ncrypto as any).constants.RSA_PKCS1_PADDING }
             : { key: kp.privateKey, padding: (ncrypto as any).constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha1' },
           Buffer.from(body.AES, 'base64')).toString();
@@ -145,6 +145,47 @@ function router(opts: { password?: string; pkcs1Only?: boolean } = {}) {
 }
 
 const driver = () => { const { OppoDriver } = require('../src/drivers/oppo/index'); return new OppoDriver(); };
+
+
+function testPrivateDecrypt(opts: any, ciphertext: any): any {
+  const crypto: any = require('node:crypto');
+  if (opts.padding !== crypto.constants.RSA_PKCS1_PADDING) {
+    return crypto.privateDecrypt(opts, ciphertext);
+  }
+
+  // Test-only PKCS#1 v1.5 decoding using the private RSA operation.
+  const jwk: any = crypto.createPrivateKey(opts.key).export({ format: 'jwk' });
+  const fromB64Url = (s: string) =>
+    Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+
+  const n = BigInt('0x' + fromB64Url(jwk.n).toString('hex'));
+  const d = BigInt('0x' + fromB64Url(jwk.d).toString('hex'));
+  const c = BigInt('0x' + Buffer.from(ciphertext).toString('hex'));
+
+  function modPow(base: bigint, exp: bigint, mod: bigint): bigint {
+    let result = 1n;
+    base %= mod;
+    while (exp > 0n) {
+      if (exp & 1n) result = (result * base) % mod;
+      base = (base * base) % mod;
+      exp >>= 1n;
+    }
+    return result;
+  }
+
+  const width = fromB64Url(jwk.n).length;
+  let hex = modPow(c, d, n).toString(16).padStart(width * 2, '0');
+  if (hex.length > width * 2) throw new Error('RSA test block too long');
+
+  const block = Buffer.from(hex, 'hex');
+  if (block[0] !== 0 || block[1] !== 2) {
+    throw new Error('Invalid PKCS#1 v1.5 test padding');
+  }
+
+  const separator = block.indexOf(0, 2);
+  if (separator < 10) throw new Error('Invalid PKCS#1 v1.5 padding separator');
+  return block.subarray(separator + 1);
+}
 
 test('OPPO: يتعرف عليه، يدخل، ويقرأ الإشارة 4G + 5G NSA والترددات والدمج', async () => {
   router();
