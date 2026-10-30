@@ -592,7 +592,8 @@ export class ZteDriver implements RouterDriver {
     if (/success/i.test(out)) return out;
     // نفس الرفض بعد الدخول = غالباً صيغة AD (مرة وحدة لكل راوتر — بعدها نعرف الصح)
     const prof = await this.identify();
-    if (prof?.write === 'ubus') throw this.g5Error();
+    // صيغ التوقيع أول — حتى لأجهزة G5 (٣٠ أكتوبر، MC801A Pro عند حسن: صفحة G5 بس تكتب goform بـ sha:wa+cr،
+    // و /ubus/ = 404). قبل كان فحص G5 يجي قبلها فما توصل الصيغة الصحيحة أبداً ← «هالخاصية لسا ما تشتغل».
     if (!this.adTried && !prof?.pinned && !AD_ALL_FAILED.has(this.host)) {
       this.adTried = true;
       const alt = await this.retryWithOtherAd(body);
@@ -600,6 +601,8 @@ export class ZteDriver implements RouterDriver {
       AD_ALL_FAILED.add(this.host);
       this.log('AD: all formulas rejected');
     }
+    // رسالة G5 بس لو الراوتر فعلاً فيه ubus (الكتابة هناك) — غير كذا نرجّع رد الراوتر الحقيقي
+    if (prof?.write === 'ubus' && await this.ngWriter()) throw this.g5Error();
     return out;
   }
   private adTried = false;

@@ -43,7 +43,10 @@ export const MODELS = {
   mu5001: P({ id: 'mu5001', label: 'ZTE MU5001', brand: 'zte', tech: '5G', write: 'goform', nrLock: true, verified: true,
     // مجرّب على جهاز حسن (STC، BD_STCMU5001V1.0.2B04): توقيع MD5 · القناع القصير · أمر 5G القديم
     pinned: { ad: 'wa+cr', lteMask: 'short', nrCmd: 'classic' } }),
-  mc801aPro: P({ id: 'mc801a-pro', label: 'ZTE MC801A Pro', brand: 'zte', tech: '5G', write: 'ubus', nrLock: true }),
+  // MC801A Pro (BD_XCBZHKMC801A ProV1.0.0B03 · WEB_XCBZHKG5BV1.0.0B03، زين) — جهاز حسن ٣٠ أكتوبر:
+  // صفحة G5 بس كل التغييرات goform (service.js بدون ubus، و /ubus/ = 404). SET_BEARER_PREFERENCE رد success
+  // بتوقيع sha:wa+cr = SHA256↑(SHA256↑(wa+cr)+RD). قبل كان مصنّف ubus فكل تغيير يوقف برسالة G5.
+  mc801aPro: P({ id: 'mc801a-pro', label: 'ZTE MC801A Pro', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
   mc801a: P({ id: 'mc801a', label: 'ZTE MC801A', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
   mc888: P({ id: 'mc888', label: 'ZTE MC888', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
   mc889: P({ id: 'mc889', label: 'ZTE MC889', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),

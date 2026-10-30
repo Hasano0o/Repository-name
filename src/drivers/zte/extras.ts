@@ -178,8 +178,25 @@ const CH5: [string[], string[]][] = [
 const ch5For = (cc: string) => CH5.find(([codes]) => codes.includes(cc))?.[1] ?? ['36', '40', '44', '48'];
 const CH24 = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13'];
 
-export async function zteRadios(io: ZteIo) {
+/**
+ * إعدادات كل شريحة واي فاي — queryWiFiChipAdvancedInfo (صفحة G5: MC801A Pro، ٣٠ أكتوبر). شكل الرد من wifi2Data.js
+ * (محاكي الصفحة نفسها): ResponseList [{ChipIndex, CountryCode, WirelessMode, Channel, BandWidth, Band}].
+ * نستخدمها لما queryAccessPointInfo ما فيه Band/Channel (MU5001 فيه، فيبقى طريقه الأول ما يتغيّر).
+ */
+export async function chipInfo(io: ZteIo): Promise<any[]> {
+  const r = await io.getRaw('queryWiFiChipAdvancedInfo').catch(() => null);
+  const list = (r?.ResponseList ?? []) as any[];
+  return Array.isArray(list) ? list.filter(x => x && x.ChipIndex !== undefined && /^\d{1,3}$/.test(String(x.Channel ?? ''))).map(x => ({ ...x, ChipIndex: String(x.ChipIndex), AccessPointIndex: '0' })) : [];
+}
+
+/** القائمة اللي فيها القنوات: نقاط الوصول (MU5001) — ولو ما فيها Band، إعدادات الشرايح (G5) */
+async function radioRows(io: ZteIo): Promise<any[]> {
   const aps = (await accessPoints(io)).filter(a => a.AccessPointIndex === '0' && (a as any).Band);
+  return aps.length ? aps : chipInfo(io);
+}
+
+export async function zteRadios(io: ZteIo) {
+  const aps = await radioRows(io);
   return aps.map(a => {
     const five = (a as any).Band === 'a' || a.ChipIndex === '1';
     return {
@@ -192,7 +209,7 @@ export async function zteRadios(io: ZteIo) {
 }
 
 export async function zteSetChannel(io: ZteIo, band: '2.4' | '5', channel: string) {
-  const ap: any = (await accessPoints(io)).find(a => a.AccessPointIndex === '0' && (((a as any).Band === 'a') === (band === '5')));
+  const ap: any = (await radioRows(io)).find(a => a.AccessPointIndex === '0' && ((((a as any).Band === 'a') || (!(a as any).Band && a.ChipIndex === '1')) === (band === '5')));
   if (!ap) throw new Error('ما لقينا شبكة هذا النطاق في راوترك');
   const out = await io.act({
     goformId: 'setWiFiChipAdvancedInfo', ChipIndex: ap.ChipIndex,

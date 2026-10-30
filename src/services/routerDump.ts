@@ -118,6 +118,18 @@ export function namedChunks(text: string): string[] {
   return [...uniq.filter(f => NET_CHUNK.test(f)), ...uniq.filter(f => !NET_CHUNK.test(f))].slice(0, 120);
 }
 
+/**
+ * ZTE (MC801A Pro/MC888…، ٣٠ أكتوبر): قائمة الصفحة {hash:"#mobile_network",path:"network/mobile_network"} —
+ * router.js يحمّل "text!tmpl/<path>.html" والموديول "<path>" (= /js/<path>.js). شاشات الترددات والأبراج والواي فاي
+ * كلها هنا وما لها رابط ثابت، فبدونها الملف ناقص. الأهم أول (شبكة/أبراج/واي فاي) لأن عدد الملفات محدود.
+ */
+export function zteMenuPaths(text: string): string[] {
+  const paths = [...new Set([...text.matchAll(/\{\s*hash\s*:\s*["']#[\w-]+["']\s*,\s*path\s*:\s*["']([\w/-]{1,60})["']/g)].map(m => m[1]))];
+  const key = /network|band|cell|lock|signal|wifi|wlan|adm|status|device/i;
+  const ordered = [...paths.filter(p => key.test(p)), ...paths.filter(p => !key.test(p))];
+  return ordered.flatMap(p => ['/js/' + p + '.js', '/tmpl/' + p + '.html']).slice(0, 80);
+}
+
 /** <base href="/web_whw/"> ← "/web_whw/" (محلي بس) */
 export function baseHrefOf(text: string): string | null {
   const m = text.match(/<base[^>]+href=["']?([^"'\s>]+)/i);
@@ -207,6 +219,10 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
     for (const ref of [...findRefs(r.text), ...angularChunks(r.text)]) {
       const rp = resolvePath(ref, from);
       if (rp && !seen.has(rp) && !queue.includes(rp)) queue.push(rp);
+    }
+    // ZTE: شاشات القائمة (path:"network/…") ← /js/<path>.js + /tmpl/<path>.html
+    for (const rp of zteMenuPaths(r.text)) {
+      if (!seen.has(rp) && !queue.includes(rp)) queue.push(rp);
     }
     // قطع Webpack بالأسماء: المسار من publicPath (مجلد الصفحة) مو من مكان main.js — "js/lockband.js" ← /js/lockband.js
     for (const ref of namedChunks(r.text)) {

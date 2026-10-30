@@ -220,3 +220,14 @@ test('هواوي H155-383: الجامع يطلب /js/lockband.js (مو /js/js/�
   assert.ok(got.includes('/js/networkmode.js'));
   assert.ok(!asked.includes('/js/js/lockband.js'));
 });
+
+test('ZTE (MC801A Pro): شاشات القائمة path:"network/…" ← /js/…js + /tmpl/…html — الشبكة والواي فاي أول', () => {
+  const { zteMenuPaths } = require('../src/services/routerDump');
+  // من menu_4ggateway.js الحقيقي (MC801A Pro، ٣٠ أكتوبر)
+  const menu = 'define(function(){return[{hash:"#login",path:"login",level:"1"},{hash:"#home",path:"home",level:"1"},{hash:"#sms",path:"sms/smslist",level:"1"},{hash:"#mobile_network",path:"network/mobile_network",level:"3"},{hash:"#wifi_advance",path:"wifi/wifi_advance",level:"3"}]})';
+  const out: string[] = zteMenuPaths(menu);
+  assert.ok(out.includes('/js/network/mobile_network.js') && out.includes('/tmpl/network/mobile_network.html'));
+  assert.ok(out.indexOf('/js/network/mobile_network.js') < out.indexOf('/js/sms/smslist.js'), 'الشبكة قبل الرسايل');
+  assert.ok(out.indexOf('/js/wifi/wifi_advance.js') < out.indexOf('/js/login.js'));
+  assert.deepEqual(zteMenuPaths('var x = {path:"a"}'), [], 'بدون hash ما نعتبره قائمة');
+});
