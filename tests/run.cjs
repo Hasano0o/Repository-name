@@ -54,6 +54,16 @@ const files = [
   'src/services/live.ts',
   'src/utils/host.ts',
   'src/drivers/types.ts',
+  // درايفر هواوي كامل (اختبار إعادة الدخول — react-native/expo-crypto يتبدّلون داخل الاختبار)
+  'src/drivers/huawei/index.ts',
+  'src/drivers/huawei/apn-dns.ts',
+  'src/drivers/huawei/carriers.ts',
+  'src/drivers/huawei/extras.ts',
+  'src/drivers/huawei/more.ts',
+  'src/drivers/huawei/rsaEnc.ts',
+  'src/drivers/huawei/wifi.ts',
+  'src/utils/linkHealth.ts',
+  'src/utils/nrprobe.ts',
   ...fs.readdirSync(path.join(root, 'tests')).filter(f => f.endsWith('.test.ts')).map(f => `tests/${f}`),
 ];
 

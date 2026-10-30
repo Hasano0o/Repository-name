@@ -251,6 +251,8 @@ export interface SignalSnapshot {
 }
 
 export interface RouterDriver {
+  /** انطردنا ← إعادة الدخول الجاية لازم تكون حقيقية (بدون الوثوق بحالة «داخل»، ورموز/كوكي جديدة) */
+  markStale?(): void;
   readonly id: string;
   readonly name: string;
   readonly capabilities: Capability[];

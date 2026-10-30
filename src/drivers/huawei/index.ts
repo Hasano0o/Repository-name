@@ -424,7 +424,24 @@ export class HuaweiDriver implements RouterDriver {
         const code = e instanceof HuaweiError ? e.code : '';
         // كلمة مرور غلط / قفل: لا نجرّب طريقة ثانية (ما نزيد المحاولات الفاشلة)
         if (/^1080(0[1-7])$/.test(code)) throw e;
-        this.scram = false;
+        // رمز/جلسة قديمة (125002/125003) مو دليل إن الراوتر ما يدعم SCRAM — كنا نطفيه ونرجع للدخول القديم
+        // (جلسة ناقصة الصلاحيات ← 100003). نجدد الجلسة ونعيد SCRAM مرة؛ لو نفس الرفض نرجّعه بدون ما نطفيه
+        // لو رفض الرمز مرة ثانية: نجرّب الدخول القديم هالمرة بس — ما نطفي SCRAM (الدخول الجاي يبدأ فيه)
+        let tokenOnly = false;
+        if (isTokenError(e)) {
+          await this.freshSession(host);
+          try {
+            await this.loginScram(username, password);
+            this.scram = true;
+            this.log('login ok (SCRAM after fresh session)');
+            return;
+          } catch (e2) {
+            if (e2 instanceof HuaweiError && /^1080(0[1-7])$/.test(e2.code)) throw e2;
+            tokenOnly = isTokenError(e2);
+            e = e2;
+          }
+        }
+        if (!tokenOnly) this.scram = false;
         this.queue = [];
         this.log('SCRAM not available, falling back:', code || (e as any)?.message);
       }
@@ -434,9 +451,8 @@ export class HuaweiDriver implements RouterDriver {
         // بعد إعادة تشغيل/فصل الراوتر أحياناً الكوكي القديم يخلي التوكن يرفض (125003):
         // نجدد الجلسة من الصفحة ونجيب التوكن من SesTokInfo بدل webserver/token
         if (attempt > 0) {
-          this.queue = [];
           await new Promise(r => setTimeout(r, 1500 * attempt));
-          try { await this.http(`http://${host}/html/home.html`, { headers: this.headers() }).then(r => r.text()); } catch {}
+          await this.freshSession(host);
         }
         if (type === '4') await this.loginSha256(username, password, attempt === 2);
         else await this.loginBase64(username, password);
@@ -501,6 +517,22 @@ export class HuaweiDriver implements RouterDriver {
   async logout() {
     try { await this.post('user/logout', '<Logout>1</Logout>'); } catch {}
     this.queue = [];
+  }
+  /**
+   * انطردنا (100003/125002/125003) ← إعادة الدخول الجاية لازم تكون حقيقية: ما نصدّق state-login «داخل»
+   * (State=0 في هواوي يعني «فيه جلسة» عموماً — مو إن جلستنا شغالة)، ونرمي الرموز والكوكي القديم.
+   * أخطاء ٢٣–٣٠ أكتوبر: ٢١ مرة «100003 → sig:100003…» (رجعنا بدون دخول) و٣٣ مرة «… → 125003 ×3» (رمز قديم).
+   */
+  markStale() {
+    this.stale = true;
+    this.queue = [];
+    if (this.manualCookie) this.cookie = '';
+  }
+  /** جلسة جديدة من الراوتر قبل محاولة دخول ثانية: الصفحة (تعطي SessionID جديد) + SesTokInfo للآيفون */
+  private async freshSession(host: string) {
+    this.queue = [];
+    try { await this.http(`http://${host}/html/home.html`, { headers: this.headers() }).then(r => r.text()); } catch {}
+    if (this.manualCookie) { try { await this.sesTok(); } catch {} }
   }
   async getSignal(): Promise<Signal> {
     const xml = await this.get('device/signal');

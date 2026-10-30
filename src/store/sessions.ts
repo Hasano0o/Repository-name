@@ -184,6 +184,8 @@ export async function withSession<T>(
       for (const wait of [1500, 4000, 8000]) {
         await new Promise(res => setTimeout(res, wait));
         let fresh: RouterDriver | undefined;
+        // دخول حقيقي: الدرايفر ما يصدّق «داخل» ويرمي الرموز/الكوكي القديم (هواوي — أخطاء ٢٣–٣٠ أكتوبر)
+        try { d.markStale?.(); } catch {}
         try {
           fresh = await connect(r, true);
           return await fn(fresh);
