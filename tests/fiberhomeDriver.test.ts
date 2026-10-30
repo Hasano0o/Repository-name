@@ -58,6 +58,8 @@ function router(opts: { password?: string; ignoreWrites?: boolean; model?: strin
   const res = (status: number, text: string) => ({ ok: status < 400, status, url: 'http://192.168.8.1/', headers: { get: () => null }, text: async () => text } as any);
   (globalThis as any).fetch = async (url: string, init?: any) => {
     const u = new URL(url);
+    // فيرموير قديم: ما فيه مسارات /fh_api/ (هذي للفيرموير الجديد — fiberhomeV2.test.ts)
+    if (u.pathname.startsWith('/fh_api/')) return res(404, '');
     if (init?.method !== 'POST') {
       const m = u.searchParams.get('ajaxmethod');
       if (u.pathname === '/login.html') return res(200, '<script src="/plugins/checkBrowser.js"></script><script src="lang/login_res.js"></script><script>_0xdx2m04ej1p623_("/js/login.js")</script>');

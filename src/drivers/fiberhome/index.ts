@@ -6,6 +6,9 @@
  *   الجسم {dataObj, ajaxmethod, sessionid} بتشفير AES (./crypto)، والرد مشفّر (إلا الدخول).
  *   أسماء الإعدادات من get_xmlnode_js_file (./nodes).
  *
+ * الفيرموير الجديد لـ LG6851F (مسارات /fh_api/، تشفير مختلف — ./fhapi): يتحدد تلقائي (api = 'v2').
+ *   القديم ما يتغيّر. في v2: الدخول والقراءة بس — أي أمر يغيّر الراوتر محجوب لين يتأكد على جهاز حقيقي.
+ *
  * النسخة الأولى: الإشارة، الأبراج المجاورة، تثبيت الترددات (4G/5G)، وضع الشبكة، تثبيت البرج، إعادة التشغيل.
  * مركز التحكم (./extras): NAT، UPnP، DMZ، الأنوار، إعادة التشغيل المجدولة، شبكات 2.4/5، اسم الواي فاي وكلمته، ضبط المصنع.
  * كل تغيير نتأكد منه بإعادة القراءة، وفيه لقطة + إرجاع متحقق منه (مثل هواوي و ZTE).
@@ -18,11 +21,17 @@ import { http } from '../http';
 import { buildSnapshot } from '../../utils/snapshot';
 import { ModelProfile } from '../models';
 import { fhBody, fhDecrypt, fhKey } from './crypto';
+import { FHAPI_TMP, FHAPI_SIGN, fhapiUnmaskGet, fhapiSecret, fhapiIsEncryptData, fhapiBody, fhapiReply } from './fhapi';
 import {
   parseNodeFile, missing, NEED, paths, RF_FIELDS, signalFrom, neighborsFrom,
   LTE_BANDS, NR_BANDS, parseBands, joinBands, FH_TO_CODE, CODE_TO_FH, MODES, loginError,
 } from './nodes';
 import { EX_FIELDS, EX_NEED, WEEK, wlanRows, extrasFrom, has5g, main5Index, ssidError, wifiPassError, isIPv4, WlanRow } from './extras';
+
+/** v2: الأوامر المسموحة لين يتأكد الفيرموير الجديد على جهاز حقيقي — قراءة + دخول/خروج بس */
+const V2_ALLOWED = (m: string) => /^get_/.test(m) || m === 'DO_WEB_LOGIN' || m === 'DO_WEB_LOGOUT';
+/** في صفحة الراوتر: هذي الثلاث GET على مسار باسمها (مو FHAPIS?ajaxmethod=) */
+const V2_PATH_GET = ['heartbeat', 'refresh_timeout', 'other_logged'];
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 interface CellRow { idx: string; act: string; arfcn: string; pci: string }
@@ -39,6 +48,10 @@ export class FiberhomeDriver implements RouterDriver {
   private encrypt = true;
   private nodes: Record<string, string> | null = null;
   private info: Record<string, any> | null = null;
+  /** v1 = /api/ (فيرموير ٢٦ أكتوبر) · v2 = /fh_api/ (LG6851F الجديد) */
+  private api: 'v1' | 'v2' | null = null;
+  /** v2: السر (٥ حروف) من is_encrypt — يدخل في مفتاح كل طلب */
+  private secret = '';
 
   private base() { return 'http://' + this.host.replace(/^https?:\/\//, '').replace(/\/+$/, ''); }
   private hdr(extra: Record<string, string> = {}) {
@@ -48,6 +61,7 @@ export class FiberhomeDriver implements RouterDriver {
 
   /** GET /api/tmp/<FHAPIS|FHNCAPIS>?ajaxmethod=… (الردود هنا مو مشفّرة — مثل $get) */
   private async getQ(method: string, nocheck = false): Promise<any> {
+    if ((await this.whichApi()) === 'v2') return this.getQ2(method, nocheck);
     const r = await http(`${this.base()}/api/tmp/${nocheck ? 'FHNCAPIS' : 'FHAPIS'}?ajaxmethod=${method}&_=${Math.random()}`, { headers: this.hdr() }, 8000);
     if (r.status === 418) throw new Error('انتهت الجلسة');
     if (r.status === 417) throw new Error('فيه أحد داخل صفحة الراوتر من جهاز ثاني — سكّرها وجرّب');
@@ -57,6 +71,7 @@ export class FiberhomeDriver implements RouterDriver {
 
   /** مثل $post: رمز جديد لكل طلب (get_refresh_sessionid)، والمفتاح أول ١٦ حرف منه */
   private async post(method: string, dataObj: unknown, opts: { nocheck?: boolean; sign?: boolean; timeout?: number } = {}): Promise<any> {
+    if ((await this.whichApi()) === 'v2') return this.post2(method, dataObj, opts);
     const tok = await this.getQ('get_refresh_sessionid', true);
     const sid = String(tok?.sessionid ?? '');
     if (this.encrypt && sid.length < 16) throw new Error(`${method}: الراوتر ما أعطى رمز جلسة`);
@@ -79,8 +94,91 @@ export class FiberhomeDriver implements RouterDriver {
     try { return JSON.parse(plain); } catch { return plain; }
   }
 
+  // ═══ v2: الفيرموير الجديد (/fh_api/) ═══
+  /** نفس getToken في الصفحة: GET بدون أي معالجة للرد */
+  private async sessionV2(): Promise<{ ok: boolean; status: number; sid: string }> {
+    const r = await http(`${this.base()}${FHAPI_TMP}FHNCAPIS?ajaxmethod=get_refresh_sessionid`, { headers: this.hdr(), cache: 'no-store' } as RequestInit, 8000);
+    const t = await r.text();
+    let sid = '';
+    try { const j = JSON.parse(t); if (j && typeof j.sessionid === 'string') sid = j.sessionid; } catch {}
+    return { ok: r.ok, status: r.status, sid };
+  }
+  /**
+   * أي بروتوكول عند هالراوتر — القديم أول: لو /api/tmp is_encrypt رد {enable} فهو v1 بالضبط مثل قبل (ما يتغيّر عليه شي).
+   * v2 بس لو القديم ما رد صح (LG6851F الجديد يرد 403) و /fh_api/ أعطى sessionid.
+   */
+  private async whichApi(): Promise<'v1' | 'v2'> {
+    if (this.api) return this.api;
+    let v1 = false;
+    try {
+      const r = await http(`${this.base()}/api/tmp/FHNCAPIS?ajaxmethod=is_encrypt&_=${Math.random()}`, { headers: this.hdr() }, 8000);
+      const j = JSON.parse(await r.text());
+      v1 = r.ok && !!j && typeof j === 'object' && 'enable' in j;
+    } catch {}
+    let v2 = false;
+    if (!v1) { try { v2 = (await this.sessionV2()).sid.length > 0; } catch {} }
+    this.api = v2 ? 'v2' : 'v1';
+    this.log('api', this.api);
+    return this.api;
+  }
+  /** v2 GET مثل $get: FHAPIS/FHNCAPIS?ajaxmethod=… (أو مسار باسم الأمر)، والرد يتنظّف برأس content-len لو موجود */
+  private async getQ2(method: string, nocheck = false): Promise<any> {
+    const url = V2_PATH_GET.includes(method)
+      ? `${this.base()}${FHAPI_TMP}${method}`
+      : `${this.base()}${FHAPI_TMP}${nocheck ? 'FHNCAPIS' : 'FHAPIS'}?ajaxmethod=${method}`;
+    const r = await http(url, { headers: this.hdr(), cache: 'no-store' } as RequestInit, 8000);
+    if (r.status === 418) throw new Error('انتهت الجلسة');
+    if (r.status === 417) throw new Error('فيه أحد داخل صفحة الراوتر من جهاز ثاني — سكّرها وجرّب');
+    const raw = await r.text();
+    if (!r.ok) throw new Error(`${method}: HTTP ${r.status}`);
+    let t = raw;
+    try { t = fhapiUnmaskGet(raw, r.headers?.get?.('content-len')) ?? raw; } catch { throw new Error(`${method}: ما قدرنا نقرأ رد الراوتر`); }
+    try { return JSON.parse(t); } catch { return t; }
+  }
+  /** v2: السر من is_encrypt (مرة وحدة؛ ينعاد لو الراوتر غيّره) */
+  private async secretV2(): Promise<string> {
+    if (this.secret.length === 5) return this.secret;
+    const t = await this.getQ2('is_encrypt', true);
+    const data = fhapiIsEncryptData(t);
+    const { secret } = fhapiSecret(data);
+    if (!secret || secret.length !== 5) {
+      throw new Error(`is_encrypt: ما قدرنا نفك سر الراوتر (${data ? `طول data ${data.length}` : `الرد بدون data: ${typeof t === 'string' ? t.slice(0, 40) : Object.keys(t ?? {}).join(',').slice(0, 60)}`})`);
+    }
+    this.secret = secret;
+    return secret;
+  }
+  /** v2 POST مثل $post: رمز جديد لكل طلب، الجسم مشفّر دايماً؛ الرد مشفّر إلا الدخول/الخروج */
+  private async post2(method: string, dataObj: unknown, opts: { nocheck?: boolean; sign?: boolean; timeout?: number } = {}): Promise<any> {
+    if (!V2_ALLOWED(method)) {
+      throw noChange('فيرموير FiberHome الجديد: القراءة شغّالة، وتغيير الإعدادات بنفتحه بعد ما نتأكد منه على جهاز حقيقي — ما غيّرنا شي.');
+    }
+    const secret = await this.secretV2();
+    const tok = await this.sessionV2();
+    if (!tok.sid) throw new Error(`${method}: الراوتر ما أعطى رمز جلسة${tok.ok ? '' : ` (HTTP ${tok.status})`}`);
+    const path = opts.sign ? `${FHAPI_SIGN}${method}` : `${FHAPI_TMP}${opts.nocheck ? 'FHNCAPIS' : 'FHAPIS'}`;
+    const r = await http(`${this.base()}${path}?_${Math.random()}`, {
+      method: 'POST',
+      // مثل الصفحة بالضبط: POST فيه Content-Type بس (بدون X-Requested-With/Accept)، والمتصفح يضيف Referer
+      headers: { 'Content-Type': 'application/json; charset=utf-8', Referer: this.base() + '/login.html' },
+      body: fhapiBody(method, dataObj, tok.sid, secret),
+    }, opts.timeout ?? 15000);
+    if (r.status === 418) throw new Error('انتهت الجلسة');
+    if (r.status === 417) throw new Error('فيه أحد داخل صفحة الراوتر من جهاز ثاني — سكّرها وجرّب');
+    const t = await r.text();
+    if (!r.ok) throw new Error(`${method}: HTTP ${r.status}`);
+    if (opts.sign) { try { return JSON.parse(t); } catch { return t; } }
+    // الصفحة تفك كل رد هنا (_0x336985_) — رد ما ينفك = خطأ، ونذكر أوله في الرسالة عشان يوصلنا في التقرير
+    try { return fhapiReply(t, tok.sid, secret); } catch {
+      this.secret = '';   // يمكن الراوتر غيّر السر (إعادة تشغيل) — الطلب الجاي يجيبه من جديد
+      throw new Error(`${method}: ما قدرنا نفك رد الراوتر (${t.length} حرف: ${t.slice(0, 40).replace(/\s+/g, ' ')})`);
+    }
+  }
+
   async detect(host: string): Promise<boolean> {
     this.host = host;
+    this.api = null;
+    this.secret = '';
+    try { if ((await this.whichApi()) === 'v2') return true; } catch {}
     try {
       const j = await this.getQ('is_encrypt', true);
       if (j && typeof j === 'object' && 'enable' in j) return true;
@@ -95,6 +193,7 @@ export class FiberhomeDriver implements RouterDriver {
   }
   /** is_encrypt — لو ما رد بشكل مفهوم نفترض التشفير شغّال (الافتراضي في polyfill) */
   private async readEncrypt(): Promise<boolean> {
+    if ((await this.whichApi()) === 'v2') return true;
     try {
       const enc = await this.getQ('is_encrypt', true);
       if (enc && typeof enc === 'object' && 'enable' in enc) return String(enc.enable) === '1';
@@ -118,12 +217,14 @@ export class FiberhomeDriver implements RouterDriver {
   }
 
   async login(host: string, username: string, password: string): Promise<void> {
+    if (host !== this.host) { this.api = null; this.secret = ''; }
     this.host = host;
     this.user = (username || '').trim() || 'admin';
     this.password = password;
     this.encrypt = await this.readEncrypt();
     const res = await this.post('DO_WEB_LOGIN', { username: this.user, password }, { sign: true });
-    const err = loginError(typeof res === 'string' ? res : JSON.stringify(res));
+    // v2 (login.js): الرد {result: 0..4}؛ v1: نص "0|…"
+    const err = loginError(res && typeof res === 'object' && 'result' in res ? String((res as any).result) : typeof res === 'string' ? res : JSON.stringify(res));
     if (err) throw new Error(err);
     // نفس صفحة الدخول بعد النجاح
     try { await this.getQ('set_developer_mode'); } catch {}
