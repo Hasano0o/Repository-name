@@ -162,12 +162,29 @@ test('قراءة الأقفال من رد الراوتر', () => {
   assert.deepEqual(parseCellLocks(parseLockRaw('<response></response>')), []);
 });
 
+test('قراءة عدة خلايا: كل PCI مرتبط بتردده ونطاقه داخل freq_info نفسه', () => {
+  const multi = '<lock_mode>2</lock_mode><freq_infos>' +
+    '<freq_info><band>3</band><freq>1300</freq><pci>101</pci></freq_info>' +
+    '<freq_info><band>7</band><freq>2850</freq><pci>202</pci></freq_info>' +
+    '</freq_infos><all_bands>3,7</all_bands>';
+  const locks = parseCellLocks({ lte: multi, nr: free });
+  assert.deepEqual(locks, [
+    { tech: 'LTE', pci: '101', band: 3, arfcn: '1300' },
+    { tech: 'LTE', pci: '202', band: 7, arfcn: '2850' },
+  ]);
+  assert.equal(lockMatches(locks, 'LTE', '202', '2850'), true);
+  assert.equal(lockMatches(locks, 'LTE', '202', '1300'), false);
+  assert.equal(lockMatches(locks, 'LTE', '999', '2850'), false);
+});
+
 test('٦) نجاح القفل يتأكد بالتقنية + PCI + القناة، مو بأي قفل', () => {
   const locks = parseCellLocks({ lte: lteLocked, nr: nrLocked });
   assert.equal(lockMatches(locks, 'NR', '55', '636666'), true);
   // قفل 4G فيه PCI ثاني — ما نحسبه نجاح لقفل 5G
   assert.equal(lockMatches(locks, 'NR', '101', ''), false);
   assert.equal(lockMatches(locks, 'NR', '55', '999'), false);
+  assert.equal(lockMatches([{ tech: 'NR', pci: '55' }], 'NR', '55', '636666'), false);
+  assert.equal(lockMatches([{ tech: 'NR', pci: '55' }], 'NR', '55', ''), true);
   assert.equal(lockMatches([], 'LTE', '101', '1300'), false);
 });
 

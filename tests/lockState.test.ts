@@ -8,7 +8,7 @@ import {
   parseNetModeFields, netModeBody, netModeDiff, normSection, lockDiff, lockDiffForMode, lockRestoreBody, huaweiSummary,
 } from '../src/drivers/huawei/lockState';
 import { parseLockRaw, sectionXml, bandLockSection } from '../src/drivers/huawei/cellLock';
-import { zteDiff, checkComplete, lteCell, nrCell, nrBands, lteBands, zteSummary } from '../src/drivers/zte/lockState';
+import { zteDiff, checkComplete, checkLockResponse, lteCell, nrCell, nrBands, lteBands, zteSummary } from '../src/drivers/zte/lockState';
 import { restoreMismatch, mismatchOf, settleMsFor } from '../src/drivers/lockSnapshot';
 import { runApply } from '../src/utils/applyGuard';
 
@@ -130,6 +130,27 @@ test('ZTE: الفرق يحدد الأجزاء اللي تغيّرت بالضبط
 test('ZTE: فيرموير ما يعطي قائمة 5G → ما نحاسب عليها', () => {
   const snap = { ...zteBase, nr5g_nsa_band_lock: '' };
   assert.deepEqual(zteDiff(snap, { ...zteBase }), []);
+});
+
+test('ZTE: غياب مفتاح أساسي من رد الراوتر يُرفض قبل المقارنة', () => {
+  assert.throws(() => checkLockResponse({
+    net_select: zteBase.net_select,
+  }), /ترددات 4G/);
+
+  assert.throws(() => checkLockResponse({
+    lte_band_lock: zteBase.lte_band_lock,
+  }), /وضع الشبكة/);
+
+  assert.doesNotThrow(() => checkLockResponse({
+    lte_band_lock: zteBase.lte_band_lock,
+    net_select: zteBase.net_select,
+  }));
+
+  // مفاتيح 5G الاختيارية ليست شرطًا لقبول الرد الأساسي.
+  assert.doesNotThrow(() => checkLockResponse({
+    lte_band_lock: zteBase.lte_band_lock,
+    net_select: zteBase.net_select,
+  }));
 });
 
 test('ZTE: القراءة الناقصة توقف التجربة', () => {

@@ -180,6 +180,19 @@ test('FiberHome: لقطة ← تثبيت برج وترددات ← إرجاع ب
   assert.equal(r.cells.length, 0);
 });
 
+test('FiberHome: الاسترجاع يعيد برجاً أصلياً فُقد أثناء التجربة', async () => {
+  const r = router();
+  r.cells.push({ act: '1', arfcn: '1300', pci: '214' });
+  r.db['IGD.X_FH_MobileNetwork.LockCellList.Enable'] = '1';
+  const d = await driver();
+  await d.login('192.168.8.1', 'admin', 'pw');
+  const snap = await d.readLockState();
+  r.cells.splice(0, 1);
+  await d.restoreLockState(snap);
+  assert.deepEqual(r.cells, [{ act: '1', arfcn: '1300', pci: '214' }]);
+  assert.equal(r.db['IGD.X_FH_MobileNetwork.LockCellList.Enable'], '1');
+});
+
 test('FiberHome: تثبيت برج بدون رقم قناة ← يوقف قبل أي أمر', async () => {
   const r = router();
   const d = await driver();

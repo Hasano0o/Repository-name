@@ -20,7 +20,7 @@ import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { ZteNgDriver } from '../zteng';
 import { identifyZte, ModelProfile } from '../models';
 import { u30SetBands, u30ReadLock, u30Supported, u30Locked, u30CellLocks, u30UnlockAll, u30Neighbors, u30Summary, u30Diff, U30Lock } from './u30';
-import { ZTE_LOCK_KEYS, ZteLockData, checkComplete, zteDiff, zteSummary, ZTE_PART_LABEL, lteBands, nrBands, lteCell, nrCell } from './lockState';
+import { ZTE_LOCK_KEYS, ZteLockData, checkComplete, zteDiff, zteSummary, ZTE_PART_LABEL, lteBands, nrBands, lteCell, nrCell, checkLockResponse} from './lockState';
 const sha256Upper = (s: string) => bytesToHex(sha256(utf8ToBytes(s))).toUpperCase();
 const sha256Hex = (s: string) => bytesToHex(sha256(utf8ToBytes(s)));
 const md5Hex = (s: string) => bytesToHex(md5(utf8ToBytes(s)));
@@ -928,46 +928,153 @@ export class ZteDriver implements RouterDriver {
     if (baseline) this.orig = baseline;
     await this.ensure();
     if (await this.isU30()) return this.u30RestoreAll(baseline);
+
+    const profile = await this.identify();
+    const canRestoreNr = profile?.nrLock === true;
     const ok: string[] = [];
-    const step = async (name: string, fn: () => Promise<string>) => {
-      try { if (/success/i.test(await fn())) ok.push(name); } catch (e) { this.log('restore', name, 'failed', (e as any)?.message); }
+
+    const writeAndVerify = async (
+      name: string,
+      write: () => Promise<string>,
+      verify: () => Promise<boolean>,
+    ): Promise<boolean> => {
+      try {
+        const out = await write();
+        if (!/success/i.test(out)) {
+          this.log('restore', name, 'write rejected');
+          return false;
+        }
+        for (let attempt = 0; attempt < 4; attempt++) {
+          try {
+            if (await verify()) {
+              ok.push(name);
+              return true;
+            }
+          } catch (e) {
+            this.log('restore', name, 'readback failed', (e as any)?.message);
+          }
+          if (attempt < 3) await sleep(1500);
+        }
+        this.log('restore', name, 'readback mismatch');
+      } catch (e) {
+        this.log('restore', name, 'failed', (e as any)?.message);
+      }
+      return false;
     };
-    // ١. فك التثبيت على الأبراج
-    await step('lte-cell', () => this.clearLteCell());
-    await step('nr-cell', () => this.clearNrCell());
-    // ٢. ترددات 4G: الأصلية لو نعرفها، وإلا قائمة واسعة، وإلا الافتراضية
+
+    const sameBands = (actual: number[], expected: number[]) => {
+      const a = [...actual].sort((x, y) => x - y);
+      const b = [...expected].sort((x, y) => x - y);
+      return a.length === b.length && a.every((v, i) => v === b[i]);
+    };
+
+    // أمان: لا نفك أقفال الأبراج العامة عبر goform.
+    // نعيد الترددات ووضع الشبكة فقط؛ مسار U30 Pro الخاص محفوظ أعلاه.
+
+    // ١. ترددات 4G: لا نعتبر رد success إثباتًا أن الإعداد تغيّر.
     const lteTries = [
       this.baseLte(),
       [...new Set([...DEFAULT_LTE, ...WIDE_LTE])].sort((a, b) => a - b),
       DEFAULT_LTE,
     ].filter((x): x is number[] => !!x && x.length > 0);
-    for (const bands of lteTries) {
-      const before = ok.length;
-      await step('lte-bands', () => this.act({
-        goformId: 'BAND_SELECT', is_gw_band: '0', gw_band_mask: '0',
-        is_lte_band: '1', lte_band_mask: maskFromBands(bands),
-      }));
-      if (ok.length > before) break;
-    }
-    // ٣. ترددات 5G
-    for (const nr of [this.baseNr(), SAFE_NR].filter((x): x is number[] => !!x && x.length > 0)) {
-      const before = ok.length;
-      await step('nr-bands', () => this.act({ goformId: 'WAN_PERFORM_NR5G_BAND_LOCK', nr5g_band_mask: nr.join(',') }));
-      if (ok.length > before) break;
-    }
-    // ٤. وضع الشبكة: الأصلي أو تلقائي
-    // «WL_AND_5G» فيها 3G — والـ 3G شبه متوقفة عندنا فيعلق على LIMITED_SERVICE_WCDMA.
-    // نرجّع الأصلي لو ما فيه 3G، وإلا 4G + 5G
-    const origMode = (this.orig?.net_select || '').trim();
-    const mode = origMode && !/^WL|WCDMA|GSM/i.test(origMode) ? origMode : CODE_TO_ZTE['0803'];
-    await step('mode', () => this.act({ goformId: 'SET_BEARER_PREFERENCE', BearerPreference: mode }));
-    this.log('restoreAll ok:', ok.join(','));
-    if (!ok.length) throw new Error('الراوتر ما قبل أي أمر — تأكد إنك متصل بالواي فاي حقه وجرّب مرة ثانية');
-    // ٥. إعادة تشغيل عشان كل شي يتطبّق
-    await this.assertWritable('REBOOT_DEVICE');
-    try { await this.post({ goformId: 'REBOOT_DEVICE' }); } catch {}
-  }
 
+    let lteRestored = false;
+    for (const bands of lteTries) {
+      const expected = [...bands].sort((a, b) => a - b);
+      lteRestored = await writeAndVerify(
+        'lte-bands',
+        () => this.act({
+          goformId: 'BAND_SELECT',
+          is_gw_band: '0',
+          gw_band_mask: '0',
+          is_lte_band: '1',
+          lte_band_mask: maskFromBands(bands),
+        }),
+        async () => {
+          const r = await this.get(['lte_band_lock']);
+          const raw = r.lte_band_lock;
+          if (typeof raw !== 'string' || !raw.trim()) return false;
+          const actual = bandsFromMask(raw);
+          return actual.length > 0 && sameBands(actual, expected);
+        },
+      );
+      if (lteRestored) break;
+    }
+
+    // ٢. ترددات 5G: لا نرسل أي أمر إلا لموديل مؤكّد الدعم.
+    // الحقول المفقودة لا تُفسّر على أنها قائمة فارغة أو نجاح.
+    let nrRestored = false;
+    if (canRestoreNr) {
+      const nrTries = [
+        this.baseNr(),
+        SAFE_NR,
+      ].filter((x): x is number[] => !!x && x.length > 0);
+
+      for (const bands of nrTries) {
+        const expected = [...bands].sort((a, b) => a - b);
+        nrRestored = await writeAndVerify(
+          'nr-bands',
+          () => this.act({
+            goformId: 'WAN_PERFORM_NR5G_BAND_LOCK',
+            nr5g_band_mask: bands.join(','),
+          }),
+          async () => {
+            const r = await this.get([
+              'nr5g_nsa_band_lock',
+              'nr5g_sa_band_lock',
+              'nr5g_band_lock',
+            ]);
+            const raw = pick(
+              r,
+              'nr5g_nsa_band_lock',
+              'nr5g_band_lock',
+              'nr5g_sa_band_lock',
+            );
+            if (typeof raw !== 'string' || !raw.trim()) return false;
+            const actual = nrList(raw);
+            return actual.length > 0 && sameBands(actual, expected);
+          },
+        );
+        if (nrRestored) break;
+      }
+    } else {
+      this.log('restore', 'nr-bands', 'skipped: model support not confirmed');
+    }
+
+    // ٣. وضع الشبكة: الأصلي أو 4G + 5G، مع قراءة تحقق فعلية.
+    const origMode = (this.orig?.net_select || '').trim();
+    const mode = origMode && !/^WL|WCDMA|GSM/i.test(origMode)
+      ? origMode
+      : CODE_TO_ZTE['0803'];
+
+    const modeRestored = await writeAndVerify(
+      'mode',
+      () => this.act({
+        goformId: 'SET_BEARER_PREFERENCE',
+        BearerPreference: mode,
+      }),
+      async () => {
+        const r = await this.get(['net_select']);
+        return typeof r.net_select === 'string'
+          && !!r.net_select.trim()
+          && r.net_select.trim() === mode;
+      },
+    );
+
+    this.log('restoreAll verified:', ok.join(',') || 'none');
+
+    if (!lteRestored || !modeRestored || (canRestoreNr && !nrRestored)) {
+      throw new Error(
+        'لم نتحقق من استعادة كل الإعدادات المطلوبة؛ أوقفنا إعادة التشغيل لتقليل المخاطر. افحص إعدادات الراوتر قبل إعادة المحاولة.',
+      );
+    }
+
+    // ٤. إعادة التشغيل فقط بعد نجاح التحقق من الإعدادات المطلوبة.
+    await this.assertWritable('REBOOT_DEVICE');
+    try {
+      await this.post({ goformId: 'REBOOT_DEVICE' });
+    } catch {}
+  }
   // ─── الترددات ───
   private async readLocks() {
     const r = await this.get(['lte_band_lock', 'nr5g_nsa_band_lock', 'nr5g_sa_band_lock', 'nr5g_band_lock']);
@@ -1275,6 +1382,7 @@ export class ZteDriver implements RouterDriver {
       return { driver: this.id, at: Date.now(), summary: u30Summary(d), data: { u30: d } };
     }
     const r = await this.get([...ZTE_LOCK_KEYS]);
+    checkLockResponse(r);
     const data: ZteLockData = {};
     for (const k of ZTE_LOCK_KEYS) data[k] = (r[k] ?? '').trim();
     checkComplete(data);
@@ -1292,8 +1400,10 @@ export class ZteDriver implements RouterDriver {
     const d = snap.data as ZteLockData;
     const read = async () => {
       const r = await this.get([...ZTE_LOCK_KEYS]);
+      checkLockResponse(r);
       const o: ZteLockData = {};
       for (const k of ZTE_LOCK_KEYS) o[k] = (r[k] ?? '').trim();
+      checkComplete(o);
       return o;
     };
     const todo = zteDiff(d, await read());
@@ -1303,22 +1413,9 @@ export class ZteDriver implements RouterDriver {
     if (todo.includes('mode') && d.net_select) await this.setNetworkMode(d.net_select);
     if (todo.includes('lte') && lteBands(d).length) await this.setLteBands(lteBands(d));
     if (todo.includes('nr') && nrBands(d).length) await this.setNrBands(nrBands(d));
-    let cellChanged = false;
-    if (todo.includes('lteCell')) {
-      const c = lteCell(d);
-      must('إرجاع قفل برج 4G', c === 'off'
-        ? await this.clearLteCell()
-        : await this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: d.lte_pci_lock, lte_earfcn_lock: d.lte_earfcn_lock }));
-      cellChanged = true;
-    }
-    if (todo.includes('nrCell')) {
-      const c = nrCell(d);
-      must('إرجاع قفل برج 5G', c === 'off'
-        ? await this.clearNrCell()
-        : await this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: d.nr5g_cell_lock }));
-      cellChanged = true;
-    }
-    if (cellChanged && rebootToApply.has(this.host)) await this.rebootAndWait();
+    // لا نكتب أقفال الأبراج العامة أثناء الاستعادة.
+    // إذا اختلف قفل برج، ستظهر عدم المطابقة في التحقق النهائي بدلًا من
+    // إرسال أوامر فك/تثبيت غير آمنة.
     // الراوتر يحدّث lte_band_lock بعد لحظة من «success» — كنا نقرأ بعد ٥٠ms ونقول «ما رجع» (تقرير ٢٥ أكتوبر)
     let left = zteDiff(d, await read());
     for (let i = 0; i < 4 && left.length; i++) {
@@ -1329,27 +1426,7 @@ export class ZteDriver implements RouterDriver {
     if (left.length) throw restoreMismatch(left.map(x => ZTE_PART_LABEL[x]));
   }
   async lockCell(t: CellLockTarget): Promise<void> {
-    // كل الفحوص هنا قبل أي أمر — نعلّمها noChange عشان safeApply ما يرجّع ولا يفك شي
-    const pci = String(parsePci(t.pci) ?? t.pci ?? '').trim();
-    const arfcn = (t.arfcn ?? '').trim();
-    if (!pci) throw noChange('ما عندنا رقم البرج (PCI) — ما نقدر نثبّت عليه');
-    if (!arfcn) throw noChange('الراوتر ما أعطانا رقم تردد هذا البرج (EARFCN) — ثبّت التردد بدلاً منه');
-    if (t.tech === 'NR' && !t.band) throw noChange('ما نعرف تردد 5G لهذا البرج');
-    try { await this.ensure(); } catch (e) { throw markNoChange(e); }
-    let out: string;
-    if (t.tech === 'NR') {
-      if (!t.band) throw noChange('ما نعرف تردد 5G لهذا البرج');
-      out = await this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: `${pci},${arfcn},${t.band},${nrScs(t.band)}` });
-    } else {
-      out = await this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: pci, lte_earfcn_lock: arfcn });
-    }
-    if (!/success/i.test(out)) throw this.rejected('التثبيت على البرج', out);
-    this.log('cell-lock set', t.tech, pci, arfcn);
-    // بعض الإصدارات تطبّقه فوراً — وأغلبها تحتاج إعادة تشغيل
-    if (!rebootToApply.has(this.host) && await this.waitServing(t.tech, pci, 12000)) return;
-    rebootToApply.add(this.host);
-    this.log('cell-lock needs reboot');
-    await this.rebootAndWait();
+    throw noChange('تثبيت البرج موقوف على راوترات ZTE العامة حفاظًا على الخدمة. استخدم تثبيت الترددات بدلًا منه.');
   }
 
   /**
@@ -1362,29 +1439,26 @@ export class ZteDriver implements RouterDriver {
     const v = (x?: string) => (x ?? '').trim();
     if (cur && !v(cur.lte_earfcn_lock) && !v(cur.lte_pci_lock)) return '{"result":"success"}';
     if (cur && v(cur.lte_earfcn_lock) === '0' && v(cur.lte_pci_lock) === '0') return '{"result":"success"}';
-    const o = await this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: '', lte_earfcn_lock: '' });
-    if (/success/i.test(o)) return o;
-    return this.act({ goformId: 'LTE_LOCK_CELL_SET', lte_pci_lock: '0', lte_earfcn_lock: '0' });
+    if (!cur) throw noChange('تعذرت قراءة قفل برج 4G؛ أوقفنا العملية ولم نرسل أي أمر.');
+    throw noChange('فك قفل برج 4G غير مدعوم بأمان على راوترات ZTE العامة؛ لم نرسل أي أمر.');
   }
   private async clearNrCell(): Promise<string> {
     const cur = await this.get(['nr5g_cell_lock']).catch(() => null);
     const f = (cur?.nr5g_cell_lock ?? '').split(',').map(x => x.trim());
     if (cur && (!f[0] || f.every(x => !x || x === '0'))) return '{"result":"success"}';
-    const o = await this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: '' });
-    if (/success/i.test(o)) return o;
-    return this.act({ goformId: 'NR5G_LOCK_CELL_SET', nr5g_cell_lock: '0,0,0,0' });
+    if (!cur) throw noChange('تعذرت قراءة قفل برج 5G؛ أوقفنا العملية ولم نرسل أي أمر.');
+    throw noChange('فك قفل برج 5G غير مدعوم بأمان على راوترات ZTE العامة؛ لم نرسل أي أمر.');
   }
 
   async unlockCell(tech?: 'LTE' | 'NR'): Promise<void> {
     await this.ensure();
     // U30: أمر وحيد يفك الكل (UNLOCK_ALL_CELL) وصفحته تعيد التشغيل بعده
     if (await this.isU30()) { if (await u30UnlockAll(this.io())) await this.rebootAndWait(); return; }
-    const had = (await this.getCellLocks().catch(() => [] as CellLockState[])).filter(h => !tech || h.tech === tech);
-    let o1 = '', o2 = '';
-    if (!tech || tech === 'LTE') o1 = await this.clearLteCell();
-    if (!tech || tech === 'NR') o2 = await this.clearNrCell().catch(() => '');
-    if (!/success/i.test(o1) && !/success/i.test(o2)) throw this.rejected('فك التثبيت', o1 || o2);
-    if (had.length && rebootToApply.has(this.host)) await this.rebootAndWait();
+    // لا نعتبر فشل القراءة دليلًا على عدم وجود قفل.
+    const had = await this.getCellLocks();
+    const relevant = had.filter(h => !tech || h.tech === tech);
+    if (!relevant.length) return;
+    throw noChange('يوجد قفل برج، لكن فكّه غير مدعوم بأمان على راوترات ZTE العامة. لم نرسل أي أمر؛ استخدم واجهة الراوتر الرسمية بحذر.');
   }
 
   async reboot(): Promise<void> {

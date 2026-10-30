@@ -29,10 +29,25 @@ export function parseCellLocks(raw: LockRaw): CellLockState[] {
   const out: CellLockState[] = [];
   for (const [tech, sec] of [['LTE', raw.lte], ['NR', raw.nr]] as const) {
     if (!isSectionLocked(sec)) continue;
-    const pci = (tag(sec, 'pci') ?? '').trim();
-    if (!pci) continue;
-    const band = parseInt(tag(sec, 'band') ?? '', 10);
-    out.push({ tech, pci, band: Number.isFinite(band) ? band : undefined, arfcn: (tag(sec, 'freq') ?? '').trim() || undefined });
+
+    // اربط PCI والتردد والنطاق من عنصر freq_info نفسه؛ لا تخلط بين العناصر.
+    const entries = [...sec.matchAll(/<freq_info>([\s\S]*?)<\/freq_info>/g)]
+      .map(m => m[1]);
+
+    // توافق احتياطي مع الردود القديمة التي لا تحتوي freq_info.
+    const sections = entries.length ? entries : [sec];
+
+    for (const entry of sections) {
+      const pci = (tag(entry, 'pci') ?? '').trim();
+      if (!pci) continue;
+      const band = parseInt(tag(entry, 'band') ?? '', 10);
+      out.push({
+        tech,
+        pci,
+        band: Number.isFinite(band) ? band : undefined,
+        arfcn: (tag(entry, 'freq') ?? '').trim() || undefined,
+      });
+    }
   }
   return out;
 }
@@ -78,9 +93,12 @@ export function buildUnlockBody(tech?: Tech): string {
 
 /** هل القراءة بعد الأمر تثبت إن الخلية المطلوبة مقفولة فعلاً؟ */
 export function lockMatches(locks: CellLockState[], tech: Tech, pci: string, arfcn: string): boolean {
-  const l = locks.find(x => x.tech === tech);
-  if (!l || l.pci !== pci) return false;
-  return !l.arfcn || !arfcn || l.arfcn === arfcn;
+  // قد يرجع الراوتر أكثر من خلية للتقنية نفسها؛ طابق الهدف ضمن جميع النتائج.
+  return locks.some(l =>
+    l.tech === tech &&
+    l.pci === pci &&
+    (!arfcn || (!!l.arfcn && l.arfcn === arfcn))
+  );
 }
 
 /**

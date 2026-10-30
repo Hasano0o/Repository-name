@@ -45,6 +45,19 @@ export function nrCell(d: ZteLockData): string {
 }
 
 /** ترمي لو القراءة ناقصة — ما نجرّب وإحنا ما نعرف وش نرجّع */
+/**
+ * يتحقق من وجود المفاتيح الأساسية في رد الراوتر قبل تسوية القيم.
+ * مفاتيح 5G والأبراج اختيارية لاختلاف دعمها بين الفيرمويرات.
+ */
+export function checkLockResponse(r: Record<string, string>): void {
+  if (!Object.prototype.hasOwnProperty.call(r, 'lte_band_lock')) {
+    throw new Error('الراوتر لم يُرجع مفتاح ترددات 4G');
+  }
+  if (!Object.prototype.hasOwnProperty.call(r, 'net_select')) {
+    throw new Error('الراوتر لم يُرجع مفتاح وضع الشبكة');
+  }
+}
+
 export function checkComplete(d: ZteLockData): void {
   if (!(d.lte_band_lock ?? '').trim()) throw new Error('ما قدرنا نقرأ ترددات 4G من الراوتر');
   if (!(d.net_select ?? '').trim()) throw new Error('ما قدرنا نقرأ وضع الشبكة من الراوتر');

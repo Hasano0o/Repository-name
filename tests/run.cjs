@@ -19,10 +19,12 @@ const files = [
   'src/utils/bands.ts',
   'src/utils/advisor.ts',
   'src/drivers/huawei/netStandard.ts',
+  'src/drivers/huawei/rsaEnc.ts',
   'src/drivers/lockSnapshot.ts',
   'src/drivers/huawei/lockState.ts',
   'src/drivers/zte/lockState.ts',
   'src/store/routerLockCore.ts',
+  'src/store/routerIdentityCore.ts',
   'src/assistant/core.ts',
   'src/drivers/models.ts',
   'src/drivers/zyxel/crypto.ts',
@@ -68,6 +70,16 @@ for (const rel of files) {
 }
 
 const tests = files.filter(f => f.endsWith('.test.ts')).map(f => path.join(out, f.replace(/\.ts$/, '.js')));
-const r = spawnSync(process.execPath, ['--test', ...tests], { stdio: 'inherit' });
+const testEnv = {
+  ...process.env,
+  NODE_PATH: [
+    path.join(root, 'node_modules'),
+    process.env.NODE_PATH
+  ].filter(Boolean).join(path.delimiter),
+};
+const r = spawnSync(process.execPath, ['--test', ...tests], {
+  stdio: 'inherit',
+  env: testEnv,
+});
 fs.rmSync(out, { recursive: true, force: true });
 process.exit(r.status ?? 1);

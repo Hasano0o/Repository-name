@@ -350,16 +350,79 @@ export class FiberhomeDriver implements RouterDriver {
     }
     if (d.mode && b.mode !== d.mode) Object.assign(url, { NetworkMode: o + b.n.x_NetworkSet_NetworkMode, ENDC: o + b.n.x_NetworkSet_ENDC }) && Object.assign(value, { NetworkMode: d.mode, ENDC: d.endc || b.endc });
     if (Object.keys(url).length) await this.setValues(url, value);
-    // البرج: نشيل الأبراج اللي انضافت بعد اللقطة، ونرجّع حالة التفعيل
+    // استرجاع قائمة الأبراج الأصلية بدقة؛ الفهارس تتغير بعد كل حذف.
     if (d.cellEnable !== '') {
-      try {
+      const desired: CellRow[] = Array.isArray(d.cells) ? d.cells : [];
+      const key = (r: CellRow) => JSON.stringify([r.act, r.arfcn, r.pci]);
+      const counts = (rows: CellRow[]) => {
+        const out = new Map<string, number>();
+        for (const r of rows) out.set(key(r), (out.get(key(r)) ?? 0) + 1);
+        return out;
+      };
+
+      // إزالة الصفوف الزائدة، مع إعادة القراءة بعد كل حذف.
+      for (let attempt = 0; attempt < 50; attempt++) {
         const c = await this.readCells();
-        const extra = c.rows.filter(r => !d.cells.some(x => x.act === r.act && x.arfcn === r.arfcn && x.pci === r.pci));
-        for (const r of extra.sort((x, y) => Number(y.idx) - Number(x.idx))) {
-          await this.post('del_xmlnode', { url: c.n.x_LockCellList_obj + c.n.x_LockCellList_LockCell, index: r.idx });
+        const remaining = counts(desired);
+        const extra: CellRow[] = [];
+        for (const r of c.rows) {
+          const k = key(r), n = remaining.get(k) ?? 0;
+          if (n > 0) remaining.set(k, n - 1);
+          else extra.push(r);
         }
-        if (c.enable !== d.cellEnable) await this.setCellEnable(c.n, d.cellEnable === '1');
-      } catch {}
+        if (!extra.length) break;
+        const row = extra.sort((x, y) => Number(y.idx) - Number(x.idx))[0];
+        if (!row.idx || !/^\d+$/.test(row.idx)) {
+          throw new Error('استرجاع الأبراج تعذّر: فهرس الحذف غير صالح');
+        }
+        await this.post('del_xmlnode', {
+          url: c.n.x_LockCellList_obj + c.n.x_LockCellList_LockCell,
+          index: row.idx,
+        });
+        if (attempt === 49) throw new Error('استرجاع الأبراج تعذّر: تجاوز عدد محاولات الحذف');
+      }
+
+      // إعادة أي برج أصلي فُقد أثناء التجربة.
+      for (let attempt = 0; attempt < 50; attempt++) {
+        const c = await this.readCells();
+        const remaining = counts(c.rows);
+        const missing = desired.find(r => {
+          const k = key(r), n = remaining.get(k) ?? 0;
+          if (n > 0) {
+            remaining.set(k, n - 1);
+            return false;
+          }
+          return true;
+        });
+        if (!missing) break;
+        await this.post('add_set_xmlnode', {
+          url: c.n.x_LockCellList_obj + c.n.x_LockCellList_LockCell,
+          setNode: {
+            url: {
+              act: c.n.x_LockCellList_act,
+              arfcn: c.n.x_LockCellList_arfcn,
+              pci: c.n.x_LockCellList_pci,
+            },
+            value: {
+              act: missing.act,
+              arfcn: missing.arfcn,
+              pci: missing.pci,
+            },
+          },
+        });
+        if (attempt === 49) throw new Error('استرجاع الأبراج تعذّر: تجاوز عدد محاولات الإضافة');
+      }
+
+      const c = await this.readCells();
+      const actualCounts = counts(c.rows);
+      const desiredCounts = counts(desired);
+      if (
+        actualCounts.size !== desiredCounts.size ||
+        [...desiredCounts].some(([k, n]) => actualCounts.get(k) !== n)
+      ) {
+        throw new Error('استرجاع الأبراج تعذّر: قائمة الأبراج لا تطابق اللقطة الأصلية');
+      }
+      if (c.enable !== d.cellEnable) await this.setCellEnable(c.n, d.cellEnable === '1');
     }
     await sleep(3000);
     const a = await this.readBand();
@@ -369,7 +432,12 @@ export class FiberhomeDriver implements RouterDriver {
     if (d.cellEnable !== '') {
       try {
         const c = await this.readCells();
-        if (c.enable !== d.cellEnable) miss.push('تثبيت البرج');
+        const key = (r: CellRow) => JSON.stringify([r.act, r.arfcn, r.pci]);
+        const actual = c.rows.map(key).sort();
+        const expected = (Array.isArray(d.cells) ? d.cells : []).map(key).sort();
+        if (c.enable !== d.cellEnable || JSON.stringify(actual) !== JSON.stringify(expected)) {
+          miss.push('تثبيت البرج');
+        }
       } catch { miss.push('تثبيت البرج'); }
     }
     if (miss.length) throw restoreMismatch(miss);
