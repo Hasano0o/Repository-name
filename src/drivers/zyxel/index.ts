@@ -81,18 +81,36 @@ export class ZyxelDriver implements RouterDriver {
     return this.rsaPem;
   }
 
-  private encrypt(obj: unknown): string {
-    const content = aesCbcEncrypt(this.aesKey, this.iv, utf8(JSON.stringify(obj)));
-    const key = rsaPkcs1Encrypt(this.rsaPem!, utf8(b64(this.aesKey)), n => Crypto.getRandomBytes(n));
-    return JSON.stringify({ content: b64(content), key: b64(key), iv: b64(this.iv) });
+  private encrypt(obj: unknown, aesKey = this.aesKey, iv = this.iv): string {
+    const content = aesCbcEncrypt(aesKey, iv, utf8(JSON.stringify(obj)));
+    const key = rsaPkcs1Encrypt(this.rsaPem!, utf8(b64(aesKey)), n => Crypto.getRandomBytes(n));
+    return JSON.stringify({ content: b64(content), key: b64(key), iv: b64(iv) });
   }
-  private decrypt(j: any): any {
+  private decrypt(j: any, aesKey = this.aesKey): any {
     if (!j || typeof j !== 'object' || !j.content || !j.iv) return j;
-    const plain = aesCbcDecrypt(this.aesKey, unb64(j.iv), unb64(j.content));
+    const plain = aesCbcDecrypt(aesKey, unb64(j.iv), unb64(j.content));
     return JSON.parse(fromUtf8(plain));
+  }
+  /**
+   * دخول واحد بس في نفس الوقت (تقرير NR5103EV2 ٣٠ أكتوبر: ٥ UserLogin بنفس اللحظة ← كل دخول يغيّر مفتاح AES
+   * ويلغي الجلسة اللي قبله ← الردود ما تنفك و/cgi-bin/DAL يرد 401 ← «كلمة المرور غلط» وهي صحيحة).
+   */
+  private loginP: Promise<void> | null = null;
+  private loginKey = '';
+  private ensure(): Promise<void> {
+    if (this.sessionkey) return Promise.resolve();
+    return this.login(this.host, this.user, this.password);
   }
 
   async login(host: string, username: string, password: string, opts?: { lastTry?: boolean; fresh?: boolean }): Promise<void> {
+    const k = `${host}\n${username || 'admin'}\n${password}`;
+    if (this.loginP && this.loginKey === k) return this.loginP;
+    this.loginKey = k;
+    const p = this.loginOnce(host, username, password, opts);
+    this.loginP = p;
+    try { await p; } finally { if (this.loginP === p) this.loginP = null; }
+  }
+  private async loginOnce(host: string, username: string, password: string, opts?: { lastTry?: boolean; fresh?: boolean }): Promise<void> {
     this.host = host;
     this.user = username || 'admin';
     this.password = password || '';
@@ -102,8 +120,9 @@ export class ZyxelDriver implements RouterDriver {
       throw new Error('كلمة المرور المحفوظة رفضها الراوتر قبل — ما جرّبناها مرة ثانية عشان ما ينقفل الدخول. حدّثها من إعدادات الراوتر.');
     }
     const pem = await this.rsaKey();
-    this.aesKey = Crypto.getRandomBytes(32);
-    this.iv = Crypto.getRandomBytes(32);
+    // مفتاح هالدخول محلي — ما نحطه للجلسة إلا لما ينجح (ما يخرب طلبات شغالة)
+    const aesKey = Crypto.getRandomBytes(32);
+    const iv = Crypto.getRandomBytes(32);
     const params = {
       Input_Account: this.user,
       Input_Passwd: b64(utf8(this.password)),
@@ -111,20 +130,22 @@ export class ZyxelDriver implements RouterDriver {
       RememberPassword: 0,
       SHA512_password: false,
     };
-    const body = pem ? this.encrypt(params) : JSON.stringify(params);
+    const body = pem ? this.encrypt(params, aesKey, iv) : JSON.stringify(params);
     const r = await http(this.base() + '/UserLogin', {
       method: 'POST',
       headers: this.hdr({ 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', Origin: this.base(), Referer: this.base() + '/login' }),
       body,
     }, 10000);
     let j: any = null;
-    try { j = this.decrypt(await r.json()); } catch {}
+    try { j = this.decrypt(await r.json(), aesKey); } catch {}
     const key = str(j?.sessionkey);
     if (r.status !== 200 || !key) {
       if (r.status === 401 || /password|account/i.test(JSON.stringify(j ?? ''))) await markBadPassword(host, fp);
       throw new Error('كلمة المرور أو اسم المستخدم غلط (زيكسل يستخدم اسم مستخدم غالباً admin). تأكد منها — ما بنجرّب مرة ثانية لحالنا.');
     }
     await markBadPassword(host, null);
+    this.aesKey = aesKey;
+    this.iv = iv;
     this.sessionkey = key;
   }
 
@@ -135,12 +156,14 @@ export class ZyxelDriver implements RouterDriver {
   }
 
   private async dal(oid: string, again = true): Promise<Record<string, any> | null> {
-    if (!this.sessionkey) await this.login(this.host, this.user, this.password);
-    const r = await http(`${this.base()}/cgi-bin/DAL?oid=${oid}&sessionkey=${this.sessionkey}`, { headers: this.hdr() }, 8000);
-    if (r.status === 401 && again) { this.sessionkey = ''; return this.dal(oid, false); }
+    await this.ensure();
+    const used = this.sessionkey, aesKey = this.aesKey;
+    const r = await http(`${this.base()}/cgi-bin/DAL?oid=${oid}&sessionkey=${used}`, { headers: this.hdr() }, 8000);
+    // 401: الجلسة انتهت — لو طلب ثاني جدّدها خلاص نستخدم الجديدة بدون دخول زايد
+    if (r.status === 401 && again) { if (this.sessionkey === used) this.sessionkey = ''; return this.dal(oid, false); }
     let j: any;
-    try { j = this.decrypt(await r.json()); } catch {
-      if (again) { this.sessionkey = ''; return this.dal(oid, false); }   // مفتاح AES ما يطابق الجلسة
+    try { j = this.decrypt(await r.json(), aesKey); } catch {
+      if (again) { if (this.sessionkey === used) this.sessionkey = ''; return this.dal(oid, false); }   // مفتاح AES ما يطابق الجلسة
       throw new Error('رد غير مفهوم من الراوتر');
     }
     if (j?.result !== 'ZCFG_SUCCESS' || !Array.isArray(j.Object)) return null;
@@ -219,7 +242,7 @@ export class ZyxelDriver implements RouterDriver {
   }
 
   async reboot(): Promise<void> {
-    if (!this.sessionkey) await this.login(this.host, this.user, this.password);
+    await this.ensure();
     const r = await http(`${this.base()}/cgi-bin/Reboot?sessionkey=${this.sessionkey}`, { method: 'POST', headers: this.hdr() }, 8000);
     let j: any = null;
     try { j = this.decrypt(await r.json()); } catch {}
@@ -256,20 +279,21 @@ export class ZyxelDriver implements RouterDriver {
   //   الكتابة: PUT على نفس الـ DAL بنفس التشفير، وبعدها نقرأ ونتأكد إنها انحفظت.
 
   private async dalPut(oid: string, obj: Record<string, unknown>): Promise<void> {
-    if (!this.sessionkey) await this.login(this.host, this.user, this.password);
+    await this.ensure();
     const send = async () => {
       const pem = await this.rsaKey();
-      const r = await http(`${this.base()}/cgi-bin/DAL?oid=${oid}&sessionkey=${this.sessionkey}`, {
+      const used = this.sessionkey, aesKey = this.aesKey, iv = this.iv;
+      const r = await http(`${this.base()}/cgi-bin/DAL?oid=${oid}&sessionkey=${used}`, {
         method: 'PUT',
         headers: this.hdr({ 'Content-Type': 'application/json', Origin: this.base() }),
-        body: pem ? this.encrypt(obj) : JSON.stringify(obj),
+        body: pem ? this.encrypt(obj, aesKey, iv) : JSON.stringify(obj),
       }, 15000);
       let j: any = null;
-      try { j = this.decrypt(await r.json()); } catch {}
-      return { status: r.status, j };
+      try { j = this.decrypt(await r.json(), aesKey); } catch {}
+      return { status: r.status, j, used };
     };
-    let { status, j } = await send();
-    if (status === 401) { this.sessionkey = ''; await this.login(this.host, this.user, this.password); ({ status, j } = await send()); }
+    let { status, j, used } = await send();
+    if (status === 401) { if (this.sessionkey === used) this.sessionkey = ''; await this.ensure(); ({ status, j } = await send()); }
     if (j?.result !== 'ZCFG_SUCCESS') throw new Error(`الراوتر رفض الإعداد (${String(j?.result ?? j?.ReplyMsg ?? status).slice(0, 60)})`);
   }
 
