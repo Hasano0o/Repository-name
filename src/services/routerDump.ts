@@ -119,6 +119,29 @@ export function namedChunks(text: string): string[] {
 }
 
 /**
+ * RequireJS بـ data-main (أو محمّل FiberHome المخفي _0x…_("/src/main.js") اللي يسوي نفسه) ← baseUrl = مجلد السكربت.
+ * FiberHome LG6851F (٣١ أكتوبر، ملف AUTH): getRoute('content/pages/frequencyLockSet') = /src/content/pages/frequencyLockSet.js
+ * و require(['./index']) = /src/index.js — كنا نطلبها من الجذر ← 400 وضاعت كل صفحات الإعدادات.
+ */
+export function dataMainBase(text: string): string | null {
+  // data-main العادي يتعامل معه readAmdConfig (ويحترم baseUrl لو موجود) — هنا المحمّل المخفي بس
+  const m = text.match(/\b_0x\w+_\(\s*["'](\/[\w./-]+?)(?:\.js)?["']\s*\)/);
+  return m ? m[1].replace(/[^/]+$/, '') : null;
+}
+const NET_PAGE = /freq|band|lock|network|net|rf|signal|carrier|antenna|cell|mode|wifi|wlan|apn|nat|upnp|dmz|led|reboot|config/i;
+export function amdModuleIds(text: string, base: string): string[] {
+  const out: string[] = [];
+  for (const m of text.matchAll(/(?:getRoute|require)\(\s*\[?\s*["']((?:\.\/)?[a-zA-Z][\w/.-]*)["']/g)) {
+    const id = m[1];
+    if (/\.(js|html?|css)$/i.test(id) || !/\//.test(id.replace(/^\.\//, '')) && !id.startsWith('./')) continue;   // ملفات كاملة (findRefs) أو أسماء مكتبات (vue…)
+    const rp = resolvePath(id + '.js', base + 'x');
+    if (rp) out.push(rp);
+  }
+  const u = [...new Set(out)];
+  return [...u.filter(f => NET_PAGE.test(f.split('/').pop() ?? '')), ...u.filter(f => !NET_PAGE.test(f.split('/').pop() ?? ''))];
+}
+
+/**
  * ZTE (MC801A Pro/MC888…، ٣٠ أكتوبر): قائمة الصفحة {hash:"#mobile_network",path:"network/mobile_network"} —
  * router.js يحمّل "text!tmpl/<path>.html" والموديول "<path>" (= /js/<path>.js). شاشات الترددات والأبراج والواي فاي
  * كلها هنا وما لها رابط ثابت، فبدونها الملف ناقص. الأهم أول (شبكة/أبراج/واي فاي) لأن عدد الملفات محدود.
@@ -209,6 +232,8 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
   let amd: AmdConfig | null = null;
   /** مجلد <base href> لو الصفحة تحدده */
   let appBase = '';
+  /** مجلد data-main (RequireJS) — FiberHome LG6851F: /src/ */
+  let dmBase = '';
   while (queue.length && files.length < MAX_FILES && total < MAX_TOTAL) {
     const p = queue.shift()!;
     if (seen.has(p)) continue;
@@ -239,6 +264,11 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
       if (isJs && !bh && !/^\.{0,2}\//.test(ref)) cands.push(resolvePath(ref, '/index.html'));
       for (const rp of cands) if (rp && !seen.has(rp) && !queue.includes(rp)) queue.push(rp);
     }
+    const dmb = dataMainBase(r.text);
+    if (dmb) dmBase = dmb;
+    if (dmBase) for (const rp of amdModuleIds(r.text, dmBase)) {
+      if (!seen.has(rp) && !queue.includes(rp)) queue.push(rp);
+    }
     // ZTE: شاشات القائمة (path:"network/…") ← /js/<path>.js + /tmpl/<path>.html
     for (const rp of zteMenuPaths(r.text)) {
       if (!seen.has(rp) && !queue.includes(rp)) queue.push(rp);
@@ -249,6 +279,8 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
       if (rp && !seen.has(rp) && !queue.includes(rp)) queue.push(rp);
     }
     amd = readAmdConfig(r.text, amd);
+    // data-main معروف (FiberHome: /src/) ← الموديولات من مجلده مو من الجذر (كانت طلبات 400 زايدة)
+    if (amd && dmBase) amd = { ...amd, base: dmBase };
     if (amd) {
       for (const id of findAmdIds(r.text, p)) {
         const f = idToFile(id, amd);

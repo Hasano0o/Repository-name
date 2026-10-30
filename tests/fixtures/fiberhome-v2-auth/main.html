@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta name="renderer" content="webkit"/>
+    <meta name="force-rendering" content="webkit"/>
+    <meta http-equiv="X-UA-Compatible" content="ie=edge,chrome=1">
+    <meta http-equiv="x-dns-prefetch-control" content="on" />
+    <meta name="apple-mobile-web-app-title" content="yeziyuan" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta content="telephone=no" name="format-detection" /> 
+    <meta name="full-screen" content="yes" />
+    <meta name="x5-fullscreen" content="true" />
+    <title>5G CPE</title>
+	<link href="" rel="icon">
+    <script type="text/javascript" src="/plugins/checkBrowser.js"></script>
+</head>
+<body>
+    <el-container id="app" class="fh-menu-hide">
+        <div class="overlay" @click="hide_menu()"></div>
+        <myheader></myheader>
+        <el-aside class="fh_nav_menu"><mymenu></mymenu></el-aside>
+        <el-container class="fh-content">
+            <el-main><router-view></router-view></el-main>
+            <el-footer class="fh-footer"><myfooter></myfooter></el-footer>
+        </el-container>
+    </el-container>
+</body>
+<script>
+    var loading;var g_this;var g_currentLang = "en";var g_device_data = {};
+</script>
+<script type="text/javascript" defer async="false">_0xdx2m04ej1p623_("/src/main.js")</script>
+</html>

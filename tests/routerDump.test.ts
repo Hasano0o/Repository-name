@@ -311,3 +311,30 @@ test('بعد الدخول: يبدأ من main.html ويسحب سكربتاتها
   assert.ok(asked.every(a => a.endsWith('#include')), 'الكوكي ينرسل: ' + asked.join(', '));
   assert.ok(!asked.some(a => /FHNCAPIS|_bandly|^\/#/.test(a)), 'ما فيه probe/live بعد الدخول: ' + asked.join(', '));
 });
+
+test('FiberHome LG6851F (ملف AUTH حقيقي): صفحات الإعدادات من /src/ (data-main) — الترددات والشبكة أول', async () => {
+  const fh = (f: string) => fs.readFileSync(path.join(process.cwd(), 'tests', 'fixtures', 'fiberhome-v2-auth', f), 'utf8');
+  const served: Record<string, string> = {
+    '/main.html': fh('main.html'),
+    '/src/main.js': fh('main.js'),
+    '/src/menu/menudata.js': fh('menudata.js'),
+    '/src/router/router.js': fh('router.js'),
+    '/src/index.js': 'define(["router"],function(){})',
+  };
+  const asked: string[] = [];
+  (globalThis as any).fetch = async (url: string) => {
+    const p = url.replace(/^http:\/\/[^/]+/, '').split('?')[0];
+    asked.push(p);
+    // أي صفحة تحت /src/content/pages موجودة (نحاكي الراوتر)، والجذر يرد 400 مثل الحقيقي
+    const body = served[p] ?? (p.startsWith('/src/content/pages/') ? `define(function(){ $post("set_${p.split('/').pop()!.replace('.js', '')}") })` : undefined);
+    return { ok: body !== undefined, status: body !== undefined ? 200 : 400, headers: { get: () => 'text/javascript' }, text: async () => body ?? '' } as any;
+  };
+  const { files } = await collectRouterFiles('192.168.8.1', undefined, { start: ['/main.html'], afterLogin: true });
+  const got = files.map(f => f.p);
+  for (const want of ['/src/main.js', '/src/index.js', '/src/content/pages/frequencyLockSet.js', '/src/content/pages/networkSet.js', '/src/content/pages/carrierLock.js']) {
+    assert.ok(got.includes(want), `${want} ما انسحب — طلبنا: ${asked.slice(0, 30).join(', ')}`);
+  }
+  assert.ok(!asked.includes('/content/pages/frequencyLockSet.js'), 'ما نطلب من الجذر (400)');
+  const pages = got.filter(p => p.startsWith('/src/content/pages/'));
+  assert.ok(pages.indexOf('/src/content/pages/frequencyLockSet.js') < pages.indexOf('/src/content/pages/home.js'), 'صفحات الشبكة قبل الباقي');
+});
