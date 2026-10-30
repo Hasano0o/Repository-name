@@ -264,7 +264,70 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
     files.push({ p: '/_bandly/probe.txt', t: probe.join('\n') });
     onStep?.(files.length);
   }
+  // فحوص حية بدون دخول (٣٠ أكتوبر — MC801A Pro: الملفات قالت «G5» بس الراوتر نفسه رد /ubus/ = 404)
+  try {
+    const live = await liveChecks(base, files.map(f => f.t).join('\n'));
+    if (live) { files.push({ p: '/_bandly/live.txt', t: live }); onStep?.(files.length); }
+  } catch {}
   return { files, skipped: [...new Set(skipped)] };
+}
+
+// ═══ فحوص حية (قراءة بس، بدون دخول) ═══
+/** أي قيمة شكلها سر تنحذف: الرموز والجلسات والكلمات والمعرّفات (IMEI/ICCID/MAC/SSID) و RD/LD */
+const LIVE_SECRET = /(sessionid|session|token|sesinfo|tokinfo|passw\w*|psk|wpa\w*key|\bkey\b|secret|nonce|csrf|imei|imsi|iccid|\bmac\w*|ssid\w*|serial\w*|sn\b|\bRD\b|\bLD\b|msisdn|phone)/i;
+export function scrubLive(text: string): string {
+  return String(text ?? '')
+    // JSON: "key":"value"
+    .replace(/"([\w.-]{1,60})"\s*:\s*"([^"]*)"/g, (all, k, v) => (LIVE_SECRET.test(k) && v ? `"${k}":"«محذوف»"` : all))
+    // XML: <key>value</key>
+    .replace(/<([\w-]{1,60})>([^<]*)<\/\1>/g, (all, k, v) => (LIVE_SECRET.test(k) && v.trim() ? `<${k}>«محذوف»</${k}>` : all))
+    // key=value
+    .replace(/\b([\w.-]{1,60})=([^&\s"'<]+)/g, (all, k, v) => (LIVE_SECRET.test(k) ? `${k}=«محذوف»` : all));
+}
+
+async function req(url: string, method: 'GET' | 'POST' = 'GET', body?: string, ms = 5000): Promise<string> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  const t0 = Date.now();
+  try {
+    const r = await fetch(url, {
+      method, body, signal: ctrl.signal, cache: 'no-store',
+      headers: { Referer: originOf(url) + '/', 'X-Requested-With': 'XMLHttpRequest', ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    } as any);
+    const text = await r.text();
+    return `${r.status} · ${r.headers.get('content-type') || '?'} · ${text.length}B · ${Date.now() - t0}ms · ${scrubLive(text).replace(/\s+/g, ' ').slice(0, 400)}`;
+  } catch (e: any) {
+    return `فشل (${e?.name === 'AbortError' ? 'ما رد خلال ' + ms / 1000 + 'ث' : String(e?.message ?? e).slice(0, 80)}) · ${Date.now() - t0}ms`;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/** الحقول العامة اللي تكشف نوع الفيرموير وطريقة الكتابة — بدون أي سر */
+const ZTE_PUBLIC = 'wa_inner_version,cr_version,web_version,hardware_version,model_name,Language,loginfo,network_type,network_provider,lte_band_lock,nr5g_band_lock,net_select';
+
+/**
+ * أسئلة حية تنجاوب بدون دخول: هل فيه ubus؟ وش الإصدارات؟ وش يرد على أوامر القراءة العامة؟ https موجود؟
+ * كل الطلبات قراءة (GET، أو POST قراءة مثل ubus "[]") — ولا أمر يغيّر شي.
+ */
+export async function liveChecks(base: string, allText: string): Promise<string> {
+  const out: string[] = [`Bandly — فحوص حية (قراءة بس، بدون دخول) · ${base}`];
+  const add = async (label: string, url: string, method: 'GET' | 'POST' = 'GET', body?: string) => out.push(`${label}: ${method} ${url.replace(base, '')} → ${await req(url, method, body)}`);
+  await add('الصفحة', base + '/');
+  out.push(`https: ${await req(base.replace(/^http:/, 'https:') + '/', 'GET', undefined, 4000)}`);
+  if (/goform_get_cmd_process|goform_set_cmd_process/.test(allText)) {
+    await add('ZTE إصدارات', `${base}/goform/goform_get_cmd_process?isTest=false&multi_data=1&cmd=${encodeURIComponent(ZTE_PUBLIC)}`);
+    await add('ZTE ubus', base + '/ubus/', 'POST', '[]');
+    await add('ZTE ubus GET', base + '/ubus');
+    await add('ZTE شرايح الواي فاي', `${base}/goform/goform_get_cmd_process?isTest=false&cmd=queryWiFiChipAdvancedInfo`);
+  }
+  if (/\/api\/webserver|SesTokInfo|api\/device/.test(allText)) {
+    await add('هواوي الجهاز', base + '/api/device/basic_information');
+    await add('هواوي SesTokInfo', base + '/api/webserver/SesTokInfo');
+    await add('هواوي token', base + '/api/webserver/token');
+    await add('هواوي state-login', base + '/api/user/state-login');
+  }
+  return out.length > 2 ? out.join('\n') : out.join('\n');
 }
 
 /**

@@ -231,3 +231,36 @@ test('ZTE (MC801A Pro): شاشات القائمة path:"network/…" ← /js/…
   assert.ok(out.indexOf('/js/wifi/wifi_advance.js') < out.indexOf('/js/login.js'));
   assert.deepEqual(zteMenuPaths('var x = {path:"a"}'), [], 'بدون hash ما نعتبره قائمة');
 });
+
+test('فحوص حية: ZTE — الإصدارات و /ubus/ = 404 بالكود، وما فيه أي أمر تغيير، والأسرار تنحذف', async () => {
+  const { liveChecks } = require('../src/services/routerDump');
+  const calls: string[] = [];
+  const real = (globalThis as any).fetch;
+  (globalThis as any).fetch = async (url: string, init?: any) => {
+    const u = new URL(url);
+    calls.push(`${init?.method ?? 'GET'} ${u.protocol}${u.pathname}${init?.body ? ' ' + init.body : ''}`);
+    const r = (status: number, text: string) => ({ ok: status < 400, status, headers: { get: () => 'text/plain' }, text: async () => text });
+    if (u.protocol === 'https:') throw new Error('TLS');
+    if (u.pathname.startsWith('/ubus')) return r(404, 'Site or Page Not Found');
+    if (u.pathname === '/goform/goform_get_cmd_process') return r(200, '{"wa_inner_version":"BD_XCBZHKMC801A ProV1.0.0B03","web_version":"WEB_XCBZHKG5BV1.0.0B03","loginfo":"","SSID1":"ZTE_B8E86C","imei":"869731080029697","RD":"abc"}');
+    return r(200, '<html></html>');
+  };
+  try {
+    const t: string = await liveChecks('http://192.168.0.1', 'x goform_get_cmd_process y');
+    assert.match(t, /ZTE ubus: POST \/ubus\/ → 404/);
+    assert.match(t, /BD_XCBZHKMC801A ProV1\.0\.0B03/);
+    assert.match(t, /https: فشل/);
+    assert.ok(!/ZTE_B8E86C|869731080029697|"RD":"abc"/.test(t), 'SSID و IMEI و RD لازم تنحذف:\n' + t);
+    const posts = calls.filter(c => c.startsWith('POST'));
+    assert.deepEqual(posts, ['POST http:/ubus/ []'], 'الـ POST الوحيد قراءة ubus «[]»');
+    assert.ok(!calls.some(c => /goform_set_cmd_process/.test(c)), 'ولا أمر goform_set');
+  } finally { (globalThis as any).fetch = real; }
+});
+
+test('فحوص حية: هواوي — رموز الجلسة تنحذف من XML', async () => {
+  const { scrubLive } = require('../src/services/routerDump');
+  const x = scrubLive('<response><SesInfo>SessionID=abc123</SesInfo><TokInfo>tok999</TokInfo><DeviceName>H122-373</DeviceName><Imei>8612</Imei></response>');
+  assert.ok(!/abc123|tok999|8612/.test(x), x);
+  assert.match(x, /H122-373/);
+  assert.equal(scrubLive('a=1&password=xyz&b=2'), 'a=1&password=«محذوف»&b=2');
+});
