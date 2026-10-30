@@ -17,6 +17,7 @@ import { desktop } from '../desktop/bridge';
 import { invite } from './InviteCard';
 import { sheet, LANG, Lang, setLang, EN_MODE } from '../i18n';
 import { diagText, sendSupportReport } from '../services/errors';
+import { sendAfterLoginPages } from '../services/authDump';
 import { isUnlocked, setUnlocked } from '../assistant/store';
 
 // ═══ ١) المربعات ═══
@@ -111,14 +112,20 @@ const when = (d: Date | null) => {
 /** زر التشخيص: يرسل آخر ما صار بين التطبيق والراوتر للمطوّر (بدون كلمات سر ولا بيانات شخصية) */
 function DiagRow() {
   const [st, setSt] = useState<'' | 'busy' | 'ok' | 'fail'>('');
+  const [note, setNote] = useState('');
   const send = async () => {
     setSt('busy');
+    setNote('');
     const ok = await sendSupportReport('diag', diagText('تشخيص يدوي من المستخدم'));
+    // راوتر يحتاج صفحات بعد الدخول (FiberHome الجديد) ← نسحبها ونرسلها مع التشخيص
+    if (ok) {
+      try { const n = await sendAfterLoginPages(m => setNote(m)); setNote(n ?? ''); } catch { setNote(''); }
+    }
     setSt(ok ? 'ok' : 'fail');
   };
   return (
     <Row icon="report" tint="#8b5cf6" label="أرسل تشخيص للمطوّر"
-      value={st === 'ok' ? '✓ وصل للمطوّر' : st === 'fail' ? 'ما وصل — تأكد من النت' : 'عندك مشكلة؟ أرسلها بضغطة'}>
+      value={st === 'busy' && note ? note : st === 'ok' ? `✓ وصل للمطوّر${note ? ` · ${note}` : ''}` : st === 'fail' ? 'ما وصل — تأكد من النت' : 'عندك مشكلة؟ أرسلها بضغطة'}>
       <Pressable style={[s.mini, st === 'busy' && { opacity: 0.5 }]} onPress={send} disabled={st === 'busy' || st === 'ok'}>
         {st === 'busy' ? <ActivityIndicator size="small" color={P.blue} /> : <Text style={s.miniTxt}>{st === 'ok' ? '✓' : 'أرسل'}</Text>}
       </Pressable>

@@ -249,6 +249,10 @@ export class FiberhomeDriver implements RouterDriver {
     return n;
   }
 
+  /** الفيرموير الجديد: الدخول والقراءة تأكدت عند عضو (٣١ أكتوبر) بس أوامر الحفظ في main.html (بعد الدخول) — ما وصلتنا */
+  afterLoginPages(): string[] {
+    return this.api === 'v2' ? ['/main.html'] : [];
+  }
   async logout(): Promise<void> {
     try { await this.post('DO_WEB_LOGOUT', null, { sign: true }); } catch {}
   }

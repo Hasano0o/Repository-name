@@ -427,6 +427,7 @@ export default function GameScreen() {
   const best = ranked[0];
   const baseRow = rows.find(r => r.kind === 'base' && r.status === 'done');
   const bestIsBase = !!best && (best.kind === 'base' || (!!baseRow && best.score! - baseRow.score! < 5));
+  const onlyBase = !!best && best.kind === 'base' && ranked.length === 1;
 
   const applyBest = () => {
     if (!info || !cfg || !best || best.kind === 'base') return;
@@ -649,7 +650,12 @@ export default function GameScreen() {
 
             {!running && best && (
               <View style={s.bestBox}>
-                {bestIsBase ? (
+                {onlyBase ? (
+                  // ما انجرّب غير الإعداد الحالي (الباقي انرفض/محجوب) — ما نقول «الأفضل» وهو ما انقارن بشي
+                  <Text style={[s.bestTitle, { color: C.sub }]}>
+                    ما قدرنا نجرّب الخيارات الثانية على راوترك — إعدادك الحالي {best.score}/100{best.score! < 45 ? '. اللاق غالباً من الإشارة أو ضغط البرج — جرّب «توجيه الأنتنا» أو وقت ثاني' : ''}
+                  </Text>
+                ) : bestIsBase ? (
                   <Text style={s.bestTitle}>إعدادك الحالي هو الأفضل للعب الحين 👌 — ما يحتاج تغيّر شي</Text>
                 ) : (
                   <>

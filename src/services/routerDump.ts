@@ -162,18 +162,19 @@ export function originOf(url: string): string {
   return url.match(/^https?:\/\/[^/]+/i)?.[0] ?? '';
 }
 
-async function get(url: string, ms = 6000, method: 'GET' | 'POST' = 'GET'): Promise<{ ok: boolean; text: string; type: string }> {
+async function get(url: string, ms = 6000, method: 'GET' | 'POST' = 'GET'): Promise<{ ok: boolean; text: string; type: string; status: number }> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
   try {
     // Referer = صفحة الراوتر نفسها: TP-Link (Archer MR600 — ٢٧ أكتوبر) يرفض/يرجّع صفحة الدخول لأي ملف بدونه،
     // فوصلنا index.html بس وضاعت encrypt.js / lib.js / oid_str.js / jquery.tp.min.js
-    const r = await fetch(url, { method, signal: ctrl.signal, cache: 'no-store', headers: { Referer: originOf(url) + '/' } } as any);
+    // credentials: الكوكي من دخول التطبيق (للصفحات اللي بعد الدخول — afterLoginPages)
+    const r = await fetch(url, { method, signal: ctrl.signal, cache: 'no-store', credentials: 'include', headers: { Referer: originOf(url) + '/' } } as any);
     const type = r.headers.get('content-type') || '';
     const text = await r.text();
-    return { ok: r.ok, text, type };
-  } catch {
-    return { ok: false, text: '', type: '' };
+    return { ok: r.ok, text, type, status: r.status };
+  } catch (e) {
+    return { ok: false, text: '', type: '', status: (e as any)?.name === 'AbortError' ? -1 : 0 };
   } finally {
     clearTimeout(t);
   }
@@ -181,13 +182,27 @@ async function get(url: string, ms = 6000, method: 'GET' | 'POST' = 'GET'): Prom
 
 export interface DumpFile { p: string; t: string }
 
-export async function collectRouterFiles(host: string, onStep?: (n: number) => void): Promise<{ files: DumpFile[]; skipped: string[] }> {
+/** سطر «ما وصل» للـ README: وش رد الراوتر بالضبط (قبل: أي فشل ينبلع بصمت — main.html في FiberHome ما ندري وش صار له) */
+export function missLine(p: string, r: { ok: boolean; status: number; text: string }, sameAsHome = false): string {
+  if (sameAsHome) return `✗ ${p} ← رجّع صفحة البداية بدل الملف`;
+  if (r.status === -1) return `✗ ${p} ← انتهت المهلة`;
+  if (r.status === 0) return `✗ ${p} ← ما رد (انقطع الطلب)`;
+  if (r.ok && !r.text) return `✗ ${p} ← فاضي (${r.status})`;
+  return `✗ ${p} ← HTTP ${r.status}`;
+}
+/** الصفحات (.html) أول: هي اللي تهمنا لو ما وصلت — والـ js المخمّنة من النصوص كثير منها 404 طبيعي */
+function topMisses(m: string[], n = 25): string[] {
+  return [...m.filter(x => /\.html?\b/.test(x)), ...m.filter(x => !/\.html?\b/.test(x))].slice(0, n);
+}
+
+export async function collectRouterFiles(host: string, onStep?: (n: number) => void, opts?: { start?: string[]; afterLogin?: boolean }): Promise<{ files: DumpFile[]; skipped: string[] }> {
   if (!isLanHost(host)) throw new Error('العنوان لازم يكون محلي');
   const base = 'http://' + host.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   const files: DumpFile[] = [];
   const skipped: string[] = [];
   const seen = new Set<string>();
-  const queue: string[] = ['/'];
+  const queue: string[] = opts?.start?.length ? [...opts.start] : ['/'];
+  const misses: string[] = [];
   let total = 0;
   let homeSample = '';
   /** إعداد RequireJS (المسار الأساسي + paths) — لو الصفحة تستخدمه */
@@ -201,9 +216,9 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
     if (SKIP.test(p)) { skipped.push(p); continue; }
     if (ES5_TWIN.test(p) && (seen.has(p.replace(/-es5\./i, '-es2015.')) || queue.includes(p.replace(/-es5\./i, '-es2015.')))) { skipped.push(p); continue; }
     const r = await get(base + p);
-    if (!r.ok || !r.text) continue;
-    // راوترات ترجع الصفحة الرئيسية لأي رابط مو موجود — ما نكررها
-    if (p !== '/' && homeSample && r.text.slice(0, 400) === homeSample) continue;
+    if (!r.ok || !r.text) { misses.push(missLine(p, r)); continue; }
+    // راوترات ترجع الصفحة الرئيسية لأي رابط مو موجود — ما نكررها (بس نكتب إنه صار)
+    if (p !== '/' && homeSample && r.text.slice(0, 400) === homeSample) { misses.push(missLine(p, r, true)); continue; }
     if (p === '/') homeSample = r.text.slice(0, 400);
     const t = scrub(r.text.slice(0, MAX_FILE));
     files.push({ p: p === '/' ? '/index.html' : p, t });
@@ -216,9 +231,13 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
     if (bh) appBase = bh;
     // ملفات السكربت داخل مجلد الـ base تحمّل قطعها من نفس المجلد (publicPath)
     const from = bh ? bh + 'index.html' : p === '/' ? '/index.html' : p;
+    // اسم نسبي داخل سكربت (location.href="main.html" في /js/login.js) ينحسب في المتصفح من الصفحة مو من مكان
+    // السكربت — كنا نطلب /js/main.html وتضيع صفحة الإعدادات (FiberHome LG6851F). نجرّب الاثنين.
+    const isJs = /\.js$/i.test(p);
     for (const ref of [...findRefs(r.text), ...angularChunks(r.text)]) {
-      const rp = resolvePath(ref, from);
-      if (rp && !seen.has(rp) && !queue.includes(rp)) queue.push(rp);
+      const cands = [resolvePath(ref, from)];
+      if (isJs && !bh && !/^\.{0,2}\//.test(ref)) cands.push(resolvePath(ref, '/index.html'));
+      for (const rp of cands) if (rp && !seen.has(rp) && !queue.includes(rp)) queue.push(rp);
     }
     // ZTE: شاشات القائمة (path:"network/…") ← /js/<path>.js + /tmpl/<path>.html
     for (const rp of zteMenuPaths(r.text)) {
@@ -240,7 +259,7 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
   }
   // FiberHome: أسماء الإعدادات (x_NetworkSettings_obj… ٥٩٢ اسم) ما هي ملف ثابت — الصفحة تطلبها وقت التشغيل
   // بـ get_xmlnode_js_file (بدون دخول، «nocheck») وتسوي لها eval. نطلبها بنفس الطريقة ونحفظ النص بس.
-  const fh = files.some(f => (/get_xmlnode_js_file/.test(f.t) && /FHNCAPIS/.test(f.t)) || /DO_WEB_LOGIN/.test(f.t));
+  const fh = !opts?.afterLogin && files.some(f => (/get_xmlnode_js_file/.test(f.t) && /FHNCAPIS/.test(f.t)) || /DO_WEB_LOGIN/.test(f.t));
   if (fh) {
     const r = await fiberhomeNodes(base);
     files.push(r.ok ? { p: '/_bandly/xmlnode.js', t: scrub(r.text.slice(0, MAX_FILE)) } : { p: '/_bandly/xmlnode-error.txt', t: r.text });
@@ -255,7 +274,7 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
   }
   // TP-Link 4G (Archer MR…): المفتاح العام nn/ee وseq وحالة الدخول — الصفحة تطلبها POST بدون دخول.
   // نحتاج شكل الرد (JSON ولا var nn=…) عشان نعرف أي نسخة تشفير عنده — المفتاح عام مو سر
-  if (files.some(f => /\/cgi\/getParm/.test(f.t))) {
+  if (!opts?.afterLogin && files.some(f => /\/cgi\/getParm/.test(f.t))) {
     const probe: string[] = [];
     for (const q of ['/cgi/getParm', '/cgi/getBusy', '/cgi/getGDPRParm']) {
       const x = await get(base + q, 6000, 'POST');
@@ -265,11 +284,11 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
     onStep?.(files.length);
   }
   // فحوص حية بدون دخول (٣٠ أكتوبر — MC801A Pro: الملفات قالت «G5» بس الراوتر نفسه رد /ubus/ = 404)
-  try {
+  if (!opts?.afterLogin) try {
     const live = await liveChecks(base, files.map(f => f.t).join('\n'));
     if (live) { files.push({ p: '/_bandly/live.txt', t: live }); onStep?.(files.length); }
   } catch {}
-  return { files, skipped: [...new Set(skipped)] };
+  return { files, skipped: [...new Set(skipped), ...topMisses([...new Set(misses)])] };
 }
 
 // ═══ فحوص حية (قراءة بس، بدون دخول) ═══

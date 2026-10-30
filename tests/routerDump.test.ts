@@ -264,3 +264,50 @@ test('فحوص حية: هواوي — رموز الجلسة تنحذف من XML'
   assert.match(x, /H122-373/);
   assert.equal(scrubLive('a=1&password=xyz&b=2'), 'a=1&password=«محذوف»&b=2');
 });
+
+// ═══ ٣١ أكتوبر: «ما وصل» مع السبب + السحب بعد الدخول (FiberHome LG6851F الجديد — main.html) ═══
+function mockStatus(files: Record<string, string | number>) {
+  const asked: string[] = [];
+  (globalThis as any).fetch = async (url: string, init?: any) => {
+    const p = url.replace(/^http:\/\/[^/]+/, '').split('?')[0];
+    asked.push(p + (init?.credentials ? '#' + init.credentials : ''));
+    const b = files[p];
+    const status = typeof b === 'number' ? b : b === undefined ? 404 : 200;
+    return { ok: status < 400, status, headers: { get: () => 'text/html' }, text: async () => (typeof b === 'string' ? b : '') } as any;
+  };
+  return asked;
+}
+
+test('جهاز جديد: main.html من سكربت ينطلب من الجذر، واللي ما وصل ينكتب مع رد الراوتر (قبل: ينبلع بصمت)', async () => {
+  const home = '<html><script src="/js/login.js"></script></html>';
+  mockStatus({
+    '/': home,
+    '/js/login.js': 'location.href="main.html"; var x="/js/gone.js";',
+    '/main.html': 403,
+    '/js/gone.js': 404,
+  });
+  const { skipped } = await collectRouterFiles('192.168.8.1');
+  // main.html داخل /js/login.js ينطلب من جذر الموقع (مثل المتصفح) — مو /js/main.html بس
+  assert.ok(skipped.includes('✗ /main.html ← HTTP 403'), skipped.join(' | '));
+  assert.ok(skipped.includes('✗ /js/gone.js ← HTTP 404'));
+  assert.ok(skipped.indexOf('✗ /main.html ← HTTP 403') < skipped.indexOf('✗ /js/gone.js ← HTTP 404'), 'الصفحات قبل ملفات js');
+});
+
+test('جهاز جديد: الراوتر يرجّع صفحة البداية بدل الملف ← ينكتب كذا', async () => {
+  const home = '<html><body onLoad="frmLoad()"><script>var a="main.html"</script></body></html>';
+  mockStatus({ '/': home, '/main.html': home });
+  const { skipped } = await collectRouterFiles('192.168.8.1');
+  assert.ok(skipped.includes('✗ /main.html ← رجّع صفحة البداية بدل الملف'), skipped.join(' | '));
+});
+
+test('بعد الدخول: يبدأ من main.html ويسحب سكربتاتها بالكوكي، وبدون فحوص «بدون دخول»', async () => {
+  const asked = mockStatus({
+    '/main.html': '<html><script src="/js/app.js"></script></html>',
+    '/js/app.js': 'var m=["set_lte_band","set_net_mode"];',
+    '/': '<html>home</html>',
+  });
+  const { files } = await collectRouterFiles('192.168.8.1', undefined, { start: ['/main.html'], afterLogin: true });
+  assert.deepEqual(files.map(f => f.p), ['/main.html', '/js/app.js']);
+  assert.ok(asked.every(a => a.endsWith('#include')), 'الكوكي ينرسل: ' + asked.join(', '));
+  assert.ok(!asked.some(a => /FHNCAPIS|_bandly|^\/#/.test(a)), 'ما فيه probe/live بعد الدخول: ' + asked.join(', '));
+});

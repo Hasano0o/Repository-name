@@ -253,6 +253,11 @@ export interface SignalSnapshot {
 export interface RouterDriver {
   /** انطردنا ← إعادة الدخول الجاية لازم تكون حقيقية (بدون الوثوق بحالة «داخل»، ورموز/كوكي جديدة) */
   markStale?(): void;
+  /**
+   * صفحات الراوتر اللي ما تنفتح إلا بعد الدخول (GET بس) — «أرسل تشخيص» يسحبها والتطبيق داخل ويرسلها zip (AUTH).
+   * فاضي/غير موجود = ما فيه شي نحتاجه. (FiberHome الجديد: main.html — ٣١ أكتوبر)
+   */
+  afterLoginPages?(): string[];
   readonly id: string;
   readonly name: string;
   readonly capabilities: Capability[];

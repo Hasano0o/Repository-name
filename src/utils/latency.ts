@@ -196,7 +196,8 @@ export function scoreWord(score: number): string {
   if (score >= 70) return 'جيد للعب';
   if (score >= 45) return 'مقبول — ممكن لاق خفيف';
   if (score > 0) return 'سيئ — بتحس باللاق';
-  return 'فشل القياس';
+  // صفر مع قياس فعلي = تذبذب/فقد عالي جداً (مو فشل) — اللي ما فيه قياس يتعامل معه المستدعي قبل
+  return 'سيئ جداً — لاق قوي';
 }
 
 export interface Diagnosis {
