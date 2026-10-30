@@ -1,3 +1,4 @@
+import { sendAfterLoginPagesFor } from '../../src/services/authDump';
 import { useCallback, useEffect, useRef, useState, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator, Alert, LayoutAnimation, RefreshControl, AppState } from 'react-native';
@@ -136,6 +137,10 @@ export default function RouterDashboard() {
   const assistantOn = useAssistantUnlocked();
   const insets = useSafeAreaInsets();
   const [info, setInfo] = useState<SavedRouter | null>(null);
+  /** صفحات بعد الدخول يحتاجها المطوّر (FiberHome الجديد) — كرت «ساعدنا نفتح التغيير» */
+  const [authPages, setAuthPages] = useState(false);
+  const [authNote, setAuthNote] = useState('');
+  const [authBusy, setAuthBusy] = useState(false);
   const [feat, setFeat] = useState<Features>(NO_FEATURES);
   const [signal, setSignal] = useState<Signal | null>(null);
   const [history, setHistory] = useState<RadarPoint[]>([]);
@@ -252,6 +257,7 @@ export default function RouterDashboard() {
     try {
       await withSession(r, async d => {
         setFeat(featuresOf(d));
+        setAuthPages(!!d.afterLoginPages?.().length);
         const [sig, use, dev, blk, net, trf, det, dp, lk] = await Promise.all([
           d.getSignal ? d.getSignal() : Promise.resolve(null),
           d.getUsage ? d.getUsage().catch(() => null) : Promise.resolve(null),
@@ -924,6 +930,29 @@ export default function RouterDashboard() {
                 onPress={() => router.push(`/device/${info.id}` as Href)} />
             </TileGrid>
           </>
+        )}
+
+        {!loading && info && authPages && (
+          // فيرموير جديد (FiberHome LG6851F): التغيير مقفول لين نعرف أوامر الحفظ من صفحة الإعدادات — بموافقة المستخدم
+          <View style={[s.moreCard, { gap: 8, borderColor: tBd('#f59e0b55') }]}>
+            <Text style={[s.moreBtnTitle, { textAlign: 'right' }]}>ساعدنا نفتح لك تغيير الإعدادات</Text>
+            <Text style={[s.moreBtnSub, { textAlign: 'right' }]}>
+              راوترك بفيرموير جديد: القراءة شغّالة، والتغيير نفتحه بعد ما نشوف صفحة إعداداته. اضغط ونرسلها للمطوّر (ملفات الصفحة بس — بدون كلمات مرور ولا بياناتك).
+            </Text>
+            {!!authNote && <Text style={[s.moreBtnSub, { textAlign: 'right', color: authNote.startsWith('✓') ? tFg('#12b76a') : C.sub }]}>{authNote}</Text>}
+            {!authNote.startsWith('✓') && (
+              <Pressable disabled={authBusy} style={[s.moreTile, { flexDirection: 'row', justifyContent: 'center', gap: 8, paddingVertical: 12, backgroundColor: tBg('#f59e0b18'), borderColor: tBd('#f59e0b55') }, authBusy && { opacity: 0.6 }]}
+                onPress={async () => {
+                  setAuthBusy(true); setAuthNote('');
+                  try { setAuthNote((await sendAfterLoginPagesFor(info, m => setAuthNote(m))) ?? ''); }
+                  catch (e: any) { setAuthNote(`ما قدرنا نسحبها: ${String(e?.message ?? e).slice(0, 80)}`); }
+                  finally { setAuthBusy(false); }
+                }}>
+                {authBusy ? <ActivityIndicator size="small" color={tFg('#b45309')} /> : <Icon name="send" size={16} color={tFg('#b45309')} />}
+                <Text style={[s.moreLbl, { color: tFg('#b45309') }]}>أرسل صفحة الإعدادات للمطوّر</Text>
+              </Pressable>
+            )}
+          </View>
         )}
 
         {!loading && info && (
