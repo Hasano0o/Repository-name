@@ -14,7 +14,7 @@
  * كل تغيير نتأكد منه بإعادة القراءة، وفيه لقطة + إرجاع متحقق منه (مثل هواوي و ZTE).
  * لسا ما انجرّب على راوتر حقيقي — أي رد غريب يطلع برسالة فيها اسم الأمر عشان يوصلنا في التقرير.
  */
-import { RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, BandConfig, ActiveLock, CellLockTarget, CellLockState, DeviceDetails, RouterExtras } from '../types';
+import { RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, BandConfig, ActiveLock, CellLockTarget, CellLockState, DeviceDetails, RouterExtras, WifiRadio } from '../types';
 import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { noChange } from '../noChange';
 import { http } from '../http';
@@ -29,7 +29,7 @@ import {
 import { EX_FIELDS, EX_NEED, WEEK, wlanRows, extrasFrom, has5g, main5Index, ssidError, wifiPassError, isIPv4, WlanRow } from './extras';
 
 /** v2: القراءة والدخول/الخروج دايماً */
-const V2_ALLOWED = (m: string) => /^get_/.test(m) || m === 'DO_WEB_LOGIN' || m === 'DO_WEB_LOGOUT';
+const V2_ALLOWED = (m: string) => /^get_/.test(m) || m === 'DO_WEB_LOGIN' || m === 'DO_WEB_LOGOUT' || m === 'web_get_wifi_possible_channels';
 /**
  * v2 — الكتابة لكل ميزة لحالها (opts.v2): بس اللي طابقت صفحات الراوتر نفسها بالأمر والخانات والقيم
  * (ملف AUTH من عضو LG6851F، ٣١ أكتوبر: frequencyLockSet / networkSet / cellLockSet / reboot / restore / natSet / upnpSet / led).
@@ -44,7 +44,12 @@ export function fhOperator(v: unknown): string | undefined {
   if (!s || /^(COMMON|LEISHEN|TRUNK|DEFAULT|GENERAL)$/i.test(s)) return undefined;
   return s.replace(/^[A-Z]{2}_/, '').replace(/_/g, ' ').trim() || undefined;
 }
-const V2_WRITE = /^(set_value_by_xmlnode|set_single_by_xmlnode|add_set_xmlnode|del_xmlnode|do_cmd_web)$/;
+const V2_WRITE = /^(set_value_by_xmlnode|set_single_by_xmlnode|add_set_xmlnode|add_xmlnode|del_xmlnode|do_cmd_web)$/;
+/** الواي فاي في الفيرموير الجديد (wifiBasic.js / wifiBasic_5g.js): Radio.1/2.Enable · SSID.<n>.SSID · AccessPoint.<n>.PreSharedKey */
+const V2_WIFI = ['x_wifi_Radio_obj', 'x_wifi_SSID_obj', 'x_wifi_AccessPoint_obj', 'x_wifi_Enable', 'x_wifi_SSID', 'x_wifi_ModeEnabled'];
+/** DMZ في الفيرموير الجديد (dmzSet.js): قائمة تحت اتصال INTERNET_R_ (WANDevice.x.WANConnectionDevice.y.WANIPConnection.z.DMZ) */
+const V2_DMZ = ['x_WANDevice_obj', 'x_WANConnectionDevice', 'x_WANIPConnection', 'x_WANPPPConnection', 'x_wan_Enable', 'x_wan_Name', 'x_DMZ_obj', 'x_DMZ_Enable', 'x_DMZ_DMZHostIP'];
+const listOf = (r: any): any[] => (Array.isArray(r?.data) ? r.data : Array.isArray(r) ? r : []);
 /** في صفحة الراوتر: هذي الثلاث GET على مسار باسمها (مو FHAPIS?ajaxmethod=) */
 const V2_PATH_GET = ['heartbeat', 'refresh_timeout', 'other_logged'];
 
@@ -537,14 +542,34 @@ export class FiberhomeDriver implements RouterDriver {
     });
     return wlanRows(r);
   }
+  /** الفيرموير الجديد بخانات الواي فاي الجديدة؟ */
+  private wifiV2(n: Record<string, string>) { return this.api === 'v2' && !missing(n, V2_WIFI).length; }
+  /** wifiBasic.js: الشبكات من SSID و AccessPoint (بالترقيم نفسه)، والتشغيل من Radio.1 (٢.٤) / Radio.2 (٥) */
+  private async wlanV2(n: Record<string, string>, main5: string, ssidNum: number): Promise<WlanRow[]> {
+    const rad = await this.readMany({ r1: n.x_wifi_Radio_obj + '1.' + n.x_wifi_Enable, r2: n.x_wifi_Radio_obj + '2.' + n.x_wifi_Enable });
+    const index = `1-${ssidNum}`;
+    const ss = listOf(await this.post('get_xml_childnode_value', { url: n.x_wifi_SSID_obj, index, node: { Enable: n.x_wifi_Enable, SSID: n.x_wifi_SSID } }));
+    // ModeEnabled بس (محمية ولا لا) — ما نقرأ الكلمة نفسها
+    const ap = listOf(await this.post('get_xml_childnode_value', { url: n.x_wifi_AccessPoint_obj, index, node: { ModeEnabled: n.x_wifi_ModeEnabled } }));
+    return ss.map(e => {
+      const idx = String(e?.child_node_idx ?? '');
+      const a = ap.find(x => String(x?.child_node_idx ?? '') === idx);
+      return { idx, radio: String((Number(idx) >= Number(main5) ? rad.r2 : rad.r1) ?? ''), ssid: String(e?.SSID ?? ''), beacon: String(a?.ModeEnabled ?? ''), enable: String(e?.Enable ?? '') };
+    }).filter(r => r.idx !== '');
+  }
   private async wifiCtx() {
-    const n = await this.need(EX_NEED.wifi, 'إعدادات الواي فاي');
+    const v2n = this.api === 'v2' ? await this.loadNodes() : null;
+    const v2 = !!v2n && this.wifiV2(v2n);
+    const n = v2 ? v2n! : await this.need(EX_NEED.wifi, 'إعدادات الواي فاي');
     const info = await this.deviceInfo().catch(() => ({} as Record<string, any>));
     const extra: Record<string, string> = {};
     if (n.x_MainSSIDIndex_58G_obj) extra.main5 = n.x_MainSSIDIndex_58G_obj;
-    if (n.x_wifi_WifiBandSteering_obj && n.x_BandSteering_Enable) extra.steer = n.x_wifi_WifiBandSteering_obj + n.x_BandSteering_Enable;
+    // دمج الشبكتين: القديم BandSteering.Enable · الجديد WifiBandSteering + x_wifi_Enable (wifiBasic.js: BandSEnable)
+    if (n.x_wifi_WifiBandSteering_obj && (v2 ? n.x_wifi_Enable : n.x_BandSteering_Enable)) extra.steer = n.x_wifi_WifiBandSteering_obj + (v2 ? n.x_wifi_Enable : n.x_BandSteering_Enable);
     const v = await this.readMany(extra);
-    return { n, model: String(info.model_name ?? ''), wifi5: info.wifi5, main5: main5Index(v.main5), steer: String(v.steer ?? ''), rows: await this.wlan(n) };
+    const main5 = main5Index(v.main5);
+    const ssidNum = Number(info.ssid_num) > 0 ? Number(info.ssid_num) : Number(main5) * 2 - 2;
+    return { n, v2, model: String(info.model_name ?? ''), wifi5: info.wifi5, main5, steer: String(v.steer ?? ''), rows: v2 ? await this.wlanV2(n, main5, ssidNum) : await this.wlan(n) };
   }
 
   async getExtras(): Promise<RouterExtras> {
@@ -554,10 +579,14 @@ export class FiberhomeDriver implements RouterDriver {
     if (n.x_MainSSIDIndex_58G_obj) q.main5 = n.x_MainSSIDIndex_58G_obj;
     const v = await this.readMany(q);
     let rows: WlanRow[] | null = null;
-    if (!missing(n, EX_NEED.wifi).length) { try { rows = await this.wlan(n); } catch {} }
+    if (this.wifiV2(n)) { try { rows = (await this.wifiCtx()).rows; } catch {} }
+    else if (!missing(n, EX_NEED.wifi).length) { try { rows = await this.wlan(n); } catch {} }
     let uptime: unknown;
     try { uptime = (await this.post('get_cmd_result_web', { key: 'UPTIME' }))?.result; } catch {}
     const ex = extrasFrom(v, rows, { model: String(info.model_name ?? ''), wifi5: info.wifi5, main5: v.main5, uptime });
+    if (this.api === 'v2' && !missing(n, V2_DMZ).length) {
+      try { const z = await this.dmzV2(n); if (z) ex.dmz = { on: z.entry?.on === '1', ip: z.entry?.ip ?? '' }; } catch {}
+    }
     // المنافذ المفتوحة: الصفحة تكتب Request أول (تحديث الجدول) ثم تقرأ
     if (ex.upnp && !missing(n, EX_NEED.upnpRules).length) {
       try {
@@ -581,10 +610,65 @@ export class FiberhomeDriver implements RouterDriver {
     const n = await this.need(EX_NEED.upnp, 'UPnP');
     await this.setValues({ upnp: n.x_DeviceInfo_obj + n.x_UPNP_Enable }, { upnp: on ? '1' : '0' }, true);
   }
+  /**
+   * dmzSet.js (الفيرموير الجديد): نقرأ اتصالات WAN بنفس الطلب المتداخل، والـ DMZ قائمة تحت اتصال الإنترنت الموجّه
+   * (اسمه فيه INTERNET و _R_). نفضّل اتصال 5G (WANDevice 1) مثل ترتيب الصفحة.
+   */
+  private async dmzV2(n: Record<string, string>): Promise<{ path: string; entry?: { idx: string; on: string; ip: string } } | null> {
+    const dmzNode = { url: n.x_DMZ_obj, node: { Enable: n.x_DMZ_Enable, DMZHostIP: n.x_DMZ_DMZHostIP } };
+    const r = await this.post('get_xml_childnode_value', {
+      url: n.x_WANDevice_obj, num: 2,
+      node: {
+        wanenable: n.x_wan_WANEnable, waninterface: n.x_wan_WanInterface,
+        wanconnection: {
+          url: n.x_WANConnectionDevice,
+          node: {
+            ipoe: { url: n.x_WANIPConnection, node: { Enable: n.x_wan_Enable, Name: n.x_wan_Name, dmz: dmzNode } },
+            pppoe: { url: n.x_WANPPPConnection, node: { Enable: n.x_wan_Enable, Name: n.x_wan_Name, dmz: dmzNode } },
+          },
+        },
+      },
+    });
+    const found: { dev: string; path: string; dmz: any[] }[] = [];
+    for (const dev of listOf(r)) {
+      for (const wc of Array.isArray(dev?.wanconnection) ? dev.wanconnection : []) {
+        for (const [kind, obj] of [['ipoe', n.x_WANIPConnection], ['pppoe', n.x_WANPPPConnection]] as const) {
+          for (const c of Array.isArray(wc?.[kind]) ? wc[kind] : []) {
+            const name = String(c?.Name ?? '');
+            if (!(name.includes('INTERNET') && name.includes('_R_'))) continue;
+            found.push({ dev: String(dev.child_node_idx), path: n.x_WANDevice_obj + dev.child_node_idx + '.' + n.x_WANConnectionDevice + wc.child_node_idx + '.' + obj + c.child_node_idx + '.DMZ', dmz: Array.isArray(c?.dmz) ? c.dmz : [] });
+          }
+        }
+      }
+    }
+    const w = found.find(f => f.dev === '1') ?? found[0];
+    if (!w) return null;
+    const e = w.dmz[0];
+    return { path: w.path, entry: e ? { idx: String(e.child_node_idx), on: String(e.Enable ?? ''), ip: String(e.DMZHostIP ?? '') } : undefined };
+  }
   async setDmz(on: boolean, ip: string): Promise<void> {
-    const n = await this.need(EX_NEED.dmz, 'DMZ');
     const a = String(ip ?? '').trim();
     if (on && !isIPv4(a)) throw noChange('عنوان الجهاز غير صحيح — ما غيّرنا شي.');
+    if (this.api === 'v2') {
+      const n = await this.need(V2_DMZ, 'DMZ');
+      const z = await this.dmzV2(n);
+      if (!z) throw noChange('ما لقينا اتصال الإنترنت في إعدادات راوترك عشان نحط عليه DMZ — ما غيّرنا شي.');
+      if (!on && (!z.entry || z.entry.on !== '1')) return;
+      let idx = z.entry?.idx;
+      if (!idx) {
+        // نفس الصفحة: add_xmlnode يرجّع رقم العنصر الجديد ← نكتب فيه Enable و DMZHostIP
+        const add = await this.post('add_xmlnode', { dmz: z.path }, { v2: true });
+        idx = String(add?.dmz ?? '');
+        if (!idx) throw new Error('add_xmlnode: الراوتر ما رجّع رقم عنصر DMZ الجديد');
+      }
+      const base = z.path + '.' + idx + '.';
+      await this.setValues({ Enable: base + n.x_DMZ_Enable, DMZHostIP: base + n.x_DMZ_DMZHostIP }, { Enable: on ? '1' : '0', DMZHostIP: on ? a : (z.entry?.ip ?? '') }, true);
+      await sleep(1500);
+      const b = await this.dmzV2(n);
+      if ((b?.entry?.on === '1') !== on || (on && b?.entry?.ip !== a)) throw new Error('الراوتر قبل أمر DMZ بس القراءة بعده مختلفة');
+      return;
+    }
+    const n = await this.need(EX_NEED.dmz, 'DMZ');
     await this.setValues(
       { DMZEnable: n.x_Firewall_obj + n.x_Firewall_DMZEnable, DMZIP: n.x_Firewall_obj + n.x_Firewall_DMZIP },
       { DMZEnable: on ? '1' : '0', DMZIP: a },
@@ -614,10 +698,16 @@ export class FiberhomeDriver implements RouterDriver {
     if (c.steer === '1') throw noChange('«دمج الشبكتين» شغّال في راوترك — صفحة الراوتر نفسها ما تسمح تطفي شبكة وهو شغّال. ما غيّرنا شي.');
     const idx = band === '2.4' ? '1' : c.main5;
     if (!c.rows.some(r => r.idx === idx)) throw noChange(`ما لقينا شبكة ${band === '5' ? '٥' : '٢.٤'} جيجا في إعدادات راوترك — ما غيّرنا شي.`);
+    if (c.v2) {
+      // wifiBasic(_5g).js onApplyEnable: Radio.1 = ٢.٤ · Radio.2 = ٥
+      await this.setSingle(c.n.x_wifi_Radio_obj + (band === '2.4' ? '1.' : '2.') + c.n.x_wifi_Enable, on ? '1' : '0', true);
+      return;
+    }
     await this.setSingle(c.n.x_WLANConfiguration_obj + idx + '.' + c.n.x_wifi_RadioEnabled, on ? '1' : '0');
   }
   async setWifiNames(names: { index: string; name: string }[], password?: string): Promise<void> {
     const c = await this.wifiCtx();
+    if (c.v2) return this.setWifiNamesV2(c, names, password);
     const w = c.n.x_WLANConfiguration_obj;
     const url: Record<string, string> = {}, value: Record<string, string> = {};
     for (const x of names) {
@@ -640,6 +730,77 @@ export class FiberhomeDriver implements RouterDriver {
     }
     if (!Object.keys(url).length) return;
     await this.setValues(url, value);
+  }
+  // ═══ قناة الواي فاي — الفيرموير الجديد بس (wifiAdvanced.js / wifiAdvanced_5g.js) ═══
+  //   Radio.1 = ٢.٤ (band "0") · Radio.2 = ٥ (band "1") · القنوات المسموحة من web_get_wifi_possible_channels
+  async getWifiRadios(): Promise<WifiRadio[]> {
+    const n = await this.loadNodes();
+    // الفيرموير القديم: ما عندنا صفحته ← قائمة فاضية (الشاشة والضبط التلقائي يتخطونها بهدوء)
+    if (!(this.api === 'v2' && !missing(n, [...V2_WIFI, 'x_wifi_Channel']).length)) return [];
+    const info = await this.deviceInfo().catch(() => ({} as Record<string, any>));
+    const out: WifiRadio[] = [];
+    for (const [band, ri, b] of [['2.4', '1', '0'], ['5', '2', '1']] as const) {
+      if (band === '5' && !has5g(String(info.model_name ?? ''), info.wifi5)) continue;
+      const q: Record<string, string> = { ch: n.x_wifi_Radio_obj + ri + '.' + n.x_wifi_Channel };
+      if (n.x_wifi_OperatingChannelBandwidth) q.bw = n.x_wifi_Radio_obj + ri + '.' + n.x_wifi_OperatingChannelBandwidth;
+      if (n.x_wifi_RegulatoryDomain) q.rd = n.x_wifi_Radio_obj + ri + '.' + n.x_wifi_RegulatoryDomain;
+      const v = await this.readMany(q);
+      if (v.ch === undefined || v.ch === null || v.ch === '') continue;
+      let allowed: string[] | undefined;
+      try {
+        const r = await this.post('web_get_wifi_possible_channels', { band: b, bandwidth: String(v.bw ?? ''), regdomain: String(v.rd ?? '') });
+        if (Array.isArray(r?.channels) && r.channels.length) allowed = r.channels.map((x: unknown) => String(x));
+      } catch {}
+      out.push({ band, channel: String(v.ch), allowed, writable: true });
+    }
+    return out;
+  }
+  async setWifiChannel(band: '2.4' | '5', channel: string): Promise<void> {
+    const r = (await this.getWifiRadios()).find(x => x.band === band);
+    if (!r) throw noChange(`ما لقينا شبكة ${band === '5' ? '٥' : '٢.٤'} جيجا في راوترك — ما غيّرنا شي.`);
+    const ch = String(channel ?? '').trim();
+    if (!/^\d{1,3}$/.test(ch)) throw noChange('رقم القناة غير صحيح — ما غيّرنا شي.');
+    // "0" = تلقائي (الصفحة ترجع له لو القناة الحالية مو بالقائمة)
+    if (ch !== '0' && r.allowed && !r.allowed.includes(ch)) throw noChange(`القناة ${ch} مو مسموحة في راوترك — ما غيّرنا شي.`);
+    if (r.channel === ch) return;
+    const n = await this.loadNodes();
+    await this.setValues({ Channel: n.x_wifi_Radio_obj + (band === '2.4' ? '1.' : '2.') + n.x_wifi_Channel }, { Channel: ch }, true);
+  }
+
+  /** wifiBasic.js onSubmit: SSID.<n>.SSID و AccessPoint.<n>.PreSharedKey (الكلمة بس للشبكة المحمية — ModeEnabled ≠ None) */
+  private async setWifiNamesV2(c: Awaited<ReturnType<FiberhomeDriver['wifiCtx']>>, names: { index: string; name: string }[], password?: string): Promise<void> {
+    const url: Record<string, string> = {}, value: Record<string, string> = {};
+    const want: Record<string, string> = {};
+    for (const x of names) {
+      const r = c.rows.find(y => y.idx === String(x.index));
+      if (!r) throw noChange('ما لقينا هالشبكة في راوترك — ما غيّرنا شي.');
+      // الصفحة تقفل شبكة الـ٥ الرئيسية لما «دمج الشبكتين» شغّال
+      if (c.steer === '1' && r.idx === c.main5) throw noChange('«دمج الشبكتين» شغّال — صفحة الراوتر نفسها تقفل تعديل شبكة الـ٥ جيجا وهو شغّال. ما غيّرنا شي.');
+      const nm = x.name.trim();
+      if (nm === r.ssid) continue;
+      const err = ssidError(nm);
+      if (err) throw noChange(err + ' ما غيّرنا شي.');
+      url['SSID' + r.idx] = c.n.x_wifi_SSID_obj + r.idx + '.' + c.n.x_wifi_SSID;
+      value['SSID' + r.idx] = nm;
+      want[r.idx] = nm;
+    }
+    if (password) {
+      const err = wifiPassError(password);
+      if (err) throw noChange(err + ' ما غيّرنا شي.');
+      if (!c.n.x_wifi_PreSharedKey) throw noChange('ما لقينا خانة كلمة مرور الواي فاي في إعدادات راوترك — ما غيّرنا شي.');
+      const sec = names.map(x => c.rows.find(y => y.idx === String(x.index))).filter((r): r is WlanRow => !!r && !!r.beacon && r.beacon !== 'None');
+      if (!sec.length) throw noChange('شبكتك مفتوحة بدون حماية — فعّل الحماية من صفحة الراوتر أول، وبعدها غيّر كلمة المرور من هنا. ما غيّرنا شي.');
+      if (c.steer === '1' && sec.some(r => r.idx === c.main5)) throw noChange('«دمج الشبكتين» شغّال — صفحة الراوتر نفسها تقفل تعديل شبكة الـ٥ جيجا وهو شغّال. ما غيّرنا شي.');
+      for (const r of sec) { url['PSK' + r.idx] = c.n.x_wifi_AccessPoint_obj + r.idx + '.' + c.n.x_wifi_PreSharedKey; value['PSK' + r.idx] = password; }
+    }
+    if (!Object.keys(url).length) return;
+    await this.setValues(url, value, true);
+    // الاسم نتأكد منه بالقراءة (الكلمة ما نقرأها)
+    if (Object.keys(want).length) {
+      await sleep(1500);
+      const rows = await this.wlanV2(c.n, c.main5, Math.max(...c.rows.map(r => Number(r.idx)), 1));
+      for (const [i, nm] of Object.entries(want)) if (rows.find(r => r.idx === i)?.ssid !== nm) throw new Error('الراوتر قبل تغيير اسم الشبكة بس القراءة بعده مختلفة');
+    }
   }
   async factoryReset(): Promise<void> {
     try { await this.post('do_cmd_web', { key: 'RECORD_MESSAGE_WEB' }, { v2: true }); } catch {}

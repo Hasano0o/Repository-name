@@ -27,7 +27,13 @@ var x_LockCellList_obj="IGD.X_FH_MobileNetwork.LockCellList.";var x_LockCellList
 var x_LockCellList_act="act",x_LockCellList_arfcn="arfcn",x_LockCellList_pci="pci";
 var x_Firewall_obj="IGD.X_FH_Firewall.";var x_Firewall_NATType="NATType",x_Firewall_DMZEnable="DMZEnable",x_Firewall_DMZIP="DMZIP";
 var x_DeviceInfo_obj="IGD.DeviceInfo.";var x_DeviceInfo_LedSwitch="LedSwitch",x_UPNP_Enable="UPNPEnable";
-var x_WLANConfiguration_obj="IGD.LANDevice.1.WLANConfiguration.";var x_wifi_RadioEnabled="RadioEnabled",x_wifi_SSID="SSID",x_wifi_BeaconType="BeaconType",x_wifi_Enable="Enable";`;
+var x_WLANConfiguration_obj="IGD.LANDevice.1.WLANConfiguration.";var x_wifi_RadioEnabled="RadioEnabled",x_wifi_SSID="SSID",x_wifi_BeaconType="BeaconType",x_wifi_Enable="Enable";
+var x_wifi_Radio_obj="IGD.WiFi.Radio.";var x_wifi_SSID_obj="IGD.WiFi.SSID.";var x_wifi_AccessPoint_obj="IGD.WiFi.AccessPoint.";
+var x_wifi_ModeEnabled="ModeEnabled",x_wifi_PreSharedKey="PreSharedKey",x_wifi_Channel="Channel",x_wifi_OperatingChannelBandwidth="OperatingChannelBandwidth",x_wifi_RegulatoryDomain="RegulatoryDomain";
+var x_wifi_WifiBandSteering_obj="IGD.WiFi.X_FH_BandSteering.";var x_MainSSIDIndex_58G_obj="IGD.X_FH_WiFi.MainSSIDIndex58G";
+var x_WANDevice_obj="IGD.WANDevice.";var x_WANConnectionDevice="WANConnectionDevice.";var x_WANIPConnection="WANIPConnection.";var x_WANPPPConnection="WANPPPConnection.";
+var x_wan_Enable="Enable",x_wan_Name="Name",x_wan_WANEnable="WANEnable",x_wan_WanInterface="WanInterface";
+var x_DMZ_obj="DMZ.";var x_DMZ_Enable="Enable",x_DMZ_DMZHostIP="DMZHostIP";`;
 
 /** المفتاح العام المقابل للمفتاح المدفون في الصفحة (n, e من fhapi) */
 function publicKey() {
@@ -58,7 +64,17 @@ function router(opts: { password?: string; sidLen?: number; operator?: string } 
     'IGD.X_FH_MobileNetwork.RadioSignalParameter.SINR': '14', 'IGD.X_FH_MobileNetwork.RadioSignalParameter.BAND': '3',
     'IGD.X_FH_MobileNetwork.RadioSignalParameter.PCI': '301', 'IGD.X_FH_MobileNetwork.RadioSignalParameter.SSB_RSRP': '-88',
     'IGD.X_FH_MobileNetwork.RadioSignalParameter.NR_Band': '78', 'IGD.X_FH_MobileNetwork.RadioSignalParameter.NR_PCI': '77',
+    // الواي فاي بالشجرة الجديدة (wifiBasic.js)
+    'IGD.WiFi.Radio.1.Enable': '1', 'IGD.WiFi.Radio.2.Enable': '1', 'IGD.WiFi.Radio.1.Channel': '1', 'IGD.WiFi.Radio.2.Channel': '36',
+    'IGD.WiFi.Radio.1.OperatingChannelBandwidth': '20MHz', 'IGD.WiFi.Radio.2.OperatingChannelBandwidth': '80MHz',
+    'IGD.WiFi.Radio.1.RegulatoryDomain': 'SA', 'IGD.WiFi.Radio.2.RegulatoryDomain': 'SA',
+    'IGD.WiFi.X_FH_BandSteering.Enable': '0', 'IGD.X_FH_WiFi.MainSSIDIndex58G': '9',
+    'IGD.WiFi.SSID.1.Enable': '1', 'IGD.WiFi.SSID.1.SSID': 'FHCPE-24', 'IGD.WiFi.AccessPoint.1.ModeEnabled': 'WPA2-Personal',
+    'IGD.WiFi.SSID.9.Enable': '1', 'IGD.WiFi.SSID.9.SSID': 'FHCPE-5G', 'IGD.WiFi.AccessPoint.9.ModeEnabled': 'WPA2-Personal',
   };
+  /** عناصر DMZ تحت اتصال الإنترنت الموجّه (dmzSet.js) */
+  const DMZ_PATH = 'IGD.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.DMZ';
+  const dmzIdx: string[] = [];
   let sid = '';
   let logged = false;
   const seen: string[] = [];
@@ -97,9 +113,29 @@ function router(opts: { password?: string; sidLen?: number; operator?: string } 
     if (u.pathname === '/fh_api/tmp/FHAPIS' && !logged) return res(418, '');
     const m = body.ajaxmethod, d = body.dataObj;
     let out: any = {};
-    if (m === 'get_device_info') out = { model_name: 'LG6851F', operator_name: opts.operator ?? 'SA_STC' };
+    if (m === 'get_device_info') out = { model_name: 'LG6851F', operator_name: opts.operator ?? 'SA_STC', wifi5: 1, ssid_num: 16 };
     else if (m === 'get_xmlnode_js_file') out = { xml: NODES };
     else if (m === 'get_value_by_xmlnode') for (const [k, p] of Object.entries(d)) out[k] = db[p as string] ?? '';
+    else if (m === 'web_get_wifi_possible_channels') out = { channels: d.band === '0' ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] : [36, 40, 44, 48, 149, 153, 157, 161] };
+    else if (m === 'get_xml_childnode_value' && (d.url === 'IGD.WiFi.SSID.' || d.url === 'IGD.WiFi.AccessPoint.')) {
+      const rows = [];
+      for (let i = 1; i <= 16; i++) {
+        if (!(`IGD.WiFi.SSID.${i}.SSID` in db)) continue;
+        const row: any = { child_node_idx: String(i) };
+        for (const [k, leaf] of Object.entries(d.node)) row[k] = db[`${d.url}${i}.${leaf}`] ?? '';
+        rows.push(row);
+      }
+      out = { data: rows };
+    }
+    else if (m === 'get_xml_childnode_value' && d.url === 'IGD.WANDevice.') {
+      const dmz = dmzIdx.map(i => ({ child_node_idx: i, Enable: db[`${DMZ_PATH}.${i}.Enable`] ?? '', DMZHostIP: db[`${DMZ_PATH}.${i}.DMZHostIP`] ?? '' }));
+      out = { data: [
+        { child_node_idx: '1', wanenable: '1', waninterface: 'dev.wwan.1', wanconnection: [
+          { child_node_idx: '1', ipoe: [{ child_node_idx: '1', Enable: '1', Name: '1_INTERNET_R_VID_', dmz }, { child_node_idx: '2', Enable: '1', Name: '2_TR069_R_VID_', dmz: [] }], pppoe: [] },
+        ] },
+        { child_node_idx: '2', wanenable: '0', waninterface: 'dev.eth.4', wanconnection: [] },
+      ] };
+    }
     else if (m === 'get_xml_childnode_value') out = { data: cells.map((c, i) => ({ child_node_idx: String(i + 1), ...c })) };
     else {
       // كتابة — نطبّقها مثل الراوتر (عشان الدرايفر يتأكد بالقراءة بعدها)
@@ -109,6 +145,7 @@ function router(opts: { password?: string; sidLen?: number; operator?: string } 
       if (m === 'add_set_xmlnode') cells.push({ ...d.setNode.value });
       if (m === 'del_xmlnode') cells.splice(Number(d.index) - 1, 1);
       out = { success: 'true' };
+      if (m === 'add_xmlnode') { const i = String(dmzIdx.length + 1); dmzIdx.push(i); assert.equal(d.dmz, DMZ_PATH, 'المسار مثل dmzSet.js'); out = { dmz: i }; }
     }
     return res(200, rand(6) + aes('enc', key, JSON.stringify(out)));
   };
@@ -205,13 +242,54 @@ test('FiberHome v2: الميزات اللي طابقت صفحة الراوتر (
   assert.equal(r.db[N + 'LTELockBAND'], '1,3', 'رجع للقطة');
 });
 
-test('FiberHome v2: DMZ والواي فاي خاناتها مختلفة في الفيرموير الجديد ← محجوبة وما ينرسل أمر كتابة', async () => {
+test('FiberHome v2: الواي فاي بالخانات الجديدة (Radio/SSID/AccessPoint) — وما نلمس WLANConfiguration القديمة', async () => {
   const r = router();
   const d = await driver();
   await d.login('192.168.8.1', 'admin', 'pw');
-  await assert.rejects(d.setDmz(true, '192.168.8.5'), (e: any) => e.noChange === true);
+  const ex = await d.getExtras();
+  assert.deepEqual(ex.bands, [{ band: '2.4', on: true }, { band: '5', on: true }]);
+  assert.deepEqual((ex.wifiNets ?? []).map((x: any) => [x.index, x.name, x.secured]), [['1', 'FHCPE-24', true], ['9', 'FHCPE-5G', true]]);
+  await d.setBandOn('5', false);
+  assert.equal(r.db['IGD.WiFi.Radio.2.Enable'], '0', 'Radio.2 = ٥ (wifiBasic_5g.js)');
+  await d.setWifiNames([{ index: '1', name: 'Bandly-24' }], 'NewPass123');
+  assert.equal(r.db['IGD.WiFi.SSID.1.SSID'], 'Bandly-24');
+  assert.equal(r.db['IGD.WiFi.AccessPoint.1.PreSharedKey'], 'NewPass123');
+  assert.ok(!r.writes.some(w => JSON.stringify(w.d).includes('WLANConfiguration')), 'ولا كتابة على الخانات القديمة');
+  // دمج الشبكتين شغّال ← شبكة الـ٥ الرئيسية مقفولة (نفس الصفحة)
+  r.db['IGD.WiFi.X_FH_BandSteering.Enable'] = '1';
+  await assert.rejects(d.setWifiNames([{ index: '9', name: 'X' }]), (e: any) => e.noChange === true);
   await assert.rejects(d.setBandOn('2.4', false), (e: any) => e.noChange === true);
-  assert.deepEqual(r.writes, [], 'ولا أمر كتابة وصل الراوتر');
+});
+
+test('FiberHome v2: DMZ تحت اتصال الإنترنت (dmzSet.js) — إضافة ثم إطفاء، والقراءة في مركز التحكم', async () => {
+  const r = router();
+  const d = await driver();
+  await d.login('192.168.8.1', 'admin', 'pw');
+  assert.deepEqual((await d.getExtras()).dmz, { on: false, ip: '' });
+  await assert.rejects(d.setDmz(true, '999.1.1.1'), (e: any) => e.noChange === true);
+  await d.setDmz(true, '192.168.8.5');
+  assert.ok(r.writes.some(w => w.m === 'add_xmlnode'), 'add_xmlnode أول مرة');
+  const P = 'IGD.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.DMZ.1.';
+  assert.equal(r.db[P + 'Enable'], '1');
+  assert.equal(r.db[P + 'DMZHostIP'], '192.168.8.5');
+  assert.deepEqual((await d.getExtras()).dmz, { on: true, ip: '192.168.8.5' });
+  await d.setDmz(false, '');
+  assert.equal(r.db[P + 'Enable'], '0');
+  assert.equal(r.writes.filter(w => w.m === 'add_xmlnode').length, 1, 'المرة الثانية تعدّل نفس العنصر');
+  assert.ok(!r.writes.some(w => JSON.stringify(w.d).includes('Firewall.DMZ')), 'ولا كتابة على خانة DMZ القديمة');
+});
+
+test('FiberHome v2: قناة الواي فاي (wifiAdvanced.js) — القنوات المسموحة من الراوتر وتتغيّر', async () => {
+  const r = router();
+  const d = await driver();
+  await d.login('192.168.8.1', 'admin', 'pw');
+  const radios = await d.getWifiRadios();
+  assert.deepEqual(radios.map((x: any) => [x.band, x.channel, x.allowed?.length]), [['2.4', '1', 13], ['5', '36', 8]]);
+  await d.setWifiChannel('2.4', '6');
+  assert.equal(r.db['IGD.WiFi.Radio.1.Channel'], '6');
+  await d.setWifiChannel('5', '149');
+  assert.equal(r.db['IGD.WiFi.Radio.2.Channel'], '149');
+  await assert.rejects(d.setWifiChannel('5', '165'), (e: any) => e.noChange === true, 'قناة مو بالقائمة');
 });
 
 test('FiberHome: operator_name كود فيرموير — «COMMON» ما يطلع كاسم شركة (كان «برج COMMON»)، SA_STC ← STC', async () => {
