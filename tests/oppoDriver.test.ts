@@ -202,7 +202,7 @@ test('OPPO: يتعرف عليه، يدخل، ويقرأ الإشارة 4G + 5G N
   const ca = await d.getCarriers();
   assert.deepEqual(ca.map((c: any) => [c.tech, c.band, c.role]), [['LTE', 3, 'PCC'], ['NR', 78, 'PCC'], ['LTE', 1, 'SCC']]);
   const m = await d.identify();
-  assert.equal(m.brand, 'oppo'); assert.match(m.label, /T1a/);
+  assert.equal(m.brand, 'oppo'); assert.match(m.label, /T1a/); assert.equal(m.verified, true);
   const det = await d.getDeviceDetails();
   assert.equal(det.software, 'T1a_11.A.20'); assert.equal(det.wanIp, '10.1.2.3');
   assert.deepEqual(await d.getUsage(), { downloadBytes: 5000, uploadBytes: 700 });

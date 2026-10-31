@@ -122,7 +122,9 @@ export class OppoDriver implements RouterDriver {
     try {
       const d = await this.api('/ommng/GetDeviceInfo', {});
       const m = String(d?.deviceName ?? '').trim();
-      return { id: 'oppo' + (m ? '-' + m.toLowerCase().replace(/\s+/g, '-') : ''), label: 'OPPO' + (m ? ' ' + m.replace(/^OPPO\s*/i, '') : ' 5G CPE'), brand: 'oppo', tech: '5G' };
+      // T1a: اشتغل عند عضو ٣١ أكتوبر (فيرموير CTC03_11.B.024_022 — ملف FULL): الدخول، الإشارة، الأجهزة، قناة الواي فاي
+      const verified = /T1a/i.test(m) || undefined;
+      return { id: 'oppo' + (m ? '-' + m.toLowerCase().replace(/\s+/g, '-') : ''), label: 'OPPO' + (m ? ' ' + m.replace(/^OPPO\s*/i, '') : ' 5G CPE'), brand: 'oppo', tech: '5G', verified };
     } catch { return null; }
   }
 
@@ -193,7 +195,8 @@ export class OppoDriver implements RouterDriver {
     };
   }
   async getUsage(): Promise<Usage> {
-    const r = await this.batch([{ apiService: 'NetStats', apiName: 'GetStats', name: 'st' }]);
+    // نفس طلب الصفحة (ملف FULL ٣١ أكتوبر): واجهة بيانات الشريحة rmnet_data0
+    const r = await this.batch([{ apiService: 'NetStats', apiName: 'GetStats', data: { Interface: 'rmnet_data0' }, name: 'st' }]);
     const s = Array.isArray(r.st?.Stats) ? r.st.Stats[0] ?? {} : {};
     return { downloadBytes: Number(s.BytesReceived ?? s.TotalBytesReceived ?? 0) || 0, uploadBytes: Number(s.BytesSent ?? s.TotalBytesSent ?? 0) || 0 };
   }
