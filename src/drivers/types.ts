@@ -398,5 +398,6 @@ export interface RouterDriver {
 /** mode: 0 داخلية · 1 خارجية (المنفذين) · 2 خارجية (منفذ ١) · 3 تلقائي */
 export type { ModelProfile } from './models';
 import type { ModelProfile } from './models';
-export interface AntennaInfo { mode?: number; canSet: boolean; raw: [string, string][] }
+/** options: أوضاع الأنتنا لو تختلف عن هواوي (FiberHome: داخلية / خارجية تلقائي / n41 / n78) — الشاشة تعرضها بدل أوضاع هواوي */
+export interface AntennaInfo { mode?: number; canSet: boolean; raw: [string, string][]; options?: { v: number; label: string; sub: string }[] }
 export interface RouterPingResult { ok: boolean; ms?: number; raw: [string, string][] }

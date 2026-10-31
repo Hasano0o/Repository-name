@@ -316,3 +316,14 @@ test('FiberHome: جهاز ثاني (مو FiberHome) ما ينحسب FiberHome', 
   const d = await driver();
   assert.equal(await d.detect('192.168.8.1'), false);
 });
+
+test('FiberHome القديم (v1): ميزات الفيرموير الجديد مخفية — التطبيق ما يعرض أزرار ما نعرف صفحتها', async () => {
+  router();
+  const d = await driver();
+  await d.login('192.168.8.1', '', 'pw');
+  for (const k of ['getCarriers', 'getDevices', 'blockDevice', 'getUsage', 'listSms', 'sendSms', 'getApnProfiles', 'setApn', 'getDns', 'setDns', 'getAntenna', 'reconnectData', 'reattach']) {
+    assert.equal((d as any)[k], undefined, `${k} لازم يختفي في v1`);
+  }
+  assert.equal(typeof d.getBandConfig, 'function', 'ميزات v1 باقية');
+  assert.deepEqual(await d.getWifiRadios(), [], 'قناة الواي فاي: فاضية في v1');
+});

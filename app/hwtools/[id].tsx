@@ -1,6 +1,7 @@
 /**
- * أدوات هواوي: الأنتنا الداخلية/الخارجية · رصيد الباقة (USSD) · بنق من الراوتر نفسه.
- * كل قسم يظهر بس لو الموديل يدعمه (الراوتر يرد على المسار).
+ * أدوات الراوتر: الأنتنا الداخلية/الخارجية · رصيد الباقة (USSD) · بنق من الراوتر نفسه.
+ * هواوي + FiberHome الجديد (الأنتنا بس — أوضاعه من الدرايفر: ant.options).
+ * كل قسم يظهر بس لو الدرايفر يدعمه.
  */
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert } from 'react-native';
@@ -37,10 +38,12 @@ export default function HuaweiTools() {
   const [pingBusy, setPingBusy] = useState(false);
   const [ping, setPing] = useState<RouterPingResult | null>(null);
   const [pingErr, setPingErr] = useState('');
+  const [has, setHas] = useState({ ussd: false, ping: false });
 
   const load = useCallback(async (r: SavedRouter) => {
-    const a = await withSession(r, d => (d.getAntenna ? d.getAntenna() : Promise.resolve(null)));
+    const [a, h] = await withSession(r, async d => [d.getAntenna ? await d.getAntenna() : null, { ussd: !!d.ussd, ping: !!d.routerPing }] as const);
     setAnt(a);
+    setHas(h);
   }, []);
 
   useFocusEffect(useCallback(() => {
@@ -99,9 +102,11 @@ export default function HuaweiTools() {
   };
 
   if (loading) return <View style={s.center}><ActivityIndicator color={C.blue} /></View>;
-  if (!info || info.driverId !== 'huawei-lte') {
-    return <View style={s.center}><Text style={s.p}>{err || 'هذي الأدوات لراوترات هواوي بس.'}</Text></View>;
+  if (!info || (info.driverId !== 'huawei-lte' && info.driverId !== 'fiberhome')) {
+    return <View style={s.center}><Text style={s.p}>{err || 'هذي الأدوات لراوترات هواوي و FiberHome بس.'}</Text></View>;
   }
+  const modes = ant?.options ?? MODES;
+  const nameOf = (m?: number) => { const o = modes.find(x => x.v === m); return o ? (o.sub && ant?.options ? `${o.label} (${o.sub})` : o.label) : 'غير معروف'; };
 
   return (
     <ScrollView style={s.wrap} contentContainerStyle={s.content}>
@@ -113,12 +118,12 @@ export default function HuaweiTools() {
         ) : (
           <>
             <Text style={s.p}>
-              الراوتر شغّال على: <Text style={s.strong}>{modeName(ant.mode)}</Text>
+              الراوتر شغّال على: <Text style={s.strong}>{nameOf(ant.mode)}</Text>
             </Text>
             <Text style={s.hint}>ركّبت أنتنا خارجية؟ تأكد إنها على «خارجية» أو «تلقائي» — بعض الراوترات تبقى على الداخلية وكأن الأنتنا مو موجودة.</Text>
             {ant.canSet && (
               <View style={s.modes}>
-                {MODES.map(m => {
+                {modes.map(m => {
                   const on = ant.mode === m.v;
                   return (
                     <Pressable key={m.v} style={[s.mode, on && s.modeOn]} disabled={antBusy} onPress={() => changeAnt(m.v)}>
@@ -137,6 +142,7 @@ export default function HuaweiTools() {
         )}
       </GlassCard>
 
+      {has.ussd && (
       <GlassCard title="رصيد الباقة" icon="💳" tint="#16a34a" collapsible={false}>
         <Text style={s.p}>اكتب كود الاستعلام (USSD) حق شركتك — يترسل من شريحة الراوتر ويطلع الرد هنا.</Text>
         <TextInput
@@ -154,7 +160,9 @@ export default function HuaweiTools() {
         {!!ussdReply && <Text style={s.reply}>{ussdReply}</Text>}
         <Text style={s.hint}>نحفظ آخر كود على جوالك بس. الرد ما يطلع من الجوال.</Text>
       </GlassCard>
+      )}
 
+      {has.ping && (
       <GlassCard title="بنق من الراوتر نفسه" icon="📶" tint="#2f6bff" collapsible={false}>
         <Text style={s.p}>الراوتر يقيس البنق بنفسه — بدون الواي فاي. لو هنا منخفض وفي اللعبة عالي ← المشكلة من الواي فاي مو من الشبكة.</Text>
         <TextInput style={s.input} value={pingHost} onChangeText={setPingHost} autoCapitalize="none" autoCorrect={false} />
@@ -171,6 +179,7 @@ export default function HuaweiTools() {
           </>
         )}
       </GlassCard>
+      )}
     </ScrollView>
   );
 }

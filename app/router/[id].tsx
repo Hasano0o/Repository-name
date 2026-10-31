@@ -48,10 +48,10 @@ import { WelcomeTour } from '../../src/ui/WelcomeTour';
 import { sheet, tr } from '../../src/i18n';import { LabelCard } from '../../src/ui/LabelCard';
 
 interface Features {
-  bands: boolean; sms: boolean; block: boolean; reboot: boolean; devices: boolean; cells: boolean; details: boolean; plan: boolean; network: boolean; carriers: boolean;
+  bands: boolean; sms: boolean; block: boolean; reboot: boolean; devices: boolean; cells: boolean; details: boolean; plan: boolean; network: boolean; carriers: boolean; antenna: boolean;
 }
 const NO_FEATURES: Features = {
-  bands: false, sms: false, block: false, reboot: false, devices: false, cells: false, details: false, plan: false, network: false, carriers: false,
+  bands: false, sms: false, block: false, reboot: false, devices: false, cells: false, details: false, plan: false, network: false, carriers: false, antenna: false,
 };
 const featuresOf = (d: RouterDriver): Features => ({
   bands: !!d.getBandConfig,
@@ -64,6 +64,7 @@ const featuresOf = (d: RouterDriver): Features => ({
   plan: !!d.getDataPlan,
   network: !!d.getApnProfiles || !!d.getDns,
   carriers: !!d.getCarriers,
+  antenna: !!d.getAntenna,
 });
 
 /** خلفية البطاقة الرئيسية حسب جودة الاتصال */
@@ -1016,12 +1017,12 @@ export default function RouterDashboard() {
                   <Text style={s.moreLbl}>شارك الواي فاي</Text>
                 </Pressable>
               )}
-              {info.driverId === 'huawei-lte' && (
+              {(info.driverId === 'huawei-lte' || (info.driverId === 'fiberhome' && feat.antenna)) && (
                 <Pressable style={[s.moreTile, { backgroundColor: tBg('#ea580c12'), borderColor: tBd('#ea580c30') }]} onPress={() => router.push(`/hwtools/${info.id}` as Href)}>
                   <View style={[s.moreIcon, { backgroundColor: tBg('#ea580c') }]}>
                     <Icon name="antenna" size={18} color={tFg('#fff')} />
                   </View>
-                  <Text style={s.moreLbl}>الأنتنا والباقة</Text>
+                  <Text style={s.moreLbl}>{info.driverId === 'fiberhome' ? 'الأنتنا' : 'الأنتنا والباقة'}</Text>
                 </Pressable>
               )}
               {feat.sms && (

@@ -33,7 +33,16 @@ var x_wifi_ModeEnabled="ModeEnabled",x_wifi_PreSharedKey="PreSharedKey",x_wifi_C
 var x_wifi_WifiBandSteering_obj="IGD.WiFi.X_FH_BandSteering.";var x_MainSSIDIndex_58G_obj="IGD.X_FH_WiFi.MainSSIDIndex58G";
 var x_WANDevice_obj="IGD.WANDevice.";var x_WANConnectionDevice="WANConnectionDevice.";var x_WANIPConnection="WANIPConnection.";var x_WANPPPConnection="WANPPPConnection.";
 var x_wan_Enable="Enable",x_wan_Name="Name",x_wan_WANEnable="WANEnable",x_wan_WanInterface="WanInterface";
-var x_DMZ_obj="DMZ.";var x_DMZ_Enable="Enable",x_DMZ_DMZHostIP="DMZHostIP";`;
+var x_DMZ_obj="DMZ.";var x_DMZ_Enable="Enable",x_DMZ_DMZHostIP="DMZHostIP";
+var x_PCCInfo_obj="IGD.X_FH.PCCInfo.";var x_PCCInfo2_obj="IGD.X_FH.PCCInfo2.";var x_PCCInfo_Type="Type",x_PCCInfo_Band="Band",x_PCCInfo_Pci="Pci",x_PCCInfo_Arfcn="Arfcn",x_PCCInfo_DlBandWidth="DlBandWidth";
+var x_SCCInfo_obj="IGD.X_FH.SCCInfo.";var x_SCCInfo_Type="Type",x_SCCInfo_State="State",x_SCCInfo_Band="Band",x_SCCInfo_Pci="Pci",x_SCCInfo_Arfcn="Arfcn",x_SCCInfo_DlBandWidth="DlBandWidth";
+var x_Hosts_Host_obj="IGD.LANDevice.1.Hosts.Host.";var x_Host_HostName="HostName",x_Host_DevName="DevName",x_Host_MacAddress="MACAddress",x_Host_IPAddress="IPAddress",x_Host_Active="Active",x_Host_InternetAccess="InternetAccess";
+var x_TrafficStats_obj="IGD.X_FH.TrafficStats.";var x_MonthRxBytes="MonthRxBytes",x_MonthTxBytes="MonthTxBytes";
+var x_SMS_recv_msg_obj="IGD.X_FH.SMS.Recv.";var x_SMS_send_msg_obj="IGD.X_FH.SMS.Send.";var x_SMS_recv_isOpened_obj="isOpened";var x_NetworkSet_AirplaneEnable="AirplaneEnable";
+var x_Configuration_Management_obj="IGD.X_FH_MobileNetwork.ConfigurationManagement.Management.";var x_Management_ProfileName="ProfileName",x_Management_Enable="Enable",x_Management_AuthenticationType="AuthenticationType",x_Management_APN="APN",x_Management_UserName="UserName",x_Management_Password="Password";
+var x_LANHostConfigManagement_obj="IGD.LANDevice.1.LANHostConfigManagement.";var x_LANHost_DNSManualEnable="DNSManualEnable",x_LANHost_DNSServers="DNSServers",x_LANHost_IPInterface_1="IPInterface.1.",x_LANHost_IPInterfaceIPAddress="IPInterfaceIPAddress";
+var x_NetworkSet_AntennaOutterSwitch="AntennaOutterSwitch",x_NetworkSet_AntennaOutterType="AntennaOutterType";
+var x_SIM_1_obj="IGD.X_FH_MobileNetwork.SIM.1.";var x_SIM_1_CarrierName="CarrierName",x_SIM_1_SIMStatus="SIMStatus",x_SIM_1_IMEI="IMEI";`;
 
 /** المفتاح العام المقابل للمفتاح المدفون في الصفحة (n, e من fhapi) */
 function publicKey() {
@@ -71,6 +80,30 @@ function router(opts: { password?: string; sidLen?: number; operator?: string } 
     'IGD.WiFi.X_FH_BandSteering.Enable': '0', 'IGD.X_FH_WiFi.MainSSIDIndex58G': '9',
     'IGD.WiFi.SSID.1.Enable': '1', 'IGD.WiFi.SSID.1.SSID': 'FHCPE-24', 'IGD.WiFi.AccessPoint.1.ModeEnabled': 'WPA2-Personal',
     'IGD.WiFi.SSID.9.Enable': '1', 'IGD.WiFi.SSID.9.SSID': 'FHCPE-5G', 'IGD.WiFi.AccessPoint.9.ModeEnabled': 'WPA2-Personal',
+  };
+  Object.assign(db, {
+    // الدمج (carrierAggregation.js): 4G أساسي B3 + 5G n78 (PCC2) + ثانوي B1 شغّال + ثانوي ثاني مطفي
+    'IGD.X_FH.PCCInfo.Type': 'LTE PCC', 'IGD.X_FH.PCCInfo.Band': 'B3', 'IGD.X_FH.PCCInfo.Pci': '301', 'IGD.X_FH.PCCInfo.Arfcn': '1300', 'IGD.X_FH.PCCInfo.DlBandWidth': '20MHz', 'IGD.X_FH.PCCInfo.RSRP': '-95',
+    'IGD.X_FH.PCCInfo2.Type': 'NR PCC', 'IGD.X_FH.PCCInfo2.Band': 'n78', 'IGD.X_FH.PCCInfo2.Pci': '77', 'IGD.X_FH.PCCInfo2.Arfcn': '627264', 'IGD.X_FH.PCCInfo2.DlBandWidth': '100MHz', 'IGD.X_FH.PCCInfo2.RSRP': '-88',
+    'IGD.X_FH.TrafficStats.MonthRxBytes': '52428800000', 'IGD.X_FH.TrafficStats.MonthTxBytes': '2147483648',
+    'IGD.X_FH_MobileNetwork.NetworkSettings.AirplaneEnable': '0',
+    'IGD.LANDevice.1.LANHostConfigManagement.DNSManualEnable': '0', 'IGD.LANDevice.1.LANHostConfigManagement.DNSServers': '192.168.8.1',
+    'IGD.LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceIPAddress': '192.168.8.1',
+    'IGD.X_FH_MobileNetwork.NetworkSettings.AntennaOutterSwitch': '0', 'IGD.X_FH_MobileNetwork.NetworkSettings.AntennaOutterType': '0',
+    'IGD.X_FH_MobileNetwork.SIM.1.CarrierName': 'zain KSA', 'IGD.X_FH_MobileNetwork.SIM.1.SIMStatus': 'Ready', 'IGD.X_FH_MobileNetwork.SIM.1.IMEI': '860000000000001',
+    'IGD.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.Enable': '1',
+  });
+  const hosts = [
+    { child_node_idx: '1', HostName: 'iPhone', DevName: '', MACAddress: 'aa:bb:cc:00:00:01', IPAddress: '192.168.8.10', Active: '1', InternetAccess: '1' },
+    { child_node_idx: '2', HostName: 'android-x', DevName: 'جوال ولدي', MACAddress: 'aa:bb:cc:00:00:02', IPAddress: '192.168.8.11', Active: '1', InternetAccess: '1' },
+    { child_node_idx: '3', HostName: 'old-tv', DevName: '', MACAddress: 'aa:bb:cc:00:00:03', IPAddress: '0.0.0.0', Active: '0', InternetAccess: '1' },
+  ];
+  const apns = [
+    { child_node_idx: '1', ProfileName: 'default', Enable: '1', AuthenticationType: '0', APN: 'zain', UserName: '' },
+  ];
+  const sms: Record<string, any> = {
+    s1: { session_phone: '700', message_item1: { rcvorsend: 'recv', msg_content: 'رصيدك 20 GB', time: '2026-10-30 21:00', childnode: '4', isOpened: '0' },
+      message_item2: { rcvorsend: 'send', msg_content: 'رصيد', time: '2026-10-30 20:59', childnode: '2' } },
   };
   /** عناصر DMZ تحت اتصال الإنترنت الموجّه (dmzSet.js) */
   const DMZ_PATH = 'IGD.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.DMZ';
@@ -136,6 +169,20 @@ function router(opts: { password?: string; sidLen?: number; operator?: string } 
         { child_node_idx: '2', wanenable: '0', waninterface: 'dev.eth.4', wanconnection: [] },
       ] };
     }
+    else if (m === 'get_xml_childnode_value' && d.url === 'IGD.X_FH.SCCInfo.') {
+      assert.equal(d.num, 4, 'SCC: num 4 مثل الصفحة');
+      out = { data: [
+        { child_node_idx: '1', Type: 'LTE SCC', State: 'activated', Band: 'B1', Pci: '12', Arfcn: '100', DlBandWidth: '15MHz', RSRP: '-101' },
+        { child_node_idx: '2', Type: 'LTE SCC', State: 'deactivated', Band: 'B28', Pci: '9', Arfcn: '9410', DlBandWidth: '10MHz', RSRP: '-110' },
+        { child_node_idx: '3', Type: '', State: '', Band: '' }, { child_node_idx: '4', Type: '', State: '', Band: '' },
+      ] };
+    }
+    else if (m === 'get_xml_childnode_value' && d.url === 'IGD.LANDevice.1.Hosts.Host.') out = { data: hosts };
+    else if (m === 'get_xml_childnode_value' && d.url === 'IGD.X_FH_MobileNetwork.ConfigurationManagement.Management.') {
+      assert.ok(!('Password' in d.node), 'ما نقرأ كلمة APN');
+      out = { data: apns };
+    }
+    else if (m === 'get_sms_data') out = sms;
     else if (m === 'get_xml_childnode_value') out = { data: cells.map((c, i) => ({ child_node_idx: String(i + 1), ...c })) };
     else {
       // كتابة — نطبّقها مثل الراوتر (عشان الدرايفر يتأكد بالقراءة بعدها)
@@ -145,7 +192,14 @@ function router(opts: { password?: string; sidLen?: number; operator?: string } 
       if (m === 'add_set_xmlnode') cells.push({ ...d.setNode.value });
       if (m === 'del_xmlnode') cells.splice(Number(d.index) - 1, 1);
       out = { success: 'true' };
-      if (m === 'add_xmlnode') { const i = String(dmzIdx.length + 1); dmzIdx.push(i); assert.equal(d.dmz, DMZ_PATH, 'المسار مثل dmzSet.js'); out = { dmz: i }; }
+      if (m === 'add_xmlnode' && d.dmz) { const i = String(dmzIdx.length + 1); dmzIdx.push(i); assert.equal(d.dmz, DMZ_PATH, 'المسار مثل dmzSet.js'); out = { dmz: i }; }
+      if (m === 'add_xmlnode' && d.Management) { const i = String(apns.length + 1); apns.push({ child_node_idx: i, ProfileName: '', Enable: '0', AuthenticationType: '0', APN: '', UserName: '' }); out = { Management: i }; }
+      // الراوتر يطبّق الكتابة على القوائم (الأجهزة/APN) مثل ما يطبقها على الخانات
+      for (const h of hosts) { const v = db[`IGD.LANDevice.1.Hosts.Host.${h.child_node_idx}.InternetAccess`]; if (v !== undefined) h.InternetAccess = v; }
+      for (const a of apns) for (const f of ['ProfileName', 'Enable', 'AuthenticationType', 'APN', 'UserName'] as const) {
+        const v = db[`IGD.X_FH_MobileNetwork.ConfigurationManagement.Management.${a.child_node_idx}.${f}`]; if (v !== undefined) (a as any)[f] = v;
+      }
+      if (m === 'send_msg') out = { result: 0 };
     }
     return res(200, rand(6) + aes('enc', key, JSON.stringify(out)));
   };
@@ -290,6 +344,107 @@ test('FiberHome v2: قناة الواي فاي (wifiAdvanced.js) — القنو�
   await d.setWifiChannel('5', '149');
   assert.equal(r.db['IGD.WiFi.Radio.2.Channel'], '149');
   await assert.rejects(d.setWifiChannel('5', '165'), (e: any) => e.noChange === true, 'قناة مو بالقائمة');
+});
+
+test('FiberHome v2: الدمج (carrierAggregation.js) — أساسي 4G + 5G + الثانوي الشغّال بس، والقراءة تطلع فيها', async () => {
+  router();
+  const d = await driver();
+  await d.login('192.168.8.1', 'admin', 'pw');
+  const ca = await d.getCarriers();
+  assert.deepEqual(ca.map((c: any) => [c.tech, c.band, c.role, c.pci, c.bandwidth]), [['LTE', 3, 'PCC', '301', 20], ['NR', 78, 'SCC', '77', 100], ['LTE', 1, 'SCC', '12', 15]]);
+  const snap = await d.getSnapshot();
+  assert.ok(JSON.stringify(snap).includes('"band":78'), 'الـ5G يطلع في اللقطة');
+});
+
+test('FiberHome v2: الأجهزة (device.js) — المتصلين بس، والحظر InternetAccess "2" ويتأكد', async () => {
+  const r = router();
+  const d = await driver();
+  await d.login('192.168.8.1', 'admin', 'pw');
+  const dev = await d.getDevices();
+  assert.deepEqual(dev.map((x: any) => [x.mac, x.name, x.ip]), [['AA:BB:CC:00:00:01', 'iPhone', '192.168.8.10'], ['AA:BB:CC:00:00:02', 'جوال ولدي', '192.168.8.11']]);
+  await d.blockDevice('aa:bb:cc:00:00:02', true);
+  assert.equal(r.db['IGD.LANDevice.1.Hosts.Host.2.InternetAccess'], '2');
+  assert.deepEqual((await d.getBlockedDevices()).map((x: any) => x.mac), ['AA:BB:CC:00:00:02']);
+  await d.blockDevice('AA:BB:CC:00:00:02', false);
+  assert.equal(r.db['IGD.LANDevice.1.Hosts.Host.2.InternetAccess'], '1');
+  await assert.rejects(d.blockDevice('11:22:33:44:55:66', true), (e: any) => e.noChange === true);
+});
+
+test('FiberHome v2: الاستهلاك + الرسائل (قراءة/مقروءة/حذف/إرسال بالعربي UCS2)', async () => {
+  const r = router();
+  const d = await driver();
+  await d.login('192.168.8.1', 'admin', 'pw');
+  assert.deepEqual(await d.getUsage(), { downloadBytes: 52428800000, uploadBytes: 2147483648 });
+  const inbox = await d.listSms('inbox');
+  assert.deepEqual(inbox.map((m: any) => [m.index, m.phone, m.unread]), [['recv:4', '700', true]]);
+  assert.deepEqual((await d.listSms('sent')).map((m: any) => m.index), ['send:2']);
+  await d.markSmsRead('recv:4');
+  assert.equal(r.db['IGD.X_FH.SMS.Recv.4.isOpened'], '1');
+  await d.deleteSms('recv:4');
+  assert.ok(r.writes.some(w => w.m === 'del_xmlnode' && w.d.url === 'IGD.X_FH.SMS.Recv.' && w.d.index === '4'));
+  await d.sendSms('700', 'رصيد');
+  const sent = r.writes.find(w => w.m === 'send_msg');
+  assert.deepEqual(sent?.d, { recv_number: '700', encode_schema: 'GSM_UCS2', content: 'رصيد' });
+  await assert.rejects(d.sendSms('abc', 'x'), (e: any) => e.noChange === true);
+});
+
+test('FiberHome v2: APN (configManage.js) — الافتراضي ينسخ لملف جديد، والتبديل Enable "1"', async () => {
+  const r = router();
+  const d = await driver();
+  await d.login('192.168.8.1', 'admin', 'pw');
+  const ap = await d.getApnProfiles();
+  assert.deepEqual(ap.map((a: any) => [a.index, a.apn, a.current, a.readOnly]), [['1', 'zain', true, true]]);
+  await d.setApn({ index: '1', name: 'zain-net', apn: 'zain.net', authMode: '0' });
+  const M = 'IGD.X_FH_MobileNetwork.ConfigurationManagement.Management.';
+  assert.ok(r.writes.some(w => w.m === 'add_xmlnode' && w.d.Management === M), 'الافتراضي ما ينعدّل — ملف جديد');
+  assert.equal(r.db[M + '2.APN'], 'zain.net');
+  assert.equal(r.db[M + '2.Enable'], '1');
+  assert.equal(r.db[M + '1.APN'], undefined, 'الافتراضي ما انلمس');
+  await d.selectApn('1');
+  assert.equal(r.db[M + '1.Enable'], '1');
+});
+
+test('FiberHome v2: DNS (ipv4Settings.js) + الأنتنا (antennaSet.js) + اسم الشركة من الشريحة', async () => {
+  const r = router();
+  const d = await driver();
+  await d.login('192.168.8.1', 'admin', 'pw');
+  assert.deepEqual(await d.getDns(), { manual: false });
+  await d.setDns({ manual: true, primary: '1.1.1.1', secondary: '8.8.8.8' });
+  assert.equal(r.db['IGD.LANDevice.1.LANHostConfigManagement.DNSServers'], '1.1.1.1,8.8.8.8');
+  await d.setDns({ manual: false });
+  assert.equal(r.db['IGD.LANDevice.1.LANHostConfigManagement.DNSServers'], '192.168.8.1', 'التلقائي = عنوان الراوتر (مثل الصفحة)');
+  const a = await d.getAntenna();
+  assert.equal(a.mode, 0);
+  assert.equal(a.options.length, 4, 'LG6851F: داخلية / خارجية تلقائي / n41 / n78');
+  await d.setAntenna(12);
+  assert.equal(r.db['IGD.X_FH_MobileNetwork.NetworkSettings.AntennaOutterSwitch'], '1');
+  assert.equal(r.db['IGD.X_FH_MobileNetwork.NetworkSettings.AntennaOutterType'], '2');
+  const det = await d.getDeviceDetails();
+  assert.equal(det.operator, 'zain KSA', 'CarrierName بدل كود الفيرموير');
+});
+
+test('FiberHome v2: DNS ممنوع لمشغّل ما تسمح صفحته (مثل PLDT) — ما ينرسل شي', async () => {
+  const r = router({ operator: 'PLDT' });
+  const d = await driver();
+  await d.login('192.168.8.1', 'admin', 'pw');
+  await assert.rejects(d.setDns({ manual: true, primary: '1.1.1.1' }), (e: any) => e.noChange === true);
+  assert.deepEqual(r.writes, []);
+});
+
+test('FiberHome v2: آي بي جديد — قطع البيانات ورجوعها (networkSet.js) + وضع الطيران ويرجع', async () => {
+  const r = router();
+  const d = await driver();
+  await d.login('192.168.8.1', 'admin', 'pw');
+  await d.reconnectData({ holdSecs: 3 });
+  const W = 'IGD.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.Enable';
+  assert.deepEqual(r.writes.filter(w => w.d.url === W).map(w => w.d.value), ['0', '1']);
+  assert.equal(r.db[W], '1');
+  await d.reattach(3);
+  const A = 'IGD.X_FH_MobileNetwork.NetworkSettings.AirplaneEnable';
+  assert.deepEqual(r.writes.filter(w => w.d.url === A).map(w => w.d.value), ['1', '0']);
+  r.db[A] = '1';
+  await d.wakeRadio();
+  assert.equal(r.db[A], '0', 'wakeRadio يطفي الطيران لو علق');
 });
 
 test('FiberHome: operator_name كود فيرموير — «COMMON» ما يطلع كاسم شركة (كان «برج COMMON»)، SA_STC ← STC', async () => {

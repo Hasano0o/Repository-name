@@ -89,7 +89,8 @@ export default function NewIp() {
         // الراوتر قال قبل إنه ما يقدر ينفصل (لا وضع مؤقت ولا تردد نوقفه عليه) — ما نجرّب كل مرة
         let noDetach = false;
         try { noDetach = (await AsyncStorage.getItem(`newip.nodetach2.${r.id}`)) === '1'; } catch {}
-        setCanDetach(!noDetach && det && (/huawei/i.test(r.driverId) || (labOn && /zte/i.test(r.driverId))));
+        // FiberHome الجديد: وضع الطيران من صفحة الراوتر نفسها (networkSet.js) — reattach موجود بس في v2
+        setCanDetach(!noDetach && det && (/huawei|fiberhome/i.test(r.driverId) || (labOn && /zte/i.test(r.driverId))));
         try { setSkipQuick((await AsyncStorage.getItem(`newip.reboot.${r.id}`)) === '1'); } catch {}
         try { setDetachFirst(labOn || (await AsyncStorage.getItem(`newip.detach.${r.id}`)) === '1'); } catch {}
         setCanReboot(reb && r.driverId !== 'device');

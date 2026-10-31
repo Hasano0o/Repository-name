@@ -14,7 +14,8 @@
  * كل تغيير نتأكد منه بإعادة القراءة، وفيه لقطة + إرجاع متحقق منه (مثل هواوي و ZTE).
  * لسا ما انجرّب على راوتر حقيقي — أي رد غريب يطلع برسالة فيها اسم الأمر عشان يوصلنا في التقرير.
  */
-import { RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, BandConfig, ActiveLock, CellLockTarget, CellLockState, DeviceDetails, RouterExtras, WifiRadio } from '../types';
+import { RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, BandConfig, ActiveLock, CellLockTarget, CellLockState, DeviceDetails, RouterExtras, WifiRadio, Carrier, ConnectedDevice, Usage, SmsMessage, ApnProfile, DnsConfig, AntennaInfo } from '../types';
+import { carriersFromCA, devicesFrom, blockedFrom, smsFrom, smsRef, smsSchema, apnsFrom, dnsFrom, DNS_OPERATORS, antennaFrom, antennaValues, FhCellRaw, FhHost } from './v2extra';
 import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { noChange } from '../noChange';
 import { http } from '../http';
@@ -44,7 +45,13 @@ export function fhOperator(v: unknown): string | undefined {
   if (!s || /^(COMMON|LEISHEN|TRUNK|DEFAULT|GENERAL)$/i.test(s)) return undefined;
   return s.replace(/^[A-Z]{2}_/, '').replace(/_/g, ' ').trim() || undefined;
 }
-const V2_WRITE = /^(set_value_by_xmlnode|set_single_by_xmlnode|add_set_xmlnode|add_xmlnode|del_xmlnode|do_cmd_web)$/;
+const V2_WRITE = /^(set_value_by_xmlnode|set_single_by_xmlnode|add_set_xmlnode|add_xmlnode|del_xmlnode|do_cmd_web|send_msg)$/;
+/**
+ * ميزات الفيرموير الجديد بس (صفحاتها وصلت منه) — على الفيرموير القديم نخفيها من الكائن نفسه،
+ * عشان التطبيق (اللي يقرّر الأزرار من وجود الدالة) ما يعرض شي ما نعرف صفحته.
+ */
+const V2_ONLY = ['getCarriers', 'getDevices', 'getBlockedDevices', 'blockDevice', 'getUsage', 'listSms', 'markSmsRead', 'deleteSms', 'sendSms',
+  'getApnProfiles', 'setApn', 'selectApn', 'getDns', 'setDns', 'getAntenna', 'setAntenna', 'reconnectData', 'reattach', 'wakeRadio'] as const;
 /** الواي فاي في الفيرموير الجديد (wifiBasic.js / wifiBasic_5g.js): Radio.1/2.Enable · SSID.<n>.SSID · AccessPoint.<n>.PreSharedKey */
 const V2_WIFI = ['x_wifi_Radio_obj', 'x_wifi_SSID_obj', 'x_wifi_AccessPoint_obj', 'x_wifi_Enable', 'x_wifi_SSID', 'x_wifi_ModeEnabled'];
 /** DMZ في الفيرموير الجديد (dmzSet.js): قائمة تحت اتصال INTERNET_R_ (WANDevice.x.WANConnectionDevice.y.WANIPConnection.z.DMZ) */
@@ -139,7 +146,15 @@ export class FiberhomeDriver implements RouterDriver {
     if (!v1) { try { v2 = (await this.sessionV2()).sid.length > 0; } catch {} }
     this.api = v2 ? 'v2' : 'v1';
     this.log('api', this.api);
+    this.applyApi();
     return this.api;
+  }
+  /** v1: نخفي ميزات v2 من هالكائن (تظليل للـ prototype) · v2: نرجّعها */
+  private applyApi() {
+    for (const k of V2_ONLY) {
+      if (this.api === 'v1') (this as any)[k] = undefined;
+      else delete (this as any)[k];
+    }
   }
   /** v2 GET مثل $get: FHAPIS/FHNCAPIS?ajaxmethod=… (أو مسار باسم الأمر)، والرد يتنظّف برأس content-len لو موجود */
   private async getQ2(method: string, nocheck = false): Promise<any> {
@@ -301,7 +316,8 @@ export class FiberhomeDriver implements RouterDriver {
   async getSnapshot(): Promise<SignalSnapshot> {
     const rf = await this.rf();
     const s = signalFrom(rf);
-    return buildSnapshot(s, [], neighborsFrom(rf), { driverId: this.id, driverName: this.name });
+    const ca = this.api === 'v2' ? await this.getCarriers().catch(() => [] as Carrier[]) : [];
+    return buildSnapshot(s, ca, neighborsFrom(rf), { driverId: this.id, driverName: this.name });
   }
 
   async getNetworkInfo(): Promise<NetworkInfo> {
@@ -316,7 +332,24 @@ export class FiberhomeDriver implements RouterDriver {
   }
   async getDeviceDetails(): Promise<DeviceDetails> {
     const d = await this.deviceInfo().catch(() => ({} as Record<string, any>));
-    return { model: d.model_name, software: d.software_version ?? d.sw_version, operator: fhOperator(d.operator_name) };
+    const out: DeviceDetails = { model: d.model_name, software: d.software_version ?? d.sw_version, operator: fhOperator(d.operator_name) };
+    // simInfo.js: اسم الشركة الحقيقي من الشريحة (بدل كود الفيرموير) + حالة الشريحة والـ IMEI — ما نقرأ IMSI/ICCID/الرقم
+    if (this.api === 'v2') {
+      try {
+        const n = await this.loadNodes();
+        if (!missing(n, ['x_SIM_1_obj', 'x_SIM_1_CarrierName']).length) {
+          const q: Record<string, string> = { carrier: n.x_SIM_1_obj + n.x_SIM_1_CarrierName };
+          if (n.x_SIM_1_SIMStatus) q.sim = n.x_SIM_1_obj + n.x_SIM_1_SIMStatus;
+          if (n.x_SIM_1_IMEI) q.imei = n.x_SIM_1_obj + n.x_SIM_1_IMEI;
+          const v = await this.readMany(q);
+          const c = String(v.carrier ?? '').trim();
+          if (c) out.operator = c;
+          if (v.sim !== undefined) out.simStatus = String(v.sim);
+          if (v.imei) out.imei = String(v.imei);
+        }
+      } catch {}
+    }
+    return out;
   }
 
   async reboot(): Promise<void> {
@@ -731,6 +764,224 @@ export class FiberhomeDriver implements RouterDriver {
     if (!Object.keys(url).length) return;
     await this.setValues(url, value);
   }
+
+  // ═══════════ الفيرموير الجديد: ميزات من صفحاته (ملف AUTH ٣١ أكتوبر) ═══════════
+  private async v2Nodes(keys: string[], what: string): Promise<Record<string, string>> {
+    if (this.api !== 'v2') throw noChange(`${what} لسا ما تشتغل على راوترك — ما غيّرنا شي.`);
+    return this.need(keys, what);
+  }
+  /** وضع الطيران أو قفل الشركة شغّال ← الصفحة تقفل الإعدادات (configManage/pccLock/smsInbox) */
+  private async airplaneOn(n: Record<string, string>): Promise<boolean> {
+    if (!n.x_NetworkSet_AirplaneEnable) return false;
+    const v = await this.readMany({ a: n.x_NetworkSettings_obj + n.x_NetworkSet_AirplaneEnable });
+    return String(v.a ?? '') === '1';
+  }
+
+  /** carrierAggregation.js: PCC + PCC2 (get_value_by_xmlnode) و SCC×4 (get_xml_childnode_value num:4) */
+  async getCarriers(): Promise<Carrier[]> {
+    const n = await this.v2Nodes(['x_PCCInfo_obj', 'x_PCCInfo_Type', 'x_PCCInfo_Band', 'x_SCCInfo_obj', 'x_SCCInfo_Type', 'x_SCCInfo_State', 'x_SCCInfo_Band'], 'الدمج');
+    const cell = (o: string): Record<string, string> => {
+      const q: Record<string, string> = { Type: o + n.x_PCCInfo_Type, Band: o + n.x_PCCInfo_Band, RSRP: o + 'RSRP', RSRQ: o + 'RSRQ', SINR: o + 'SINR' };
+      if (n.x_PCCInfo_Pci) q.Pci = o + n.x_PCCInfo_Pci;
+      if (n.x_PCCInfo_Arfcn) q.Arfcn = o + n.x_PCCInfo_Arfcn;
+      if (n.x_PCCInfo_DlBandWidth) q.DlBandWidth = o + n.x_PCCInfo_DlBandWidth;
+      return q;
+    };
+    const pcc = await this.readMany(cell(n.x_PCCInfo_obj)) as FhCellRaw;
+    const pcc2 = n.x_PCCInfo2_obj ? await this.readMany(cell(n.x_PCCInfo2_obj)) as FhCellRaw : null;
+    const node: Record<string, string> = { Type: n.x_SCCInfo_Type, State: n.x_SCCInfo_State, Band: n.x_SCCInfo_Band, RSRP: 'RSRP', RSRQ: 'RSRQ', SINR: 'SINR' };
+    if (n.x_SCCInfo_Pci) node.Pci = n.x_SCCInfo_Pci;
+    if (n.x_SCCInfo_Arfcn) node.Arfcn = n.x_SCCInfo_Arfcn;
+    if (n.x_SCCInfo_DlBandWidth) node.DlBandWidth = n.x_SCCInfo_DlBandWidth;
+    let scc: FhCellRaw[] = [];
+    try { scc = listOf(await this.post('get_xml_childnode_value', { url: n.x_SCCInfo_obj, num: 4, node })) as FhCellRaw[]; } catch {}
+    return carriersFromCA(pcc, pcc2, scc);
+  }
+
+  // ─── الأجهزة (device.js) ───
+  private async hosts(): Promise<{ n: Record<string, string>; rows: (FhHost & { child_node_idx: string })[] }> {
+    const n = await this.v2Nodes(['x_Hosts_Host_obj', 'x_Host_MacAddress', 'x_Host_IPAddress', 'x_Host_Active', 'x_Host_InternetAccess'], 'الأجهزة المتصلة');
+    const node: Record<string, string> = { MACAddress: n.x_Host_MacAddress, IPAddress: n.x_Host_IPAddress, Active: n.x_Host_Active, InternetAccess: n.x_Host_InternetAccess };
+    if (n.x_Host_HostName) node.HostName = n.x_Host_HostName;
+    if (n.x_Host_DevName) node.DevName = n.x_Host_DevName;
+    const rows = listOf(await this.post('get_xml_childnode_value', { url: n.x_Hosts_Host_obj, node })).map((r: any) => ({ ...r, child_node_idx: String(r?.child_node_idx ?? '') }));
+    return { n, rows };
+  }
+  async getDevices(): Promise<ConnectedDevice[]> { return devicesFrom((await this.hosts()).rows); }
+  async getBlockedDevices(): Promise<ConnectedDevice[]> { return blockedFrom((await this.hosts()).rows); }
+  /** device.js FBlacklist: Hosts.Host.<n>.InternetAccess = "1" مسموح / "2" محظور */
+  async blockDevice(mac: string, block: boolean): Promise<void> {
+    const { n, rows } = await this.hosts();
+    const m = String(mac ?? '').toUpperCase();
+    const h = rows.find(r => String(r.MACAddress ?? '').toUpperCase() === m);
+    if (!h || !h.child_node_idx) throw noChange('ما لقينا هالجهاز في قائمة الراوتر — ما غيّرنا شي.');
+    await this.setSingle(n.x_Hosts_Host_obj + h.child_node_idx + '.' + n.x_Host_InternetAccess, block ? '2' : '1', true);
+    await sleep(1500);
+    const a = (await this.hosts()).rows.find(r => r.child_node_idx === h.child_node_idx);
+    if (a && (Number(a.InternetAccess) >= 2) !== block) throw new Error('الراوتر قبل أمر الحظر بس القراءة بعده مختلفة');
+  }
+
+  /** trafficStat.js: استهلاك الشهر (Rx = تحميل · Tx = رفع) */
+  async getUsage(): Promise<Usage> {
+    const n = await this.v2Nodes(['x_TrafficStats_obj', 'x_MonthRxBytes', 'x_MonthTxBytes'], 'الاستهلاك');
+    const v = await this.readMany({ rx: n.x_TrafficStats_obj + n.x_MonthRxBytes, tx: n.x_TrafficStats_obj + n.x_MonthTxBytes });
+    const b = (x: unknown) => { const k = Number(String(x ?? '').trim()); return Number.isFinite(k) && k >= 0 ? k : 0; };
+    return { downloadBytes: b(v.rx), uploadBytes: b(v.tx) };
+  }
+
+  // ─── الرسائل (smsInbox.js) ───
+  async listSms(box: 'inbox' | 'sent' = 'inbox'): Promise<SmsMessage[]> {
+    if (this.api !== 'v2') return [];
+    return smsFrom(await this.post('get_sms_data', null), box);
+  }
+  async markSmsRead(index: string): Promise<void> {
+    const ref = smsRef(index);
+    if (!ref || ref.box !== 'recv') return;
+    const n = await this.v2Nodes(['x_SMS_recv_msg_obj', 'x_SMS_recv_isOpened_obj'], 'الرسائل');
+    await this.setValues({ smsIsopend: n.x_SMS_recv_msg_obj + ref.idx + '.' + n.x_SMS_recv_isOpened_obj }, { smsIsopend: '1' }, true);
+  }
+  async deleteSms(index: string): Promise<void> {
+    const ref = smsRef(index);
+    if (!ref) throw noChange('رسالة غير معروفة — ما حذفنا شي.');
+    const n = await this.v2Nodes(['x_SMS_recv_msg_obj', 'x_SMS_send_msg_obj'], 'الرسائل');
+    await this.post('del_xmlnode', { url: ref.box === 'recv' ? n.x_SMS_recv_msg_obj : n.x_SMS_send_msg_obj, index: ref.idx }, { v2: true });
+  }
+  async sendSms(phone: string, text: string): Promise<void> {
+    if (this.api !== 'v2') throw noChange('الرسائل لسا ما تشتغل على راوترك — ما أرسلنا شي.');
+    const to = String(phone ?? '').replace(/[\s-]/g, '');
+    if (!/^\+?\d{3,20}$/.test(to)) throw noChange('رقم الجوال غير صحيح — ما أرسلنا شي.');
+    const content = String(text ?? '');
+    if (!content.trim()) throw noChange('الرسالة فاضية — ما أرسلنا شي.');
+    const n = await this.loadNodes();
+    if (await this.airplaneOn(n).catch(() => false)) throw noChange('وضع الطيران شغّال في راوترك — الرسائل ما تنرسل. ما أرسلنا شي.');
+    const r = await this.post('send_msg', { recv_number: to, encode_schema: smsSchema(content), content }, { v2: true });
+    // الصفحة: result 0 أو "" = نجاح
+    const res = r && typeof r === 'object' ? String((r as any).result ?? '') : '';
+    if (res !== '' && res !== '0') throw new Error(`الراوتر ما أرسل الرسالة (${res})`);
+  }
+
+  // ─── APN (configManage.js) ───
+  private async apnRows(n: Record<string, string>) {
+    return apnsFrom(listOf(await this.post('get_xml_childnode_value', {
+      url: n.x_Configuration_Management_obj,
+      node: { ProfileName: n.x_Management_ProfileName, Enable: n.x_Management_Enable, AuthenticationType: n.x_Management_AuthenticationType, APN: n.x_Management_APN, UserName: n.x_Management_UserName },
+    })));
+  }
+  private apnNeed = ['x_Configuration_Management_obj', 'x_Management_ProfileName', 'x_Management_Enable', 'x_Management_AuthenticationType', 'x_Management_APN', 'x_Management_UserName', 'x_Management_Password'];
+  async getApnProfiles(): Promise<ApnProfile[]> { return this.apnRows(await this.v2Nodes(this.apnNeed, 'APN')); }
+  async setApn(p: { index: string; name: string; apn: string; username?: string; password?: string; authMode?: string }): Promise<void> {
+    const n = await this.v2Nodes(this.apnNeed, 'APN');
+    if (await this.airplaneOn(n)) throw noChange('وضع الطيران شغّال — صفحة الراوتر نفسها تقفل APN وهو شغّال. ما غيّرنا شي.');
+    const rows = await this.apnRows(n);
+    const cur = rows.find(r => r.index === String(p.index));
+    if (!cur) throw noChange('ما لقينا ملف الاتصال هذا في راوترك — ما غيّرنا شي.');
+    // الملف الافتراضي (١): الصفحة تعرضه بدون تعديل ← نسوي ملف جديد بنفس الطريقة (add_xmlnode) ونفعّله
+    let idx = cur.index;
+    if (cur.readOnly) {
+      const add = await this.post('add_xmlnode', { Management: n.x_Configuration_Management_obj }, { v2: true });
+      idx = String(add?.Management ?? '');
+      if (!idx) throw new Error('add_xmlnode: الراوتر ما رجّع رقم ملف الاتصال الجديد');
+    }
+    const auth = /^[0-3]$/.test(String(p.authMode ?? '')) ? String(p.authMode) : '0';
+    const head = n.x_Configuration_Management_obj + idx + '.';
+    const url: Record<string, string> = { Enable: head + n.x_Management_Enable, ProfileName: head + n.x_Management_ProfileName, AuthenticationType: head + n.x_Management_AuthenticationType, APN: head + n.x_Management_APN };
+    const value: Record<string, string> = { Enable: cur.current || cur.readOnly ? '1' : '0', ProfileName: (p.name || p.apn).trim().slice(0, 32), AuthenticationType: auth, APN: p.apn.trim() };
+    if (auth === '1' || auth === '3') { url.UserName = head + n.x_Management_UserName; value.UserName = String(p.username ?? ''); }
+    if (auth !== '0' && p.password) { url.Password = head + n.x_Management_Password; value.Password = p.password; }
+    await this.setValues(url, value, true);
+  }
+  /** configManage.js: الملف النشط = Enable "1" */
+  async selectApn(index: string): Promise<void> {
+    const n = await this.v2Nodes(this.apnNeed, 'APN');
+    if (await this.airplaneOn(n)) throw noChange('وضع الطيران شغّال — صفحة الراوتر نفسها تقفل APN وهو شغّال. ما غيّرنا شي.');
+    const rows = await this.apnRows(n);
+    if (!rows.some(r => r.index === String(index))) throw noChange('ما لقينا ملف الاتصال هذا — ما غيّرنا شي.');
+    await this.setValues({ Enable: n.x_Configuration_Management_obj + index + '.' + n.x_Management_Enable }, { Enable: '1' }, true);
+  }
+
+  // ─── DNS (ipv4Settings.js) ───
+  private dnsNeed = ['x_LANHostConfigManagement_obj', 'x_LANHost_DNSManualEnable', 'x_LANHost_DNSServers'];
+  async getDns(): Promise<DnsConfig> {
+    const n = await this.v2Nodes(this.dnsNeed, 'DNS');
+    const v = await this.readMany({ t: n.x_LANHostConfigManagement_obj + n.x_LANHost_DNSManualEnable, s: n.x_LANHostConfigManagement_obj + n.x_LANHost_DNSServers });
+    return dnsFrom(v.t, v.s);
+  }
+  async setDns(cfg: DnsConfig): Promise<void> {
+    const n = await this.v2Nodes([...this.dnsNeed, 'x_LANHost_IPInterface_1', 'x_LANHost_IPInterfaceIPAddress'], 'DNS');
+    const op = String((await this.deviceInfo().catch(() => ({} as Record<string, any>))).operator_name ?? '');
+    if (!DNS_OPERATORS.test(op)) throw noChange('صفحة راوترك ما تسمح بتغيير DNS في نسخة شركتك — ما غيّرنا شي.');
+    const L = n.x_LANHostConfigManagement_obj;
+    if (cfg.manual) {
+      const a = String(cfg.primary ?? '').trim(), b = String(cfg.secondary ?? '').trim();
+      if (!isIPv4(a) || (b && !isIPv4(b))) throw noChange('عنوان DNS غير صحيح — ما غيّرنا شي.');
+      await this.setValues({ DNSConfigType: L + n.x_LANHost_DNSManualEnable, DNSServers: L + n.x_LANHost_DNSServers }, { DNSConfigType: '1', DNSServers: b ? `${a},${b}` : a }, true);
+    } else {
+      // التلقائي في الصفحة = عنوان الراوتر نفسه
+      const ip = String((await this.readMany({ ip: L + n.x_LANHost_IPInterface_1 + n.x_LANHost_IPInterfaceIPAddress })).ip ?? '').trim();
+      if (!isIPv4(ip)) throw new Error('ما قدرنا نقرأ عنوان الراوتر عشان نرجّع DNS للتلقائي');
+      await this.setValues({ DNSConfigType: L + n.x_LANHost_DNSManualEnable, DNSServers: L + n.x_LANHost_DNSServers }, { DNSConfigType: '0', DNSServers: ip }, true);
+    }
+    await sleep(1500);
+    const now = await this.getDns();
+    if (now.manual !== !!cfg.manual || (cfg.manual && now.primary !== String(cfg.primary).trim())) throw new Error('الراوتر قبل تغيير DNS بس القراءة بعده مختلفة');
+  }
+
+  // ─── الأنتنا (antennaSet.js) — النوع (n41 / n78) في LG6851F بس ───
+  private async antennaCtx() {
+    const n = await this.v2Nodes(['x_NetworkSettings_obj', 'x_NetworkSet_AntennaOutterSwitch'], 'الأنتنا');
+    const model = String((await this.deviceInfo().catch(() => ({} as Record<string, any>))).model_name ?? '');
+    return { n, withType: /LG6851F/i.test(model) && !!n.x_NetworkSet_AntennaOutterType };
+  }
+  async getAntenna(): Promise<AntennaInfo | null> {
+    const { n, withType } = await this.antennaCtx();
+    const q: Record<string, string> = { sw: n.x_NetworkSettings_obj + n.x_NetworkSet_AntennaOutterSwitch };
+    if (withType) q.type = n.x_NetworkSettings_obj + n.x_NetworkSet_AntennaOutterType;
+    const v = await this.readMany(q);
+    if (v.sw === undefined) return null;
+    return antennaFrom(v.sw, v.type, withType);
+  }
+  async setAntenna(mode: number): Promise<void> {
+    const { n, withType } = await this.antennaCtx();
+    const want = antennaValues(mode, withType);
+    if (!want) throw noChange('وضع أنتنا غير معروف لراوترك — ما غيّرنا شي.');
+    const o = n.x_NetworkSettings_obj;
+    const url: Record<string, string> = { AntennaOutterSwitch: o + n.x_NetworkSet_AntennaOutterSwitch };
+    const value: Record<string, string> = { AntennaOutterSwitch: want.sw };
+    if (want.type !== undefined) { url.AntennaOutterType = o + n.x_NetworkSet_AntennaOutterType; value.AntennaOutterType = want.type; }
+    await this.setValues(url, value, true);
+  }
+
+  // ─── آي بي جديد (networkSet.js) ───
+  /** اتصال البيانات: WANDevice.<أول مفعّل>.WANConnectionDevice.1.WANIPConnection.1.Enable — نفس onApplyDataNetwork */
+  private async dataWanPath(): Promise<string> {
+    const n = await this.v2Nodes(['x_WANDevice_obj', 'x_wan_WANEnable', 'x_WANConnectionDevice', 'x_WANIPConnection', 'x_wan_Enable'], 'آي بي جديد');
+    const r = await this.post('get_xml_childnode_value', { url: n.x_WANDevice_obj, num: 2, node: { wanenable: n.x_wan_WANEnable } });
+    const dev = listOf(r).find((d: any) => String(d?.wanenable ?? '') === '1');
+    if (!dev) throw noChange('ما لقينا اتصال البيانات في إعدادات راوترك — ما غيّرنا شي.');
+    return n.x_WANDevice_obj + dev.child_node_idx + '.' + n.x_WANConnectionDevice + '1.' + n.x_WANIPConnection + '1.' + n.x_wan_Enable;
+  }
+  async reconnectData(opts?: { holdSecs?: number }): Promise<void> {
+    const path = await this.dataWanPath();
+    await this.setSingle(path, '0', true);
+    try { await sleep(Math.max(3, Math.min(30, opts?.holdSecs ?? 8)) * 1000); }
+    finally { await this.setSingle(path, '1', true); }
+  }
+  /** وضع الطيران (networkSet.js AirplaneEnable) = فصل كامل عن البرج ورجوع */
+  async reattach(holdSecs = 10): Promise<void> {
+    const n = await this.v2Nodes(['x_NetworkSettings_obj', 'x_NetworkSet_AirplaneEnable'], 'الفصل عن البرج');
+    const p = n.x_NetworkSettings_obj + n.x_NetworkSet_AirplaneEnable;
+    await this.setSingle(p, '1', true);
+    try { await sleep(Math.max(3, Math.min(30, holdSecs)) * 1000); }
+    finally { await this.setSingle(p, '0', true); }
+  }
+  /** يطفي وضع الطيران لو علق شغّال — آمن ينادى أي وقت */
+  async wakeRadio(): Promise<void> {
+    if (this.api !== 'v2') return;
+    const n = await this.loadNodes();
+    if (!n.x_NetworkSet_AirplaneEnable) return;
+    if (await this.airplaneOn(n)) await this.setSingle(n.x_NetworkSettings_obj + n.x_NetworkSet_AirplaneEnable, '0', true);
+  }
+
   // ═══ قناة الواي فاي — الفيرموير الجديد بس (wifiAdvanced.js / wifiAdvanced_5g.js) ═══
   //   Radio.1 = ٢.٤ (band "0") · Radio.2 = ٥ (band "1") · القنوات المسموحة من web_get_wifi_possible_channels
   async getWifiRadios(): Promise<WifiRadio[]> {
