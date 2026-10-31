@@ -14,6 +14,7 @@ import { getRouter, saveRouter, updateRouter, deleteRouter, listRouters, SavedRo
 import { LabelScannerHost, ensureScanner } from '../src/ui/scanner';
 import type { LabelData } from '../src/utils/routerLabel';
 import { dropSession } from '../src/store/sessions';
+import { reportError } from '../src/services/errors';
 import {
   DEVICE_DRIVER_ID, DEVICE_HOST, ensureCellPermission,
 } from '../src/drivers/device';
@@ -333,6 +334,9 @@ export default function AddRouterScreen() {
       return;
     }
     setBusy(true);
+    // فشل الإضافة يوصل للسيرفر (errors.jsonl · add-login) — بدون كلمة ولا آي بي عام: الموديل والعنوان المحلي والخطأ بس
+    const addFail = (what: string, model?: string) =>
+      reportError('add-login', `${model ?? '؟'} · ${h} · مستخدم ${u === 'admin' ? 'admin' : 'مخصص'} · طول الكلمة ${password.length} · ${what.slice(0, 220)}`).catch(() => {});
     try {
       setStep('نتعرّف على نوع الراوتر...');
       let driver = await detectDriver(h);
@@ -365,6 +369,7 @@ export default function AddRouterScreen() {
           // العنوان ما رد ← يمكن جوالك على راوتر ثاني: نعطيه عنوانه الصح بضغطة
           setStep('ندوّر على راوترك…');
           const alt = await findRouterElsewhere(h);
+          addFail(`ما رد · ${alt ? `راوتر ثاني ${alt.label} على ${alt.host}` : 'ولا راوتر ثاني'}`);
           if (alt) { alertOtherRouter(h, alt, false); return; }
           Alert.alert('ما لقينا راوتر',
             `ما فيه جهاز يرد على ${h}.\n\nتأكد إن جوالك متصل بواي فاي الراوتر (مو بيانات الجوال)، أو خلّ التطبيق يدوّر عليه.`,
@@ -401,6 +406,7 @@ export default function AddRouterScreen() {
           try {
             await driver.login(h, u, password, { lastTry: true, fresh: true });
           } catch (e2) {
+            addFail(`المحاولة الأخيرة · ${e2 instanceof Error ? e2.message : String(e2)}`, prof?.label ?? (driver as any).name);
             Alert.alert('فشل الدخول', e2 instanceof Error ? e2.message : String(e2));
             return;
           }
@@ -415,15 +421,19 @@ export default function AddRouterScreen() {
             try {
               await driver.login(h, u, password, { fresh: true });
             } catch (e3) {
+              addFail(`انقطع ثم رد وفشل مرة ثانية · ${msg} ⟶ ${e3 instanceof Error ? e3.message : String(e3)}`, prof?.label ?? (driver as any).name);
               Alert.alert('فشل الدخول', e3 instanceof Error ? e3.message : String(e3));
               return;
             }
           } else {
             setStep('ندوّر على راوترك…');
-            alertOtherRouter(h, await findRouterElsewhere(h), true);
+            const alt2 = await findRouterElsewhere(h);
+            addFail(`انقطع ووقف يرد · ${msg} · ${alt2 ? `راوتر ثاني ${alt2.label} على ${alt2.host}` : 'ولا راوتر ثاني'}`, prof?.label ?? (driver as any).name);
+            alertOtherRouter(h, alt2, true);
             return;
           }
         } else {
+          addFail(msg || 'بدون رسالة', prof?.label ?? (driver as any).name);
           Alert.alert('فشل الدخول', msg || 'تحقق من اسم المستخدم وكلمة المرور');
           return;
         }
