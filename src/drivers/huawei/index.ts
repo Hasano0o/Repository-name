@@ -162,6 +162,25 @@ export class HuaweiDriver implements RouterDriver {
   name = 'Huawei LTE/5G';
   capabilities: Capability[] = ['signal', 'devices', 'reboot', 'bandLock', 'sms', 'usage', 'block', 'traffic', 'cells'];
   private host = '';
+  /**
+   * أصل الصفحة الفعلي لو الراوتر يحوّل (H112-370 من Three: http://192.168.8.1 ← https://hirouter.net).
+   * بدونه: الدخول ينجح على hirouter.net والقراءات تروح لـ 192.168.8.1 بدون كوكي الجلسة ← 100003 «الراوتر يطلّع التطبيق».
+   * فاضي = http://<العنوان> مثل قبل (باقي الموديلات ما يتغيّر عليها شي).
+   */
+  private origin = '';
+  private base() { return this.origin || `http://${this.host}`; }
+  /** نقرأ home.html ونشوف وين انتهى التحويل — لو https أو اسم ثاني نمشي عليه */
+  private async homePage(host: string): Promise<void> {
+    const r = await this.http(`${this.origin || `http://${host}`}/html/home.html`, { headers: this.headers() });
+    await r.text();
+    try {
+      const u = new URL(r.url);
+      if (u.host && (u.protocol === 'https:' || u.host !== host) && /^https?:$/.test(u.protocol)) {
+        const o = `${u.protocol}//${u.host}`;
+        if (o !== this.origin) { this.origin = o; diag(`[huawei] الراوتر يحوّل صفحته ← ${o} — نكمّل عليه`); }
+      }
+    } catch {}
+  }
   private queue: string[] = [];
   private allLte = ALL_LTE;
   private lockFreq: boolean | null = null;
@@ -192,7 +211,7 @@ export class HuaweiDriver implements RouterDriver {
     this.log('lock-freq 100003 — retrying with developer-mode login (loginflag=2)');
     try { await this.post('user/logout', '<Logout>1</Logout>', undefined, false); } catch {}
     this.queue = [];
-    try { await this.http(`http://${this.host}/html/home.html`, { headers: this.headers() }).then(r => r.text()); } catch {}
+    try { await this.homePage(this.host); } catch {}
     if (this.manualCookie) { try { await this.sesTok(); } catch {} }
     try {
       await this.loginScram(u, p, true);
@@ -297,7 +316,7 @@ export class HuaweiDriver implements RouterDriver {
     if (__DEV__) console.log('[huawei]', ...a);
   }
   private url(p: string) {
-    return `http://${this.host}/api/${p}`;
+    return `${this.base()}/api/${p}`;
   }
   private headers(extra: Record<string, string> = {}) {
     return {
@@ -306,7 +325,7 @@ export class HuaweiDriver implements RouterDriver {
       // بدونها الجلسة ما تشوف قفل الترددات (net/lock-freq يرد فاضي) والكتابة ترفض.
       // تأكدنا منها من طلب الحفظ الفعلي لصفحة «تحديد النطاق» على H158-381 (أكتوبر 2026).
       _ResponseSource: 'Broswer',
-      Referer: `http://${this.host}/html/home.html`,
+      Referer: `${this.base()}/html/home.html`,
       ...extra,
     };
   }
@@ -428,11 +447,12 @@ export class HuaweiDriver implements RouterDriver {
     return isHuaweiSessionReply(await t.text());
   }
   async login(host: string, username: string, password: string, opts?: { lastTry?: boolean; fresh?: boolean }): Promise<void> {
+    if (this.host !== host) this.origin = '';
     this.host = host;
     this.queue = [];
     this.creds = { u: username, p: password };
     this.devTried = false;
-    try { await this.http(`http://${host}/html/home.html`, { headers: this.headers() }).then(r => r.text()); } catch {}
+    try { await this.homePage(host); } catch {}
     // H112-370 على الآيفون (add-login ٣١ أكتوبر): state-login ينقطع («تعذر الاتصال») مرة وينجح مرة —
     // الصفحة اللي قبله صارت تنقرى كاملة (فوق)، ولو انقطع نعيده مرة بعد ثانية. ما يغيّر شي للي يرد من أول مرة
     let state: string;
@@ -480,7 +500,7 @@ export class HuaweiDriver implements RouterDriver {
       this.log(opts?.fresh ? 'fresh login requested — verifying password' : 'stale session — forcing fresh login');
       try { await this.post('user/logout', '<Logout>1</Logout>'); } catch {}
       this.queue = [];
-      try { await this.http(`http://${host}/html/home.html`, { headers: this.headers() }).then(r => r.text()); } catch {}
+      try { await this.homePage(host); } catch {}
     }
     this.stale = false;
     if (this.manualCookie) { try { await this.sesTok(); } catch { this.manualCookie = false; } }
@@ -603,7 +623,7 @@ export class HuaweiDriver implements RouterDriver {
   /** جلسة جديدة من الراوتر قبل محاولة دخول ثانية: الصفحة (تعطي SessionID جديد) + SesTokInfo للآيفون */
   private async freshSession(host: string) {
     this.queue = [];
-    try { await this.http(`http://${host}/html/home.html`, { headers: this.headers() }).then(r => r.text()); } catch {}
+    try { await this.homePage(host); } catch {}
     if (this.manualCookie) { try { await this.sesTok(); } catch {} }
   }
   async getSignal(): Promise<Signal> {
@@ -1496,7 +1516,7 @@ export class HuaweiDriver implements RouterDriver {
       get: (p: string) => this.get(p),
       post: (p: string, b: string) => this.post(p, b),
       log: (...a: unknown[]) => this.log(...a),
-      page: async (p: string) => (await this.http(`http://${this.host}/${p.replace(/^\//, '')}`, { headers: this.headers() }, 10000)).text(),
+      page: async (p: string) => (await this.http(`${this.base()}/${p.replace(/^\//, '')}`, { headers: this.headers() }, 10000)).text(),
     };
   }
   getApnProfiles() { return getApnProfiles(this.io()); }
