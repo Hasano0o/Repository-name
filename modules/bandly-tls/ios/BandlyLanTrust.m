@@ -32,7 +32,7 @@ static BOOL BandlyIsLocalHost(NSString *host) {
       return NO;
     }
   }
-  for (NSString *suffix in @[@".local", @".lan", @".home", @".internal"]) {
+  for (NSString *suffix in @[@".local", @".lan", @".home", @".internal", @".cpe", @".router", @".box", @".gateway"]) {
     if ([h hasSuffix:suffix]) return YES;
   }
   return [h rangeOfString:@"."].location == NSNotFound && [h rangeOfString:@":"].location == NSNotFound;

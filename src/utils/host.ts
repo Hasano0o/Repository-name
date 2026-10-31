@@ -31,7 +31,9 @@ const PRIVATE_V6 = [
   /^f[cd][0-9a-f]{2}:/i, // fc00::/7 unique local
 ];
 
-const LOCAL_SUFFIXES = ['.local', '.lan', '.home', '.internal'];
+// .cpe/.router/.box/.gateway: أسماء صفحات الراوترات نفسها (هواوي homerouter.cpe، وغيرها) — مو نطاقات إنترنت عامة.
+// H112-370 (Three) يحوّل لـ https باسم بدل العنوان، فكنا نرفضه «redirect خارجي».
+const LOCAL_SUFFIXES = ['.local', '.lan', '.home', '.internal', '.cpe', '.router', '.box', '.gateway'];
 
 export function hostOnly(raw: string): string {
   let s = raw.trim().replace(/^https?:\/\//i, '').replace(/^\/+/, '');

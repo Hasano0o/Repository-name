@@ -71,11 +71,12 @@ export async function http(
     try {
       const finalUrl = new URL(res.url);
       if (!isLanHost(finalUrl.host)) {
-        throw new Error('رفض: redirect خارجي');
+        // اسم الوجهة بس (بدون مسار) — نعرف منه اسم الراوتر (H112-370 أندرويد ٣١ أكتوبر: «redirect خارجي» بدون ما نعرف لوين)
+        throw new Error(`رفض: redirect خارجي (${finalUrl.hostname.slice(0, 60)})`);
       }
     } catch (e: any) {
       // خطأ URL parsing فقط — نتجاهله (الحالة النادرة)
-      if (e?.message === 'رفض: redirect خارجي') throw e;
+      if (String(e?.message ?? '').startsWith('رفض: redirect خارجي')) throw e;
     }
 
     // التشخيص: نسجّل كود الرد لما ينقرى النص (بدون المحتوى)
@@ -93,7 +94,7 @@ export async function http(
     if (e?.name === 'AbortError' || timedOut) {
       throw new Error('الراوتر ما رد — تأكد إنك متصل بشبكته');
     }
-    if (e?.message === 'رفض: redirect خارجي' || e?.message === 'رفض: عنوان غير محلي') {
+    if (String(e?.message ?? '').startsWith('رفض: redirect خارجي') || e?.message === 'رفض: عنوان غير محلي') {
       throw e;
     }
     // الراوتر حوّلنا لـ https بشهادة ذاتية (H112-370 من Three): النسخ القديمة ترفضها — نقول له يحدّث بدل «تعذر الاتصال»

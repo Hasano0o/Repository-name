@@ -27,7 +27,7 @@ object LanTls {
     addr != null && !addr.isLoopbackAddress && (addr.isSiteLocalAddress || addr.isLinkLocalAddress)
 
   private val PRIVATE_V4 = Regex("""^(10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)""")
-  private val LOCAL_SUFFIX = listOf(".local", ".lan", ".home", ".internal")
+  private val LOCAL_SUFFIX = listOf(".local", ".lan", ".home", ".internal", ".cpe", ".router", ".box", ".gateway")
 
   /** اسم محلي؟ (للتحقق من اسم الشهادة — الشهادة الذاتية غالباً ما فيها العنوان) */
   private fun localName(host: String?): Boolean {
