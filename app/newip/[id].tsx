@@ -182,9 +182,17 @@ export default function NewIp() {
               if (canQuick && !(detachFirst && canDetach)) {
                 setStep('quick');
                 setStatus(canDetach ? '١/٣ — نقطع البيانات ونرجّعها...' : '١/٢ — نقطع البيانات ونرجّعها...');
-                await withSession(info, d => d.reconnectData!({ holdSecs: 10 }), false);
-                await sleep(3000);
-                fresh = await settle(60000);
+                try {
+                  await withSession(info, d => d.reconnectData!({ holdSecs: 10 }), false);
+                  await sleep(3000);
+                  fresh = await settle(60000);
+                } catch (e: any) {
+                  // الراوتر ما يسمح بقطع الاتصال اليدوي (ZTE MC801A العادي — ما انقطع شي) ← نكمّل لإعادة التشغيل ونتذكره
+                  if (!e?.quickUnsupported || !canReboot) throw e;
+                  diag(`[newip] quick unsupported → reboot: ${String(e?.message ?? e).slice(0, 80)}`);
+                  AsyncStorage.setItem(`newip.reboot.${info.id}`, '1').catch(() => {});
+                  setSkipQuick(true);
+                }
               }
               // ٢) الشركة رجّعت نفس الآي بي → إعادة تشغيل من التطبيق (الطريقة المؤكدة عند أغلب الشركات)
               if (mounted.current && canReboot && !canDetach && !differs(old, fresh)) {

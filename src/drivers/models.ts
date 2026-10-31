@@ -47,6 +47,8 @@ export const MODELS = {
   // صفحة G5 بس كل التغييرات goform (service.js بدون ubus، و /ubus/ = 404). SET_BEARER_PREFERENCE رد success
   // بتوقيع sha:wa+cr = SHA256↑(SHA256↑(wa+cr)+RD). قبل كان مصنّف ubus فكل تغيير يوقف برسالة G5.
   mc801aPro: P({ id: 'mc801a-pro', label: 'ZTE MC801A Pro', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
+  // MC801A العادي (ملف FULL ٣١ أكتوبر، فيرموير Elisa B06 على stc): goform، AD = md5(md5(wa+cr)+RD)، /ubus/ = 404،
+  // قطع/وصل الاتصال اليدوي مرفوض (الصفحة ما تعرضه إلا ببعض أوضاع WAN) ← «آي بي جديد» بإعادة التشغيل
   mc801a: P({ id: 'mc801a', label: 'ZTE MC801A', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
   mc888: P({ id: 'mc888', label: 'ZTE MC888', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
   mc889: P({ id: 'mc889', label: 'ZTE MC889', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),

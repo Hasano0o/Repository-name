@@ -583,7 +583,12 @@ export class ZteDriver implements RouterDriver {
     }
   }
 
-  private async act(body: Record<string, string>): Promise<string> {
+  /**
+   * opts.noAdCycle: أمر رفضه ممكن يكون «الراوتر ما يسمح بهالأمر بالذات» مو توقيع غلط (DISCONNECT_NETWORK في MC801A
+   * العادي — ملف FULL ٣١ أكتوبر: نفس توقيع الصفحة md5(md5(wa+cr)+RD) بالضبط، والرفض بس على قطع الاتصال).
+   * ما ندوّر الصيغ عليه وما نعلّم الراوتر «يرفض كل الأوامر» بسببه — الأوامر الثانية تكمل عادي.
+   */
+  private async act(body: Record<string, string>, opts?: { noAdCycle?: boolean }): Promise<string> {
     let out = await this.post(body);
     this.log('write', body.goformId, '→', classifyZteWrite(out));
     if (/success/i.test(out) || !this.password) return out;
@@ -594,7 +599,7 @@ export class ZteDriver implements RouterDriver {
     const prof = await this.identify();
     // صيغ التوقيع أول — حتى لأجهزة G5 (٣٠ أكتوبر، MC801A Pro عند حسن: صفحة G5 بس تكتب goform بـ sha:wa+cr،
     // و /ubus/ = 404). قبل كان فحص G5 يجي قبلها فما توصل الصيغة الصحيحة أبداً ← «هالخاصية لسا ما تشتغل».
-    if (!this.adTried && !prof?.pinned && !AD_ALL_FAILED.has(this.host)) {
+    if (!opts?.noAdCycle && !this.adTried && !prof?.pinned && !AD_ALL_FAILED.has(this.host)) {
       this.adTried = true;
       const alt = await this.retryWithOtherAd(body);
       if (alt) return alt;
@@ -1400,8 +1405,14 @@ export class ZteDriver implements RouterDriver {
   async reconnectData(opts?: { holdSecs?: number }): Promise<void> {
     await this.ensure();
     await this.g5Guard('آي بي جديد');
-    const off = await this.act({ goformId: 'DISCONNECT_NETWORK' });
-    if (!/success/i.test(off)) throw this.rejected('قطع الاتصال', off);
+    const off = await this.act({ goformId: 'DISCONNECT_NETWORK' }, { noAdCycle: true });
+    // الرفض هنا = الراوتر ما يسمح بقطع الاتصال اليدوي (وضع الاتصال/الشبكة عنده) — ما انقطع شي.
+    // noChange ← «آي بي جديد» يروح لإعادة التشغيل بدل ما يطيح برسالة «يرفض كل الأوامر»
+    if (!/success/i.test(off)) {
+      const e = noChange(`راوترك ما يسمح بقطع الاتصال اليدوي من التطبيق — ما انقطع شي (${(off || 'بدون رد').replace(/\s+/g, ' ').slice(0, 60)})`);
+      (e as any).quickUnsupported = true;
+      throw e;
+    }
     // ننتظر الجلسة تنقطع فعلاً، ونخليها مقطوعة شوي عشان الشركة تفك الآي بي
     for (let i = 0; i < 6; i++) {
       await sleep(2000);
@@ -1409,7 +1420,7 @@ export class ZteDriver implements RouterDriver {
       if (/disconnected/i.test(r.ppp_status || '')) break;
     }
     await sleep((opts?.holdSecs ?? 10) * 1000);
-    const on = await this.act({ goformId: 'CONNECT_NETWORK' });
+    const on = await this.act({ goformId: 'CONNECT_NETWORK' }, { noAdCycle: true });
     if (!/success/i.test(on)) throw this.rejected('إرجاع الاتصال', on);
   }
 
