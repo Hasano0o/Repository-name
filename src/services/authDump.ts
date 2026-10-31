@@ -8,7 +8,12 @@
 import { listRouters, SavedRouter } from '../store/routers';
 import { connect } from '../store/sessions';
 import { driverById } from '../drivers/registry';
-import { collectRouterFiles, sendRouterFiles } from './routerDump';
+import { collectRouterFiles, sendRouterFiles, scrub, DumpFile } from './routerDump';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { RouterDriver } from '../drivers/types';
+import { MODELS, ModelProfile } from '../drivers/models';
+import { diagText } from './errors';
+import { fullDumpEligible, fullDumpFingerprint } from './fullDumpRule';
 
 /** راوتر واحد (زر صفحة الراوتر) — null = درايفره ما يحتاج شي */
 export async function sendAfterLoginPagesFor(r: SavedRouter, onStep?: (msg: string) => void): Promise<string | null> {
@@ -43,4 +48,44 @@ export async function sendAfterLoginPages(onStep?: (msg: string) => void): Promi
     } catch { /* مو على شبكته / الدخول فشل — التشخيص نفسه وصل */ }
   }
   return notes.length ? notes.join(' · ') : null;
+}
+
+/* ═══ ملفات الراوتر الشاملة (FULL) — مرة وحدة لكل راوتر/فيرموير غير مؤكد (٣١ أكتوبر) ═══
+ * اللي فتح FiberHome كامل: ملفات الصفحة قبل وبعد الدخول. هنا نفسها لأي راوتر مو مؤكد (MC801A العادي، زيكسل، U30…):
+ * zip واحد = صفحات الراوتر (بجلسة التطبيق — نفس الكوكي) + الفحوص الحية + سبب كل ملف ما وصل + ملخص التشخيص.
+ * بموافقة المستخدم (كرت في صفحة الراوتر). بعد ما يوصل: ما يطلع مرة ثانية لنفس الراوتر ونفس الفيرموير.
+ */
+const FULL_KEY = (id: string) => `bandly.fullDump.${id}`;
+
+/** يحتاج الراوتر نرسل ملفاته؟ يرجّع «بصمة» الموديل/الفيرموير لو يحتاج، وإلا null. d = جلسة شغالة */
+export async function fullDumpNeeded(r: SavedRouter, d: RouterDriver): Promise<string | null> {
+  if (r.host === 'demo' || r.host === 'device') return null;
+  if (d.pageFilesKnown?.()) return null;
+  const prof: ModelProfile | null = d.identify ? await d.identify().catch(() => null) : null;
+  if (!fullDumpEligible(r.driverId, prof, MODELS.huawei.id)) return null;
+  const soft = d.getDeviceDetails ? (await d.getDeviceDetails().catch(() => null))?.software : undefined;
+  const fp = fullDumpFingerprint(prof?.id ?? r.driverId, soft);
+  let sent: string | null = null;
+  try { sent = await AsyncStorage.getItem(FULL_KEY(r.id)); } catch {}
+  return sent === fp ? null : fp;
+}
+
+export async function sendFullRouterFiles(r: SavedRouter, fp: string, onStep?: (msg: string) => void): Promise<string> {
+  const d = await connect(r);
+  const prof = d.identify ? await d.identify().catch(() => null) : null;
+  const label = (prof?.label || r.driverName || r.name || r.driverId).slice(0, 40);
+  onStep?.('نجمع ملفات الراوتر…');
+  // من "/" (مثل «جهاز جديد» بالفحوص الحية) + صفحات بعد الدخول لو الدرايفر يعرفها — والكوكي من جلسة التطبيق
+  const start = ['/', ...(d.afterLoginPages?.() ?? [])];
+  const { files, skipped } = await collectRouterFiles(r.host, n => onStep?.(`نجمع ملفات الراوتر… ${n}`), { start });
+  const extra: DumpFile[] = [
+    { p: '/_bandly/router.txt', t: scrub([`driver: ${r.driverId}`, `model: ${label}`, `profile: ${prof?.id ?? '—'}`, `fingerprint: ${fp}`].join('\n')) },
+    { p: '/_bandly/diag.txt', t: scrub(diagText('ملفات الراوتر الشاملة', { driverName: label })) },
+  ];
+  const send = [...files, ...extra];
+  onStep?.(`نرسل ${send.length} ملف…`);
+  const res = await sendRouterFiles(send, { model: `${label}-FULL`, host: r.host, skipped });
+  if (!res.ok) return 'ما وصلت الملفات للمطوّر — تأكد من النت وجرّب مرة ثانية';
+  try { await AsyncStorage.setItem(FULL_KEY(r.id), fp); } catch {}
+  return `✓ وصلت ملفات راوترك للمطوّر (${res.sent} ملف) — شكراً لك`;
 }

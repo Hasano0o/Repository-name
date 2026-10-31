@@ -258,6 +258,8 @@ export interface RouterDriver {
    * فاضي/غير موجود = ما فيه شي نحتاجه. (FiberHome الجديد: main.html — ٣١ أكتوبر)
    */
   afterLoginPages?(): string[];
+  /** عندنا ملفات صفحة هالراوتر كاملة (ما نحتاج «أرسل ملفات راوترك») — FiberHome */
+  pageFilesKnown?(): boolean;
   readonly id: string;
   readonly name: string;
   readonly capabilities: Capability[];

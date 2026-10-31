@@ -1,4 +1,4 @@
-import { sendAfterLoginPagesFor } from '../../src/services/authDump';
+import { sendAfterLoginPagesFor, fullDumpNeeded, sendFullRouterFiles } from '../../src/services/authDump';
 import { useCallback, useEffect, useRef, useState, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator, Alert, LayoutAnimation, RefreshControl, AppState } from 'react-native';
@@ -142,6 +142,9 @@ export default function RouterDashboard() {
   const [authPages, setAuthPages] = useState(false);
   const [authNote, setAuthNote] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
+  /** راوتر غير مؤكد ما أرسل ملفاته (بصمة الموديل/الفيرموير) — كرت «أرسل ملفات راوترك» مرة وحدة */
+  const [fullFp, setFullFp] = useState<string | null>(null);
+  const fullChecked = useRef(false);
   const [feat, setFeat] = useState<Features>(NO_FEATURES);
   const [signal, setSignal] = useState<Signal | null>(null);
   const [history, setHistory] = useState<RadarPoint[]>([]);
@@ -259,6 +262,11 @@ export default function RouterDashboard() {
       await withSession(r, async d => {
         setFeat(featuresOf(d));
         setAuthPages(!!d.afterLoginPages?.().length);
+        // بعد القراءة الأساسية — طلب أو طلبين (الموديل والفيرموير) بنفس الجلسة
+        if (!fullChecked.current) {
+          fullChecked.current = true;
+          setTimeout(() => { fullDumpNeeded(r, d).then(fp => setFullFp(fp)).catch(() => {}); }, 1500);
+        }
         const [sig, use, dev, blk, net, trf, det, dp, lk] = await Promise.all([
           d.getSignal ? d.getSignal() : Promise.resolve(null),
           d.getUsage ? d.getUsage().catch(() => null) : Promise.resolve(null),
@@ -933,24 +941,30 @@ export default function RouterDashboard() {
           </>
         )}
 
-        {!loading && info && authPages && (
-          // فيرموير جديد (FiberHome LG6851F): التغيير مقفول لين نعرف أوامر الحفظ من صفحة الإعدادات — بموافقة المستخدم
+        {!loading && info && (authPages || !!fullFp || authNote.startsWith('✓')) && (
+          // راوتر غير مؤكد (أو صفحاته تحتاج دخول): ملفات صفحته للمطوّر — مرة وحدة، بموافقة المستخدم
           <View style={[s.moreCard, { gap: 8, borderColor: tBd('#f59e0b55') }]}>
-            <Text style={[s.moreBtnTitle, { textAlign: 'right' }]}>ساعدنا نفتح لك تغيير الإعدادات</Text>
+            <Text style={[s.moreBtnTitle, { textAlign: 'right' }]}>{authPages ? 'ساعدنا نفتح لك تغيير الإعدادات' : 'ساعدنا ندعم راوترك بالكامل'}</Text>
             <Text style={[s.moreBtnSub, { textAlign: 'right' }]}>
-              راوترك بفيرموير جديد: القراءة شغّالة، والتغيير نفتحه بعد ما نشوف صفحة إعداداته. اضغط ونرسلها للمطوّر (ملفات الصفحة بس — بدون كلمات مرور ولا بياناتك).
+              {authPages
+                ? 'راوترك بفيرموير جديد: القراءة شغّالة، والتغيير نفتحه بعد ما نشوف صفحة إعداداته. اضغط ونرسلها للمطوّر (ملفات الصفحة بس — بدون كلمات مرور ولا بياناتك).'
+                : 'اضغط مرة وحدة ونرسل ملفات صفحة راوترك للمطوّر — منها نصلّح المشاكل ونضيف الميزات اللي ناقصة لموديلك. (ملفات الصفحة بس — بدون كلمات مرور ولا بياناتك)'}
             </Text>
             {!!authNote && <Text style={[s.moreBtnSub, { textAlign: 'right', color: authNote.startsWith('✓') ? tFg('#12b76a') : C.sub }]}>{authNote}</Text>}
             {!authNote.startsWith('✓') && (
               <Pressable disabled={authBusy} style={[s.moreTile, { flexDirection: 'row', justifyContent: 'center', gap: 8, paddingVertical: 12, backgroundColor: tBg('#f59e0b18'), borderColor: tBd('#f59e0b55') }, authBusy && { opacity: 0.6 }]}
                 onPress={async () => {
                   setAuthBusy(true); setAuthNote('');
-                  try { setAuthNote((await sendAfterLoginPagesFor(info, m => setAuthNote(m))) ?? ''); }
+                  try {
+                    const note = fullFp ? await sendFullRouterFiles(info, fullFp, m => setAuthNote(m)) : await sendAfterLoginPagesFor(info, m => setAuthNote(m));
+                    setAuthNote(note ?? '');
+                    if (note?.startsWith('✓')) { setFullFp(null); setAuthPages(false); }
+                  }
                   catch (e: any) { setAuthNote(`ما قدرنا نسحبها: ${String(e?.message ?? e).slice(0, 80)}`); }
                   finally { setAuthBusy(false); }
                 }}>
                 {authBusy ? <ActivityIndicator size="small" color={tFg('#b45309')} /> : <Icon name="send" size={16} color={tFg('#b45309')} />}
-                <Text style={[s.moreLbl, { color: tFg('#b45309') }]}>أرسل صفحة الإعدادات للمطوّر</Text>
+                <Text style={[s.moreLbl, { color: tFg('#b45309') }]}>{authPages ? 'أرسل صفحة الإعدادات للمطوّر' : 'أرسل ملفات راوتري للمطوّر'}</Text>
               </Pressable>
             )}
           </View>

@@ -291,6 +291,8 @@ export class FiberhomeDriver implements RouterDriver {
   afterLoginPages(): string[] {
     return [];
   }
+  /** النوعين وصلتنا صفحاتهم كاملة (v1 من «جهاز جديد»، v2 من ملف AUTH) */
+  pageFilesKnown(): boolean { return true; }
   async logout(): Promise<void> {
     try { await this.post('DO_WEB_LOGOUT', null, { sign: true }); } catch {}
   }
