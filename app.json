@@ -26,7 +26,9 @@
         "NSLocalNetworkUsageDescription": "Bandly يحتاج يوصل لراوترك على الشبكة المحلية عشان يقرأ الإشارة ويديره.",
         "NSMicrophoneUsageDescription": "Bandly يستخدم الميكروفون لما تكلّم مساعد Bandly (مثل «أفضل تردد»)، وللمكالمات والرسائل الصوتية مع الفني.",
         "NSCameraUsageDescription": "Bandly يستخدم الكاميرا لقراءة ملصق الراوتر، وأثناء المكالمة لما تشغّلها بنفسك عشان الفني يشوف الهوائي والراوتر.",
-        "NSSpeechRecognitionUsageDescription": "Bandly يحوّل كلامك لنص عشان يفهم طلبك للمساعد (مثل «افحص إشارتي»). ما نحفظ صوتك."
+        "NSSpeechRecognitionUsageDescription": "Bandly يحوّل كلامك لنص عشان يفهم طلبك للمساعد (مثل «افحص إشارتي»). ما نحفظ صوتك.",
+        "NSPhotoLibraryUsageDescription": "Bandly يفتح الصور بس لما تختار بنفسك صورة ملصق الراوتر عشان يقرأ بياناته. ما نرفع صورك.",
+        "NSPhotoLibraryAddUsageDescription": "Bandly يحفظ في صورك بس لما تطلب حفظ صورة (مثل بيانات الراوتر أو نتيجة الفحص)."
       }
     },
     "android": {
