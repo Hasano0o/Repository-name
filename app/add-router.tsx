@@ -28,10 +28,28 @@ const COMMON_HOSTS: { host: string; hint: string; color: string }[] = [
   { host: '192.168.1.1', hint: 'غيره', color: '#7c5cff' },
 ];
 
-/** يرد أحد على هالعنوان؟ (صفحة الراوتر الرئيسية، بدون دخول) */
-async function pingHost(h: string, ms = 1800): Promise<boolean> {
+/**
+ * يرد أحد على هالعنوان؟ (صفحة الراوتر الرئيسية، بدون دخول)
+ * يرجّع العنوان اللي وصلنا له فعلاً — أو null لو ما رد.
+ */
+async function probeHost(h: string, ms = 1800): Promise<string | null> {
   const c = new AbortController(); const t = setTimeout(() => c.abort(), ms);
-  try { await fetch(`http://${h}/`, { signal: c.signal }); return true; } catch { return false; } finally { clearTimeout(t); }
+  try {
+    const r = await fetch(`http://${h}/`, { signal: c.signal });
+    let to = h;
+    try { to = new URL(r.url).hostname || h; } catch {}
+    return to.toLowerCase();
+  } catch { return null; } finally { clearTimeout(t); }
+}
+/**
+ * رد من نفس العنوان؟ هواوي بدون إنترنت/شريحة يحوّل أي عنوان لصفحته (192.168.1.1 ← 192.168.8.1) —
+ * هذا مو راوتر ثاني. التحويل لاسم (router.local) عادي ونقبله.
+ */
+const sameHost = (asked: string, to: string | null) =>
+  !!to && (to === asked.toLowerCase() || !/^\d+\.\d+\.\d+\.\d+$/.test(to));
+/** وعد بمهلة: لو طوّل نرجّع القيمة البديلة بدل ما يعلق الزر */
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([p.catch(() => fallback), new Promise<T>(r => setTimeout(() => r(fallback), ms))]);
 }
 /** خطأ شبكة (مو رفض كلمة): الراوتر ما رد أو انقطع الطلب */
 const NET_ERR = /(تعذر الاتصال بالراوتر|ما رد|Network request failed|timed? ?out|timeout|aborted|canceled|ECONN|ENETUNREACH)/i;
@@ -86,14 +104,17 @@ export default function AddRouterScreen() {
    * العنوان اللي كتبه ما رد ← ندوّر على راوتر الجوال متصل فيه فعلاً (كل العناوين المشهورة مع بعض)
    * ونرجّع أول واحد نتعرّف عليه. ما نسجّل دخول عليه — بس نعرضه للمستخدم.
    */
-  const findRouterElsewhere = async (skip: string): Promise<{ host: string; label: string } | null> => {
-    const answered = (await Promise.all(ROUTER_HOSTS.filter(x => x !== skip).map(async x => ((await pingHost(x)) ? x : null)))).filter(Boolean) as string[];
-    for (const alt of answered) {
-      const label = await identifyHost(alt).catch(() => null);
+  const findRouterElsewhere = (skip: string): Promise<{ host: string; label: string } | null> => withTimeout((async () => {
+    const probes = await Promise.all(ROUTER_HOSTS.filter(x => x !== skip).map(async x => ({ x, to: await probeHost(x) })));
+    const real = probes.filter(p => sameHost(p.x, p.to)).map(p => p.x);
+    // كثير يردون مع بعض = جهاز واحد يعترض كل الطلبات — مو راوتر ثاني
+    if (real.length === 0 || real.length > 3) return null;
+    for (const alt of real) {
+      const label = await withTimeout(identifyHost(alt), 7000, null);
       if (label) return { host: alt, label };
     }
-    return answered[0] ? { host: answered[0], label: 'راوتر' } : null;
-  };
+    return null;
+  })(), 15_000, null);
   /** ينقل الخانة لعنوان الراوتر الصح — بدون دخول (كلمة الراوتر الثاني غالباً غير، وZTE يقفل لو غلطنا) */
   const applyFoundHost = (alt: { host: string; label: string }) => {
     pickHost(alt.host);
@@ -117,10 +138,8 @@ export default function AddRouterScreen() {
         [{ text: 'رجوع', style: 'cancel' }, { text: `استخدم ${alt.host}`, onPress: () => applyFoundHost(alt) }],
       );
     } else {
-      Alert.alert('انقطع الاتصال بالراوتر',
-        `الراوتر على ${h} رد أول، وبعدها جوالك طلع من شبكته.
-
-${switchTip}`,
+      Alert.alert('الراوتر وقف يرد',
+        `الراوتر على ${h} رد أول، وبعدها وقف يرد.\n\n• يمكن الراوتر علّق: انتظر دقيقة وجرّب مرة ثانية، ولو ما زبط طفّه وشغّله.\n• أو جوالك طلع من شبكته: ${switchTip}`,
         [{ text: 'تمام', style: 'cancel' }]);
     }
   };
@@ -128,14 +147,16 @@ ${switchTip}`,
     if (editId || welcomeScan) { setModel({ state: 'none' }); return; }
     let alive = true;
     (async () => {
-      const HOSTS = ROUTER_HOSTS;
-      const ping = async (h: string) => {
-        const c = new AbortController(); const t = setTimeout(() => c.abort(), 1800);
-        try { await fetch(`http://${h}/`, { signal: c.signal }); return true; } catch { return false; } finally { clearTimeout(t); }
-      };
-      const alive2 = (await Promise.all(HOSTS.map(async h => ((await ping(h)) ? h : null)))).filter(Boolean) as string[];
-      for (const h of alive2) {
-        const label = await identifyHost(h);
+      // العناوين المشهورة أول (٤ طلبات بس) — بعض الراوترات (هواوي بدون إنترنت) تعترض كل العناوين،
+      // و٢٢ طلب مع بعض ممكن تعلّقها قبل الدخول. الباقي بس لو ما رد ولا واحد
+      const scan = async (list: string[]) =>
+        (await Promise.all(list.map(async h => (sameHost(h, await probeHost(h)) ? h : null)))).filter(Boolean) as string[];
+      const first = COMMON_HOSTS.map(c => c.host);
+      let alive2 = await scan(first);
+      if (!alive) return;
+      if (!alive2.length) alive2 = await scan(ROUTER_HOSTS.filter(h => !first.includes(h)));
+      for (const h of alive2.slice(0, 4)) {
+        const label = await withTimeout(identifyHost(h), 8000, null);
         if (!alive) return;
         if (label) {
           if (!hostTouched.current) setHost(h);
@@ -385,8 +406,11 @@ ${switchTip}`,
           }
         } else if (NET_ERR.test(msg)) {
           // الراوتر رد على التعرّف وانقطع وقت الدخول: لسا يرد؟ نعيد مرة. ما يرد؟ الجوال تحوّل لشبكة ثانية
+          // نسأل الراوتر نفسه (بطريقته، مو الصفحة الرئيسية) بعد استراحة قصيرة — بعضها يعلق ثواني بعد ضغط الطلبات
           setStep('نتأكد من الاتصال…');
-          if (await pingHost(h, 2500)) {
+          await new Promise(r => setTimeout(r, 1500));
+          if (await withTimeout(driver.detect(h), 8000, false)) {
+            await new Promise(r => setTimeout(r, 1000));
             setStep('نسجّل الدخول مرة ثانية...');
             try {
               await driver.login(h, u, password, { fresh: true });
