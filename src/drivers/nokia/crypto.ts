@@ -5,6 +5,7 @@
  * ملف صافي (عليه اختبارات).
  */
 import { sha256 } from '@noble/hashes/sha2';
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import { b64, utf8 } from '../zyxel/crypto';
 
 
@@ -19,13 +20,26 @@ export function nkSha256url(a: string, b: string): string {
 }
 
 /**
+ * الفيرموير الأحدث (ملف ٢٧ أكتوبر — 3.1): الراوتر يرسل iterations، والكلمة تتحول قبل الدخول:
+ * hex(SHA256(كلمة)) ثم (iterations-1) مرة hex(SHA256(bytes(hex))) — نفس submitChanges في صفحة تغيير الكلمة.
+ * iterations = 0 أو مو موجود (فيرموير ٣١ أكتوبر) ← الكلمة كما هي.
+ */
+export function nkPasswordHash(pass: string, iterations: number): string {
+  const n = Number.isSafeInteger(iterations) && iterations > 0 && iterations <= 100000 ? iterations : 0;
+  if (!n) return pass;
+  let h = bytesToHex(sha256(utf8(pass)));
+  for (let i = 1; i < n; i++) h = bytesToHex(sha256(hexToBytes(h)));
+  return h;
+}
+
+/**
  * جسم طلب الدخول بالضبط مثل login() في الصفحة:
  * userhash · RandomKeyhash · response = sha256url(sha256(user, pass), nonce) · nonce · enckey · enciv
  * enckey/enciv: مفتاح AES عشوائي نعطيه الراوتر (يشفّر فيه كلمات الواي فاي في الردود) — ١٦ بايت base64.
  */
-export function nkLoginBody(user: string, pass: string, nonce: string, randomKey: string, rand: (n: number) => Uint8Array): { body: string; key: string; iv: string } {
+export function nkLoginBody(user: string, pass: string, nonce: string, randomKey: string, rand: (n: number) => Uint8Array, iterations = 0): { body: string; key: string; iv: string } {
   const key = b64(rand(16)), iv = b64(rand(16));
-  const response = nkSha256url(nkSha256(user, pass), nonce);
+  const response = nkSha256url(nkSha256(user, nkPasswordHash(pass, iterations)), nonce);
   const body = `userhash=${nkSha256url(user, nonce)}&RandomKeyhash=${nkSha256url(randomKey, nonce)}&response=${response}`
     + `&nonce=${nkEscape(nonce)}&enckey=${nkEscape(key)}&enciv=${nkEscape(iv)}`;
   return { body, key, iv };

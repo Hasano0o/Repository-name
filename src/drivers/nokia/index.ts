@@ -1,7 +1,7 @@
 /**
  * Nokia FastMile 5G Gateway (3.1 — 192.168.1.1، واجهة Angular /web_whw/) — من ملفات صفحة حقيقية لثلاث أعضاء (٢٧ و٣١ أكتوبر).
  * البروتوكول من كود الصفحة نفسه (main-es2015 + assets/js/crypto_page.js):
- *   الدخول: GET login_web_app.cgi?nonce ← {nonce, randomKey} ثم POST login_web_app.cgi بـ sha256 (./crypto) ← {result 0, sid, token}
+ *   الدخول: GET login_web_app.cgi?nonce ← {nonce, randomKey, iterations؟} ثم POST login_web_app.cgi بـ sha256 (./crypto) ← {result 0, sid, token}
  *           result ‎-1 = كلمة غلط · ‎-2 = الراوتر قفل الدخول. الجلسة بالكوكي (withCredentials) والكتابة فيها csrf_token = token.
  *   القراءة: GET <اسم>_web_app.cgi ← JSON.
  *
@@ -79,7 +79,7 @@ export class NokiaDriver implements RouterDriver {
     const n = await this.req('login_web_app.cgi?nonce');
     const nonce = String(n?.nonce ?? '');
     if (!nonce) throw new Error('login_web_app: الراوتر ما أعطى nonce');
-    const { body } = nkLoginBody(user, password, nonce, String(n?.randomKey ?? ''), k => Crypto.getRandomBytes(k));
+    const { body } = nkLoginBody(user, password, nonce, String(n?.randomKey ?? ''), k => Crypto.getRandomBytes(k), Number(n?.iterations) || 0);
     const r = await this.req('login_web_app.cgi', body);
     const res = Number(r?.result);
     if (res === 0 && r?.token) { this.token = String(r.token); return; }

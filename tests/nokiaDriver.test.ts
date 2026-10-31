@@ -9,6 +9,7 @@ import * as ncrypto from 'node:crypto';
 
 declare const require: any;
 declare const process: any;
+declare const Buffer: any;
 const Module = require('module');
 const origLoad = Module._load;
 Module._load = function (req: string, ...rest: unknown[]) {
@@ -30,7 +31,7 @@ const RADIO = {
   apn_cfg: [{ APN: 'zain', X_ALU_COM_IPAddressV4: '10.1.2.3' }],
 };
 
-function router(opts: { password?: string; noLte?: boolean } = {}) {
+function router(opts: { password?: string; noLte?: boolean; iterations?: number } = {}) {
   const st: any = { nonce: 'abc+/=XYZ', randomKey: 'RK123', sid: '', posts: [] as string[], rebooted: false, fails: 0 };
   const res = (status: number, text: string, headers: Record<string, string> = {}) =>
     ({ ok: status < 400, status, url: 'http://192.168.1.1/', headers: { get: (k: string) => headers[k.toLowerCase()] ?? null }, text: async () => text } as any);
@@ -42,9 +43,15 @@ function router(opts: { password?: string; noLte?: boolean } = {}) {
     const body = String(init?.body ?? '');
     const q = new URLSearchParams(body);
     if (p === '') return res(200, '<!doctype html><title>FastMile 5G Gateway</title><base href="/web_whw/">');
-    if (p === 'login_web_app.cgi?nonce') return J({ nonce: st.nonce, randomKey: st.randomKey, pubkey: '---' });
+    if (p === 'login_web_app.cgi?nonce') return J({ nonce: st.nonce, randomKey: st.randomKey, pubkey: '---', ...(opts.iterations ? { iterations: opts.iterations } : {}) });
     if (p === 'login_web_app.cgi' && m === 'POST') {
-      const pass = opts.password ?? 'pw';
+      let pass = opts.password ?? 'pw';
+      if (opts.iterations) {
+        // نفس صفحة تغيير الكلمة: hex(SHA256) ثم SHA256 على bytes الـ hex
+        let x = (ncrypto as any).createHash('sha256').update(pass).digest('hex');
+        for (let i = 1; i < opts.iterations; i++) x = (ncrypto as any).createHash('sha256').update(Buffer.from(x, 'hex')).digest('hex');
+        pass = x;
+      }
       const ok = q.get('userhash') === hu('admin', st.nonce) && q.get('RandomKeyhash') === hu(st.randomKey, st.nonce)
         && q.get('response') === hu(h('admin', pass), st.nonce) && q.get('nonce') === esc(st.nonce)
         && /^[A-Za-z0-9_-]{22}\.\.$/.test(q.get('enckey') ?? '') && /^[A-Za-z0-9_-]{22}\.\.$/.test(q.get('enciv') ?? '');
@@ -114,4 +121,13 @@ test('Nokia: الأجهزة المتصلة (Active ومو مقوّي) · الم�
   await d.reboot();
   assert.equal(st.rebooted, true);
   await assert.rejects(d.setBand([3]), (e: any) => e.noChange === true);
+});
+
+test('Nokia: الفيرموير الأحدث يرسل iterations ← الكلمة تتحول قبل الحسبة (والقديم بدونها يبقى نفسه)', async () => {
+  router({ iterations: 1000 });
+  const d = driver();
+  await d.login('192.168.1.1', 'admin', 'pw');
+  assert.equal((await d.getSignal()).network, '5G NSA');
+  router({ iterations: 1 });
+  await driver().login('192.168.1.1', 'admin', 'pw');
 });
