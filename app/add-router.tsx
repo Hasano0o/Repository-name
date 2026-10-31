@@ -34,14 +34,25 @@ const COMMON_HOSTS: { host: string; hint: string; color: string }[] = [
  * يرد أحد على هالعنوان؟ (صفحة الراوتر الرئيسية، بدون دخول)
  * يرجّع العنوان اللي وصلنا له فعلاً — أو null لو ما رد.
  */
-async function probeHost(h: string, ms = 1800): Promise<string | null> {
+async function probePath(h: string, path: string, ms: number): Promise<string | null> {
   const c = new AbortController(); const t = setTimeout(() => c.abort(), ms);
   try {
-    const r = await fetch(`http://${h}/`, { signal: c.signal });
+    const r = await fetch(`http://${h}${path}`, { signal: c.signal });
     let to = h;
     try { to = new URL(r.url).hostname || h; } catch {}
     return to.toLowerCase();
   } catch { return null; } finally { clearTimeout(t); }
+}
+/**
+ * الصفحة الرئيسية + صفحة هواوي مع بعض — H112-370 ما يرد على «/» أبداً (٤ ث وينقطع)
+ * ويرد على /html/home.html خلال ٣٠ms (تقرير add-login ٣١ أكتوبر). أول واحد يرد يكفي.
+ */
+async function probeHost(h: string, ms = 1800): Promise<string | null> {
+  const a = probePath(h, '/', ms);
+  const b = probePath(h, '/html/home.html', ms);
+  const first = await Promise.race([a, b]);
+  if (first) return first;
+  return (await a) ?? (await b);
 }
 /**
  * رد من نفس العنوان؟ هواوي بدون إنترنت/شريحة يحوّل أي عنوان لصفحته (192.168.1.1 ← 192.168.8.1) —
@@ -149,7 +160,9 @@ export default function AddRouterScreen() {
         if (await probeHost(f.host, 2500)) {
           setStep('نجمع ملفات صفحة الراوتر — لا تطلع من الشاشة…');
           const got = await withTimeout(
-            collectRouterFiles(f.host, n => setStep(`نجمع ملفات صفحة الراوتر… ${n} — لا تطلع من الشاشة`)),
+            collectRouterFiles(f.host, n => setStep(`نجمع ملفات صفحة الراوتر… ${n} — لا تطلع من الشاشة`),
+              // هواوي: «/» ممكن ما يرد (H112-370) — نبدأ من صفحاته مباشرة
+              /huawei|هواوي/i.test(f.model) ? { start: ['/', '/html/home.html', '/html/index.html'] } : undefined),
             90_000, { files: [] as DumpFile[], skipped: ['جمع الملفات طوّل أكثر من ٩٠ ث'] });
           p.files = got.files;
           p.skipped = got.skipped;

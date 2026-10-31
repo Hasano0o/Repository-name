@@ -452,6 +452,18 @@ export class HuaweiDriver implements RouterDriver {
     try {
       return await this.loginWith(host, type, state, username, password, opts);
     } catch (e) {
+      // الآيفون: كل طلب يرد 125003 (الرمز من SesTokInfo مع SessionID اللي معه) — H112-370 تقرير add-login ٣١ أكتوبر:
+      // challenge_login و user/login كلها 125003 ×٨. الكوكي اليدوي ما ينفع مع هالراوتر ← نعيد الدخول مرة بجرة كوكيز النظام
+      // (نفس رجوع net-mode تحت). يصير بس بعد ما تفشل كل محاولات الرمز — اللي يدخل من أول ما يتغيّر عليه شي.
+      // 125003 مو محاولة كلمة غلط، فما يقرّب الراوتر من قفل الدخول.
+      if (this.manualCookie && isTokenError(e)) {
+        diag('[huawei] الكوكي اليدوي: الرمز ينرفض (125003) — نعيد الدخول بجرة كوكيز النظام');
+        this.manualCookie = false;
+        this.cookie = '';
+        this.queue = [];
+        this.stale = true;
+        return this.login(host, username, password, opts);
+      }
       if (samePwd && e instanceof HuaweiError && /^10800[126]$/.test(e.code)) {
         e.message = `الراوتر رفض الكلمة (${e.code}). في هذا الجهاز كلمة الدخول هي نفسها كلمة الواي فاي — جرّب كلمة الواي فاي (اللي تتصل فيها بالشبكة)`;
       }
