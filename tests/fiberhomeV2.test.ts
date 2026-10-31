@@ -24,7 +24,10 @@ var x_RadioSignalParameter_obj="IGD.X_FH_MobileNetwork.RadioSignalParameter.";
 var x_RadioSignal_WorkMode="WorkMode",x_RadioSignal_RSRP="RSRP",x_RadioSignal_SINR="SINR",x_RadioSignal_BAND="BAND",x_RadioSignal_PCI="PCI";
 var x_RadioSignal_SSB_RSRP="SSB_RSRP",x_RadioSignal_NR_Band="NR_Band",x_RadioSignal_NR_PCI="NR_PCI";
 var x_LockCellList_obj="IGD.X_FH_MobileNetwork.LockCellList.";var x_LockCellList_LockCell="LockCell.";var x_LockCellList_LockEnable="Enable";
-var x_LockCellList_act="act",x_LockCellList_arfcn="arfcn",x_LockCellList_pci="pci";`;
+var x_LockCellList_act="act",x_LockCellList_arfcn="arfcn",x_LockCellList_pci="pci";
+var x_Firewall_obj="IGD.X_FH_Firewall.";var x_Firewall_NATType="NATType",x_Firewall_DMZEnable="DMZEnable",x_Firewall_DMZIP="DMZIP";
+var x_DeviceInfo_obj="IGD.DeviceInfo.";var x_DeviceInfo_LedSwitch="LedSwitch",x_UPNP_Enable="UPNPEnable";
+var x_WLANConfiguration_obj="IGD.LANDevice.1.WLANConfiguration.";var x_wifi_RadioEnabled="RadioEnabled",x_wifi_SSID="SSID",x_wifi_BeaconType="BeaconType",x_wifi_Enable="Enable";`;
 
 /** المفتاح العام المقابل للمفتاح المدفون في الصفحة (n, e من fhapi) */
 function publicKey() {
@@ -43,7 +46,7 @@ function mask(plain: string, a = 7, b = 23, c = 41) {
   return { data: rand(a) + s1, hdr: String(a).padStart(2, '0') + String(b) + '.' + String(c) };
 }
 
-function router(opts: { password?: string; sidLen?: number } = {}) {
+function router(opts: { password?: string; sidLen?: number; operator?: string } = {}) {
   const pub = publicKey();
   let secret = rand(5);
   const encSecret = () => rand(5) + '0' + (ncrypto as any).publicEncrypt({ key: pub, padding: (ncrypto as any).constants.RSA_PKCS1_PADDING }, Buffer.from(secret)).toString('base64');
@@ -59,6 +62,9 @@ function router(opts: { password?: string; sidLen?: number } = {}) {
   let sid = '';
   let logged = false;
   const seen: string[] = [];
+  /** أوامر الكتابة اللي وصلت الراوتر فعلاً (method · dataObj) */
+  const writes: { m: string; d: any }[] = [];
+  const cells: { act: string; arfcn: string; pci: string }[] = [];
   const aes = (mode: 'enc' | 'dec', key: string, data: string) => {
     const c = mode === 'enc' ? (ncrypto as any).createCipheriv('aes-128-cbc', Buffer.from(key, 'utf8'), Buffer.from(IV)) : (ncrypto as any).createDecipheriv('aes-128-cbc', Buffer.from(key, 'utf8'), Buffer.from(IV));
     return Buffer.concat([c.update(Buffer.from(data, mode === 'enc' ? 'utf8' : 'hex')), c.final()]).toString(mode === 'enc' ? 'hex' : 'utf8');
@@ -91,13 +97,22 @@ function router(opts: { password?: string; sidLen?: number } = {}) {
     if (u.pathname === '/fh_api/tmp/FHAPIS' && !logged) return res(418, '');
     const m = body.ajaxmethod, d = body.dataObj;
     let out: any = {};
-    if (m === 'get_device_info') out = { model_name: 'LG6851F', operator_name: 'SA_STC' };
+    if (m === 'get_device_info') out = { model_name: 'LG6851F', operator_name: opts.operator ?? 'SA_STC' };
     else if (m === 'get_xmlnode_js_file') out = { xml: NODES };
     else if (m === 'get_value_by_xmlnode') for (const [k, p] of Object.entries(d)) out[k] = db[p as string] ?? '';
-    else out = { success: 'true' };
+    else if (m === 'get_xml_childnode_value') out = { data: cells.map((c, i) => ({ child_node_idx: String(i + 1), ...c })) };
+    else {
+      // كتابة — نطبّقها مثل الراوتر (عشان الدرايفر يتأكد بالقراءة بعدها)
+      writes.push({ m, d });
+      if (m === 'set_value_by_xmlnode') for (const k of Object.keys(d.url)) db[d.url[k]] = String(d.value[k]);
+      if (m === 'set_single_by_xmlnode') db[d.url] = String(d.value);
+      if (m === 'add_set_xmlnode') cells.push({ ...d.setNode.value });
+      if (m === 'del_xmlnode') cells.splice(Number(d.index) - 1, 1);
+      out = { success: 'true' };
+    }
     return res(200, rand(6) + aes('enc', key, JSON.stringify(out)));
   };
-  return { db, seen, rotateSecret: () => { secret = rand(5); } };
+  return { db, seen, writes, cells, rotateSecret: () => { secret = rand(5); } };
 }
 
 async function driver() {
@@ -162,20 +177,53 @@ test('FiberHome v2: كلمة مرور غلط ← «كلمة المرور» (resu
   await assert.rejects(d.login('192.168.8.1', 'admin', 'wrong'), /كلمة المرور/);
 });
 
-test('FiberHome v2: أي تغيير محجوب (noChange) وما ينرسل للراوتر', async () => {
+test('FiberHome v2: الميزات اللي طابقت صفحة الراوتر (ملف AUTH ٣١ أكتوبر) تنكتب وتتأكد بالقراءة', async () => {
   const r = router();
   const d = await driver();
   await d.login('192.168.8.1', 'admin', 'pw');
-  const before = r.seen.length;
-  await assert.rejects(d.setBand([3]), (e: any) => e.noChange === true);
-  await assert.rejects(d.setNetworkMode('03'), (e: any) => e.noChange === true);
-  await assert.rejects(d.lockCell({ tech: 'LTE', pci: '301', arfcn: '1300' }), (e: any) => e.noChange === true);
-  await assert.rejects(d.reboot(), (e: any) => e.noChange === true);
-  await assert.rejects(d.factoryReset(), (e: any) => e.noChange === true);
-  const sent = r.seen.slice(before).filter(x => x.startsWith('POST'));
-  // اللي ينرسل قراءات بس (الدرايفر يقرأ الحالة قبل التغيير)
-  for (const x of sent) assert.ok(/FHAPIS|FHNCAPIS/.test(x), x);
-  assert.equal(r.db['IGD.X_FH_MobileNetwork.NetworkSettings.LockBandEnable'], '0');
+  const N = 'IGD.X_FH_MobileNetwork.NetworkSettings.';
+  await d.setBand([3, 1]);
+  assert.equal(r.db[N + 'LockBandEnable'], '1');
+  assert.equal(r.db[N + 'LTELockBAND'], '1,3');
+  await d.setNetworkMode('03');
+  assert.equal(r.db[N + 'NetworkMode'], '0', '4G فقط = 0 (نفس networkSet.js)');
+  await d.lockCell({ tech: 'LTE', pci: '301', arfcn: '1300' });
+  assert.deepEqual(r.cells, [{ act: '1', arfcn: '1300', pci: '301' }], 'act 1 = 4G (نفس cellLockSet.js)');
+  assert.equal(r.db['IGD.X_FH_MobileNetwork.LockCellList.Enable'], '1');
+  await d.unlockCell();
+  assert.equal(r.db['IGD.X_FH_MobileNetwork.LockCellList.Enable'], '0');
+  await d.setNat('cone');
+  assert.equal(r.db['IGD.X_FH_Firewall.NATType'], '2');
+  await d.setLed(false);
+  assert.equal(r.db['IGD.DeviceInfo.LedSwitch'], '0');
+  await d.reboot();
+  assert.ok(r.writes.some(w => w.m === 'do_cmd_web' && w.d.key === 'REBOOT_WEB'), 'REBOOT_WEB (نفس reboot.js)');
+  // اللقطة والإرجاع (الإنقاذ يعتمد عليها)
+  const snap = await d.readLockState();
+  await d.setBand([28]);
+  await d.restoreLockState(snap);
+  assert.equal(r.db[N + 'LTELockBAND'], '1,3', 'رجع للقطة');
+});
+
+test('FiberHome v2: DMZ والواي فاي خاناتها مختلفة في الفيرموير الجديد ← محجوبة وما ينرسل أمر كتابة', async () => {
+  const r = router();
+  const d = await driver();
+  await d.login('192.168.8.1', 'admin', 'pw');
+  await assert.rejects(d.setDmz(true, '192.168.8.5'), (e: any) => e.noChange === true);
+  await assert.rejects(d.setBandOn('2.4', false), (e: any) => e.noChange === true);
+  assert.deepEqual(r.writes, [], 'ولا أمر كتابة وصل الراوتر');
+});
+
+test('FiberHome: operator_name كود فيرموير — «COMMON» ما يطلع كاسم شركة (كان «برج COMMON»)، SA_STC ← STC', async () => {
+  const { fhOperator } = require('../src/drivers/fiberhome/index');
+  assert.equal(fhOperator('COMMON'), undefined);
+  assert.equal(fhOperator('SA_STC'), 'STC');
+  assert.equal(fhOperator('PH_GLOBE'), 'GLOBE');
+  assert.equal(fhOperator(''), undefined);
+  router({ operator: 'COMMON' });
+  const d = await driver();
+  await d.login('192.168.8.1', 'admin', 'pw');
+  assert.equal((await d.getNetworkInfo()).operator, undefined);
 });
 
 test('FiberHome v2: الراوتر غيّر السر (إعادة تشغيل) ← طلب يفشل برسالة واضحة، واللي بعده يجيب السر الجديد', async () => {

@@ -28,8 +28,23 @@ import {
 } from './nodes';
 import { EX_FIELDS, EX_NEED, WEEK, wlanRows, extrasFrom, has5g, main5Index, ssidError, wifiPassError, isIPv4, WlanRow } from './extras';
 
-/** v2: الأوامر المسموحة لين يتأكد الفيرموير الجديد على جهاز حقيقي — قراءة + دخول/خروج بس */
+/** v2: القراءة والدخول/الخروج دايماً */
 const V2_ALLOWED = (m: string) => /^get_/.test(m) || m === 'DO_WEB_LOGIN' || m === 'DO_WEB_LOGOUT';
+/**
+ * v2 — الكتابة لكل ميزة لحالها (opts.v2): بس اللي طابقت صفحات الراوتر نفسها بالأمر والخانات والقيم
+ * (ملف AUTH من عضو LG6851F، ٣١ أكتوبر: frequencyLockSet / networkSet / cellLockSet / reboot / restore / natSet / upnpSet / led).
+ * DMZ والواي فاي خاناتها مختلفة في الفيرموير الجديد (x_DMZ_* و x_wifi_SSID_obj…) ← تبقى محجوبة.
+ */
+/**
+ * operator_name من get_device_info = كود فيرموير مو اسم شركة: «COMMON» (عام — اللي طلع للعضو «برج COMMON»)،
+ * أو «SA_STC» / «PH_GLOBE» (دولة_شركة). العام ما نعرضه، والباقي نشيل كود الدولة.
+ */
+export function fhOperator(v: unknown): string | undefined {
+  const s = String(v ?? '').trim();
+  if (!s || /^(COMMON|LEISHEN|TRUNK|DEFAULT|GENERAL)$/i.test(s)) return undefined;
+  return s.replace(/^[A-Z]{2}_/, '').replace(/_/g, ' ').trim() || undefined;
+}
+const V2_WRITE = /^(set_value_by_xmlnode|set_single_by_xmlnode|add_set_xmlnode|del_xmlnode|do_cmd_web)$/;
 /** في صفحة الراوتر: هذي الثلاث GET على مسار باسمها (مو FHAPIS?ajaxmethod=) */
 const V2_PATH_GET = ['heartbeat', 'refresh_timeout', 'other_logged'];
 
@@ -70,7 +85,7 @@ export class FiberhomeDriver implements RouterDriver {
   }
 
   /** مثل $post: رمز جديد لكل طلب (get_refresh_sessionid)، والمفتاح أول ١٦ حرف منه */
-  private async post(method: string, dataObj: unknown, opts: { nocheck?: boolean; sign?: boolean; timeout?: number } = {}): Promise<any> {
+  private async post(method: string, dataObj: unknown, opts: { nocheck?: boolean; sign?: boolean; timeout?: number; v2?: boolean } = {}): Promise<any> {
     if ((await this.whichApi()) === 'v2') return this.post2(method, dataObj, opts);
     const tok = await this.getQ('get_refresh_sessionid', true);
     const sid = String(tok?.sessionid ?? '');
@@ -148,9 +163,9 @@ export class FiberhomeDriver implements RouterDriver {
     return secret;
   }
   /** v2 POST مثل $post: رمز جديد لكل طلب، الجسم مشفّر دايماً؛ الرد مشفّر إلا الدخول/الخروج */
-  private async post2(method: string, dataObj: unknown, opts: { nocheck?: boolean; sign?: boolean; timeout?: number } = {}): Promise<any> {
-    if (!V2_ALLOWED(method)) {
-      throw noChange('فيرموير FiberHome الجديد: القراءة شغّالة، وتغيير الإعدادات بنفتحه بعد ما نتأكد منه على جهاز حقيقي — ما غيّرنا شي.');
+  private async post2(method: string, dataObj: unknown, opts: { nocheck?: boolean; sign?: boolean; timeout?: number; v2?: boolean } = {}): Promise<any> {
+    if (!V2_ALLOWED(method) && !(opts.v2 && V2_WRITE.test(method))) {
+      throw noChange('هالإعداد في فيرموير FiberHome الجديد مختلف عن القديم (الواي فاي / DMZ) — لسا ما فتحناه. الترددات ووضع الشبكة والبرج ومركز التحكم شغّالة — ما غيّرنا شي.');
     }
     const secret = await this.secretV2();
     const tok = await this.sessionV2();
@@ -249,9 +264,12 @@ export class FiberhomeDriver implements RouterDriver {
     return n;
   }
 
-  /** الفيرموير الجديد: الدخول والقراءة تأكدت عند عضو (٣١ أكتوبر) بس أوامر الحفظ في main.html (بعد الدخول) — ما وصلتنا */
+  /**
+   * الفيرموير الجديد: صفحات الإعدادات وصلت كاملة (ملف AUTH ٣١ أكتوبر — ٩١ ملف) ومنها فتحنا الكتابة (V2_WRITE).
+   * ما نحتاج شي ثاني الحين ← الكرت يختفي. (لو احتجنا صفحات ثانية بعدين: نرجّع ['/main.html'])
+   */
   afterLoginPages(): string[] {
-    return this.api === 'v2' ? ['/main.html'] : [];
+    return [];
   }
   async logout(): Promise<void> {
     try { await this.post('DO_WEB_LOGOUT', null, { sign: true }); } catch {}
@@ -283,7 +301,7 @@ export class FiberhomeDriver implements RouterDriver {
 
   async getNetworkInfo(): Promise<NetworkInfo> {
     let operator: string | undefined;
-    try { operator = String((await this.deviceInfo()).operator_name ?? '').replace(/_/g, ' ').trim() || undefined; } catch {}
+    try { operator = fhOperator((await this.deviceInfo()).operator_name); } catch {}
     let mode = '';
     try { mode = String((await this.rf()).WorkMode ?? '').trim(); } catch {}
     return { operator, connected: /LTE|NSA|SA/i.test(mode), mode: mode || undefined, supports5g: true };
@@ -293,13 +311,13 @@ export class FiberhomeDriver implements RouterDriver {
   }
   async getDeviceDetails(): Promise<DeviceDetails> {
     const d = await this.deviceInfo().catch(() => ({} as Record<string, any>));
-    return { model: d.model_name, software: d.software_version ?? d.sw_version, operator: d.operator_name };
+    return { model: d.model_name, software: d.software_version ?? d.sw_version, operator: fhOperator(d.operator_name) };
   }
 
   async reboot(): Promise<void> {
     // نفس reboot.js: نسجّل الرسالة ثم نعيد التشغيل
-    try { await this.post('do_cmd_web', { key: 'RECORD_MESSAGE_WEB' }); } catch {}
-    try { await this.post('do_cmd_web', { key: 'REBOOT_WEB' }); } catch (e) {
+    try { await this.post('do_cmd_web', { key: 'RECORD_MESSAGE_WEB' }, { v2: true }); } catch {}
+    try { await this.post('do_cmd_web', { key: 'REBOOT_WEB' }, { v2: true }); } catch (e) {
       // الراوتر يقطع الاتصال وهو يطفي — هذا نجاح غالباً
       if (!/تعذر الاتصال|ما رد/.test(String((e as any)?.message ?? e))) throw e;
     }
@@ -316,8 +334,9 @@ export class FiberhomeDriver implements RouterDriver {
     if (!r || typeof r !== 'object') throw new Error('get_value_by_xmlnode: رد غير متوقع (الترددات)');
     return { n, band4: String(r.band4 ?? ''), band5: String(r.band5 ?? ''), enable: String(r.enable ?? ''), mode: String(r.mode ?? ''), endc: String(r.endc ?? '') };
   }
-  private async setValues(url: Record<string, string>, value: Record<string, string>) {
-    const r = await this.post('set_value_by_xmlnode', { url, value });
+  /** v2: true = الميزة طابقت صفحة الفيرموير الجديد (V2_WRITE) */
+  private async setValues(url: Record<string, string>, value: Record<string, string>, v2 = false) {
+    const r = await this.post('set_value_by_xmlnode', { url, value }, { v2 });
     if (r && typeof r === 'object' && (r.success === 'false' || r.success === false)) throw new Error('set_value_by_xmlnode: الراوتر رفض');
   }
 
@@ -354,6 +373,7 @@ export class FiberhomeDriver implements RouterDriver {
     await this.setValues(
       { band4: o + b.n.x_NetworkSet_LTELockBAND, band5: o + b.n.x_NetworkSet_NRLockBAND, enable: o + b.n.x_NetworkSet_LockBandEnable },
       want,
+      true,
     );
     await sleep(3000); // الصفحة نفسها تعيد القراءة بعد ٣ ثواني
     const a = await this.readBand();
@@ -367,7 +387,7 @@ export class FiberhomeDriver implements RouterDriver {
     const b = await this.readBand();
     if (b.mode === v) return;
     const o = b.n.x_NetworkSettings_obj;
-    await this.setValues({ NetworkMode: o + b.n.x_NetworkSet_NetworkMode, ENDC: o + b.n.x_NetworkSet_ENDC }, { NetworkMode: v, ENDC: b.endc });
+    await this.setValues({ NetworkMode: o + b.n.x_NetworkSet_NetworkMode, ENDC: o + b.n.x_NetworkSet_ENDC }, { NetworkMode: v, ENDC: b.endc }, true);
     await sleep(3000);
     if ((await this.readBand()).mode !== v) throw new Error('الراوتر قبل أمر وضع الشبكة بس ما تغيّر');
   }
@@ -394,7 +414,7 @@ export class FiberhomeDriver implements RouterDriver {
     };
   }
   private async setCellEnable(n: Record<string, string>, on: boolean) {
-    await this.setValues({ Enable: n.x_LockCellList_obj + n.x_LockCellList_LockEnable }, { Enable: on ? '1' : '0' });
+    await this.setValues({ Enable: n.x_LockCellList_obj + n.x_LockCellList_LockEnable }, { Enable: on ? '1' : '0' }, true);
   }
 
   async getCellLocks(): Promise<CellLockState[]> {
@@ -418,7 +438,7 @@ export class FiberhomeDriver implements RouterDriver {
           url: { act: c.n.x_LockCellList_act, arfcn: c.n.x_LockCellList_arfcn, pci: c.n.x_LockCellList_pci },
           value: { act, arfcn, pci },
         },
-      });
+      }, { v2: true });
     }
     if (c.enable !== '1') await this.setCellEnable(c.n, true);
     await sleep(3000);
@@ -454,14 +474,14 @@ export class FiberhomeDriver implements RouterDriver {
       Object.assign(value, { band4: d.band4, band5: d.band5, enable: d.enable });
     }
     if (d.mode && b.mode !== d.mode) Object.assign(url, { NetworkMode: o + b.n.x_NetworkSet_NetworkMode, ENDC: o + b.n.x_NetworkSet_ENDC }) && Object.assign(value, { NetworkMode: d.mode, ENDC: d.endc || b.endc });
-    if (Object.keys(url).length) await this.setValues(url, value);
+    if (Object.keys(url).length) await this.setValues(url, value, true);
     // البرج: نشيل الأبراج اللي انضافت بعد اللقطة، ونرجّع حالة التفعيل
     if (d.cellEnable !== '') {
       try {
         const c = await this.readCells();
         const extra = c.rows.filter(r => !d.cells.some(x => x.act === r.act && x.arfcn === r.arfcn && x.pci === r.pci));
         for (const r of extra.sort((x, y) => Number(y.idx) - Number(x.idx))) {
-          await this.post('del_xmlnode', { url: c.n.x_LockCellList_obj + c.n.x_LockCellList_LockCell, index: r.idx });
+          await this.post('del_xmlnode', { url: c.n.x_LockCellList_obj + c.n.x_LockCellList_LockCell, index: r.idx }, { v2: true });
         }
         if (c.enable !== d.cellEnable) await this.setCellEnable(c.n, d.cellEnable === '1');
       } catch {}
@@ -487,13 +507,14 @@ export class FiberhomeDriver implements RouterDriver {
     await this.setValues(
       { enable: o + b.n.x_NetworkSet_LockBandEnable, NetworkMode: o + b.n.x_NetworkSet_NetworkMode, ENDC: o + b.n.x_NetworkSet_ENDC },
       { enable: '0', NetworkMode: '3', ENDC: b.endc },
+      true,
     );
     try { await this.unlockCell(); } catch {}
   }
 
   // ═══ مركز التحكم (./extras — من صفحات الراوتر نفسها) ═══
-  private async setSingle(url: string, value: string) {
-    const r = await this.post('set_single_by_xmlnode', { url, value });
+  private async setSingle(url: string, value: string, v2 = false) {
+    const r = await this.post('set_single_by_xmlnode', { url, value }, { v2 });
     if (r && typeof r === 'object' && (r.success === 'false' || r.success === false)) throw new Error('set_single_by_xmlnode: الراوتر رفض');
   }
   /** قراءة كم خانة — لو الطلب المجمّع فشل نقرأها وحدة وحدة (خانة مو موجودة في موديل ما تطيّح الباقي) */
@@ -540,7 +561,7 @@ export class FiberhomeDriver implements RouterDriver {
     // المنافذ المفتوحة: الصفحة تكتب Request أول (تحديث الجدول) ثم تقرأ
     if (ex.upnp && !missing(n, EX_NEED.upnpRules).length) {
       try {
-        await this.setValues({ Request: n.x_DeviceInfo_obj + n.x_UPNP_Request }, { Request: 'Request' });
+        await this.setValues({ Request: n.x_DeviceInfo_obj + n.x_UPNP_Request }, { Request: 'Request' }, true);
         const r = await this.post('get_xml_childnode_value', {
           url: n.x_DeviceInfo_obj + n.x_UPNPRULE_Obj,
           node: { IPAddress: n.x_UPNPRULE_IPAddress, Protocol: n.x_UPNPRULE_Protocol, ExternalPort: n.x_UPNPRULE_ExternalPort, Description: n.x_UPNPRULE_Description },
@@ -554,11 +575,11 @@ export class FiberhomeDriver implements RouterDriver {
 
   async setNat(t: 'cone' | 'symmetric'): Promise<void> {
     const n = await this.need(EX_NEED.nat, 'نوع الـ NAT');
-    await this.setValues({ NATType: n.x_Firewall_obj + n.x_Firewall_NATType }, { NATType: t === 'cone' ? '2' : '1' });
+    await this.setValues({ NATType: n.x_Firewall_obj + n.x_Firewall_NATType }, { NATType: t === 'cone' ? '2' : '1' }, true);
   }
   async setUpnp(on: boolean): Promise<void> {
     const n = await this.need(EX_NEED.upnp, 'UPnP');
-    await this.setValues({ upnp: n.x_DeviceInfo_obj + n.x_UPNP_Enable }, { upnp: on ? '1' : '0' });
+    await this.setValues({ upnp: n.x_DeviceInfo_obj + n.x_UPNP_Enable }, { upnp: on ? '1' : '0' }, true);
   }
   async setDmz(on: boolean, ip: string): Promise<void> {
     const n = await this.need(EX_NEED.dmz, 'DMZ');
@@ -571,12 +592,12 @@ export class FiberhomeDriver implements RouterDriver {
   }
   async setLed(on: boolean): Promise<void> {
     const n = await this.need(EX_NEED.led, 'أنوار الراوتر');
-    await this.setSingle(n.x_DeviceInfo_obj + n.x_DeviceInfo_LedSwitch, on ? '1' : '0');
+    await this.setSingle(n.x_DeviceInfo_obj + n.x_DeviceInfo_LedSwitch, on ? '1' : '0', true);
   }
   async setAutoReboot(on: boolean): Promise<void> {
     const n = await this.need(EX_NEED.reboot, 'إعادة التشغيل التلقائية');
     const o = n.x_TimedReboot_obj;
-    if (!on) { await this.setValues({ Enable: o + n.x_TimedReboot_enable }, { Enable: '0' }); return; }
+    if (!on) { await this.setValues({ Enable: o + n.x_TimedReboot_enable }, { Enable: '0' }, true); return; }
     const cur = await this.readMany({ days: o + n.x_TimedReboot_repeatdays, time: o + n.x_TimedReboot_time });
     const days = String(cur.days ?? '').split(',').map(x => x.trim()).filter(x => WEEK.includes(x));
     const time = String(cur.time ?? '').trim();
@@ -584,6 +605,7 @@ export class FiberhomeDriver implements RouterDriver {
     await this.setValues(
       { Enable: o + n.x_TimedReboot_enable, repeatDays: o + n.x_TimedReboot_repeatdays, time: o + n.x_TimedReboot_time },
       { Enable: '1', repeatDays: (days.length ? days : WEEK).join(','), time: /^\d{1,2}:\d{2}$/.test(time) && time !== '00:00' ? time : '04:00' },
+      true,
     );
   }
   async setBandOn(band: '2.4' | '5', on: boolean): Promise<void> {
@@ -620,8 +642,8 @@ export class FiberhomeDriver implements RouterDriver {
     await this.setValues(url, value);
   }
   async factoryReset(): Promise<void> {
-    try { await this.post('do_cmd_web', { key: 'RECORD_MESSAGE_WEB' }); } catch {}
-    const r = await this.post('do_cmd_web', { key: 'UBUS_RESTORE_MODE_2' });
+    try { await this.post('do_cmd_web', { key: 'RECORD_MESSAGE_WEB' }, { v2: true }); } catch {}
+    const r = await this.post('do_cmd_web', { key: 'UBUS_RESTORE_MODE_2' }, { v2: true });
     if (r && typeof r === 'object' && (r.success === 'false' || r.success === false)) throw new Error('UBUS_RESTORE_MODE_2: الراوتر رفض ضبط المصنع');
   }
 }
