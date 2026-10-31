@@ -36,7 +36,7 @@ const { bytesToHex, hexToBytes, utf8ToBytes } = require('@noble/hashes/utils');
 const PW = 'Pass1234';
 const rnd = () => Math.random().toString(36).slice(2, 12);
 
-function router(opts: { noScram?: boolean } = {}) {
+function router(opts: { noScram?: boolean; tokenRotates?: boolean; htmlAll?: boolean; slowParallel?: boolean } = {}) {
   // logged: 'full' = SCRAM · 'limited' = الدخول القديم user/login (جلسة ناقصة: net/lock-freq ← 100003، تعليق الدرايفر)
   type Sess = { tok: string[]; logged: false | 'full' | 'limited'; scram?: { first: string; server: string } };
   const sessions = new Map<string, Sess>();
@@ -45,6 +45,7 @@ function router(opts: { noScram?: boolean } = {}) {
   let busy = 0;                       // بعد الطرد/تغيير الترددات الراوتر يرفض أول كم POST بـ 125003 (لسا يعيد الاتصال)
   const salt = bytesToHex(utf8ToBytes('salt-salt-salt-1'));
   const log: string[] = [];
+  let par = 0;
   const newSess = () => { const id = rnd(); sessions.set(id, { tok: [rnd()], logged: false }); return id; };
   const xml = (b: string) => `<?xml version="1.0" encoding="UTF-8"?><response>${b}</response>`;
   const err = (c: string) => `<?xml version="1.0" encoding="UTF-8"?><error><code>${c}</code><message></message></error>`;
@@ -64,10 +65,25 @@ function router(opts: { noScram?: boolean } = {}) {
     if (u.pathname === '/html/home.html') { const id = newSess(); setSid(id); return res('<html></html>'); }
     // SesTokInfo يرجّع الجلسة الحالية (مو جديدة) — جلسة جديدة بس من الصفحة أو لو الكوكي مو معروف
     if (p === 'webserver/SesTokInfo') return res(xml(`<SesInfo>SessionID=${sid}</SesInfo><TokInfo>${s.tok[0]}</TokInfo>`));
+    if (opts.htmlAll && u.pathname.startsWith('/api/')) return res('<!DOCTYPE html><html><head></head><body><script>pageRedirect()</script></body></html>');
+    // H122/H155 على الآيفون: webserver/token يفتح جلسة جديدة (set-cookie ما يوصل للتطبيق في iOS) ويرجّع رمزها
+    if (p === 'webserver/token' && opts.tokenRotates) {
+      const id = newSess();
+      if (init?.credentials !== 'omit') jar = `SessionID=${id}`;
+      return res(xml(`<token>${'x'.repeat(32)}${sessions.get(id)!.tok[0]}</token>`));
+    }
     if (p === 'webserver/token') return res(xml(`<token>${'x'.repeat(32)}${s.tok[0]}</token>`));
     if (p === 'user/state-login') return res(xml(`<State>${ghost || s.logged ? '0' : '-1'}</State><password_type>4</password_type><username>admin</username>`));
     if (method === 'GET') {
       if (!s.logged) return res(err('100003'));
+      if (opts.slowParallel) {
+        // راوتر ما يتحمل طلبات متوازية: لو فيه ٣ أو أكثر مع بعض يعلق (المهلة تقطعه)
+        par++;
+        try {
+          if (par >= 3) await new Promise((_, rej) => { const sig = init?.signal; sig?.addEventListener('abort', () => rej(Object.assign(new Error('Fetch request has been canceled'), { name: 'Error' }))); });
+          await new Promise(r => realSet(r, 0));
+        } finally { par--; }
+      }
       if (p === 'net/lock-freq') return s.logged === 'full' ? res(xml('<NetworkMode>03</NetworkMode>')) : res(err('100003'));
       if (p === 'device/signal') return res(xml('<pci>134</pci><rsrp>-95dBm</rsrp><rsrq>-10dB</rsrq><sinr>12dB</sinr><band>3</band>'));
       if (p === 'monitoring/status') return res(xml('<CurrentNetworkTypeEx>101</CurrentNetworkTypeEx>'));
@@ -176,4 +192,33 @@ test('هواوي: راوتر يرد على SCRAM بـ 125003 دايماً ← ا
   assert.equal((await d.getSignal()).pci, '134');
   assert.ok(r.log.includes('POST user/login'), 'دخل بالطريقة القديمة');
   assert.ok((d as any).scram !== false, 'الدخول الجاي يجرّب SCRAM أول');
+});
+
+test('هواوي (ios): webserver/token يغيّر الجلسة بكوكي ما نشوفه ← نجيب الرمز من SesTokInfo، وما نوصل للدخول القديم (108006)', async () => {
+  OS = 'ios';
+  const r = router({ tokenRotates: true });
+  const d = await driver();
+  await d.login('192.168.8.1', 'admin', PW);
+  assert.equal((await d.getSignal()).pci, '134');
+  assert.ok(!r.log.includes('POST user/login'), 'ما رجعنا للدخول القديم: ' + r.log.join(', '));
+  assert.ok(!r.log.some(x => x === 'GET webserver/token'), 'ما طلبنا webserver/token على الآيفون');
+});
+
+test('هواوي: راوتر ثاني يرجّع صفحة HTML لكل رابط ← نوقف برسالة «مو هواوي» بدل «دخلنا» والقراءات فاضية', async () => {
+  OS = 'android';
+  router({ htmlAll: true });
+  const d = await driver();
+  await assert.rejects(d.login('192.168.8.1', 'admin', PW), /مو راوتر هواوي/);
+});
+
+test('هواوي (H122-373): طلبات متوازية تعلق ← نتحوّل لطلب واحد بالمرة والقراءة ترجع', async () => {
+  OS = 'android';
+  router({ slowParallel: true });
+  const d = await driver();
+  await d.login('192.168.8.1', 'admin', PW);
+  const all = await Promise.allSettled([1, 2, 3, 4].map(() => (d as any).get('device/signal')));
+  assert.ok(all.some(x => x.status === 'rejected'), 'أول دفعة متوازية تعلق');
+  assert.equal((d as any).serial, true, 'تحوّلنا لطلب واحد بالمرة');
+  const again = await Promise.all([1, 2, 3, 4].map(() => d.getSignal()));
+  assert.ok(again.every(x => x.pci === '134'));
 });

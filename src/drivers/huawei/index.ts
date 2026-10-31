@@ -1,4 +1,5 @@
 import * as Crypto from 'expo-crypto';
+import { diag } from '../../services/diag';
 import { huaweiEncrypt } from './rsaEnc';
 import { sha256 } from '@noble/hashes/sha2';
 import { hmac } from '@noble/hashes/hmac';
@@ -137,6 +138,16 @@ export class HuaweiError extends Error {
     super(ERRORS[code] ? `${ERRORS[code]} (${code})` : `خطأ من الراوتر (${code})`);
   }
 }
+/**
+ * راوتر ثاني على 192.168.8.1 يرجّع صفحته (HTML) لأي رابط بـ 200 — كنا نحسب الدخول «نجح» والقراءات فاضية
+ * (ملف FULL ٣١ أكتوبر ١٢:٣٧: كل /api/* ← 1027 بايت index.html، صفحة layui/jQuery مو هواوي)
+ */
+function notHuaweiPage(body: string) {
+  if (/^\s*(<!doctype\s+html|<html)/i.test(body)) {
+    throw new Error('الراوتر رد بصفحة بدل رد هواوي — غالباً مو راوتر هواوي. احذفه وأضفه من جديد، ولو ما انعرف استخدم «مو مدعوم؟»');
+  }
+}
+
 const isTokenError = (e: unknown) =>
   e instanceof HuaweiError && (e.code === '125002' || e.code === '125003');
 
@@ -219,7 +230,36 @@ export class HuaweiDriver implements RouterDriver {
     const m = sc.match(/SessionID=([^;,\s]+)/);
     if (m) this.cookie = `SessionID=${m[1]}`;
   }
+  /**
+   * بعض الموديلات (H122-373 / 5G CPE Pro 2 — ملفات FULL ٣١ أكتوبر) ما تتحمل ٨–١٠ طلبات مع بعض بعد الدخول:
+   * كلها تعلق ٨ ث وتنقطع («تعذر الاتصال بالراوتر (GET /api/device/signal)») وبعضها يرجع بعد ٣–٧ ث.
+   * أول ما يصير هالشي (مهلة وفيه ٣ طلبات أو أكثر شغالة) نحوّل هالراوتر لطلب واحد بالمرة — الباقي ما يتأثر.
+   */
+  private inflight = 0;
+  private serial = false;
+  private chain: Promise<unknown> = Promise.resolve();
   private async http(url: string, init: RequestInit = {}, timeoutMs?: number): Promise<Response> {
+    if (this.serial) {
+      const run = this.chain.then(() => this.http1(url, init, timeoutMs ?? 15_000), () => this.http1(url, init, timeoutMs ?? 15_000));
+      // الطلب الجاي يبدأ بعد ما يرد هذا (الرأس) — ما نلمس جسم الرد عشان يقراه صاحبه
+      this.chain = run.then(() => undefined, () => undefined);
+      return run;
+    }
+    this.inflight++;
+    const many = this.inflight >= 3;
+    try {
+      return await this.http1(url, init, timeoutMs);
+    } catch (e) {
+      if (many && /ما رد|timeout|انتهت المهلة/i.test(String((e as any)?.message ?? e))) {
+        this.serial = true;
+        diag('[huawei] الراوتر ما يتحمل طلبات متوازية — نكمّل طلب واحد بالمرة');
+      }
+      throw e;
+    } finally {
+      this.inflight--;
+    }
+  }
+  private async http1(url: string, init: RequestInit = {}, timeoutMs?: number): Promise<Response> {
     if (!this.manualCookie) return rawHttp(url, init, timeoutMs);
     const headers = { ...(init.headers as Record<string, string> | undefined), ...(this.cookie ? { Cookie: this.cookie } : {}) };
     const r = await rawHttp(url, { ...init, headers, credentials: 'omit' } as RequestInit, timeoutMs);
@@ -278,6 +318,11 @@ export class HuaweiDriver implements RouterDriver {
     else if (single) this.queue = single.split('#').filter(Boolean);
   }
   private async freshToken(viaSes = false): Promise<string> {
+    // الآيفون (الكوكي يدوي): webserver/token يغيّر SessionID بترويسة set-cookie ما نقدر نقراها في iOS ← الرمز ما يطابق
+    // كوكينا ← 125003 على challenge_login، وبعدها الدخول القديم يرد 108006 (كلمة غلط) ← الراوتر يقفل الدخول.
+    // تقارير ٣١ أكتوبر (آيفون): «token → challenge 125003» يتكرر، و«SesTokInfo → challenge» ينجح.
+    // فعلى الآيفون نجيب الرمز من SesTokInfo ونمسك SessionID اللي معه (الاثنين مع بعض)
+    if (this.manualCookie) viaSes = true;
     if (!viaSes) try {
       const r = await this.http(this.url('webserver/token'), { headers: this.headers() });
       const t = tokenFromReply(await r.text());
@@ -285,7 +330,10 @@ export class HuaweiDriver implements RouterDriver {
     } catch {}
     const r = await this.http(this.url('webserver/SesTokInfo'), { headers: this.headers() });
     const x = await r.text();
-    if (hasSesTok(x)) return tag(x, 'TokInfo') ?? '';
+    if (hasSesTok(x)) {
+      if (this.manualCookie) { const m = (tag(x, 'SesInfo') ?? '').match(/SessionID=([^;,\s]+)/); if (m) this.cookie = `SessionID=${m[1]}`; }
+      return tag(x, 'TokInfo') ?? '';
+    }
     // H155-383: ما فيه SesTokInfo — نرجع لـ webserver/token (حتى لو طُلب viaSes)
     const t = await this.http(this.url('webserver/token'), { headers: this.headers() });
     return tokenFromReply(await t.text());
@@ -293,6 +341,7 @@ export class HuaweiDriver implements RouterDriver {
   private async get(p: string, retry = true): Promise<string> {
     const r = await this.http(this.url(p), { headers: this.headers() });
     const xml = await r.text();
+    notHuaweiPage(xml);
     if (xml.includes('<error>')) {
       const code = tag(xml, 'code') ?? '0';
       this.log('GET', p, 'error', code);
@@ -335,6 +384,7 @@ export class HuaweiDriver implements RouterDriver {
     }, SLOW_POST.test(p) ? 25_000 : undefined);
     this.captureTokens(r);
     const xml = await r.text();
+    notHuaweiPage(xml);
     if (xml.includes('<error>')) {
       const code = tag(xml, 'code') ?? '0';
       this.log('POST', p, 'error', code);

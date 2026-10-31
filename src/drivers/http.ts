@@ -46,7 +46,9 @@ export async function http(
   const what = describeReq(url, init);
   const t0 = Date.now();
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  // أندرويد: الإلغاء بالمهلة يطلع «Fetch request has been canceled» مو AbortError — كنا نكتبه «تعذر الاتصال» وهو مهلة
+  let timedOut = false;
+  const t = setTimeout(() => { timedOut = true; ctrl.abort(); }, timeoutMs);
   try {
     const res = await fetch(url, {
       ...init,
@@ -78,8 +80,8 @@ export async function http(
     } catch {}
     return guardBody(res, timeoutMs);
   } catch (e: any) {
-    diag(`${what} ✗ ${Date.now() - t0}ms ${e?.name === 'AbortError' ? 'timeout' : String(e?.message ?? e).slice(0, 40)}`);
-    if (e?.name === 'AbortError') {
+    diag(`${what} ✗ ${Date.now() - t0}ms ${e?.name === 'AbortError' || timedOut ? 'timeout' : String(e?.message ?? e).slice(0, 40)}`);
+    if (e?.name === 'AbortError' || timedOut) {
       throw new Error('الراوتر ما رد — تأكد إنك متصل بشبكته');
     }
     if (e?.message === 'رفض: redirect خارجي' || e?.message === 'رفض: عنوان غير محلي') {
