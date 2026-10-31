@@ -65,7 +65,10 @@ export class ZyxelDriver implements RouterDriver {
       const txt = await r.text();
       const m = txt.match(/\b((?:NR|FWA|LTE|AX|VMG|EX|DX)\d{3,5}[A-Z0-9-]*(?:\s*5G)?(?:\s*V\d)?)\b/i);
       const label = m ? 'Zyxel ' + m[1] : 'Zyxel';
-      return { id: 'zyxel-' + (m ? m[1].toLowerCase() : 'generic'), label, brand: 'zyxel', tech: /LTE/i.test(m?.[1] ?? '') ? '4G' : '5G' };
+      // اشتغلت عند أعضاء (ملفات FULL ٣١ أكتوبر): NR5103E — الدخول والإشارة وتثبيت ترددات 4G (PUT cellwan_band انقبل)؛
+      // FWA505 — الدخول والإشارة. غيرها (ومنها NR5103EV2) يبقى غير مؤكد لين يوصلنا منه
+      const verified = /^(NR5103E|FWA505)$/i.test(m?.[1] ?? '') || undefined;
+      return { id: 'zyxel-' + (m ? m[1].toLowerCase() : 'generic'), label, brand: 'zyxel', tech: /LTE/i.test(m?.[1] ?? '') ? '4G' : '5G', verified };
     } catch { return null; }
   }
 
