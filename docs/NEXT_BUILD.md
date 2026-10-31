@@ -25,7 +25,7 @@
   - **JS:** `src/drivers/http.ts` (`TLS_ERR` + `setLanTlsFlag` من `app/_layout.tsx`): النسخ القديمة تشوف «يحتاج آخر نسخة من Bandly من المتجر» بدل «تعذر الاتصال». اختبار `tests/lanTls.test.ts`.
   - **أي اتصال غير محلي (السيرفر، التحديثات، Cloudflare) ما يتغيّر عليه شي.**
   - ما انضاف للويندوز (Electron) — لو احتجناه: undici Agent بـ rejectUnauthorized:false للعناوين المحلية بس في `desktop/main.js`.
-  - ⏳ **ينتظر:** APK جديد + نسخة متجر iOS. بعدها: صاحب H112-370 يجرّب الدخول.
+  - ✅ **انبنت:** APK 1.1.1 (31 أكتوبر 9:13 م، BUILD SUCCESSFUL) + iOS 1.1.1 (8) انرسل للمراجعة 8:53 م (بناء 7 انرفض: 90683 ← أضفنا NSPhotoLibraryUsageDescription). بعد الموافقة: صاحب H112-370 يجرّب الدخول.
 
 ## مقترحة (تنتظر قرار)
 - **اهتزاز أدق** (`expo-haptics`) لكل شاشات التوجيه — الحين نستخدم اهتزاز النظام البسيط.
