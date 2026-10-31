@@ -17,6 +17,8 @@ export interface ModelProfile {
   nrLock?: boolean;
   /** ملاحظة تطلع للمستخدم لو فيه شي يعرفه */
   note?: string;
+  /** ZTE: حجب المواقع بنظام ثاني (قائمة مواقع مسموحة + قواعد الأجهزة) — أوامر URL_FILTER_* مو موجودة في صفحته */
+  noUrlFilter?: boolean;
   /** جرّبناه مع مستخدم حقيقي */
   verified?: boolean;
   /**
@@ -49,7 +51,8 @@ export const MODELS = {
   mc801aPro: P({ id: 'mc801a-pro', label: 'ZTE MC801A Pro', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
   // MC801A العادي (ملف FULL ٣١ أكتوبر، فيرموير Elisa B06 على stc): goform، AD = md5(md5(wa+cr)+RD)، /ubus/ = 404،
   // قطع/وصل الاتصال اليدوي مرفوض (الصفحة ما تعرضه إلا ببعض أوضاع WAN) ← «آي بي جديد» بإعادة التشغيل
-  mc801a: P({ id: 'mc801a', label: 'ZTE MC801A', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
+  // نسخة stc (BD_SASTCMC801AV1.0.0B15، ملف FULL ثاني) نفس التوقيع والأوامر · حجب المواقع: ADD_WHITE_SITE/CHILD_MAC_RULE_* بدل URL_FILTER_*
+  mc801a: P({ id: 'mc801a', label: 'ZTE MC801A', brand: 'zte', tech: '5G', write: 'goform', nrLock: true, noUrlFilter: true }),
   mc888: P({ id: 'mc888', label: 'ZTE MC888', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
   mc889: P({ id: 'mc889', label: 'ZTE MC889', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
   // U30 Pro (STC، U30Pro_GEN_MEASV1.0.0B07 · cr_version MU5358): صفحته goform القديمة (require.js) — تقرير ٢٥ أكتوبر، @Mjeeduk

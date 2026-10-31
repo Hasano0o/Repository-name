@@ -132,6 +132,11 @@ const GOOD_FORMULA = new Map<string, string>();
 const AD_LEARNED = new Map<string, string>();
 /** راوترات جرّبنا عليها كل صيغ التوقيع وكلها انرفضت (MC801A) — ما نعيد ٩ محاولات كل مرة */
 const AD_ALL_FAILED = new Set<string>();
+/**
+ * الأوامر اللي انرفضت بكل صيغ التوقيع (لكل راوتر). نحكم «يرفض كل الأوامر» بس لو أمرين مختلفين انرفضوا —
+ * أمر واحد ممكن يكون مو موجود في هالفيرموير (حجب المواقع في MC801A، قطع الاتصال…) مو توقيع غلط.
+ */
+const AD_FAILED_CMDS = new Map<string, Set<string>>();
 
 /** تباعد الترددات الفرعية (SCS) لـ 5G — ترددات TDD العالية 30 والباقي 15 */
 const NR_SCS30 = new Set([34, 38, 39, 40, 41, 46, 47, 48, 77, 78, 79]);
@@ -599,18 +604,22 @@ export class ZteDriver implements RouterDriver {
     const prof = await this.identify();
     // صيغ التوقيع أول — حتى لأجهزة G5 (٣٠ أكتوبر، MC801A Pro عند حسن: صفحة G5 بس تكتب goform بـ sha:wa+cr،
     // و /ubus/ = 404). قبل كان فحص G5 يجي قبلها فما توصل الصيغة الصحيحة أبداً ← «هالخاصية لسا ما تشتغل».
-    if (!opts?.noAdCycle && !this.adTried && !prof?.pinned && !AD_ALL_FAILED.has(this.host)) {
-      this.adTried = true;
+    const failedCmds = AD_FAILED_CMDS.get(this.host) ?? new Set<string>();
+    if (!opts?.noAdCycle && !this.adTried.has(body.goformId) && !failedCmds.has(body.goformId) && !prof?.pinned && !AD_ALL_FAILED.has(this.host)) {
+      this.adTried.add(body.goformId);
       const alt = await this.retryWithOtherAd(body);
       if (alt) return alt;
-      AD_ALL_FAILED.add(this.host);
-      this.log('AD: all formulas rejected');
+      failedCmds.add(body.goformId);
+      AD_FAILED_CMDS.set(this.host, failedCmds);
+      if (failedCmds.size >= 2) { AD_ALL_FAILED.add(this.host); this.log('AD: all formulas rejected on 2+ commands'); }
+      else this.log('AD: all formulas rejected for', body.goformId, '— command-specific for now');
     }
     // رسالة G5 بس لو الراوتر فعلاً فيه ubus (الكتابة هناك) — غير كذا نرجّع رد الراوتر الحقيقي
     if (prof?.write === 'ubus' && await this.ngWriter()) throw this.g5Error();
     return out;
   }
-  private adTried = false;
+  /** الأوامر اللي جرّبنا عليها صيغ التوقيع (مرة لكل أمر) */
+  private adTried = new Set<string>();
   /** أجهزة G5: الصفحة تقرا بالطريقة القديمة (goform) بس ترفض أي تغيير فيها — تقرير MC801A: ٨ صيغ توقيع كلها انرفضت */
   private g5Error(): Error {
     const e = new Error('هالخاصية لسا ما تشتغل على راوترك (من عائلة ZTE G5 — التغيير فيه بطريقة ثانية). الترددات ووضع الشبكة وإعادة التشغيل شغالة.');
@@ -1629,13 +1638,25 @@ export class ZteDriver implements RouterDriver {
   private io(): ZteIo {
     return { get: f => this.get(f), getRaw: f => this.getRaw(f), act: b => this.act(b) };
   }
-  async getExtras() { await this.ensure(); return zteExtras(this.io()); }
+  async getExtras() {
+    await this.ensure();
+    const ex = await zteExtras(this.io());
+    // حجب المواقع بنظام ثاني (MC801A) ← ما نعرض البطاقة أصلاً
+    if ((await this.identify().catch(() => null))?.noUrlFilter) delete ex.urlBlocks;
+    return ex;
+  }
   async setUpnp(on: boolean) { await this.ensure(); return zteSetUpnp(this.io(), on); }
   async setDmz(on: boolean, ip: string) { await this.ensure(); return zteSetDmz(this.io(), on, ip); }
   async setLedNight(on: boolean, start: string, end: string) { await this.ensure(); return zteSetLedNight(this.io(), on, start, end); }
   async setBandOn(band: '2.4' | '5', on: boolean) { await this.ensure(); return zteSetBandOn(this.io(), band, on); }
   async setGuest(on: boolean, offHours: number) { await this.ensure(); return zteSetGuest(this.io(), on, offHours); }
-  async setUrlBlocks(list: { url: string; macs: string[] }[]) { await this.ensure(); return zteSetUrlBlocks(this.io(), list); }
+  async setUrlBlocks(list: { url: string; macs: string[] }[]) {
+    await this.ensure();
+    if ((await this.identify())?.noUrlFilter) {
+      throw noChange('راوترك يحجب المواقع بطريقة ثانية (قائمة مواقع مسموحة) — لسا ما أضفناها للتطبيق. ما غيّرنا شي.');
+    }
+    return zteSetUrlBlocks(this.io(), list);
+  }
   async setAutoRecover(on: boolean) { await this.ensure(); return zteSetAutoRecover(this.io(), on); }
   async setWifiNames(names: { index: string; name: string }[], password?: string) { await this.ensure(); return zteSetWifiNames(this.io(), names, password); }
   async factoryReset() { await this.ensure(); return zteFactoryReset(this.io()); }

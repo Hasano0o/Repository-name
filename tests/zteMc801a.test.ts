@@ -94,3 +94,27 @@ test('MC801A العادي: بعد رفض قطع الاتصال، وضع الشب
   assert.equal(r.st.net_select, 'Only_LTE');
   assert.ok(r.log.some(x => x.id === 'SET_BEARER_PREFERENCE' && x.ok));
 });
+
+test('MC801A: حجب المواقع (نظامه مختلف — ما فيه URL_FILTER) ← رسالة واضحة وما ينرسل شي، والبطاقة مخفية', async () => {
+  const r = router();
+  const d = await driver();
+  const before = r.log.length;
+  let err: any;
+  try { await d.setUrlBlocks([{ url: 'tiktok.com', macs: [] }]); } catch (e) { err = e; }
+  assert.equal(err?.noChange, true);
+  assert.match(String(err?.message), /بطريقة ثانية/);
+  assert.equal(r.log.length, before, 'ولا أمر انرسل');
+  const ex = await d.getExtras();
+  assert.equal(ex.urlBlocks, undefined, 'بطاقة حجب المواقع ما تطلع');
+});
+
+test('MC801A نسخة stc (BD_SASTCMC801AV1.0.0B15، web_version فاضي): نفس ملف الموديل (goform، حجب المواقع مقفول)', async () => {
+  const r = router();
+  r.st.wa_inner_version = 'BD_SASTCMC801AV1.0.0B15';
+  r.st.web_version = '';
+  const d = await driver();
+  const m = await d.identify();
+  assert.equal(m.id, 'mc801a');
+  assert.equal(m.write, 'goform');
+  assert.equal(m.noUrlFilter, true);
+});
