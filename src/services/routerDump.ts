@@ -119,6 +119,24 @@ export function namedChunks(text: string): string[] {
 }
 
 /**
+ * Webpack (create-react-app) بخريطة هاش منفصلة — D-Link DWR-2000M (٣١ أكتوبر، وصل ٢ من ~٥٠ ملف):
+ *   "static/js/"+({}[e]||e)+"."+{0:"ba75d680",1:"f653a391",…}[e]+".1643359712666.js"
+ * الاسم من الخريطة الأولى (لو فاضية = رقم القطعة) + الهاش من الثانية + اللاحقة.
+ */
+export function craChunks(text: string): string[] {
+  const out: string[] = [];
+  for (const m of text.matchAll(/["']([\w./-]*js\/)["']\s*\+\s*\(\{([^{}]{0,20000})\}\[\w+\]\s*\|\|\s*\w+\)\s*\+\s*["']\.["']\s*\+\s*\{([^{}]{1,40000})\}\[\w+\]\s*\+\s*["']([\w.-]*\.js)["']/g)) {
+    const names: Record<string, string> = {};
+    for (const n of m[2].matchAll(/(\d+|"[\w-]+")\s*:\s*"([\w.-]+)"/g)) names[n[1].replace(/"/g, '')] = n[2];
+    for (const h of m[3].matchAll(/(\d+|"[\w-]+")\s*:\s*"([0-9a-f]{4,})"/g)) {
+      const id = h[1].replace(/"/g, '');
+      out.push(`${m[1]}${names[id] ?? id}.${h[2]}${m[4]}`);
+    }
+  }
+  return [...new Set(out)].slice(0, 120);
+}
+
+/**
  * RequireJS بـ data-main (أو محمّل FiberHome المخفي _0x…_("/src/main.js") اللي يسوي نفسه) ← baseUrl = مجلد السكربت.
  * FiberHome LG6851F (٣١ أكتوبر، ملف AUTH): getRoute('content/pages/frequencyLockSet') = /src/content/pages/frequencyLockSet.js
  * و require(['./index']) = /src/index.js — كنا نطلبها من الجذر ← 400 وضاعت كل صفحات الإعدادات.
@@ -291,7 +309,7 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
       if (!seen.has(rp) && !queue.includes(rp)) queue.push(rp);
     }
     // قطع Webpack بالأسماء: المسار من publicPath (مجلد الصفحة) مو من مكان main.js — "js/lockband.js" ← /js/lockband.js
-    for (const ref of namedChunks(r.text)) {
+    for (const ref of [...namedChunks(r.text), ...craChunks(r.text)]) {
       const rp = resolvePath(ref, (appBase || '/') + 'index.html');
       if (rp && !seen.has(rp) && !queue.includes(rp)) queue.push(rp);
     }

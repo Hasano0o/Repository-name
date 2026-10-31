@@ -361,3 +361,20 @@ test('هواوي القديم (E5785): رد XML 100002 ينحسب «ما وصل�
   assert.ok(!files.some(f => !f.p.startsWith('/_bandly/') && /<code>100002<\/code>/.test(f.t)), 'ولا ملف فاضي 100002: ' + files.filter(f => /100002/.test(f.t)).map(f => f.p).join(','));
   assert.ok(skipped.some(x => /رد هواوي 100002 \(مو موجود\)/.test(x)), skipped.join(' | '));
 });
+
+test('D-Link DWR-2000M (create-react-app): قطع الكود من خريطة الهاش — ~٥٠ ملف بدل ٢ (كان يطلب /.1643359712666.js)', async () => {
+  const { craChunks } = require('../src/services/routerDump');
+  const html = fs.readFileSync(path.join(process.cwd(), 'tests', 'fixtures', 'dlink-dwr2000m', 'index.html'), 'utf8');
+  const ch = craChunks(html);
+  assert.ok(ch.length >= 45, `قطع: ${ch.length}`);
+  assert.ok(ch.includes('static/js/0.ba75d680.1643359712666.js'), ch.slice(0, 3).join(', '));
+  const asked: string[] = [];
+  (globalThis as any).fetch = async (url: string) => {
+    const p = url.replace(/^http:\/\/[^/]+/, '').split('?')[0];
+    asked.push(p);
+    const body = p === '/' ? html : /^\/static\/js\/\d+\.[0-9a-f]+\.1643359712666\.js$/.test(p) ? `/* chunk ${p} */ fetch("/acfun/getStatus")` : undefined;
+    return { ok: body !== undefined, status: body !== undefined ? 200 : 404, headers: { get: () => 'text/html' }, text: async () => body ?? '' } as any;
+  };
+  const { files } = await collectRouterFiles('192.168.0.1');
+  assert.ok(files.filter(f => /^\/static\/js\/\d+\./.test(f.p)).length >= 45, 'القطع انسحبت: ' + files.length);
+});
