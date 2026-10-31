@@ -52,7 +52,9 @@ export const MODELS = {
   // MC801A العادي (ملف FULL ٣١ أكتوبر، فيرموير Elisa B06 على stc): goform، AD = md5(md5(wa+cr)+RD)، /ubus/ = 404،
   // قطع/وصل الاتصال اليدوي مرفوض (الصفحة ما تعرضه إلا ببعض أوضاع WAN) ← «آي بي جديد» بإعادة التشغيل
   // نسخة stc (BD_SASTCMC801AV1.0.0B15، ملف FULL ثاني) نفس التوقيع والأوامر · حجب المواقع: ADD_WHITE_SITE/CHILD_MAC_RULE_* بدل URL_FILTER_*
-  mc801a: P({ id: 'mc801a', label: 'ZTE MC801A', brand: 'zte', tech: '5G', write: 'goform', nrLock: true, noUrlFilter: true }),
+  // ٣١ أكتوبر (٧ ملفات FULL بعد إصلاح التوقيع): الكتابة شغالة على ٥ فيرمويرات — Elisa B06 · SASTC B15/B07 · SASTCOM…A1 B07 · HOLOLNE A1 B10:
+  // BAND_SELECT · WAN_PERFORM_NR5G_BAND_LOCK · SET_BEARER_PREFERENCE · setWiFiChipAdvancedInfo كلها success
+  mc801a: P({ id: 'mc801a', label: 'ZTE MC801A', brand: 'zte', tech: '5G', write: 'goform', nrLock: true, noUrlFilter: true, verified: true }),
   mc888: P({ id: 'mc888', label: 'ZTE MC888', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
   mc889: P({ id: 'mc889', label: 'ZTE MC889', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
   // U30 Pro (STC، U30Pro_GEN_MEASV1.0.0B07 · cr_version MU5358): صفحته goform القديمة (require.js) — تقرير ٢٥ أكتوبر، @Mjeeduk
@@ -62,6 +64,12 @@ export const MODELS = {
   u30Pro: P({ id: 'u30-pro', label: 'ZTE U30 Pro', brand: 'zte', tech: '5G', write: 'goform', nrLock: true, writeUnverified: true,
     writeAllow: U30_WRITES, cmdSet: 'u30',
     note: 'الترددات ووضع الشبكة وإعادة التشغيل — من كود صفحة الراوتر (لسا ما انجرّبت ميداني). الواي فاي نضيفه قريب' }),
+  // U30 Air (صفحة UFI «ufi/u30air» — ملف ٢٩ أكتوبر): نفس service.js حق U30 Pro — LTE_BAND_LOCK lte_band_lock / NR_BAND_LOCK nr_band_lock /
+  // CELL_LOCK pci,earfcn,rat · التوقيع SHA256(wa_inner_version + cr_version). كان ينحسب «ZTE» عام ويرسل BAND_SELECT (مو موجود في صفحته).
+  // نفس حذر U30 Pro: بس أوامر الصفحة، لين أول تجربة
+  u30Air: P({ id: 'u30-air', label: 'ZTE U30 Air', brand: 'zte', tech: '5G', write: 'goform', nrLock: true, writeUnverified: true,
+    writeAllow: U30_WRITES, cmdSet: 'u30',
+    note: 'الترددات ووضع الشبكة وإعادة التشغيل — من كود صفحة الراوتر (لسا ما انجرّبت ميداني)' }),
   u10sPro: P({ id: 'u10s-pro', label: 'ZTE U10S Pro', brand: 'zte', tech: '4G', write: 'goform', nrLock: false, note: 'راوتر جيب 4G — ما فيه 5G' }),
   zteG5: P({ id: 'zte-g5', label: 'ZTE (G5)', brand: 'zte', tech: '5G', write: 'ubus', nrLock: true }),
   zte: P({ id: 'zte', label: 'ZTE', brand: 'zte', tech: '5G', write: 'goform' }),
@@ -77,6 +85,7 @@ export function identifyZte(wa?: string, web?: string, hw?: string): ModelProfil
   if (/MU5001/i.test(s)) return MODELS.mu5001;
   if (/MU5250|U60/i.test(s)) return MODELS.u60Pro;
   // MU3351 = منصة صفحة U30 Pro (config.js: DEVICE "ufi/mu3351") — تقرير ٢٧ أكتوبر
+  if (/U30\s*Air/i.test(s)) return MODELS.u30Air;
   if (/U30\s*Pro|MU5358|MU3351/i.test(s)) return MODELS.u30Pro;
   if (/U10S\s*Pro/i.test(s)) return MODELS.u10sPro;
   if (/MC801A\s*Pro/i.test(s)) return MODELS.mc801aPro;

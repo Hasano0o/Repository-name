@@ -13,8 +13,9 @@ test('FULL: الموديلات المؤكدة ما يطلع لها (MU5001 / U60
   assert.equal(fullDumpEligible('zteng', MODELS.u60Pro, H), false);
 });
 
-test('FULL: MC801A العادي (يرفض الكتابة، ما عندنا ملفاته) وزيكسل والجيب ← يطلع', () => {
-  assert.equal(fullDumpEligible('zte', MODELS.mc801a, H), true);
+test('FULL: MC801A العادي صار مؤكد (٣١ أكتوبر) ← ما يطلع · U30 Air وزيكسل غير المؤكد والجيب ← يطلع', () => {
+  assert.equal(fullDumpEligible('zte', MODELS.mc801a, H), false);
+  assert.equal(fullDumpEligible('zte', MODELS.u30Air, H), true);
   assert.equal(fullDumpEligible('zyxel', { id: 'zyxel-nr5103e', label: 'Zyxel NR5103E', brand: 'zyxel', tech: '5G' } as any, H), true);
   assert.equal(fullDumpEligible('zteufi', null, H), true);
 });

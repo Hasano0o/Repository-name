@@ -48,3 +48,11 @@ test('U30 Pro: القراءة مسموحة والكتابة موقوفة لين 
   assert.ok(!identifyZte('BD_MC888V1.0', '').writeUnverified);
   assert.ok(!identifyZte('U10SProV1.02', '').writeUnverified);
 });
+
+test('ZTE U30 Air: نفس أوامر U30 Pro (LTE_BAND_LOCK/NR_BAND_LOCK) — مو «ZTE» عام يرسل BAND_SELECT · MC801A مؤكد', () => {
+  const a = identifyZte('BD_SAU30AirV1.0.0B05', 'WEB_U30AirV1.0', '');
+  assert.equal(a.id, 'u30-air'); assert.equal(a.cmdSet, 'u30'); assert.equal(a.writeUnverified, true);
+  assert.ok(a.writeAllow?.includes('LTE_BAND_LOCK'));
+  assert.equal(identifyZte('MC801A1_Elisa1_B06').verified, true);
+  assert.equal(identifyZte('U30Pro_GEN_MEASV1.0.0B07').id, 'u30-pro');
+});
