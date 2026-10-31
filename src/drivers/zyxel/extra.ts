@@ -143,3 +143,68 @@ export function zxAzimuth(o: any): ZxAzimuth | null {
   if (String(m.lockStatus) !== '0' && Number.isFinite(Number(m.lockAngle))) r.lockDeg = Number(m.lockAngle);
   return r;
 }
+
+// ═══ قناة الواي فاي (صفحة Wireless › General: doWifiApply) ═══
+// الصفحة ترسل كل إعدادات الشبكة مع القناة — نبنيها من نفس الكائن بالضبط مثل ما تحسبها الصفحة وقت التحميل
+// (updateWifiRadio / sidebandOptionUpdate / updateWifiSec / changeEncryptionMode) ونغيّر القناة بس.
+export type ZxWifiVariant = 'nr5103e' | 'fwa505';
+type Flags = { ShowAllWiFiChannel?: boolean; hideWlanChannel1213?: boolean; SupportWPAMixMode?: boolean };
+const isWpa = (m: string) => m.slice(0, 3) === 'WPA';
+
+/** العرض كما تعرضه الصفحة: '80' · '40' · '0' (20/40 على 2.4 مع OBSS) · '20' */
+export function zxBw(o: any, band: '2.4' | '5'): string {
+  const b = String(o?.bandwidth ?? '');
+  if (b === '80MHz') return '80';
+  if (b === '40MHz') return o?.X_ZYXEL_OBSS_coex && band === '2.4' ? '0' : '40';
+  return '20';
+}
+function sideband(o: any, band: '2.4' | '5'): string {
+  let bw = zxBw(o, band);
+  if (bw === '0' && band === '2.4') bw = '40';
+  return bw === '40' ? (Number(o?.extcha) === 2 ? '2' : '1') : '0';
+}
+/** قائمة القنوات المسموحة حسب العرض والجانب (channelListUpdate) */
+export function zxChannels(o: any, band: '2.4' | '5', f: Flags = {}): string[] {
+  let bw = zxBw(o, band);
+  if (bw === '0' && band === '2.4') bw = '40';
+  const sb = sideband(o, band);
+  let a = '';
+  if (bw === '80') a = String(o?.X_ZYXEL_AC80_Channels ?? '');
+  else if (bw === '40') a = f.ShowAllWiFiChannel ? String(o?.PossibleChannels ?? '') : sb === '1' ? String(o?.X_ZYXEL_LowerChannels ?? '') : (f.hideWlanChannel1213 ? '5,6,7,8,9,10,11' : String(o?.X_ZYXEL_UpperChannels ?? ''));
+  else a = f.hideWlanChannel1213 ? '1,2,3,4,5,6,7,8,9,10,11' : String(o?.PossibleChannels ?? '');
+  return a.split(',').map(x => x.trim()).filter(Boolean).sort((x, y) => Number(x) - Number(y));
+}
+export function zxChannelPayload(list: any[], band: '2.4' | '5', channel: string, variant: ZxWifiVariant, f: Flags = {}): unknown {
+  const o = band === '2.4' ? list[0] : list[4];
+  if (!o) throw new Error('wlan: رد غير متوقع');
+  const mode = String(o.SecurityMode ?? '');
+  const range = isWpa(mode) ? 2 : mode.slice(0, 3) === 'WEP' ? 1 : 0;
+  const wpaMode = mode === 'WPA-WPA2-Personal' ? 'wpawpa2psk' : mode === 'WPA2-Enterprise' ? 'wpa2' : mode === 'WPA3-Personal' ? 'wpa3psk' : mode === 'WPA2-WPA3-Personal' ? 'wpa2wpa3psk' : 'wpa2psk';
+  let encryp = o.encryp;
+  if (['WPA2-Enterprise', 'WPA2-Personal', 'WPA3-Personal', 'WPA2-WPA3-Personal'].includes(mode)) encryp = 'aes';
+  else if (f.SupportWPAMixMode && mode === 'WPA-WPA2-Personal') encryp = 'tkipaes';
+  const ch = Number(channel) || 0;
+  let sb = sideband(o, band);
+  // checkSidebandSupport: مع ShowAllWiFiChannel الجانب يتبع القناة المختارة
+  let bwEff = zxBw(o, band); if (bwEff === '0' && band === '2.4') bwEff = '40';
+  if (f.ShowAllWiFiChannel && bwEff === '40' && ch) {
+    const lo = String(o.X_ZYXEL_LowerChannels ?? '').split(','), up = String(o.X_ZYXEL_UpperChannels ?? '').split(',');
+    if (!lo.includes(String(ch))) sb = '2';
+    if (!up.includes(String(ch))) sb = '1';
+  }
+  const t: Record<string, unknown> = {
+    oneSsidEnable: o.oneSsidEnable, Index: band === '2.4' ? 1 : 5, wlEnable: o.wlEnable, X_ZYXEL_Multicast_Fwd: o.X_ZYXEL_Multicast_Fwd,
+    SSID: o.SSID, upRate: Number(o.upRate) === 0 ? '' : o.upRate, downRate: Number(o.downRate) === 0 ? '' : o.downRate,
+    MaxAssociatedDevices: o.MaxAssociatedDevices, wlHide: o.wlHide, secMode: range === 0 ? 43 : range === 1 ? 149 : 255, wpaMode,
+    AutoGenPSK: o.AutoGenPSK, psk_value: o.AutoGenPSK ? o.AutoGenPSKValue : o.PskDisplay, encryp, RekeyingInterval: o.RekeyingInterval,
+    X_ZYXEL_Preauth: o.X_ZYXEL_Preauth, X_ZYXEL_ReauthInterval: o.X_ZYXEL_ReauthInterval,
+    RadiusServerIPAddr: o.RadiusServerIPAddr, RadiusServerPort: o.RadiusServerPort, RadiusSecret: o.RadiusSecret,
+    div_wifiAdvance: true, channel: ch, bandwidth: zxBw(o, band), extcha: sb, subnetObjAction: '', div_wifiSubnet: false,
+  };
+  const one = o.oneSsidEnable;
+  const s5 = { Index: 5, SSID: list[4]?.SSID ?? '', oneSsidEnable: one };
+  if (variant === 'nr5103e') return t.Index === 1 ? [t, s5] : t;
+  // FWA505: الصفحة تضيف شبكات الضيوف (2 و 6) بأسمائها مع كل حفظ
+  const g2 = { Index: 2, SSID: list[1]?.SSID ?? '', oneSsidEnable: one }, g6 = { Index: 6, SSID: list[5]?.SSID ?? '', oneSsidEnable: one };
+  return t.Index === 1 ? [t, s5, g2, g6] : [t, g2, g6];
+}

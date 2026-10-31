@@ -12,7 +12,7 @@ import * as Crypto from 'expo-crypto';
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import { RouterDriver, Capability, Signal, Carrier, Usage, NetworkInfo, SignalSnapshot, CellTower, BandConfig, ConnectedDevice, ActiveLock, RouterExtras, SmsMessage, WifiRadio } from '../types';
-import { unesc, zxWlanPayload, zxSecured, zxSmsList, zxSmsBody, zxBlocked, zxBlockPayload, zxAzimuth, ZxAzimuth } from './extra';
+import { unesc, zxWlanPayload, zxSecured, zxSmsList, zxSmsBody, zxBlocked, zxBlockPayload, zxAzimuth, ZxAzimuth, zxChannels, zxChannelPayload, ZxWifiVariant } from './extra';
 import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { noChange } from '../noChange';
 import { http } from '../http';
@@ -507,21 +507,45 @@ export class ZyxelDriver implements RouterDriver {
     await this.dalReq('PUT', 'wlan', { Index: band === '2.4' ? 1 : 5, wlEnable: on });
     await this.wlCheck();
   }
-  /**
-   * القناة الحالية من نفس الكائن (AutoChannelEnable = تلقائي). تغييرها في الصفحة يرسل كل إعدادات الشبكة مع الحماية
-   * (doWifiApply: secMode/encryp/الكلمة/العرض/الجانب) — ما نرسلها لين نتأكد من أول تجربة للاسم والكلمة، فهي للعرض بس.
-   */
+  /** صيغة حفظ القناة تختلف بين صفحتي الموديلين — نسمح بس للي عندنا كود صفحته (كل موديل لحاله) */
+  private async wifiVariant(): Promise<ZxWifiVariant | null> {
+    const id = (await this.identify().catch(() => null))?.id ?? '';
+    return id === 'zyxel-nr5103e' ? 'nr5103e' : id === 'zyxel-fwa505' ? 'fwa505' : null;
+  }
   async getWifiRadios(): Promise<WifiRadio[]> {
     const list = await this.dalList('wlan');
+    const f = await this.guiFlags();
+    const writable = !!(await this.wifiVariant());
     const out: WifiRadio[] = [];
     const one = (o: any, band: '2.4' | '5') => {
       if (!o) return;
-      const allowed = String(o.PossibleChannels ?? '').split(',').map(x => x.trim()).filter(Boolean);
-      out.push({ band, channel: o.AutoChannelEnable ? '0' : String(o.channel ?? '0'), allowed, writable: false });
+      out.push({ band, channel: o.AutoChannelEnable ? '0' : String(o.channel ?? '0'), allowed: zxChannels(o, band, f), writable });
     };
     one(list[0], '2.4');
     if (await this.has5G(list)) one(list[4], '5');
     return out;
+  }
+  async setWifiChannel(band: '2.4' | '5', channel: string): Promise<void> {
+    const variant = await this.wifiVariant();
+    if (!variant) throw noChange('تغيير القناة لراوترك ما انضاف للحين (نحتاج ملفات صفحته) — ما غيّرنا شي.');
+    const list = await this.dalList('wlan');
+    const o = band === '2.4' ? list[0] : list[4];
+    if (!o) throw noChange('راوترك ما فيه هالشبكة — ما غيّرنا شي.');
+    if (band === '5' && o.oneSsidEnable) throw noChange('راوترك على «شبكة وحدة للنطاقين» — قناة 5G تتغيّر معها تلقائي. ما غيّرنا شي.');
+    const f = await this.guiFlags();
+    const ch = String(Number(channel) || 0);
+    if (ch !== '0' && !zxChannels(o, band, f).includes(ch)) throw noChange(`القناة ${ch} مو مسموحة بالعرض الحالي لراوترك — ما غيّرنا شي.`);
+    const cur = o.AutoChannelEnable ? '0' : String(o.channel ?? '0');
+    if (cur === ch) return;
+    await this.dalReq('PUT', 'wlan', zxChannelPayload(list, band, ch, variant, f));
+    await this.wlCheck();
+    const after = (await this.dalList('wlan'))[band === '2.4' ? 0 : 4];
+    const got = after?.AutoChannelEnable ? '0' : String(after?.channel ?? '');
+    if (got !== ch) throw new Error('الراوتر قبل أمر القناة بس القراءة بعده مختلفة');
+    // نتأكد إن الحماية ما تغيّرت (الأمر يرسل كل إعدادات الشبكة)
+    if (String(after?.SecurityMode ?? '') !== String(o.SecurityMode ?? '') || String(after?.SSID ?? '') !== String(o.SSID ?? '')) {
+      throw new Error('القناة تغيّرت بس إعدادات الشبكة اختلفت — شيّك اسم وكلمة الواي فاي');
+    }
   }
 
   // ─── الرسائل (صفحة Cellular WAN › SMS) ───

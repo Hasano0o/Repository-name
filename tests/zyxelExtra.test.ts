@@ -82,7 +82,7 @@ test('زيكسل FWA505: البوصلة — الزاوية والدقة والت
 });
 
 // ═══ الدرايفر على راوتر محاكى ═══
-function router(flags: any = { Support5G: true, supportSmsCmd: true }) {
+function router(flags: any = { Support5G: true, supportSmsCmd: true }, model = 'FWA505') {
   const st: any = {
     wlan: [W(1), W(2, { SSID: 'Guest' }), W(3), W(4), W(5), W(6, { SSID: 'G5' })],
     sms: { SMS_Enable: true, SMS_Inbox: [{ ObjIndex: 7, From: '959', FromType: 129, TimeStamp: '26/10/31,10:00:00+12', CharacterSet: 1, Content: 'Balance &amp; more', State: 0 }] },
@@ -95,7 +95,7 @@ function router(flags: any = { Support5G: true, supportSmsCmd: true }) {
     const u = new URL(url);
     const m = init?.method ?? 'GET';
     const oid = u.searchParams.get('oid');
-    if (u.pathname === '/getBasicInformation') return res(200, { result: 'ZCFG_SUCCESS', ModelName: 'FWA505' });
+    if (u.pathname === '/getBasicInformation') return res(200, { result: 'ZCFG_SUCCESS', ModelName: model });
     if (u.pathname === '/GetInfoNoLogin') return res(200, { result: 'ZCFG_SUCCESS' });
     if (u.pathname === '/getRSAPublickKey') return res(200, { result: 'ZCFG_SUCCESS', RSAPublicKey: 'None' });
     if (u.pathname === '/getWebGuiFlag') return res(200, flags);
@@ -112,6 +112,7 @@ function router(flags: any = { Support5G: true, supportSmsCmd: true }) {
         if (e.SSID !== undefined) t.SSID = e.SSID;
         if (e.psk_value !== undefined) t.PskDisplay = e.psk_value;
         if (e.wlEnable !== undefined) t.wlEnable = e.wlEnable;
+        if (e.channel !== undefined) { t.channel = e.channel; t.AutoChannelEnable = e.channel === 0; }
       }
       return ok();
     }
@@ -149,7 +150,7 @@ test('زيكسل (درايفر): الواي فاي — الشبكات في مر�
   assert.deepEqual(st.puts.at(-1), { Index: 5, wlEnable: false });
   await assert.rejects(d.setWifiNames([], 'short'), (e: any) => e.noChange === true);
   const radios = await d.getWifiRadios();
-  assert.deepEqual(radios[0], { band: '2.4', channel: '6', allowed: ['1', '6', '11'], writable: false });
+  assert.deepEqual(radios[0], { band: '2.4', channel: '6', allowed: ['1', '6', '11'], writable: true });
 });
 
 test('زيكسل (درايفر): الرسائل — قراءة (رموز HTML تنفك)، مقروءة، حذف، إرسال · وحظر وفك جهاز · والبوصلة', async () => {
@@ -179,4 +180,45 @@ test('زيكسل (درايفر): بدون supportSmsCmd ما نرسل أمر «�
   await assert.rejects(d.blockDevice('AA:BB:CC:00:00:09', true), (e: any) => e.noChange === true);
   const ex = await d.getExtras();
   assert.equal(ex.wifiNets.length, 1); assert.equal(ex.bands.length, 1);
+});
+
+test('زيكسل: قناة الواي فاي — نفس doWifiApply (الحماية والكلمة كما هي)، والقنوات حسب العرض، وكل موديل بصيغته', () => {
+  const o2 = W(1, { band: '2.4GHz', bandwidth: '40MHz', X_ZYXEL_OBSS_coex: true, extcha: 2, PossibleChannels: '1,2,3,4,5,6,7,8,9,10,11,12,13',
+    X_ZYXEL_LowerChannels: '1,2,3,4,5,6,7,8,9', X_ZYXEL_UpperChannels: '5,6,7,8,9,10,11,12,13', AutoGenPSK: false, encryp: 'aes',
+    upRate: 0, downRate: 0, MaxAssociatedDevices: 32, X_ZYXEL_Multicast_Fwd: true });
+  const o5 = W(5, { band: '5GHz', bandwidth: '80MHz', X_ZYXEL_AC80_Channels: '36,40,44,48', SecurityMode: 'WPA2-WPA3-Personal' });
+  const list = [o2, W(2, { SSID: 'G2' }), W(3), W(4), o5, W(6, { SSID: 'G6' })];
+  assert.equal(X.zxBw(o2, '2.4'), '0');
+  assert.deepEqual(X.zxChannels(o2, '2.4'), ['5', '6', '7', '8', '9', '10', '11', '12', '13']);
+  assert.deepEqual(X.zxChannels(o5, '5'), ['36', '40', '44', '48']);
+  const a: any[] = X.zxChannelPayload(list, '2.4', '11', 'nr5103e');
+  assert.equal(a.length, 2);
+  assert.equal(a[0].Index, 1); assert.equal(a[0].channel, 11); assert.equal(a[0].bandwidth, '0'); assert.equal(a[0].extcha, '2');
+  assert.equal(a[0].secMode, 255); assert.equal(a[0].wpaMode, 'wpa2psk'); assert.equal(a[0].encryp, 'aes');
+  assert.equal(a[0].psk_value, 'oldpass11'); assert.equal(a[0].SSID, 'Net1'); assert.equal(a[0].upRate, ''); assert.equal(a[0].div_wifiAdvance, true);
+  assert.deepEqual(a[1], { Index: 5, SSID: 'Net5', oneSsidEnable: false });
+  const b: any = X.zxChannelPayload(list, '5', '44', 'nr5103e');
+  assert.equal(b.Index, 5); assert.equal(b.wpaMode, 'wpa2wpa3psk'); assert.equal(b.bandwidth, '80'); assert.equal(b.extcha, '0');
+  const c: any[] = X.zxChannelPayload(list, '5', '0', 'fwa505');
+  assert.deepEqual(c.slice(1), [{ Index: 2, SSID: 'G2', oneSsidEnable: false }, { Index: 6, SSID: 'G6', oneSsidEnable: false }]);
+  assert.equal(c[0].channel, 0);
+  const d: any[] = X.zxChannelPayload(list, '2.4', '6', 'fwa505');
+  assert.deepEqual(d.map((x: any) => x.Index), [1, 5, 2, 6]);
+});
+
+test('زيكسل (درايفر): تغيير القناة — يتأكد بالقراءة، يرفض قناة مو بالقائمة، وموديل ما عندنا صفحته ← ما نرسل', async () => {
+  const st = router();
+  const d = await driver();
+  await d.setWifiChannel('2.4', '11');
+  assert.equal(st.wlan[0].channel, 11); assert.equal(st.wlan[0].SSID, 'Net1'); assert.equal(st.wlan[0].PskDisplay, 'oldpass11');
+  const p = st.puts.at(-1);
+  assert.deepEqual(p.map((x: any) => x.Index), [1, 5, 2, 6]);
+  await d.setWifiChannel('2.4', '0');
+  assert.equal(st.wlan[0].AutoChannelEnable, true);
+  await assert.rejects(d.setWifiChannel('2.4', '14'), (e: any) => e.noChange === true);
+  const st2 = router(undefined, 'NR7101');
+  const d2 = await driver();
+  assert.equal((await d2.getWifiRadios())[0].writable, false);
+  await assert.rejects(d2.setWifiChannel('2.4', '6'), (e: any) => e.noChange === true);
+  assert.equal(st2.puts.length, 0);
 });
