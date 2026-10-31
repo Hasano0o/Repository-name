@@ -6,6 +6,7 @@ import { ZyxelDriver } from './zyxel';
 import { FiberhomeDriver } from './fiberhome';
 import { OppoDriver } from './oppo';
 import { GreenPacketDriver } from './greenpacket';
+import { NokiaDriver } from './nokia';
 import { ZteUfiDriver } from './zteufi';
 import { UnknownDriver } from './unknown';
 import { DeviceDriver } from './device';
@@ -35,6 +36,8 @@ const factories: (() => RouterDriver)[] = [
   () => new OppoDriver(),
   // Green Packet 5G CPE (E5-250MK — زين، /web/v1 JSON) — من ملفات صفحة حقيقية (٢٦ أكتوبر)، لسا ما انجرّب ميداني
   () => new GreenPacketDriver(),
+  // Nokia FastMile 5G Gateway (3.1 — Angular /web_whw/، *_web_app.cgi) — من ملفات صفحة حقيقية (٢٧ و٣١ أكتوبر)، لسا ما انجرّب ميداني
+  () => new NokiaDriver(),
   () => new UnknownDriver(),
 ];
 
