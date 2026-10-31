@@ -17,7 +17,7 @@
   - `app.json`: إضافة plugin `expo-speech-recognition` + `NSSpeechRecognitionUsageDescription` + تحديث نص الميكروفون.
   - النسخ القديمة: المكتبات تنطلب «اختيارياً» — زر المايك ما يظهر وكل شي ثاني يشتغل.
   - App Privacy: الصوت يروح لمحرك أبل/قوقل للتحويل لنص بس، وBandly ما يحفظه ولا يرسله لسيرفره.
-  - ⏳ **ينتظر:** APK جديد + نسخة متجر iOS.
+  - ✅ **دخلت مع نسخة 1.1.1** (APK 31 أكتوبر + iOS 1.1.1) — المكتبات والصلاحيات كانت في app.json من قبل.
 
 - **🔒 راوترات https بشهادة ذاتية** — ✅ انبنى بالكود (31 أكتوبر 2026). السبب: Huawei H112-370 (Three) يحوّل صفحاته وstate-login لـ https بشهادة ذاتية، والآيفون يرفض («A TLS error caused the secure connection to fail»).
   - **أندرويد:** `modules/bandly-cell/.../LanTls.kt` — في نفس مصنع OkHttp حق `WifiRoute` (fetch كله): فحص النظام أول، ولو رفض **والسوكت متصل بعنوان محلي فعلاً** (192.168/10/172.16-31/169.254) نقبل. الاسم: نفس الفكرة. علامة للـ JS: `BandlyCell.lanTls()`.
