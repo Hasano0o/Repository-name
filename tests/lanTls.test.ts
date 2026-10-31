@@ -37,3 +37,9 @@ test('انقطاع عادي ما يتغيّر', async () => {
   fail('Network request failed');
   await assert.rejects(http('http://192.168.8.1/api/user/state-login'), /تعذر الاتصال بالراوتر \(GET \/api\/user\/state-login\)/);
 });
+
+test('أسماء صفحات الراوترات محلية (H112-370 يحوّل لـ hirouter.net) — والنطاق كامل لا', async () => {
+  const { isLanHost } = await import('../src/utils/host');
+  for (const h of ['hirouter.net', 'HIROUTER.NET', 'https://hirouter.net/html/home.html', 'homerouter.cpe', 'x.router', '192.168.8.1']) assert.ok(isLanHost(h), h);
+  for (const h of ['evil.net', 'hirouter.net.evil.com', 'google.com', '8.8.8.8']) assert.ok(!isLanHost(h), h);
+});

@@ -12,6 +12,8 @@
 static BOOL BandlyIsLocalHost(NSString *host) {
   if (host.length == 0) return NO;
   NSString *h = host.lowercaseString;
+  // أسماء صفحات الراوترات (H112-370 من Three يحوّل لـ https://hirouter.net) — نفس ROUTER_NAMES في src/utils/host.ts
+  if ([@[@"hirouter.net", @"homerouter.cpe", @"mediarouter.home", @"routerlogin.net", @"routerlogin.com", @"tplinkwifi.net", @"tplinklogin.net", @"tplinkmodem.net", @"tplinkrepeater.net", @"mwlogin.net", @"miwifi.com", @"router.asus.com", @"dlinkrouter.local"] containsObject:h]) return YES;
   NSArray<NSString *> *parts = [h componentsSeparatedByString:@"."];
   if (parts.count == 4) {
     BOOL numeric = YES;

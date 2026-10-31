@@ -27,11 +27,14 @@ object LanTls {
     addr != null && !addr.isLoopbackAddress && (addr.isSiteLocalAddress || addr.isLinkLocalAddress)
 
   private val PRIVATE_V4 = Regex("""^(10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)""")
+  private val ROUTER_NAMES = setOf("hirouter.net", "homerouter.cpe", "mediarouter.home", "routerlogin.net", "routerlogin.com", "tplinkwifi.net", "tplinklogin.net", "tplinkmodem.net", "tplinkrepeater.net", "mwlogin.net", "miwifi.com", "router.asus.com", "dlinkrouter.local")
   private val LOCAL_SUFFIX = listOf(".local", ".lan", ".home", ".internal", ".cpe", ".router", ".box", ".gateway")
 
   /** اسم محلي؟ (للتحقق من اسم الشهادة — الشهادة الذاتية غالباً ما فيها العنوان) */
   private fun localName(host: String?): Boolean {
     val h = (host ?: return false).lowercase()
+    // أسماء صفحات الراوترات (H112-370: hirouter.net) — نفس ROUTER_NAMES في src/utils/host.ts
+    if (h in ROUTER_NAMES) return true
     if (Regex("""^\d{1,3}(\.\d{1,3}){3}$""").matches(h)) return PRIVATE_V4.containsMatchIn(h)
     if (LOCAL_SUFFIX.any { h.endsWith(it) }) return true
     return !h.contains('.') && !h.contains(':')

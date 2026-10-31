@@ -45,9 +45,17 @@ export function hostOnly(raw: string): string {
   return s.split(':')[0];
 }
 
+/**
+ * أسماء صفحات الراوترات المعروفة — الراوتر نفسه يرد عليها (DNS داخلي)، ويحوّل لها صفحته.
+ * H112-370 (Three، ٣١ أكتوبر): http://192.168.8.1 ← https://hirouter.net — كنا نرفضه «redirect خارجي».
+ * أسماء بالضبط (مو نطاق .net كامل).
+ */
+export const ROUTER_NAMES = ['hirouter.net', 'homerouter.cpe', 'mediarouter.home', 'routerlogin.net', 'routerlogin.com', 'tplinkwifi.net', 'tplinklogin.net', 'tplinkmodem.net', 'tplinkrepeater.net', 'mwlogin.net', 'miwifi.com', 'router.asus.com', 'dlinkrouter.local'];
+
 export function isLanHost(raw: string): boolean {
   const h = hostOnly(raw).toLowerCase();
   if (!h) return false;
+  if (ROUTER_NAMES.includes(h)) return true;
 
   // رفض العناوين الخطيرة
   if (REJECTED_V4.some(re => re.test(h))) return false;
