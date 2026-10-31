@@ -28,6 +28,14 @@ const COMMON_HOSTS: { host: string; hint: string; color: string }[] = [
   { host: '192.168.1.1', hint: 'غيره', color: '#7c5cff' },
 ];
 
+/** يرد أحد على هالعنوان؟ (صفحة الراوتر الرئيسية، بدون دخول) */
+async function pingHost(h: string, ms = 1800): Promise<boolean> {
+  const c = new AbortController(); const t = setTimeout(() => c.abort(), ms);
+  try { await fetch(`http://${h}/`, { signal: c.signal }); return true; } catch { return false; } finally { clearTimeout(t); }
+}
+/** خطأ شبكة (مو رفض كلمة): الراوتر ما رد أو انقطع الطلب */
+const NET_ERR = /(تعذر الاتصال بالراوتر|ما رد|Network request failed|timed? ?out|timeout|aborted|canceled|ECONN|ENETUNREACH)/i;
+
 export default function AddRouterScreen() {
   const nav = useRouter();
   const params = useLocalSearchParams<{ id?: string; scan?: string }>();
@@ -73,6 +81,48 @@ export default function AddRouterScreen() {
     if (!d || (d as any).id === 'unknown') return null;
     const p = d.identify ? await d.identify().catch(() => null) : null;
     return p?.label ?? (d as any).name ?? null;
+  };
+  /**
+   * العنوان اللي كتبه ما رد ← ندوّر على راوتر الجوال متصل فيه فعلاً (كل العناوين المشهورة مع بعض)
+   * ونرجّع أول واحد نتعرّف عليه. ما نسجّل دخول عليه — بس نعرضه للمستخدم.
+   */
+  const findRouterElsewhere = async (skip: string): Promise<{ host: string; label: string } | null> => {
+    const answered = (await Promise.all(ROUTER_HOSTS.filter(x => x !== skip).map(async x => ((await pingHost(x)) ? x : null)))).filter(Boolean) as string[];
+    for (const alt of answered) {
+      const label = await identifyHost(alt).catch(() => null);
+      if (label) return { host: alt, label };
+    }
+    return answered[0] ? { host: answered[0], label: 'راوتر' } : null;
+  };
+  /** ينقل الخانة لعنوان الراوتر الصح — بدون دخول (كلمة الراوتر الثاني غالباً غير، وZTE يقفل لو غلطنا) */
+  const applyFoundHost = (alt: { host: string; label: string }) => {
+    pickHost(alt.host);
+    setModel({ state: 'found', label: alt.label, host: alt.host });
+  };
+  /** «راوترك على عنوان ثاني» — mid: الراوتر رد أول وبعدين انقطع (الجوال تحوّل لشبكة ثانية) */
+  const alertOtherRouter = (h: string, alt: { host: string; label: string } | null, mid: boolean) => {
+    const iosTip = Platform.OS === 'ios'
+      ? 'ولو طلع لك «لا يوجد اتصال بالإنترنت» اختر «استمرار»'
+      : 'ولو قال الجوال «الشبكة بدون إنترنت» اختر «البقاء متصلاً»';
+    const switchTip = `غالباً راوترك ما فيه إنترنت، فالجوال يحوّل لحاله لشبكة ثانية فيها إنترنت. ارجع لواي فاي الراوتر من الإعدادات، ${iosTip}، وطفّ «الانضمام التلقائي» للشبكة الثانية مؤقتاً.`;
+    if (alt) {
+      Alert.alert(
+        mid ? 'جوالك تحوّل لراوتر ثاني' : 'جوالك متصل براوتر ثاني',
+        `${mid ? `الراوتر على ${h} رد أول، وبعدها انقطع.` : `ما فيه راوتر يرد على ${h}.`}
+
+جوالك الحين متصل بـ ${alt.label} على ${alt.host}.
+
+• تبي هذا؟ اضغط «استخدم ${alt.host}» واكتب كلمة مروره.
+• تبي راوتر ${h}؟ ${switchTip}`,
+        [{ text: 'رجوع', style: 'cancel' }, { text: `استخدم ${alt.host}`, onPress: () => applyFoundHost(alt) }],
+      );
+    } else {
+      Alert.alert('انقطع الاتصال بالراوتر',
+        `الراوتر على ${h} رد أول، وبعدها جوالك طلع من شبكته.
+
+${switchTip}`,
+        [{ text: 'تمام', style: 'cancel' }]);
+    }
   };
   useEffect(() => {
     if (editId || welcomeScan) { setModel({ state: 'none' }); return; }
@@ -291,6 +341,10 @@ export default function AddRouterScreen() {
             `لقينا راوتر على ${h}، بس نوعه للحين ما يشتغل مع Bandly.\n\nأرسل لنا تفاصيله (دقيقة وحدة) والمبرمج يتواصل معك ويضيفه.`,
             [{ text: 'رجوع', style: 'cancel' }, { text: 'نضيفه لك', onPress: () => nav.push('/newdevice') }]);
         } else {
+          // العنوان ما رد ← يمكن جوالك على راوتر ثاني: نعطيه عنوانه الصح بضغطة
+          setStep('ندوّر على راوترك…');
+          const alt = await findRouterElsewhere(h);
+          if (alt) { alertOtherRouter(h, alt, false); return; }
           Alert.alert('ما لقينا راوتر',
             `ما فيه جهاز يرد على ${h}.\n\nتأكد إن جوالك متصل بواي فاي الراوتر (مو بيانات الجوال)، أو خلّ التطبيق يدوّر عليه.`,
             [{ text: 'تمام', style: 'cancel' }, { text: 'دوّر عليه', onPress: () => nav.push('/setup') }]);
@@ -327,6 +381,22 @@ export default function AddRouterScreen() {
             await driver.login(h, u, password, { lastTry: true, fresh: true });
           } catch (e2) {
             Alert.alert('فشل الدخول', e2 instanceof Error ? e2.message : String(e2));
+            return;
+          }
+        } else if (NET_ERR.test(msg)) {
+          // الراوتر رد على التعرّف وانقطع وقت الدخول: لسا يرد؟ نعيد مرة. ما يرد؟ الجوال تحوّل لشبكة ثانية
+          setStep('نتأكد من الاتصال…');
+          if (await pingHost(h, 2500)) {
+            setStep('نسجّل الدخول مرة ثانية...');
+            try {
+              await driver.login(h, u, password, { fresh: true });
+            } catch (e3) {
+              Alert.alert('فشل الدخول', e3 instanceof Error ? e3.message : String(e3));
+              return;
+            }
+          } else {
+            setStep('ندوّر على راوترك…');
+            alertOtherRouter(h, await findRouterElsewhere(h), true);
             return;
           }
         } else {
