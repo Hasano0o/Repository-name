@@ -11,7 +11,8 @@
 import * as Crypto from 'expo-crypto';
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
-import { RouterDriver, Capability, Signal, Carrier, Usage, NetworkInfo, SignalSnapshot, CellTower, BandConfig, ConnectedDevice, ActiveLock } from '../types';
+import { RouterDriver, Capability, Signal, Carrier, Usage, NetworkInfo, SignalSnapshot, CellTower, BandConfig, ConnectedDevice, ActiveLock, RouterExtras, SmsMessage, WifiRadio } from '../types';
+import { unesc, zxWlanPayload, zxSecured, zxSmsList, zxSmsBody, zxBlocked, zxBlockPayload, zxAzimuth, ZxAzimuth } from './extra';
 import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { noChange } from '../noChange';
 import { http } from '../http';
@@ -33,7 +34,7 @@ const bandOf = (v: unknown) => { const m = str(v).match(/(\d+)\s*$/); return m ?
 export class ZyxelDriver implements RouterDriver {
   id = 'zyxel';
   name = 'Zyxel';
-  capabilities: Capability[] = ['signal', 'reboot', 'usage', 'devices', 'bandLock'];
+  capabilities: Capability[] = ['signal', 'reboot', 'usage', 'devices', 'bandLock', 'sms', 'block'];
 
   private host = '';
   private user = 'admin';
@@ -423,4 +424,145 @@ export class ZyxelDriver implements RouterDriver {
     return lines.join('\n');
   }
 
+
+  // ═══════════ ميزات الصفحة (ملفات FULL لـ NR5103E و FWA505 — ٣١ أكتوبر) — كل الأوامر من app.js ═══════════
+
+  /** طلب DAL بأي طريقة — GET/DELETE: القيم في الرابط (مثل httpReqSendAndRecv) · PUT/POST: الجسم مشفّر مثل dalPut */
+  private async dalReq(method: 'GET' | 'PUT' | 'POST' | 'DELETE', oid: string, body?: unknown, query: Record<string, string | number> = {}): Promise<any> {
+    await this.ensure();
+    const send = async () => {
+      const pem = await this.rsaKey();
+      const used = this.sessionkey, aesKey = this.aesKey, iv = this.iv;
+      const q = Object.entries(query).map(([k, v]) => `&${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('');
+      const hasBody = body !== undefined && (method === 'PUT' || method === 'POST');
+      const r = await http(`${this.base()}/cgi-bin/DAL?oid=${oid}&sessionkey=${used}${q}`, {
+        method,
+        headers: this.hdr(hasBody ? { 'Content-Type': 'application/json', Origin: this.base() } : {}),
+        ...(hasBody ? { body: pem ? this.encrypt(body, aesKey, iv) : JSON.stringify(body) } : {}),
+      }, 15000);
+      let j: any = null;
+      try { j = this.decrypt(await r.json(), aesKey); } catch {}
+      return { status: r.status, j, used };
+    };
+    let { status, j, used } = await send();
+    if (status === 401) { if (this.sessionkey === used) this.sessionkey = ''; await this.ensure(); ({ status, j } = await send()); }
+    if (j?.result !== 'ZCFG_SUCCESS') throw new Error(`${oid}: الراوتر رفض (${String(j?.ReplyMsg || j?.result || status).slice(0, 60)})`);
+    return method === 'GET' ? unesc(j) : j;
+  }
+  private async dalList(oid: string): Promise<any[]> {
+    const j = await this.dalReq('GET', oid);
+    return Array.isArray(j?.Object) ? j.Object : [];
+  }
+  /** إعدادات الواجهة (Support5G، supportSmsCmd) — نفس /getWebGuiFlag اللي تقراه الصفحة */
+  private flags: Record<string, any> | null = null;
+  private async guiFlags(): Promise<Record<string, any>> {
+    if (this.flags) return this.flags;
+    try {
+      const r = await http(this.base() + '/getWebGuiFlag', { headers: this.hdr() }, 6000);
+      const j: any = this.decrypt(await r.json());
+      this.flags = j && typeof j === 'object' ? j : {};
+    } catch { this.flags = {}; }
+    return this.flags!;
+  }
+  private async has5G(list: any[]): Promise<boolean> {
+    const f = await this.guiFlags();
+    if (typeof f.Support5G === 'boolean') return f.Support5G;
+    return !!list[4] && /5/.test(String(list[4].band ?? list[4].Band ?? '5'));
+  }
+
+  // ─── الواي فاي: الاسم والكلمة (صفحة Wifisetting) وتشغيل كل نطاق (Main24gsubmit / Main5gsubmit) ───
+  async getExtras(): Promise<RouterExtras> {
+    const list = await this.dalList('wlan');
+    const ex: RouterExtras = {};
+    const w2 = list[0], w5 = list[4];
+    if (!w2) return ex;
+    const five = await this.has5G(list) && !!w5;
+    const nets: NonNullable<RouterExtras['wifiNets']> = [{ index: '1', band: '2.4', name: String(w2.SSID ?? ''), secured: zxSecured(w2) }];
+    if (five && !w2.oneSsidEnable) nets.push({ index: '5', band: '5', name: String(w5.SSID ?? ''), secured: zxSecured(w5) });
+    ex.wifiNets = nets;
+    ex.bands = [{ band: '2.4', on: !!w2.wlEnable }, ...(five ? [{ band: '5' as const, on: !!w5.wlEnable }] : [])];
+    return ex;
+  }
+  /** بعد أي تغيير واي فاي الصفحة تنتظر Wireless?action=WlCheck (لين ٦٠ ث) — الواي فاي ممكن ينقطع وقتها */
+  private async wlCheck() {
+    try { await http(`${this.base()}/cgi-bin/Wireless?action=WlCheck&sessionkey=${this.sessionkey}`, { headers: this.hdr() }, 60000).then(r => r.text()); } catch {}
+  }
+  async setWifiNames(names: { index: string; name: string }[], password?: string): Promise<void> {
+    for (const n of names) {
+      const v = n.name.trim();
+      if (!v || v.length > 32) throw noChange('اسم الشبكة لازم يكون من ١ إلى ٣٢ حرف — ما غيّرنا شي.');
+    }
+    if (password !== undefined && (password.length < 8 || password.length > 63)) throw noChange('كلمة الواي فاي لازم تكون من ٨ إلى ٦٣ حرف — ما غيّرنا شي.');
+    const list = await this.dalList('wlan');
+    if (password && !zxSecured(list[0])) throw noChange('شبكتك مفتوحة بدون حماية — فعّل الحماية من صفحة الراوتر أول. ما غيّرنا شي.');
+    const body = zxWlanPayload(list, await this.has5G(list), names.map(n => ({ index: n.index, name: n.name.trim() })), password);
+    await this.dalReq('PUT', 'wlan', body);
+    await this.wlCheck();
+  }
+  async setBandOn(band: '2.4' | '5', on: boolean): Promise<void> {
+    const list = await this.dalList('wlan');
+    const o = band === '2.4' ? list[0] : list[4];
+    if (!o) throw noChange('راوترك ما فيه هالشبكة — ما غيّرنا شي.');
+    if (!!o.wlEnable === on) return;
+    await this.dalReq('PUT', 'wlan', { Index: band === '2.4' ? 1 : 5, wlEnable: on });
+    await this.wlCheck();
+  }
+  /**
+   * القناة الحالية من نفس الكائن (AutoChannelEnable = تلقائي). تغييرها في الصفحة يرسل كل إعدادات الشبكة مع الحماية
+   * (doWifiApply: secMode/encryp/الكلمة/العرض/الجانب) — ما نرسلها لين نتأكد من أول تجربة للاسم والكلمة، فهي للعرض بس.
+   */
+  async getWifiRadios(): Promise<WifiRadio[]> {
+    const list = await this.dalList('wlan');
+    const out: WifiRadio[] = [];
+    const one = (o: any, band: '2.4' | '5') => {
+      if (!o) return;
+      const allowed = String(o.PossibleChannels ?? '').split(',').map(x => x.trim()).filter(Boolean);
+      out.push({ band, channel: o.AutoChannelEnable ? '0' : String(o.channel ?? '0'), allowed, writable: false });
+    };
+    one(list[0], '2.4');
+    if (await this.has5G(list)) one(list[4], '5');
+    return out;
+  }
+
+  // ─── الرسائل (صفحة Cellular WAN › SMS) ───
+  async listSms(box: 'inbox' | 'sent' = 'inbox'): Promise<SmsMessage[]> {
+    const list = await this.dalList('cellwan_sms');
+    return zxSmsList(list[0], box, !!(await this.guiFlags()).supportSmsCmd);
+  }
+  async markSmsRead(index: string): Promise<void> {
+    // الصفحة تعلّمها مقروءة بس لو supportSmsCmd (stateHandler) — غيرها ما فيه أمر لها
+    if (!(await this.guiFlags()).supportSmsCmd) return;
+    await this.dalReq('PUT', 'cellwan_sms', { setSmsState: 1, SMS_InboxObjId: Number(index) });
+  }
+  async deleteSms(index: string): Promise<void> {
+    await this.dalReq('DELETE', 'cellwan_sms', undefined, { objIndex: index });
+  }
+  async sendSms(phone: string, text: string): Promise<void> {
+    if (!phone.replace(/\D/g, '')) throw noChange('رقم المستلم غير صحيح — ما انرسل شي.');
+    const b = zxSmsBody(phone, text, !!(await this.guiFlags()).supportSmsCmd);
+    if (!b) throw noChange('الرسالة طويلة — الحد ٧٠ حرف بالعربي أو ١٦٠ بالإنجليزي. ما انرسل شي.');
+    await this.dalReq('POST', 'cellwan_sms', b);
+  }
+
+  // ─── حظر الأجهزة (صفحة Security › MAC Filter) ───
+  async getBlockedDevices(): Promise<ConnectedDevice[]> {
+    return zxBlocked((await this.dalList('macfilter'))[0]);
+  }
+  async blockDevice(mac: string, block: boolean, name?: string): Promise<void> {
+    const o = (await this.dalList('macfilter'))[0];
+    if (!o) throw new Error('macfilter: رد غير متوقع');
+    if (o.MAC?.Filter_Enable && !o.MAC?.Restrict) {
+      throw noChange('حظر الأجهزة في راوترك على «القائمة المسموحة بس» — غيّرها من صفحة الراوتر لو تبي تحظر من هنا. ما غيّرنا شي.');
+    }
+    const body = zxBlockPayload(o, mac, block, name);
+    if (!body) return;
+    await this.dalReq('PUT', 'macfilter', body);
+    const after = zxBlocked((await this.dalList('macfilter'))[0]).some(d => d.mac === mac.toUpperCase());
+    if (after !== block) throw new Error('الراوتر قبل أمر الحظر بس القائمة ما تغيّرت');
+  }
+
+  // ─── البوصلة (FWA505 الخارجي — صفحة Maintenance › Azimuth) ───
+  async getAzimuth(): Promise<ZxAzimuth | null> {
+    try { return zxAzimuth((await this.dalList('azimuth'))[0]); } catch { return null; }
+  }
 }

@@ -27,6 +27,7 @@ const files = [
   'src/drivers/models.ts',
   'src/drivers/zyxel/crypto.ts',
   'src/drivers/zyxel/index.ts',
+  'src/drivers/zyxel/extra.ts',
   'src/drivers/fiberhome/crypto.ts',
   'src/drivers/fiberhome/fhapi.ts',
   'src/drivers/fiberhome/v2extra.ts',

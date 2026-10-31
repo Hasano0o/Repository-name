@@ -364,6 +364,8 @@ export interface RouterDriver {
   getCarriers?(): Promise<Carrier[]>;
   /** قنوات الواي فاي */
   getWifiRadios?(): Promise<WifiRadio[]>;
+  /** اتجاه الراوتر بالدرجات من بوصلته الداخلية (زيكسل FWA505 الخارجي — oid=azimuth). accuracy 0–3 */
+  getAzimuth?(): Promise<{ deg: number; accuracy: number; compensated?: number; lockDeg?: number } | null>;
   setWifiChannel?(band: '2.4' | '5', channel: string): Promise<void>;
   /** نص خام للدعم لو الراوتر ما قبل التغيير */
   wifiDebug?(): Promise<string>;

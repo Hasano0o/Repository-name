@@ -190,6 +190,7 @@ export default function AimScreen() {
   const insets = useSafeAreaInsets();
   const [info, setInfo] = useState<SavedRouter | null>(null);
   const [signal, setSignal] = useState<Signal | null>(null);
+  const [azi, setAzi] = useState<{ deg: number; accuracy: number; compensated?: number; lockDeg?: number } | null>(null);
   const [tech, setTech] = useState<Tech>('LTE');
   const [readings, setReadings] = useState<Reading[]>([]);
   const [baseline, setBaseline] = useState<number | null>(null);
@@ -319,10 +320,15 @@ export default function AimScreen() {
     if (busy.current) return;
     busy.current = true;
     try {
-      const sig = await withSession(r, async d => {
+      const res = await withSession(r, async d => {
         setCanPin(typeof d.lockCell === 'function' && typeof d.unlockCell === 'function' && !d.cellLockRisk);
-        return d.getSignal ? d.getSignal() : null;
+        const s = d.getSignal ? await d.getSignal() : null;
+        // بوصلة الراوتر نفسه (زيكسل FWA505 الخارجي) — اختياري، فشلها ما يوقف القياس
+        const az = d.getAzimuth ? await d.getAzimuth().catch(() => null) : undefined;
+        return { s, az };
       });
+      if (res.az !== undefined) setAzi(res.az);
+      const sig = res.s;
       if (!sig) return;
       setSignal(sig);
       setError('');
@@ -821,6 +827,22 @@ export default function AimScreen() {
 
         {!loading && (
           <>
+            {/* ═══ بوصلة الراوتر (زيكسل FWA505): اتجاهه الحين من حسّاسه الداخلي ═══ */}
+            {!!azi && (
+              <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 10, padding: 12, borderRadius: 16, marginBottom: 10,
+                backgroundColor: P.violetSoft, borderWidth: 1, borderColor: tBd('#b9a6ff') }}>
+                <Text style={{ fontSize: 22 }}>🧭</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: TEXT, fontWeight: '800', fontSize: 15, textAlign: 'right' }}>
+                    اتجاه الراوتر الحين: {Math.round(azi.compensated ?? azi.deg)}°
+                  </Text>
+                  <Text style={{ color: MUTED, fontSize: 12, textAlign: 'right' }}>
+                    {['الدقة ضعيفة — عاير البوصلة من صفحة الراوتر (Azimuth)', 'الدقة منخفضة', 'الدقة متوسطة', 'الدقة عالية'][Math.max(0, Math.min(3, azi.accuracy))]}
+                    {azi.lockDeg !== undefined ? `  ·  الاتجاه المحفوظ: ${Math.round(azi.lockDeg)}°` : ''}
+                  </Text>
+                </View>
+              </View>
+            )}
             {/* ═══ Hero ═══ */}
             {/* ═══ شريط التوجيه: الصوت والاهتزاز + وين أنت من أفضل نقطة ═══ */}
             <View style={a.aimBar}>
