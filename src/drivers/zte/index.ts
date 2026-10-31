@@ -1,4 +1,7 @@
 import { sha256 } from '@noble/hashes/sha2';
+import { u30Enc, u30NewKey } from './u30crypto';
+/** عشوائي آمن — نحمّل expo-crypto وقت الحاجة بس (تشفير U30) */
+const u30Rand = async () => { const C = await import('expo-crypto'); return (n: number) => C.getRandomBytes(n); };
 import { md5 } from '@noble/hashes/legacy';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import {
@@ -351,7 +354,8 @@ export class ZteDriver implements RouterDriver {
   private loginP: Promise<void> | null = null;
   login(host: string, username: string, password: string, opts?: { lastTry?: boolean; fresh?: boolean }): Promise<void> {
     if (this.loginP && !opts?.lastTry && !opts?.fresh) return this.loginP;
-    this.loginP = this.loginOnce(host, username, password, !!opts?.lastTry, !!opts?.fresh).finally(() => {
+    // جلسة جديدة = مفتاح تشفير U30 جديد (الصفحة تفاوضه بعد كل دخول)
+    this.loginP = this.loginOnce(host, username, password, !!opts?.lastTry, !!opts?.fresh).then(() => { this.u30Key = ''; }).finally(() => {
       // نخلي النتيجة صالحة ثانيتين — الطلبات اللي وصلت متأخرة ما تفتح دخول جديد
       setTimeout(() => { this.loginP = null; }, 2000);
     });
@@ -1697,9 +1701,40 @@ export class ZteDriver implements RouterDriver {
     if (!/success/i.test(out)) throw this.rejected('حذف الرسالة', out);
   }
 
+  /**
+   * U30 Pro / U30 Air: الصفحة تفاوض مفتاح AES بعد الدخول (web_crt_get ← web_http_enstr_set) وتشفّر رقم ونص الرسالة
+   * (و كلمة الواي فاي) بـ AES-256-GCM — ./u30crypto. بدونها SEND_SMS ينرفض.
+   */
+  private u30Key = '';
+  private async u30EnsureKey(): Promise<string> {
+    if (this.u30Key) return this.u30Key;
+    const r = await this.getRaw('web_crt_get');
+    const pem = String((r as any)?.result ?? (r as any)?.crt ?? '').trim();
+    if (pem.length < 100) throw new Error('الراوتر ما أعطى مفتاح التشفير (web_crt_get)');
+    const { keyHex, enstr } = u30NewKey(pem, await u30Rand());
+    const out = await this.act({ goformId: 'web_http_enstr_set', web_enstr: enstr });
+    if (!/success/i.test(out)) throw this.rejected('مفتاح التشفير', out);
+    this.u30Key = keyHex;
+    return keyHex;
+  }
+
   /** بدون إعادة محاولة تلقائية — عشان ما تنرسل الرسالة مرتين */
   async sendSms(phone: string, text: string): Promise<void> {
     await this.ensure();
+    if (await this.isU30()) {
+      // الرفض هنا = الراوتر ما فك التشفير (ما انرسل شي) ← مفتاح جديد ونعيد مرة وحدة بس
+      const rand = await u30Rand();
+      for (let i = 0; i < 2; i++) {
+        const key = await this.u30EnsureKey();
+        const out = await this.post({
+          goformId: 'SEND_SMS', notCallback: 'true', Number: u30Enc(key, phone.trim(), rand),
+          sms_time: zteSmsNow(), MessageBody: u30Enc(key, ucs2Hex(text), rand), ID: '-1', encode_type: 'UNICODE',
+        });
+        if (/success/i.test(out)) return;
+        if (i === 0) { this.u30Key = ''; continue; }
+        throw this.rejected('إرسال الرسالة', out);
+      }
+    }
     const out = await this.post({
       goformId: 'SEND_SMS', notCallback: 'true', Number: phone.trim(), sms_time: zteSmsNow(),
       MessageBody: ucs2Hex(text), ID: '-1', encode_type: 'UNICODE',

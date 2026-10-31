@@ -15,6 +15,8 @@ import type { ZteIo } from './extras';
 export const U30_WRITES = [
   'LTE_BAND_LOCK', 'NR_BAND_LOCK', 'UNLOCK_ALL_CELL', 'SET_BEARER_PREFERENCE',
   'REBOOT_DEVICE', 'DISCONNECT_NETWORK', 'CONNECT_NETWORK',
+  // الرسائل (٣١ أكتوبر): نفس service.js — المفتاح web_http_enstr_set ثم SEND_SMS مشفّر (u30crypto)، والحذف/القراءة بـ msg_id عادي
+  'web_http_enstr_set', 'SEND_SMS', 'DELETE_SMS', 'SET_MSG_READ',
 ];
 
 /** القيم الافتراضية في config.js لو الراوتر ما رجّع قائمته */
