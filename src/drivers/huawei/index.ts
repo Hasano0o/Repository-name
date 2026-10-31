@@ -192,7 +192,7 @@ export class HuaweiDriver implements RouterDriver {
     this.log('lock-freq 100003 — retrying with developer-mode login (loginflag=2)');
     try { await this.post('user/logout', '<Logout>1</Logout>', undefined, false); } catch {}
     this.queue = [];
-    try { await this.http(`http://${this.host}/html/home.html`, { headers: this.headers() }); } catch {}
+    try { await this.http(`http://${this.host}/html/home.html`, { headers: this.headers() }).then(r => r.text()); } catch {}
     if (this.manualCookie) { try { await this.sesTok(); } catch {} }
     try {
       await this.loginScram(u, p, true);
@@ -432,8 +432,18 @@ export class HuaweiDriver implements RouterDriver {
     this.queue = [];
     this.creds = { u: username, p: password };
     this.devTried = false;
-    try { await this.http(`http://${host}/html/home.html`, { headers: this.headers() }); } catch {}
-    const state = await this.get('user/state-login');
+    try { await this.http(`http://${host}/html/home.html`, { headers: this.headers() }).then(r => r.text()); } catch {}
+    // H112-370 على الآيفون (add-login ٣١ أكتوبر): state-login ينقطع («تعذر الاتصال») مرة وينجح مرة —
+    // الصفحة اللي قبله صارت تنقرى كاملة (فوق)، ولو انقطع نعيده مرة بعد ثانية. ما يغيّر شي للي يرد من أول مرة
+    let state: string;
+    try {
+      state = await this.get('user/state-login');
+    } catch (e) {
+      if (!/تعذر الاتصال/.test(String((e as any)?.message ?? e))) throw e;
+      diag('[huawei] state-login انقطع — نعيده مرة');
+      await new Promise(r => setTimeout(r, 1000));
+      state = await this.get('user/state-login');
+    }
     const type = tag(state, 'password_type');
     this.log('state', tag(state, 'State'), 'password_type', type);
     // H122 (5G CPE Pro 2) وغيره: wifipwdsamewithwebpwd=1 ← كلمة دخول الراوتر هي نفسها كلمة الواي فاي،
@@ -458,7 +468,7 @@ export class HuaweiDriver implements RouterDriver {
       this.log(opts?.fresh ? 'fresh login requested — verifying password' : 'stale session — forcing fresh login');
       try { await this.post('user/logout', '<Logout>1</Logout>'); } catch {}
       this.queue = [];
-      try { await this.http(`http://${host}/html/home.html`, { headers: this.headers() }); } catch {}
+      try { await this.http(`http://${host}/html/home.html`, { headers: this.headers() }).then(r => r.text()); } catch {}
     }
     this.stale = false;
     if (this.manualCookie) { try { await this.sesTok(); } catch { this.manualCookie = false; } }
