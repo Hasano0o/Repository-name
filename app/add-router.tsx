@@ -14,7 +14,8 @@ import { getRouter, saveRouter, updateRouter, deleteRouter, listRouters, SavedRo
 import { LabelScannerHost, ensureScanner } from '../src/ui/scanner';
 import type { LabelData } from '../src/utils/routerLabel';
 import { dropSession } from '../src/store/sessions';
-import { reportError } from '../src/services/errors';
+import { reportError, sendSupportReport, diagText } from '../src/services/errors';
+import { collectRouterFiles, sendRouterFiles, DumpFile } from '../src/services/routerDump';
 import {
   DEVICE_DRIVER_ID, DEVICE_HOST, ensureCellPermission,
 } from '../src/drivers/device';
@@ -121,6 +122,69 @@ export default function AddRouterScreen() {
     pickHost(alt.host);
     setModel({ state: 'found', label: alt.label, host: alt.host });
   };
+  // ═══ «أرسل الخطأ للمطوّر» — مع كل رسالة فشل (نفس فكرة FiberHome): سجل الطلبات + ملفات صفحة الراوتر ═══
+  /** آخر فشل — يتعبّى من addFail داخل onSave */
+  const lastFail = useRef<{ host: string; model: string; what: string; ctx: string } | null>(null);
+  /** ملفات الصفحة اللي جمعناها — لو الإرسال فشل (الراوتر بدون نت) نعيد إرسالها بدون ما نجمع من جديد */
+  const pendingDump = useRef<{ files: DumpFile[]; skipped: string[]; host: string; model: string; text: string } | null>(null);
+  const DEV_BTN = 'أرسل الخطأ للمطوّر';
+  const sendFailToDev = async () => {
+    const f = lastFail.current;
+    if (!f) return;
+    setBusy(true);
+    try {
+      let p = pendingDump.current;
+      if (!p || p.host !== f.host) {
+        const text = [
+          '🧩 فشل إضافة راوتر',
+          `• الموديل: ${f.model}`,
+          `• العنوان: ${f.host}`,
+          `• ${f.ctx}`,
+          `• الخطأ: ${f.what}`,
+          '',
+          diagText(`فشل إضافة راوتر: ${f.what}`, { driverName: f.model }),
+        ].join('\n');
+        p = { files: [], skipped: [], host: f.host, model: f.model, text };
+        // الراوتر يرد؟ نجمع ملفات صفحته (قبل الدخول) — منها نعرف طريقة الدخول بالضبط
+        if (await probeHost(f.host, 2500)) {
+          setStep('نجمع ملفات صفحة الراوتر — لا تطلع من الشاشة…');
+          const got = await withTimeout(
+            collectRouterFiles(f.host, n => setStep(`نجمع ملفات صفحة الراوتر… ${n} — لا تطلع من الشاشة`)),
+            90_000, { files: [] as DumpFile[], skipped: ['جمع الملفات طوّل أكثر من ٩٠ ث'] });
+          p.files = got.files;
+          p.skipped = got.skipped;
+        }
+        pendingDump.current = p;
+      }
+      setStep('نرسل التفاصيل للمطوّر…');
+      const ok = await sendSupportReport('add-login', p.text, { driverName: p.model });
+      let note = '';
+      if (ok && p.files.length) {
+        setStep(`نرسل ${p.files.length} ملف من صفحة الراوتر…`);
+        const r = await sendRouterFiles([...p.files, { p: '_bandly/add-error.txt', t: p.text }],
+          { model: `${p.model}-add-error`, host: p.host, skipped: p.skipped });
+        note = r.ok ? ` و${r.sent} ملف من صفحة الراوتر` : '';
+      }
+      if (ok) {
+        pendingDump.current = null;
+        Alert.alert('✓ وصلت للمطوّر', `وصلت تفاصيل الخطأ${note}. بنشوفها ونرد عليك في قروب الدعم.`);
+      } else {
+        Alert.alert('ما وصلت',
+          'جوالك متصل بالراوتر وما فيه إنترنت. شغّل بيانات الجوال (أو اتصل بشبكة فيها نت) واضغط «أرسل مرة ثانية» — التفاصيل محفوظة.',
+          [{ text: 'رجوع', style: 'cancel' }, { text: 'أرسل مرة ثانية', onPress: () => { sendFailToDev(); } }]);
+      }
+    } finally {
+      setBusy(false);
+      setStep('');
+    }
+  };
+  /** رسالة فشل + زر «أرسل الخطأ للمطوّر» */
+  const failAlert = (title: string, body: string, extra: { text: string; onPress: () => void }[] = []) =>
+    Alert.alert(title, body, [
+      { text: extra.length ? 'رجوع' : 'تمام', style: 'cancel' },
+      ...extra,
+      { text: DEV_BTN, onPress: () => { sendFailToDev(); } },
+    ]);
   /** «راوترك على عنوان ثاني» — mid: الراوتر رد أول وبعدين انقطع (الجوال تحوّل لشبكة ثانية) */
   const alertOtherRouter = (h: string, alt: { host: string; label: string } | null, mid: boolean) => {
     const iosTip = Platform.OS === 'ios'
@@ -128,7 +192,7 @@ export default function AddRouterScreen() {
       : 'ولو قال الجوال «الشبكة بدون إنترنت» اختر «البقاء متصلاً»';
     const switchTip = `غالباً راوترك ما فيه إنترنت، فالجوال يحوّل لحاله لشبكة ثانية فيها إنترنت. ارجع لواي فاي الراوتر من الإعدادات، ${iosTip}، وطفّ «الانضمام التلقائي» للشبكة الثانية مؤقتاً.`;
     if (alt) {
-      Alert.alert(
+      failAlert(
         mid ? 'جوالك تحوّل لراوتر ثاني' : 'جوالك متصل براوتر ثاني',
         `${mid ? `الراوتر على ${h} رد أول، وبعدها انقطع.` : `ما فيه راوتر يرد على ${h}.`}
 
@@ -136,12 +200,12 @@ export default function AddRouterScreen() {
 
 • تبي هذا؟ اضغط «استخدم ${alt.host}» واكتب كلمة مروره.
 • تبي راوتر ${h}؟ ${switchTip}`,
-        [{ text: 'رجوع', style: 'cancel' }, { text: `استخدم ${alt.host}`, onPress: () => applyFoundHost(alt) }],
+        [{ text: `استخدم ${alt.host}`, onPress: () => applyFoundHost(alt) }],
       );
     } else {
-      Alert.alert('الراوتر وقف يرد',
+      failAlert('الراوتر وقف يرد',
         `الراوتر على ${h} رد أول، وبعدها وقف يرد.\n\n• يمكن الراوتر علّق: انتظر دقيقة وجرّب مرة ثانية، ولو ما زبط طفّه وشغّله.\n• أو جوالك طلع من شبكته: ${switchTip}`,
-        [{ text: 'تمام', style: 'cancel' }]);
+      );
     }
   };
   useEffect(() => {
@@ -335,8 +399,11 @@ export default function AddRouterScreen() {
     }
     setBusy(true);
     // فشل الإضافة يوصل للسيرفر (errors.jsonl · add-login) — بدون كلمة ولا آي بي عام: الموديل والعنوان المحلي والخطأ بس
-    const addFail = (what: string, model?: string) =>
-      reportError('add-login', `${model ?? '؟'} · ${h} · مستخدم ${u === 'admin' ? 'admin' : 'مخصص'} · طول الكلمة ${password.length} · ${what.slice(0, 220)}`).catch(() => {});
+    const addFail = (what: string, model?: string) => {
+      lastFail.current = { host: h, model: model ?? '؟', what, ctx: `مستخدم ${u === 'admin' ? 'admin' : 'مخصص'} · طول الكلمة ${password.length}` };
+      pendingDump.current = null;
+      return reportError('add-login', `${model ?? '؟'} · ${h} · مستخدم ${u === 'admin' ? 'admin' : 'مخصص'} · طول الكلمة ${password.length} · ${what.slice(0, 220)}`).catch(() => {});
+    };
     try {
       setStep('نتعرّف على نوع الراوتر...');
       let driver = await detectDriver(h);
@@ -371,9 +438,9 @@ export default function AddRouterScreen() {
           const alt = await findRouterElsewhere(h);
           addFail(`ما رد · ${alt ? `راوتر ثاني ${alt.label} على ${alt.host}` : 'ولا راوتر ثاني'}`);
           if (alt) { alertOtherRouter(h, alt, false); return; }
-          Alert.alert('ما لقينا راوتر',
+          failAlert('ما لقينا راوتر',
             `ما فيه جهاز يرد على ${h}.\n\nتأكد إن جوالك متصل بواي فاي الراوتر (مو بيانات الجوال)، أو خلّ التطبيق يدوّر عليه.`,
-            [{ text: 'تمام', style: 'cancel' }, { text: 'دوّر عليه', onPress: () => nav.push('/setup') }]);
+            [{ text: 'دوّر عليه', onPress: () => nav.push('/setup') }]);
         }
         return;
       }
@@ -407,7 +474,7 @@ export default function AddRouterScreen() {
             await driver.login(h, u, password, { lastTry: true, fresh: true });
           } catch (e2) {
             addFail(`المحاولة الأخيرة · ${e2 instanceof Error ? e2.message : String(e2)}`, prof?.label ?? (driver as any).name);
-            Alert.alert('فشل الدخول', e2 instanceof Error ? e2.message : String(e2));
+            failAlert('فشل الدخول', e2 instanceof Error ? e2.message : String(e2));
             return;
           }
         } else if (NET_ERR.test(msg)) {
@@ -422,7 +489,7 @@ export default function AddRouterScreen() {
               await driver.login(h, u, password, { fresh: true });
             } catch (e3) {
               addFail(`انقطع ثم رد وفشل مرة ثانية · ${msg} ⟶ ${e3 instanceof Error ? e3.message : String(e3)}`, prof?.label ?? (driver as any).name);
-              Alert.alert('فشل الدخول', e3 instanceof Error ? e3.message : String(e3));
+              failAlert('فشل الدخول', e3 instanceof Error ? e3.message : String(e3));
               return;
             }
           } else {
@@ -434,7 +501,7 @@ export default function AddRouterScreen() {
           }
         } else {
           addFail(msg || 'بدون رسالة', prof?.label ?? (driver as any).name);
-          Alert.alert('فشل الدخول', msg || 'تحقق من اسم المستخدم وكلمة المرور');
+          failAlert('فشل الدخول', msg || 'تحقق من اسم المستخدم وكلمة المرور');
           return;
         }
       }
