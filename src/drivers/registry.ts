@@ -7,6 +7,7 @@ import { FiberhomeDriver } from './fiberhome';
 import { OppoDriver } from './oppo';
 import { GreenPacketDriver } from './greenpacket';
 import { NokiaDriver } from './nokia';
+import { NokiaFwaDriver } from './nokia/fwa';
 import { ZteUfiDriver } from './zteufi';
 import { UnknownDriver } from './unknown';
 import { DeviceDriver } from './device';
@@ -38,6 +39,8 @@ const factories: (() => RouterDriver)[] = [
   () => new GreenPacketDriver(),
   // Nokia FastMile 5G Gateway (3.1 — Angular /web_whw/، *_web_app.cgi) — من ملفات صفحة حقيقية (٢٧ و٣١ أكتوبر)، لسا ما انجرّب ميداني
   () => new NokiaDriver(),
+  // Nokia FastMile 6.1 (Angular جديد بدون main-es2015، دخول بـ salt، ubus service_function) — درايفر لحاله، من ملفات صفحة عضو (٣١ أكتوبر)
+  () => new NokiaFwaDriver(),
   () => new UnknownDriver(),
 ];
 

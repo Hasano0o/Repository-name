@@ -79,7 +79,7 @@ export class NokiaDriver implements RouterDriver {
     const n = await this.req('login_web_app.cgi?nonce');
     const nonce = String(n?.nonce ?? '');
     if (!nonce) throw new Error('login_web_app: الراوتر ما أعطى nonce');
-    const { body } = nkLoginBody(user, password, nonce, String(n?.randomKey ?? ''), k => Crypto.getRandomBytes(k), Number(n?.iterations) || 0);
+    const { body } = nkLoginBody(user, password, nonce, String(n?.randomKey ?? ''), k => Crypto.getRandomBytes(k), n?.iterations === undefined || n?.iterations === null ? undefined : Number(n.iterations) || 0);
     const r = await this.req('login_web_app.cgi', body);
     const res = Number(r?.result);
     if (res === 0 && r?.token) { this.token = String(r.token); return; }

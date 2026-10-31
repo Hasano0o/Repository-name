@@ -6,7 +6,7 @@
  */
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
-import { b64, utf8 } from '../zyxel/crypto';
+import { b64, utf8, aesCbcEncrypt, rsaPkcs1Encrypt } from '../zyxel/crypto';
 
 
 export function nkEscape(b: string): string {
@@ -24,10 +24,11 @@ export function nkSha256url(a: string, b: string): string {
  * hex(SHA256(كلمة)) ثم (iterations-1) مرة hex(SHA256(bytes(hex))) — نفس submitChanges في صفحة تغيير الكلمة.
  * iterations = 0 أو مو موجود (فيرموير ٣١ أكتوبر) ← الكلمة كما هي.
  */
-export function nkPasswordHash(pass: string, iterations: number): string {
+export function nkPasswordHash(pass: string, iterations: number, salt = ''): string {
+  // FastMile 6.1 (FWA): نفس الحسبة بس على salt+كلمة — salt = alati من login_web_app.cgi?salt
   const n = Number.isSafeInteger(iterations) && iterations > 0 && iterations <= 100000 ? iterations : 0;
-  if (!n) return pass;
-  let h = bytesToHex(sha256(utf8(pass)));
+  if (!n) return salt + pass;
+  let h = bytesToHex(sha256(utf8(salt + pass)));
   for (let i = 1; i < n; i++) h = bytesToHex(sha256(hexToBytes(h)));
   return h;
 }
@@ -37,10 +38,28 @@ export function nkPasswordHash(pass: string, iterations: number): string {
  * userhash · RandomKeyhash · response = sha256url(sha256(user, pass), nonce) · nonce · enckey · enciv
  * enckey/enciv: مفتاح AES عشوائي نعطيه الراوتر (يشفّر فيه كلمات الواي فاي في الردود) — ١٦ بايت base64.
  */
-export function nkLoginBody(user: string, pass: string, nonce: string, randomKey: string, rand: (n: number) => Uint8Array, iterations = 0): { body: string; key: string; iv: string } {
+export function nkLoginBody(user: string, pass: string, nonce: string, randomKey: string, rand: (n: number) => Uint8Array,
+  iterations?: number, salt = ''): { body: string; key: string; iv: string } {
   const key = b64(rand(16)), iv = b64(rand(16));
-  const response = nkSha256url(nkSha256(user, nkPasswordHash(pass, iterations)), nonce);
+  // الفيرموير اللي يرسل iterations (حتى لو 0) يصغّر الناتج: sha256(user, r.toLowerCase()) — القديم بدونها يرسل الكلمة كما هي
+  const secret = iterations === undefined && !salt ? pass : nkPasswordHash(pass, iterations ?? 0, salt).toLowerCase();
+  const response = nkSha256url(nkSha256(user, secret), nonce);
   const body = `userhash=${nkSha256url(user, nonce)}&RandomKeyhash=${nkSha256url(randomKey, nonce)}&response=${response}`
     + `&nonce=${nkEscape(nonce)}&enckey=${nkEscape(key)}&enciv=${nkEscape(iv)}`;
   return { body, key, iv };
+}
+
+/** sjcl.codec.base64url: بدون = وبـ - _ */
+const b64url = (u: Uint8Array) => b64(u).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+/**
+ * encrypt_post_data في crypto_page.js (FastMile 6.1 يشفّر كل طلب POST_CSRF بعد الدخول بالمفتاح العام pubkey من nonce):
+ * مفتاح AES-128 + iv عشوائي ← ct = AES-CBC (PKCS#7) · ck = RSA PKCS#1 (JSEncrypt) على "base64(key) base64(iv)"
+ * الجسم: encrypted=1&ct=<base64url بدون =>&ck=<base64 بالهروب>
+ */
+export function nkEncryptPost(pubkey: string, plain: string, rand: (n: number) => Uint8Array): string {
+  const key = rand(16), iv = rand(16);
+  const ct = aesCbcEncrypt(key, iv, utf8(plain));
+  const ck = b64(rsaPkcs1Encrypt(pubkey, utf8(b64(key) + ' ' + b64(iv)), rand));
+  return 'encrypted=1&ct=' + b64url(ct) + '&ck=' + nkEscape(ck);
 }
