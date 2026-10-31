@@ -32,6 +32,7 @@ object WifiRoute {
     if (started) return
     started = true
     val app = context.applicationContext
+    var watch = true
     try {
       val cm = app.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
       val req = NetworkRequest.Builder()
@@ -42,14 +43,15 @@ object WifiRoute {
         override fun onLost(network: Network) { if (wifi == network) wifi = null }
       })
     } catch (ignored: Throwable) {
-      return // ما نقدر نراقب الواي فاي — نخلي fetch على وضعه الطبيعي
+      watch = false // ما نقدر نراقب الواي فاي — التوجيه يطفى، وقبول شهادات الراوترات (LanTls) يبقى
     }
 
     OkHttpClientProvider.setOkHttpClientFactory(object : OkHttpClientFactory {
-      override fun createNewNetworkModuleClient(): OkHttpClient =
-        OkHttpClientProvider.createClientBuilder(app)
-          .socketFactory(LanOverWifiSocketFactory)
-          .build()
+      override fun createNewNetworkModuleClient(): OkHttpClient {
+        val b = OkHttpClientProvider.createClientBuilder(app)
+        if (watch) b.socketFactory(LanOverWifiSocketFactory)
+        return LanTls.apply(b).build()
+      }
     })
   }
 

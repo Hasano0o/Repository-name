@@ -19,6 +19,14 @@
   - App Privacy: الصوت يروح لمحرك أبل/قوقل للتحويل لنص بس، وBandly ما يحفظه ولا يرسله لسيرفره.
   - ⏳ **ينتظر:** APK جديد + نسخة متجر iOS.
 
+- **🔒 راوترات https بشهادة ذاتية** — ✅ انبنى بالكود (31 أكتوبر 2026). السبب: Huawei H112-370 (Three) يحوّل صفحاته وstate-login لـ https بشهادة ذاتية، والآيفون يرفض («A TLS error caused the secure connection to fail»).
+  - **أندرويد:** `modules/bandly-cell/.../LanTls.kt` — في نفس مصنع OkHttp حق `WifiRoute` (fetch كله): فحص النظام أول، ولو رفض **والسوكت متصل بعنوان محلي فعلاً** (192.168/10/172.16-31/169.254) نقبل. الاسم: نفس الفكرة. علامة للـ JS: `BandlyCell.lanTls()`.
+  - **آيفون:** موديول جديد `modules/bandly-tls` — `BandlyLanTrust.m` يضيف لـ `RCTHTTPRequestHandler` (وقت +load) دالة تحدي الشهادة: يقبل بس للعناوين المحلية (IP خاص أو .local/.lan/.home/.internal أو اسم بدون نقطة)، والباقي PerformDefaultHandling. علامة: `BandlyTls.lanTls()`.
+  - **JS:** `src/drivers/http.ts` (`TLS_ERR` + `setLanTlsFlag` من `app/_layout.tsx`): النسخ القديمة تشوف «يحتاج آخر نسخة من Bandly من المتجر» بدل «تعذر الاتصال». اختبار `tests/lanTls.test.ts`.
+  - **أي اتصال غير محلي (السيرفر، التحديثات، Cloudflare) ما يتغيّر عليه شي.**
+  - ما انضاف للويندوز (Electron) — لو احتجناه: undici Agent بـ rejectUnauthorized:false للعناوين المحلية بس في `desktop/main.js`.
+  - ⏳ **ينتظر:** APK جديد + نسخة متجر iOS. بعدها: صاحب H112-370 يجرّب الدخول.
+
 ## مقترحة (تنتظر قرار)
 - **اهتزاز أدق** (`expo-haptics`) لكل شاشات التوجيه — الحين نستخدم اهتزاز النظام البسيط.
 - **الاشتراك المدفوع** (أسبوع مجاني ثم ١٠ ريال بالشهر) — مشتريات داخل التطبيق من أبل وقوقل. **مؤجل** (17 أكتوبر 2026): لين ينتشر التطبيق.

@@ -26,6 +26,15 @@ function guardBody(res: Response, ms: number): Response {
   return res;
 }
 
+/**
+ * النسخة المثبّتة تقبل شهادات الراوترات الذاتية (https محلي)؟ — يتعبّى من app/_layout.tsx
+ * (هنا بدون react-native عشان الاختبارات). افتراضياً لا.
+ */
+let lanTlsFlag: () => boolean = () => false;
+export function setLanTlsFlag(f: () => boolean) { lanTlsFlag = f; }
+/** خطأ شهادة/TLS: الآيفون «A TLS error… / An SSL error…» · أندرويد SSLHandshake / Trust anchor / CertPath / Hostname not verified */
+export const TLS_ERR = /(TLS|SSL|certificate|Trust anchor|CertPath|not verified|handshake)/i;
+
 export async function http(
   url: string,
   init: RequestInit = {},
@@ -86,6 +95,12 @@ export async function http(
     }
     if (e?.message === 'رفض: redirect خارجي' || e?.message === 'رفض: عنوان غير محلي') {
       throw e;
+    }
+    // الراوتر حوّلنا لـ https بشهادة ذاتية (H112-370 من Three): النسخ القديمة ترفضها — نقول له يحدّث بدل «تعذر الاتصال»
+    if (TLS_ERR.test(String(e?.message ?? e))) {
+      throw new Error(lanTlsFlag()
+        ? `الاتصال المشفّر بالراوتر فشل (${what.split(' ').slice(0, 2).join(' ')})`
+        : 'راوترك يفتح صفحته باتصال مشفّر (https) — يحتاج آخر نسخة من Bandly من المتجر');
     }
     // نذكر الطلب اللي انقطع (المسار بس، بدون أي قيم) — الراوتر يرد على غيره، فنعرف وش اللي يقطعه بالضبط
     throw new Error(`تعذر الاتصال بالراوتر (${what.split(' ').slice(0, 2).join(' ')})`);

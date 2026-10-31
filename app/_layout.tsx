@@ -24,6 +24,10 @@ import { C, isDark } from '../src/ui/theme';
 import { UpdateBanner } from '../src/ui/UpdateBanner';
 import { initNotificationHandler } from '../src/utils/notify';
 import '../src/tasks/monitor'; // يسجّل تعريف مهمة المراقبة الخلفية عند الإقلاع
+import { setLanTlsFlag } from '../src/drivers/http';
+import { lanTlsAvailable } from '../modules/bandly-tls/src';
+// راوترات https بشهادة ذاتية: النسخة فيها القبول؟ (بناء نوفمبر ٢٠٢٦) — يحدد رسالة الخطأ (حدّث / فشل التشفير)
+setLanTlsFlag(lanTlsAvailable);
 import { ProgressHost } from '../src/ui/Progress';
 
 initNotificationHandler();

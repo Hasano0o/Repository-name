@@ -47,6 +47,9 @@ class BandlyCellModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("BandlyCell")
 
+    /** النسخة فيها قبول شهادات الراوترات الذاتية على العناوين المحلية (LanTls) — من نوفمبر ٢٠٢٦ */
+    Function("lanTls") { true }
+
     Function("isSupported") {
       ctx.packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY)
     }

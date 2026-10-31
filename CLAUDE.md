@@ -15,6 +15,8 @@ Bandly: تطبيق Expo (SDK 57، expo-router، TypeScript strict) يدير را
 - **ZTE U30 Air**: نفس أوامر U30 Pro (`cmdSet: 'u30'`، profile `u30Air`) — نفس الحذر.
 - **U30 (Pro/Air) — التشفير**: بعد الدخول الصفحة تفاوض مفتاح AES (`web_crt_get` ← `web_http_enstr_set` بـ RSA) وتشفّر الحقول الحساسة AES-256-GCM: `base64(iv‖tag‖ct)` (`zte/u30crypto.ts`). الرسائل مفتوحة (SEND_SMS مشفّر، DELETE_SMS/SET_MSG_READ عادي). الواي فاي (`setAccessPointInfo` Password = l(...)) لسا محجوب. تثبيت البرج مقفول على كل ZTE (`cellLockRisk`).
 - **ZTE U30 Pro**: القراءة شغالة، والكتابة موقوفة عمداً (`writeUnverified` في `models.ts`) لين يوصل `service.js` من «مو مدعوم؟». لا ترسل أوامر تخمينية لراوتر عضو.
+- **راوترات https بشهادة ذاتية** (من بناء نوفمبر ٢٠٢٦): أندرويد `bandly-cell/LanTls.kt` (مصنع OkHttp)، آيفون `modules/bandly-tls` (دالة تحدي الشهادة على RCTHTTPRequestHandler) — يقبل **بس** للعناوين المحلية. `http.ts` يعرف خطأ TLS (`TLS_ERR`) ويقول «يحتاج آخر نسخة» للنسخ القديمة (`setLanTlsFlag` في `_layout.tsx`).
+- «إضافة راوتر» (`app/add-router.tsx`): أي فشل ← `add-login` في `data/errors.jsonl`، وزر «أرسل الخطأ للمطوّر» ← تقرير كامل في `data/reports/bandly-add-login-*.txt` + zip الصفحة `<الموديل>-add-error` في `data/dumps/` (ما ينرسل للبوت — يتحفظ بالسيرفر).
 - «مو مدعوم؟» (`app/newdevice.tsx` + `src/services/routerDump.ts`): يجمع ملفات صفحة الراوتر ويرسلها zip للبوت؛ لو فشل الإرسال يوصل تقرير `newdevice-dump`. الحزم على السيرفر في `/root/bandly-live/data/dumps/`.
 - الاختبارات: `node tests/run.cjs` (لازم كلها تنجح قبل الدمج).
 - الشاشات: `app/<name>/[id].tsx` — وعناوينها في مصفوفة `SCREENS` داخل `app/_layout.tsx` (أي شاشة جديدة تنضاف هناك).
