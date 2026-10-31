@@ -213,6 +213,15 @@ export function missLine(p: string, r: { ok: boolean; status: number; text: stri
   if (r.ok && !r.text) return `✗ ${p} ← فاضي (${r.status})`;
   return `✗ ${p} ← HTTP ${r.status}`;
 }
+/**
+ * هواوي يرد 200 بـ XML خطأ لأي ملف مو موجود: <error><code>100002</code> (مو موجود) / 100003 (يحتاج دخول).
+ * كنا نحفظها ملفات (٨٨ بايت) — E5785 (٣١ أكتوبر): ٧٠ ملف فاضي من ٨٦ وضاعت الصفحات الحقيقية تحت الحد.
+ */
+export function huaweiErrorCode(text: string): string | null {
+  if (text.length > 400) return null;
+  const m = text.match(/^\s*(?:<\?xml[^>]*>\s*)?<error>\s*<code>\s*(\d{6})\s*<\/code>/);
+  return m ? m[1] : null;
+}
 /** الصفحات (.html) أول: هي اللي تهمنا لو ما وصلت — والـ js المخمّنة من النصوص كثير منها 404 طبيعي */
 function topMisses(m: string[], n = 25): string[] {
   return [...m.filter(x => /\.html?\b/.test(x)), ...m.filter(x => !/\.html?\b/.test(x))].slice(0, n);
@@ -234,6 +243,8 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
   let appBase = '';
   /** مجلد data-main (RequireJS) — FiberHome LG6851F: /src/ */
   let dmBase = '';
+  /** مجلد آخر صفحة HTML حمّلت سكربتات (هواوي القديم: /html/index.html ← ../js/main.js) — أسماء الصفحات داخل السكربت تنحسب منها */
+  let pageDir = '';
   while (queue.length && files.length < MAX_FILES && total < MAX_TOTAL) {
     const p = queue.shift()!;
     if (seen.has(p)) continue;
@@ -244,6 +255,8 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
     if (!r.ok || !r.text) { misses.push(missLine(p, r)); continue; }
     // راوترات ترجع الصفحة الرئيسية لأي رابط مو موجود — ما نكررها (بس نكتب إنه صار)
     if (p !== '/' && homeSample && r.text.slice(0, 400) === homeSample) { misses.push(missLine(p, r, true)); continue; }
+    const hwErr = huaweiErrorCode(r.text);
+    if (hwErr) { misses.push(`✗ ${p} ← رد هواوي ${hwErr}${hwErr === '100002' ? ' (مو موجود)' : hwErr === '100003' ? ' (يحتاج دخول)' : ''}`); continue; }
     if (p === '/') homeSample = r.text.slice(0, 400);
     const t = scrub(r.text.slice(0, MAX_FILE));
     files.push({ p: p === '/' ? '/index.html' : p, t });
@@ -259,9 +272,13 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
     // اسم نسبي داخل سكربت (location.href="main.html" في /js/login.js) ينحسب في المتصفح من الصفحة مو من مكان
     // السكربت — كنا نطلب /js/main.html وتضيع صفحة الإعدادات (FiberHome LG6851F). نجرّب الاثنين.
     const isJs = /\.js$/i.test(p);
+    if (/\.html?$/i.test(p) && p !== '/' && /<script[^>]+src=/i.test(r.text)) pageDir = p.replace(/[^/]*$/, '');
     for (const ref of [...findRefs(r.text), ...angularChunks(r.text)]) {
       const cands = [resolvePath(ref, from)];
-      if (isJs && !bh && !/^\.{0,2}\//.test(ref)) cands.push(resolvePath(ref, '/index.html'));
+      if (isJs && !bh && !/^\.{0,2}\//.test(ref)) {
+        cands.push(resolvePath(ref, '/index.html'));
+        if (pageDir && pageDir !== '/' && /\.html?$/i.test(ref)) cands.unshift(resolvePath(ref, pageDir + 'index.html'));
+      }
       for (const rp of cands) if (rp && !seen.has(rp) && !queue.includes(rp)) queue.push(rp);
     }
     const dmb = dataMainBase(r.text);

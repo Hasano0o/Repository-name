@@ -338,3 +338,26 @@ test('FiberHome LG6851F (ملف AUTH حقيقي): صفحات الإعدادات 
   const pages = got.filter(p => p.startsWith('/src/content/pages/'));
   assert.ok(pages.indexOf('/src/content/pages/frequencyLockSet.js') < pages.indexOf('/src/content/pages/home.js'), 'صفحات الشبكة قبل الباقي');
 });
+
+test('هواوي القديم (E5785): رد XML 100002 ينحسب «ما وصل» مو ملف، والصفحات داخل السكربت تنطلب من مجلد الصفحة /html/', async () => {
+  const NF = '<?xml version="1.0" encoding="UTF-8"?>\n<error>\n<code>100002</code>\n<message/>\n</error>';
+  const served: Record<string, string> = {
+    '/': '<html><script>window.location.replace("/html/index.html");</script></html>',
+    '/html/index.html': '<html><script type="text/javascript" src="../js/main.js"></script></html>',
+    '/js/main.js': 'var pages=["celllock.html","mobilenetworksettings.html"];$.get("api/net/net-mode")',
+    '/html/celllock.html': '<div id="celllock"></div>',
+    '/html/mobilenetworksettings.html': '<div id="netmode"></div>',
+  };
+  const asked: string[] = [];
+  (globalThis as any).fetch = async (url: string) => {
+    const p = url.replace(/^http:\/\/[^/]+/, '').split('?')[0];
+    asked.push(p);
+    const body = served[p] ?? NF;   // هواوي: 200 بـ XML خطأ لأي شي مو موجود
+    return { ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => body } as any;
+  };
+  const { files, skipped } = await collectRouterFiles('192.168.8.1');
+  const got = files.map(f => f.p);
+  assert.ok(got.includes('/html/celllock.html') && got.includes('/html/mobilenetworksettings.html'), 'صفحات الإعدادات من /html/: ' + got.join(', '));
+  assert.ok(!files.some(f => !f.p.startsWith('/_bandly/') && /<code>100002<\/code>/.test(f.t)), 'ولا ملف فاضي 100002: ' + files.filter(f => /100002/.test(f.t)).map(f => f.p).join(','));
+  assert.ok(skipped.some(x => /رد هواوي 100002 \(مو موجود\)/.test(x)), skipped.join(' | '));
+});
