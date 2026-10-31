@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLeaveGuard } from '../../src/ui/useLeaveGuard';
 import { ActivityIndicator, Alert, Share } from 'react-native';
 import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -108,6 +109,8 @@ export default function GameScreen() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const cancel = useRef(false);
+  // خروج وقت الفحص ← تأكيد (كان يكمل بالخلفية ويطلع «الراوتر مشغول» لو رجع)
+  useLeaveGuard(running, { what: 'مُحسّن الألعاب', onStop: () => { cancel.current = true; } });
   const mounted = useRef(true);
 
   const reg = regionById(region);

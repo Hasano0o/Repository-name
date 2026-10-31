@@ -1,4 +1,5 @@
 import { runRouterOp } from '../../src/utils/routerOp';
+import { useLeaveGuard } from '../../src/ui/useLeaveGuard';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, } from 'react-native';
 import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
@@ -75,6 +76,8 @@ export default function NsaCombo() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const cancel = useRef(false);
+  // خروج وقت الفحص ← تأكيد (كان يكمل بالخلفية ويطلع «الراوتر مشغول» لو رجع)
+  useLeaveGuard(running, { what: 'فحص الدمج', onStop: () => { cancel.current = true; } });
   const mounted = useRef(true);
   const [, setTick] = useState(0);
   useEffect(() => {

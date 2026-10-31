@@ -1,4 +1,5 @@
 import { runRouterOp } from '../../src/utils/routerOp';
+import { useLeaveGuard } from '../../src/ui/useLeaveGuard';
 /**
  * الدمج المزدوج — نفس التردد مرتين:
  *   5G: n77+n77 / n78+n78 (الافتراضي)
@@ -81,6 +82,8 @@ export default function NrDual() {
   const [pick, setPick] = useState<number | null>(null);
   const [manual, setManual] = useState<{ band: number; count: number; bw?: number } | null>(null);
   const cancel = useRef(false);
+  // خروج وقت الفحص ← تأكيد (كان يكمل بالخلفية ويطلع «الراوتر مشغول» لو رجع)
+  useLeaveGuard(running, { what: 'فحص الدمج المزدوج', onStop: () => { cancel.current = true; } });
   const mounted = useRef(true);
 
   useEffect(() => {

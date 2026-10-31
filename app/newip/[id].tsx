@@ -1,4 +1,5 @@
 import { runRouterOp } from '../../src/utils/routerOp';
+import { useLeaveGuard } from '../../src/ui/useLeaveGuard';
 /**
  * آي بي جديد — تصعيد تلقائي: ١) قطع بيانات سريع  ٢) لو نفس الآي بي: فصل كامل عن البرج (reattach)
  * — هذا اللي يخلي الشركة تفك الآي بي مثل الطفي — ٣) إعادة تشغيل كخيار أخير.
@@ -62,6 +63,8 @@ export default function NewIp() {
   const [before, setBefore] = useState<Ips | null>(null);
   const [after, setAfter] = useState<Ips | null>(null);
   const [busy, setBusy] = useState(false);
+  // خروج وقت الفحص ← تأكيد (كان يكمل بالخلفية ويطلع «الراوتر مشغول» لو رجع)
+  useLeaveGuard(busy, { what: 'آي بي جديد' });
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');

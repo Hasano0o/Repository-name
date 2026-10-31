@@ -1,4 +1,5 @@
 import { runRouterOp } from '../../src/utils/routerOp';
+import { useLeaveGuard } from '../../src/ui/useLeaveGuard';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, } from 'react-native';
 import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
@@ -71,6 +72,8 @@ export default function OptimizeScreen() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const cancel = useRef(false);
+  // خروج وقت الفحص ← تأكيد (كان يكمل بالخلفية ويطلع «الراوتر مشغول» لو رجع)
+  useLeaveGuard(running, { what: 'المُحسّن التلقائي', onStop: () => { cancel.current = true; } });
   const mounted = useRef(true);
 
   useEffect(() => {
