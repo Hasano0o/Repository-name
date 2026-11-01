@@ -1,0 +1,146 @@
+<form method="post" name="cbi" action="/cgi-bin/luci/;stok=STOK/admin/modem/cell" enctype="multipart/form-data" onreset="return cbi_validate_reset(this)" onsubmit="return cbi_validate_form(this, 'Some fields are invalid, cannot save values!','The entered password is invalid!')">
+	<div>
+		<script type="text/javascript" src="/luci-static/resources/cbi.js"></script>
+		<input type="hidden" name="cbi.submit" value="1" />
+		<input type="submit" value="Submit" class="hidden" />
+	</div>
+<div class="cbi-map" id="cbi-modem_info">
+	<h2><a id="content" name="content">Cell lock</a></h2>
+	
+	<fieldset class="cbi-section" id="cbi-modem_info-ltecelllock">
+		<legend>4G</legend>
+		
+		
+		
+		<div class="cbi-section-node" id="cbi-modem_info-ltecelllock">
+			
+
+
+	<div class="cbi-value" id="cbi-modem_info-ltecelllock-enable"><label class="cbi-value-title" for="cbid.modem_info.ltecelllock.enable">Enbale</label>
+		<div class="cbi-value-field">
+
+	<input type="hidden" value="1" name="cbi.cbe.modem_info.ltecelllock.enable" />
+	<input class="cbi-input-checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" type="checkbox" id="cbid.modem_info.ltecelllock.enable" name="cbid.modem_info.ltecelllock.enable" value="1" />
+		</div></div>
+
+
+
+
+<div class="cbi-value" id="cbi-modem_info-ltecelllock-freq"><label class="cbi-value-title" for="cbid.modem_info.ltecelllock.freq">freq</label>
+		<div class="cbi-value-field">
+
+	<input type="text" class="cbi-input-text" onchange="cbi_d_update(this.id)" name="cbid.modem_info.ltecelllock.freq" id="cbid.modem_info.ltecelllock.freq" value="" />
+	
+			</div></div>
+
+
+
+
+<div class="cbi-value cbi-value-last" id="cbi-modem_info-ltecelllock-pci"><label class="cbi-value-title" for="cbid.modem_info.ltecelllock.pci">PCI</label>
+		<div class="cbi-value-field">
+
+	<input type="text" class="cbi-input-text" onchange="cbi_d_update(this.id)" name="cbid.modem_info.ltecelllock.pci" id="cbid.modem_info.ltecelllock.pci" value="" />
+	
+			</div></div>
+
+
+
+
+
+
+
+
+
+
+
+		</div>
+		<br />
+	</fieldset>
+
+<!-- /nsection -->
+
+	<fieldset class="cbi-section" id="cbi-modem_info-sacelllock">
+		<legend>5G</legend>
+		
+		
+		
+		<div class="cbi-section-node" id="cbi-modem_info-sacelllock">
+			
+
+
+	<div class="cbi-value" id="cbi-modem_info-sacelllock-enable"><label class="cbi-value-title" for="cbid.modem_info.sacelllock.enable">Enbale</label>
+		<div class="cbi-value-field">
+
+	<input type="hidden" value="1" name="cbi.cbe.modem_info.sacelllock.enable" />
+	<input class="cbi-input-checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" type="checkbox" id="cbid.modem_info.sacelllock.enable" name="cbid.modem_info.sacelllock.enable" value="1" checked="checked" />
+		</div></div>
+
+
+
+
+<div class="cbi-value" id="cbi-modem_info-sacelllock-freq"><label class="cbi-value-title" for="cbid.modem_info.sacelllock.freq">freq</label>
+		<div class="cbi-value-field">
+
+	<input type="text" class="cbi-input-text" onchange="cbi_d_update(this.id)" name="cbid.modem_info.sacelllock.freq" id="cbid.modem_info.sacelllock.freq" value="636666" />
+	
+			</div></div>
+
+
+
+
+<div class="cbi-value" id="cbi-modem_info-sacelllock-scs"><label class="cbi-value-title" for="cbid.modem_info.sacelllock.scs">scs</label>
+		<div class="cbi-value-field">
+
+
+	<select class="cbi-input-select" onchange="cbi_d_update(this.id)" id="cbid.modem_info.sacelllock.scs" name="cbid.modem_info.sacelllock.scs" size="1">
+	<option id="cbi-modem_info-sacelllock-scs-15" value="15">15</option><option id="cbi-modem_info-sacelllock-scs-30" value="30" selected="selected">30</option><option id="cbi-modem_info-sacelllock-scs-60" value="60">60</option><option id="cbi-modem_info-sacelllock-scs-120" value="120">120</option>
+	</select>
+
+		</div></div>
+
+
+
+
+<div class="cbi-value" id="cbi-modem_info-sacelllock-pci"><label class="cbi-value-title" for="cbid.modem_info.sacelllock.pci">PCI</label>
+		<div class="cbi-value-field">
+
+	<input type="text" class="cbi-input-text" onchange="cbi_d_update(this.id)" name="cbid.modem_info.sacelllock.pci" id="cbid.modem_info.sacelllock.pci" value="123" />
+	
+			</div></div>
+
+
+
+
+<div class="cbi-value cbi-value-last" id="cbi-modem_info-sacelllock-band"><label class="cbi-value-title" for="cbid.modem_info.sacelllock.band">band</label>
+		<div class="cbi-value-field">
+
+	<input type="text" class="cbi-input-text" onchange="cbi_d_update(this.id)" name="cbid.modem_info.sacelllock.band" id="cbid.modem_info.sacelllock.band" value="78" />
+	
+			</div></div>
+
+
+
+
+
+
+
+
+
+
+
+		</div>
+		<br />
+	</fieldset>
+
+<!-- /nsection -->
+
+	<br />
+</div><div class="cbi-page-actions">
+		
+
+		
+		
+			<input class="cbi-button cbi-button-apply" type="submit" name="cbi.apply" value="Save &amp; Apply" />
+		
+		<script type="text/javascript">cbi_d_update();</script>
+	</div></form>

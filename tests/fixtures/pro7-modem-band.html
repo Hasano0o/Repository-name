@@ -1,0 +1,413 @@
+<form method="post" name="cbi" action="/cgi-bin/luci/;stok=STOK/admin/modem/band" enctype="multipart/form-data" onreset="return cbi_validate_reset(this)" onsubmit="return cbi_validate_form(this, 'Some fields are invalid, cannot save values!','The entered password is invalid!')">
+	<div>
+		<script type="text/javascript" src="/luci-static/resources/cbi.js"></script>
+		<input type="hidden" name="cbi.submit" value="1" />
+		<input type="submit" value="Submit" class="hidden" />
+	</div>
+<div class="cbi-map" id="cbi-modem_info">
+	<h2><a id="content" name="content">Band Lock</a></h2>
+	<fieldset class="cbi-section" id="cbi-modem_info-band">
+	
+	<div class="cbi-section-descr"></div>
+	
+
+		
+
+		<fieldset class="cbi-section-node" id="cbi-modem_info-band">
+			
+
+
+	<div class="cbi-value" id="cbi-modem_info-band-gwenable"><label class="cbi-value-title" for="cbid.modem_info.band.gwenable">Enable WCDMA</label>
+		<div class="cbi-value-field">
+
+	<input type="hidden" value="1" name="cbi.cbe.modem_info.band.gwenable" />
+	<input class="cbi-input-checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" type="checkbox" id="cbid.modem_info.band.gwenable" name="cbid.modem_info.band.gwenable" value="1" />
+		</div></div>
+
+
+
+
+<div class="cbi-value cbi-value-last" id="cbi-modem_info-band-set_gwband"><label class="cbi-value-title" for="cbid.modem_info.band.set_gwband">WCDMA List</label>
+		<div class="cbi-value-field">
+
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_gwband1" name="cbid.modem_info.band.set_gwband" value="1" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_gwband1">1</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_gwband2" name="cbid.modem_info.band.set_gwband" value="5" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_gwband2">5</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_gwband3" name="cbid.modem_info.band.set_gwband" value="8" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_gwband3">8</label>
+	
+		<br />
+	
+
+
+		</div></div>
+
+
+
+
+
+
+
+
+
+
+
+		</fieldset>
+		<br />
+
+	
+
+	
+</fieldset><fieldset class="cbi-section" id="cbi-modem_info-band">
+	
+	<div class="cbi-section-descr"></div>
+	
+
+		
+
+		<fieldset class="cbi-section-node" id="cbi-modem_info-band">
+			
+
+
+	<div class="cbi-value" id="cbi-modem_info-band-lteenable"><label class="cbi-value-title" for="cbid.modem_info.band.lteenable">Enable LTE</label>
+		<div class="cbi-value-field">
+
+	<input type="hidden" value="1" name="cbi.cbe.modem_info.band.lteenable" />
+	<input class="cbi-input-checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" type="checkbox" id="cbid.modem_info.band.lteenable" name="cbid.modem_info.band.lteenable" value="1" />
+		</div></div>
+
+
+
+
+<div class="cbi-value cbi-value-last" id="cbi-modem_info-band-set_lteband"><label class="cbi-value-title" for="cbid.modem_info.band.set_lteband">LTE List</label>
+		<div class="cbi-value-field">
+
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_lteband1" name="cbid.modem_info.band.set_lteband" value="1" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_lteband1">1</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_lteband2" name="cbid.modem_info.band.set_lteband" value="3" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_lteband2">3</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_lteband3" name="cbid.modem_info.band.set_lteband" value="5" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_lteband3">5</label>
+	
+		<br />
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_lteband4" name="cbid.modem_info.band.set_lteband" value="7" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_lteband4">7</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_lteband5" name="cbid.modem_info.band.set_lteband" value="8" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_lteband5">8</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_lteband6" name="cbid.modem_info.band.set_lteband" value="20" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_lteband6">20</label>
+	
+		<br />
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_lteband7" name="cbid.modem_info.band.set_lteband" value="28" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_lteband7">28</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_lteband8" name="cbid.modem_info.band.set_lteband" value="32" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_lteband8">32</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_lteband9" name="cbid.modem_info.band.set_lteband" value="38" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_lteband9">38</label>
+	
+		<br />
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_lteband10" name="cbid.modem_info.band.set_lteband" value="40" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_lteband10">40</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_lteband11" name="cbid.modem_info.band.set_lteband" value="41" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_lteband11">41</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_lteband12" name="cbid.modem_info.band.set_lteband" value="42" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_lteband12">42</label>
+	
+		<br />
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_lteband13" name="cbid.modem_info.band.set_lteband" value="43" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_lteband13">43</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_lteband14" name="cbid.modem_info.band.set_lteband" value="71" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_lteband14">71</label>
+	
+
+
+		</div></div>
+
+
+
+
+
+
+
+
+
+
+
+		</fieldset>
+		<br />
+
+	
+
+	
+</fieldset><fieldset class="cbi-section" id="cbi-modem_info-band">
+	
+	<div class="cbi-section-descr"></div>
+	
+
+		
+
+		<fieldset class="cbi-section-node" id="cbi-modem_info-band">
+			
+
+
+	<div class="cbi-value" id="cbi-modem_info-band-nsanr5genable"><label class="cbi-value-title" for="cbid.modem_info.band.nsanr5genable">Enable NSA_NR5G</label>
+		<div class="cbi-value-field">
+
+	<input type="hidden" value="1" name="cbi.cbe.modem_info.band.nsanr5genable" />
+	<input class="cbi-input-checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" type="checkbox" id="cbid.modem_info.band.nsanr5genable" name="cbid.modem_info.band.nsanr5genable" value="1" checked="checked" />
+		</div></div>
+
+
+
+
+<div class="cbi-value cbi-value-last" id="cbi-modem_info-band-set_nsanr5gband"><label class="cbi-value-title" for="cbid.modem_info.band.set_nsanr5gband">NSA_NR5G List</label>
+		<div class="cbi-value-field">
+
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nsanr5gband1" name="cbid.modem_info.band.set_nsanr5gband" value="1" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nsanr5gband1">1</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nsanr5gband2" name="cbid.modem_info.band.set_nsanr5gband" value="3" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nsanr5gband2">3</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nsanr5gband3" name="cbid.modem_info.band.set_nsanr5gband" value="5" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nsanr5gband3">5</label>
+	
+		<br />
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nsanr5gband4" name="cbid.modem_info.band.set_nsanr5gband" value="7" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nsanr5gband4">7</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nsanr5gband5" name="cbid.modem_info.band.set_nsanr5gband" value="8" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nsanr5gband5">8</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nsanr5gband6" name="cbid.modem_info.band.set_nsanr5gband" value="20" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nsanr5gband6">20</label>
+	
+		<br />
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nsanr5gband7" name="cbid.modem_info.band.set_nsanr5gband" value="28" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nsanr5gband7">28</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nsanr5gband8" name="cbid.modem_info.band.set_nsanr5gband" value="38" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nsanr5gband8">38</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nsanr5gband9" name="cbid.modem_info.band.set_nsanr5gband" value="40" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nsanr5gband9">40</label>
+	
+		<br />
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nsanr5gband10" name="cbid.modem_info.band.set_nsanr5gband" value="41" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nsanr5gband10">41</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nsanr5gband11" name="cbid.modem_info.band.set_nsanr5gband" value="71" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nsanr5gband11">71</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nsanr5gband12" name="cbid.modem_info.band.set_nsanr5gband" value="75" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nsanr5gband12">75</label>
+	
+		<br />
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nsanr5gband13" name="cbid.modem_info.band.set_nsanr5gband" value="76" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nsanr5gband13">76</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nsanr5gband14" name="cbid.modem_info.band.set_nsanr5gband" value="77" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nsanr5gband14">77</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nsanr5gband15" name="cbid.modem_info.band.set_nsanr5gband" value="78" checked="checked" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nsanr5gband15">78</label>
+	
+		<br />
+	
+
+
+		</div></div>
+
+
+
+
+
+
+
+
+
+
+
+		</fieldset>
+		<br />
+
+	
+
+	
+</fieldset><fieldset class="cbi-section" id="cbi-modem_info-band">
+	
+	<div class="cbi-section-descr"></div>
+	
+
+		
+
+		<fieldset class="cbi-section-node" id="cbi-modem_info-band">
+			
+
+
+	<div class="cbi-value" id="cbi-modem_info-band-nr5genable"><label class="cbi-value-title" for="cbid.modem_info.band.nr5genable">Enable NR5G</label>
+		<div class="cbi-value-field">
+
+	<input type="hidden" value="1" name="cbi.cbe.modem_info.band.nr5genable" />
+	<input class="cbi-input-checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" type="checkbox" id="cbid.modem_info.band.nr5genable" name="cbid.modem_info.band.nr5genable" value="1" />
+		</div></div>
+
+
+
+
+<div class="cbi-value cbi-value-last" id="cbi-modem_info-band-set_nr5gband"><label class="cbi-value-title" for="cbid.modem_info.band.set_nr5gband">NR5G List</label>
+		<div class="cbi-value-field">
+
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nr5gband1" name="cbid.modem_info.band.set_nr5gband" value="1" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nr5gband1">1</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nr5gband2" name="cbid.modem_info.band.set_nr5gband" value="3" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nr5gband2">3</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nr5gband3" name="cbid.modem_info.band.set_nr5gband" value="5" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nr5gband3">5</label>
+	
+		<br />
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nr5gband4" name="cbid.modem_info.band.set_nr5gband" value="7" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nr5gband4">7</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nr5gband5" name="cbid.modem_info.band.set_nr5gband" value="8" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nr5gband5">8</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nr5gband6" name="cbid.modem_info.band.set_nr5gband" value="20" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nr5gband6">20</label>
+	
+		<br />
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nr5gband7" name="cbid.modem_info.band.set_nr5gband" value="28" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nr5gband7">28</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nr5gband8" name="cbid.modem_info.band.set_nr5gband" value="38" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nr5gband8">38</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nr5gband9" name="cbid.modem_info.band.set_nr5gband" value="40" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nr5gband9">40</label>
+	
+		<br />
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nr5gband10" name="cbid.modem_info.band.set_nr5gband" value="41" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nr5gband10">41</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nr5gband11" name="cbid.modem_info.band.set_nr5gband" value="71" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nr5gband11">71</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nr5gband12" name="cbid.modem_info.band.set_nr5gband" value="75" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nr5gband12">75</label>
+	
+		<br />
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nr5gband13" name="cbid.modem_info.band.set_nr5gband" value="76" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nr5gband13">76</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nr5gband14" name="cbid.modem_info.band.set_nr5gband" value="77" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nr5gband14">77</label>
+	
+
+	<input class="cbi-input-checkbox" type="checkbox" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)" id="cbid.modem_info.band.set_nr5gband15" name="cbid.modem_info.band.set_nr5gband" value="78" />
+	<label style="padding-right:20px;"  for="cbid.modem_info.band.set_nr5gband15">78</label>
+	
+		<br />
+	
+
+
+		</div></div>
+
+
+
+
+
+
+
+
+
+
+
+		</fieldset>
+		<br />
+
+	
+
+	
+</fieldset>
+	<br />
+</div><div class="cbi-page-actions">
+		
+
+		
+		
+			<input class="cbi-button cbi-button-apply" type="submit" name="cbi.apply" value="Save &amp; Apply" />
+		
+		<script type="text/javascript">cbi_d_update();</script>
+	</div></form>

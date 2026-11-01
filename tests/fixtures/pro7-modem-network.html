@@ -1,0 +1,196 @@
+<form method="post" name="cbi" action="/cgi-bin/luci/;stok=STOK/admin/modem/network" enctype="multipart/form-data" onreset="return cbi_validate_reset(this)" onsubmit="return cbi_validate_form(this, 'Some fields are invalid, cannot save values!','The entered password is invalid!')">
+	<div>
+		<script type="text/javascript" src="/luci-static/resources/cbi.js"></script>
+		<input type="hidden" name="cbi.submit" value="1" />
+		<input type="submit" value="Submit" class="hidden" />
+	</div>
+<div class="cbi-map" id="cbi-modem_info">
+	
+	<fieldset class="cbi-section" id="cbi-modem_info-network">
+	<legend>Network Selection</legend>
+	<div class="cbi-section-descr"></div>
+	
+
+		
+
+		<fieldset class="cbi-section-node" id="cbi-modem_info-cfg0502af">
+			
+
+
+	<div class="cbi-value" id="cbi-modem_info-cfg0502af-network"><label class="cbi-value-title" for="cbid.modem_info.cfg0502af.network">Network Mode</label>
+		<div class="cbi-value-field">
+
+
+	<select class="cbi-input-select" onchange="cbi_d_update(this.id)" id="cbid.modem_info.cfg0502af.network" name="cbid.modem_info.cfg0502af.network" size="1">
+	<option id="cbi-modem_info-cfg0502af-network-0" value="0">Auto</option><option id="cbi-modem_info-cfg0502af-network-1" value="1">5G Only</option><option id="cbi-modem_info-cfg0502af-network-2" value="2">4G Only</option><option id="cbi-modem_info-cfg0502af-network-3" value="3">3G Only</option><option id="cbi-modem_info-cfg0502af-network-4" value="4" selected="selected">5G NSA Only</option><option id="cbi-modem_info-cfg0502af-network-5" value="5">5G SA Only</option><option id="cbi-modem_info-cfg0502af-network-6" value="6">5G SA+NSA/4G</option>
+	</select>
+
+		</div></div>
+
+
+
+
+<div class="cbi-value cbi-value-last" id="cbi-modem_info-cfg0502af-mode"><label class="cbi-value-title" for="cbid.modem_info.cfg0502af.mode">Network</label>
+		<div class="cbi-value-field">
+
+
+<script type="text/javascript">
+	//<![CDATA[
+	function act_t(act) {
+		switch (act){
+			case 2:
+			case 4:
+			case 5:
+			case 6:
+				return "WCDMA";
+			case 7:
+				return "LTE";
+			case 10:
+			case 11:
+				return "NR5G";
+			case 12:
+				return "OTHER";
+			case 13:
+				return "NSA-NR5G";
+			default:
+				return " "
+		}
+	}
+
+	function stat_t(stat) {
+		switch (stat){
+			case "0":
+				return "(Unknown)";
+			//available
+			case "1":
+				return "";
+			case "2":
+				return "(Current)";
+			case "3":
+				return "(Forbidden)";
+			default:
+				return " "
+		}
+	}
+
+	function start(btn) {
+		btn.value    = 'Searching...';
+		btn.disabled = true;
+		var value_net = document.getElementById("cbid.modem_info.cfg0502af.mode");
+		var table = document.getElementById("table");
+        var flag =true;
+		//reset the list
+		//value_net.options.length=0;
+		var html = document.documentElement;
+		var mask  =  document.createElement('div');
+		html.appendChild(mask);
+		mask.style="z-index:99999999;display:block;width:100%;height:100%;background:rgba(255,255,255,.9);position:absolute;top:-0%;"
+		var tmsg  =  document.createElement('p');
+		var tdiv  =  document.createElement('div');
+		var timg  =  document.createElement('img');
+
+		tdiv.style="width:400px;height:200px;top:45%;left:40%;position:absolute;display:inline-block;";
+		timg.src="/luci-static/bigtmt/icons/load.gif";
+		timg.style="width:40px; height:40px;float:left;display:inline;margin:20px;";
+		tmsg.innerHTML="Searching..."
+		tmsg.style="line-height:80px;display:inline;text-align:center; color: black; font-size: 20px; position:relative;width:100px;height:100px;"
+		mask.appendChild(tdiv);
+		tdiv.appendChild(timg);
+		tdiv.appendChild(tmsg);
+		XHR.get('/cgi-bin/luci/;stok=STOK/admin/modem/search', null,
+			function (x, rv) {
+				if ((rv != null) && (typeof(rv) == "object")){
+					var net = rv.netopt_info;
+					for (var i=0;i<net.length;i++){
+						var tr = document.createElement("tr");
+						tr.style="cursor:pointer;"
+						//var radio = document.createElement("input");
+						//radio.setAttribute("name","net");
+						//radio.setAttribute("type","radio");
+						//radio.setAttribute("id","radiobtn");
+						//radio.setAttribute("value",String.format('%s,%s', net[i].oper, net[i].Act));
+						//radio.style="margin-right:20px;";
+                        table.appendChild(tr);
+						var td = document.createElement("td");
+						td.style="padding:5px;";
+						td.id = "cbid.modem_info.cfg0502af.mode-" + net[i].oper;
+						td.value = String.format('%s,%s', net[i].oper, net[i].Act);
+						td.innerText = String.format('%s %s %s', net[i].oper, act_t(net[i].Act), stat_t(net[i].stat));
+						//tr.appendChild(radio);
+						tr.appendChild(td);
+						if(tr.onclick){console.log(tr.id)}
+						//value_net.add(td, null);
+					}
+				}
+				tdclick();
+				flag=false;
+				if(flag == false){mask.style="display:none;"}
+			}
+		);
+
+ 		btn.disabled = false;
+		btn.value    = 'Search network';
+        return true;
+	}
+
+	function tdclick(){
+		var table = document.getElementById("table");
+		var trs = table.getElementsByTagName("tr");
+		for(var i = 0 ;i<trs.length; i++){
+			trs[i].onclick = TrOnClick;
+		}
+	}
+
+	function TrOnClick(){
+		var table = document.getElementById("table");
+		var trs = table.getElementsByTagName("tr");
+		//var tb =  table.getElementsByTagName("tr").firstChild;
+		for(var i = 0 ;i<trs.length; i++) {
+			if(trs[i] == this){
+				trs[i].style.background = "rgb(0, 171, 255)";
+			}
+			else{
+			trs[i].style.background = "white";
+			}
+		}
+	}
+  //]]>
+</script>
+
+<input type="button" class="cbi-button cbi-button-apply" value="Search" onclick="return start(this)" />
+<div class="cbi-value-field" id="test">
+	<table id="table"></table>
+</div>
+
+		</div></div>
+
+
+<script type="text/javascript" id="cbip-modem_info-cfg0502af-mode">
+		
+		cbi_d_add("cbi-modem_info-cfg0502af-mode", {"cbid.modem_info.cfg0502af.search":"manual"}, "cbip-modem_info-cfg0502af-mode");
+	</script>
+
+
+
+
+
+
+
+
+		</fieldset>
+		<br />
+
+	
+
+	
+</fieldset>
+	<br />
+</div><div class="cbi-page-actions">
+		
+
+		
+		
+			<input class="cbi-button cbi-button-apply" type="submit" name="cbi.apply" value="Save &amp; Apply" />
+		
+		<script type="text/javascript">cbi_d_update();</script>
+	</div></form>
