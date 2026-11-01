@@ -27,6 +27,12 @@
   - ما انضاف للويندوز (Electron) — لو احتجناه: undici Agent بـ rejectUnauthorized:false للعناوين المحلية بس في `desktop/main.js`.
   - ✅ **انبنت:** APK 1.1.1 (31 أكتوبر 9:13 م، BUILD SUCCESSFUL) + iOS 1.1.1 (8) انرسل للمراجعة 8:53 م (بناء 7 انرفض: 90683 ← أضفنا NSPhotoLibraryUsageDescription). بعد الموافقة: صاحب H112-370 يجرّب الدخول.
 
+- **🔒 آيفون: قبول شهادة الراوتر على fetch حق Expo** — ✅ بالكود (1 نوفمبر 2026)، **نسخة 1.1.2**.
+  - السبب: في Expo SDK 57 الـ fetch العام هو `ExpoFetchModule` (URLSession مندوبه `URLSessionSessionDelegateProxy`، والطلب `ExpoURLSessionTask`) — مو `RCTHTTPRequestHandler`. بناء 1.1.1 ركّب المعالج على RN بس ← H112-370 على الآيفون «الاتصال المشفّر فشل». (الأندرويد شغال: Expo fetch يبني OkHttp من `OkHttpClientProvider.createClient` ← مصنعنا.)
+  - `BandlyLanTrust.m` يركّب دالتي التحدي على الثلاثة (+load وبعد إقلاع التطبيق). العلامة `BandlyTls.lanTls()` تفحص مندوب Expo.
+  - `app.json`: `NSExceptionDomains` لأسماء صفحات الراوترات (hirouter.net …) — ATS ما يسمح بشهادة ذاتية لاسم غير محلي بدونها.
+  - ⏳ **ينتظر:** iOS 1.1.2 (APK ما يحتاج — بس لو تبي ROUTER_NAMES الأصلية).
+
 ## مقترحة (تنتظر قرار)
 - **اهتزاز أدق** (`expo-haptics`) لكل شاشات التوجيه — الحين نستخدم اهتزاز النظام البسيط.
 - **الاشتراك المدفوع** (أسبوع مجاني ثم ١٠ ريال بالشهر) — مشتريات داخل التطبيق من أبل وقوقل. **مؤجل** (17 أكتوبر 2026): لين ينتشر التطبيق.
