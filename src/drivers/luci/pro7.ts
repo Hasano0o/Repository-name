@@ -18,8 +18,11 @@ export function num(v: unknown, lo: number, hi: number): number | undefined {
   const n = Number(m[0]);
   return Number.isFinite(n) && n >= lo && n <= hi ? n : undefined;
 }
-const bandNo = (v: unknown) => s(v).match(/(\d{1,3})\s*$/)?.[1] ?? s(v).match(/\d{1,3}/)?.[0];
-const id = (v: unknown) => { const x = s(v); return x && x !== '-' && !/^0+$/.test(x) ? x : undefined; };
+/** الدمج (CA): الراوتر يرجّع «60+270+60+60» و«1850+300+37950+6200» — الأول هو الأساسي (شوهد عند العضو ٢ نوفمبر) */
+const first = (v: unknown) => s(v).split('+')[0].trim();
+const parts = (v: unknown) => s(v).split('+').map(x => x.trim()).filter(x => x && x !== '-');
+const bandNo = (v: unknown) => { const f = first(v); return f.match(/(\d{1,3})\s*$/)?.[1] ?? f.match(/\d{1,3}/)?.[0]; };
+const id = (v: unknown) => { const x = first(v); return x && x !== '-' && !/^0+$/.test(x) ? x : undefined; };
 
 export function pro7Network(mode: unknown): string | undefined {
   const m = s(mode).toUpperCase();
@@ -57,6 +60,9 @@ export function pro7Signal(j: Pro7Status): Signal {
   out.rsrp = num(j.signal, -150, -30);
   out.rsrq = num(j.rsrq, -40, 0);
   out.sinr = num(j.sinr, -30, 50);
+  // نواقل 4G المدموجة = عدد القيم في PCI/القناة (كلها نفس العدد)
+  const ca = Math.max(parts(j.PCI).length, parts(j.arfcn).length, parts(j.frequency).length);
+  if (ca > 1) out.caCount = ca;
   if (nsa) {
     const nb = bandNo(j.nsa_band);
     out.nrBand = nb ? 'n' + nb : undefined;

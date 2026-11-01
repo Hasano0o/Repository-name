@@ -92,3 +92,9 @@ test('LuCI Pro7: getSignal يقرأ admin/status/nr?status=1', async () => {
   assert.equal(sig.rsrp, -79); assert.equal(sig.band, 'B3'); assert.equal(sig.network, '4G');
   void asked;
 });
+
+test('Pro7: الدمج «60+270+60+60» ← PCI الأساسي 60 والقناة 1850، ٤ نواقل', () => {
+  const sig = pro7Signal({ mode: 'NR5G-NSA', signal: '-78', sinr: '12', rsrq: '-14', PCI: '60+270+60+60', arfcn: '1850+300+37950+6200', band: '3', band_width: '20', nsa_band: '78', nsa_pci: '86', nsa_earfcn: '647424', nsa_rsrp: '-86', nsa_sinr: '28', nsa_rsrq: '-10', nsa_band_width: '100' });
+  assert.equal(sig.pci, '60'); assert.equal(sig.earfcn, '1850'); assert.equal(sig.caCount, 4); assert.equal(sig.band, 'B3');
+  assert.equal(sig.nrPci, '86'); assert.equal(sig.nrArfcn, '647424');
+});
