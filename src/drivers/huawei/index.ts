@@ -455,14 +455,28 @@ export class HuaweiDriver implements RouterDriver {
     try { await this.homePage(host); } catch {}
     // H112-370 على الآيفون (add-login ٣١ أكتوبر): state-login ينقطع («تعذر الاتصال») مرة وينجح مرة —
     // الصفحة اللي قبله صارت تنقرى كاملة (فوق)، ولو انقطع نعيده مرة بعد ثانية. ما يغيّر شي للي يرد من أول مرة
+    const getState = async (): Promise<string> => {
+      try {
+        return await this.get('user/state-login');
+      } catch (e) {
+        if (!/تعذر الاتصال/.test(String((e as any)?.message ?? e))) throw e;
+        diag('[huawei] state-login انقطع — نعيده مرة');
+        await new Promise(r => setTimeout(r, 1000));
+        return await this.get('user/state-login');
+      }
+    };
     let state: string;
     try {
-      state = await this.get('user/state-login');
+      state = await getState();
     } catch (e) {
-      if (!/تعذر الاتصال/.test(String((e as any)?.message ?? e))) throw e;
-      diag('[huawei] state-login انقطع — نعيده مرة');
-      await new Promise(r => setTimeout(r, 1000));
-      state = await this.get('user/state-login');
+      // H112-370 على الآيفون (١ نوفمبر): التحويل لـ https://hirouter.net يفشل — iOS (ATS) ما يسمح بشهادة ذاتية لاسم
+      // مو محلي، حتى مع قبولنا لها. نفس الصفحة على https://<العنوان> مسموحة (العناوين المحلية مستثناة) ← نجرّبها مرة.
+      // يصير بس بعد خطأ تشفير — الراوترات اللي تشتغل ما يتغيّر عليها شي.
+      const httpsIp = `https://${host}`;
+      if (!/مشفّر/.test(String((e as any)?.message ?? e)) || this.origin === httpsIp) throw e;
+      diag('[huawei] https بالاسم انرفض — نجرّب https على العنوان مباشرة');
+      this.origin = httpsIp;
+      state = await getState();
     }
     const type = tag(state, 'password_type');
     this.log('state', tag(state, 'State'), 'password_type', type);

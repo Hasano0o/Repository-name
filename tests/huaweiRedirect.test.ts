@@ -31,7 +31,7 @@ const { bytesToHex, hexToBytes, utf8ToBytes } = require('@noble/hashes/utils');
 const PW = 'Pass1234';
 const rnd = () => Math.random().toString(36).slice(2, 12);
 
-function router(redirect: boolean) {
+function router(redirect: boolean, iosAts = false) {
   const sessions = new Map<string, { tok: string; logged: boolean; scram?: { first: string; server: string } }>();
   const jars: Record<string, string> = {};               // جرة أندرويد لكل اسم (OkHttp)
   const salt = bytesToHex(utf8ToBytes('salt-salt-salt-1'));
@@ -41,8 +41,10 @@ function router(redirect: boolean) {
   (globalThis as any).fetch = async (url: string, init?: any) => {
     let u = new URL(url);
     // الصفحات وstate-login يتحوّلون لـ https://hirouter.net — باقي /api/ يرد على العنوان عادي
-    if (redirect && u.host === '192.168.8.1' && (u.pathname.startsWith('/html/') || u.pathname === '/api/user/state-login')) u = new URL(`https://hirouter.net${u.pathname}`);
-    hosts.push(u.host);
+    if (redirect && u.protocol === 'http:' && u.host === '192.168.8.1' && (u.pathname.startsWith('/html/') || u.pathname === '/api/user/state-login')) u = new URL(`https://hirouter.net${u.pathname}`);
+    // الآيفون: شهادة hirouter.net الذاتية مرفوضة (ATS) — https://192.168.8.1 مسموح
+    if (iosAts && u.host === 'hirouter.net') throw new Error('A TLS error caused the secure connection to fail.');
+    hosts.push(`${u.protocol}//${u.host}`.replace('http://', ''));
     const method = init?.method ?? 'GET';
     const p = u.pathname.replace(/^\/api\//, '');
     let sid = ((jars[u.host] ?? '').match(/SessionID=([^;]+)/) ?? [])[1] ?? '';
@@ -93,8 +95,8 @@ test('الراوتر يحوّل لـ https://hirouter.net: الدخول والق
   await d.login('192.168.8.1', 'admin', PW, { fresh: true });
   const sig = await d.getSignal();
   assert.equal(String(sig.pci), '134');
-  const after = r.hosts.slice(r.hosts.indexOf('hirouter.net'));
-  assert.ok(after.every(h => h === 'hirouter.net'), `كل الطلبات بعد التحويل على hirouter.net: ${after.join(',')}`);
+  const after = r.hosts.slice(r.hosts.indexOf('https://hirouter.net'));
+  assert.ok(after.length > 1 && after.every(h => h === 'https://hirouter.net'), `كل الطلبات بعد التحويل على hirouter.net: ${after.join(',')}`);
 });
 
 test('راوتر بدون تحويل: كل شي على http://192.168.8.1 مثل قبل', async () => {
@@ -104,4 +106,14 @@ test('راوتر بدون تحويل: كل شي على http://192.168.8.1 مثل
   await d.login('192.168.8.1', 'admin', PW, { fresh: true });
   assert.equal(String((await d.getSignal()).pci), '134');
   assert.ok(r.hosts.every(h => h === '192.168.8.1'));
+});
+
+test('الآيفون: hirouter.net مرفوض (ATS) ← نكمّل على https://192.168.8.1', async () => {
+  const r = router(true, true);
+  const { HuaweiDriver } = require('../src/drivers/huawei/index');
+  const d = new HuaweiDriver();
+  await d.login('192.168.8.1', 'admin', PW, { fresh: true });
+  assert.equal(String((await d.getSignal()).pci), '134');
+  const last = r.hosts.slice(-3);
+  assert.ok(last.every(h => h === 'https://192.168.8.1'), `آخر الطلبات على https بالعنوان: ${last.join(',')}`);
 });
