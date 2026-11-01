@@ -20,7 +20,7 @@ function router(stok = 'a1b2c3d4e5f60718') {
       const b = new URLSearchParams(String(init.body));
       if (b.get('luci_username') === 'admin' && b.get('luci_password') === 'admin') {
         session = stok;
-        return res(200, `<html><body class="logged-in"><a href="/cgi-bin/luci/;stok=${stok}/admin/status/overview">Status</a><a href="/cgi-bin/luci/;stok=${stok}/admin/logout">Logout</a></body></html>`, `http://${u.host}/cgi-bin/luci/;stok=${stok}/`);
+        return res(200, `<html><head><title>Pro7 - System Status</title></head><body class="logged-in"><a href="/cgi-bin/luci/;stok=${stok}/admin/status/overview">Status</a><a href="/cgi-bin/luci/;stok=${stok}/admin/logout">Logout</a></body></html>`, `http://${u.host}/cgi-bin/luci/;stok=${stok}/`);
       }
       return res(403, LOGIN);
     }
@@ -46,4 +46,5 @@ test('LuCI: كلمة غلط ← رسالة واضحة · الصحيحة ← stok
   const pages = d.afterLoginPages();
   assert.ok(pages[0].includes(';stok=a1b2c3d4e5f60718'), pages.join(','));
   assert.equal(await d.isConnected(), true);
+  assert.equal(d.name, 'Pro7 (OpenWrt)', 'الاسم بدون «- System Status»');
 });

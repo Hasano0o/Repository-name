@@ -33,7 +33,8 @@ export class LuciDriver implements RouterDriver {
   }
   /** اسم الجهاز من <title> صفحة الدخول (Pro7) */
   private nameFrom(html: string) {
-    const t = html.match(/<title>\s*([^<]{2,40}?)\s*<\/title>/i)?.[1]?.trim();
+    // بعد الدخول العنوان «Pro7 - System Status» — ناخذ اسم الجهاز بس
+    const t = html.match(/<title>\s*([^<]{2,60}?)\s*<\/title>/i)?.[1]?.split(/\s+[-|–]\s+/)[0]?.trim();
     if (t && !/^(LuCI|OpenWrt|Authorization)/i.test(t)) this.name = `${t} (OpenWrt)`;
   }
 
