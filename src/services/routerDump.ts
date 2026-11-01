@@ -270,7 +270,9 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
     if (SKIP.test(p)) { skipped.push(p); continue; }
     if (ES5_TWIN.test(p) && (seen.has(p.replace(/-es5\./i, '-es2015.')) || queue.includes(p.replace(/-es5\./i, '-es2015.')))) { skipped.push(p); continue; }
     const r = await get(base + p);
-    if (!r.ok || !r.text) { misses.push(missLine(p, r)); continue; }
+    // LuCI (OpenWrt — 5G CPE Pro 7، ١ نوفمبر) يرد صفحة الدخول نفسها بحالة 403 لما ما فيه جلسة — هي اللي نبيها
+    const loginPage = r.status === 403 && /luci_password|name=["']?password|<form/i.test(r.text);
+    if ((!r.ok && !loginPage) || !r.text) { misses.push(missLine(p, r)); continue; }
     // راوترات ترجع الصفحة الرئيسية لأي رابط مو موجود — ما نكررها (بس نكتب إنه صار)
     if (p !== '/' && homeSample && r.text.slice(0, 400) === homeSample) { misses.push(missLine(p, r, true)); continue; }
     const hwErr = huaweiErrorCode(r.text);

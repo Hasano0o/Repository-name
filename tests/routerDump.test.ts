@@ -16,7 +16,8 @@ function mockRouter(files: Record<string, string>) {
     const p = url.replace(/^http:\/\/[^/]+/, '').split('?')[0];
     asked.push(p);
     const body = files[p];
-    return { ok: body !== undefined, headers: { get: () => 'text/plain' }, text: async () => body ?? '' } as any;
+    const st = p.startsWith('/cgi-bin/luci') && body !== undefined && /luci_password/.test(body) ? 403 : body !== undefined ? 200 : 404;
+    return { ok: st === 200, status: st, headers: { get: () => 'text/plain' }, text: async () => body ?? '' } as any;
   };
   return asked;
 }
@@ -379,9 +380,9 @@ test('D-Link DWR-2000M (create-react-app): قطع الكود من خريطة ا�
   assert.ok(files.filter(f => /^\/static\/js\/\d+\./.test(f.p)).length >= 45, 'القطع انسحبت: ' + files.length);
 });
 
-test('OpenWrt/LuCI (5G CPE Pro 7): index.html بـ meta refresh ← نلحق cgi-bin/luci وصفحة الدخول وملفاتها', async () => {
+test('OpenWrt/LuCI (5G CPE Pro 7): index.html بـ meta refresh ← نلحق cgi-bin/luci (صفحة الدخول ترجع 403) وملفاتها', async () => {
   const asked = mockRouter({
-    '/': '<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Cache-Control" content="no-cache" /><meta http-equiv="refresh" content="0; URL=cgi-bin/luci/" /></head><body style="background-color: white"><a style="color: black" href="cgi-bin/luci/">LuCI - Lua Configuration Interface</a></body></html>',
+    '/': '<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Cache-Control" content="no-cache" /><meta http-equiv="refresh" content="0; URL=/cgi-bin/luci" /></head><body style="background-color: white"><a style="color: black" href="cgi-bin/luci/">LuCI - Lua Configuration Interface</a></body></html>',
     '/cgi-bin/luci': '<html><head><script src="/luci-static/resources/cbi.js"></script></head><body><form method="post"><input name="luci_username"/><input type="password" name="luci_password"/></form></body></html>',
     '/luci-static/resources/cbi.js': 'var x=1;',
   });
