@@ -299,6 +299,12 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
       }
       for (const rp of cands) if (rp && !seen.has(rp) && !queue.includes(rp)) queue.push(rp);
     }
+    // <meta http-equiv="refresh" content="0; URL=cgi-bin/luci/"> — صفحة OpenWrt/LuCI الافتراضية (5G CPE Pro 7، ١ نوفمبر:
+    // index.html ٤٩٠ بايت وبس، والسحب وقف عنده). نلحق التحويل مثل المتصفح.
+    for (const m of r.text.matchAll(/<meta[^>]+http-equiv\s*=\s*["']?refresh["']?[^>]*content\s*=\s*["'][^"']*?url\s*=\s*([^"'>\s;]+)/gi)) {
+      const rp = resolvePath(m[1].trim(), from);
+      if (rp && !seen.has(rp) && !queue.includes(rp)) queue.push(rp);
+    }
     const dmb = dataMainBase(r.text);
     if (dmb) dmBase = dmb;
     if (dmBase) for (const rp of amdModuleIds(r.text, dmBase)) {

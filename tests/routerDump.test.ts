@@ -378,3 +378,15 @@ test('D-Link DWR-2000M (create-react-app): قطع الكود من خريطة ا�
   const { files } = await collectRouterFiles('192.168.0.1');
   assert.ok(files.filter(f => /^\/static\/js\/\d+\./.test(f.p)).length >= 45, 'القطع انسحبت: ' + files.length);
 });
+
+test('OpenWrt/LuCI (5G CPE Pro 7): index.html بـ meta refresh ← نلحق cgi-bin/luci وصفحة الدخول وملفاتها', async () => {
+  const asked = mockRouter({
+    '/': '<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Cache-Control" content="no-cache" /><meta http-equiv="refresh" content="0; URL=cgi-bin/luci/" /></head><body style="background-color: white"><a style="color: black" href="cgi-bin/luci/">LuCI - Lua Configuration Interface</a></body></html>',
+    '/cgi-bin/luci': '<html><head><script src="/luci-static/resources/cbi.js"></script></head><body><form method="post"><input name="luci_username"/><input type="password" name="luci_password"/></form></body></html>',
+    '/luci-static/resources/cbi.js': 'var x=1;',
+  });
+  const { files } = await collectRouterFiles('192.168.1.1');
+  const ps = files.map(f => f.p);
+  assert.ok(asked.includes('/cgi-bin/luci'), `طلب صفحة LuCI: ${asked.join(',')}`);
+  assert.ok(ps.includes('/cgi-bin/luci') && ps.includes('/luci-static/resources/cbi.js'), ps.join(','));
+});
