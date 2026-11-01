@@ -78,10 +78,19 @@ export class LuciDriver implements RouterDriver {
     try { await http(`${this.base()}${this.root()}/admin/logout`, {}, 5000); } catch {}
   }
 
-  /** صفحات بعد الدخول للجامع (FULL): الرئيسية والحالة والشبكة — ومنها يلحق روابط القائمة */
+  /**
+   * صفحات بعد الدخول للجامع (FULL). الجامع ما يلحق روابط القائمة (بدون امتداد) — فنعطيه صفحات المودم بالاسم.
+   * من قائمة Pro7 (ملف FULL الأول، ١ نوفمبر): admin/status/{nr,wan,overview,system} · admin/modem/{band,cell,network,connect,apn}
+   * كلها عرض (GET بدون قيم) — ما فيها أي أمر.
+   */
   afterLoginPages(): string[] {
     const r = this.root();
-    return [`${r}/`, `${r}/admin`, `${r}/admin/status/overview`, `${r}/admin/network`];
+    return [
+      `${r}/`,
+      ...['status/nr', 'status/wan', 'status/overview', 'status/system', 'status/lan',
+        'modem/band', 'modem/cell', 'modem/network', 'modem/connect', 'modem/apn',
+        'system/device', 'network/setting', 'sms/inbox'].map(x => `${r}/admin/${x}`),
+    ];
   }
 
   async isConnected(): Promise<boolean> {
