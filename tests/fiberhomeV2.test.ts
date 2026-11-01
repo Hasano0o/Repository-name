@@ -225,6 +225,16 @@ test('fhapi: متجهات من كود صفحة الراوتر نفسه — فك 
   }
 });
 
+test('fhapi: is_encrypt بدون الـ ٦ حروف (data طوله 344 — ١ نوفمبر) ← نفس السر', () => {
+  const V = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'tests', 'fixtures', 'fhapi-vectors.json'), 'utf8'));
+  for (const v of V) {
+    const bare = v.isEncPlain.slice(6);
+    assert.equal(bare.length, 344);
+    assert.equal(F.fhapiSecret(bare).secret, v.secret, 'بدون بادئة');
+    assert.equal(F.fhapiSecret('Q' + bare).secret, v.secret, 'بادئة حرف واحد');
+  }
+});
+
 test('fhapi: رد GET مخلوط برأس content-len يتنظف — وبدون الرأس يبقى كما هو', () => {
   for (let i = 0; i < 50; i++) {
     const plain = JSON.stringify({ i, s: rand(20 + i), ar: 'ع' });

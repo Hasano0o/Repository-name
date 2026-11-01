@@ -162,8 +162,16 @@ export function fhapiRsaDecrypt(b64: string): string | null {
 
 /** نص data في رد is_encrypt: الحرف ٥ علامة (فحص أدوات المطوّر في الصفحة)، والباقي السر المشفّر */
 export function fhapiSecret(isEncryptText: string): { flag: number; secret: string | null } {
-  const t = String(isEncryptText ?? '');
-  return { flag: Number(t.slice(5, 6)), secret: fhapiRsaDecrypt(t.slice(6)) };
+  const t = String(isEncryptText ?? '').trim();
+  const first = fhapiRsaDecrypt(t.slice(6));
+  if (first) return { flag: Number(t.slice(5, 6)), secret: first };
+  // فيرمويرات ثانية (١ نوفمبر: «طول data 344» = base64 لكتلة RSA-2048 كاملة بدون الـ ٦ حروف): نجرّب بدون بادئة
+  // وببدايات قريبة. PKCS#1 يرفض أي فك غلط، فما فيه تخمين — يا سر صحيح يا null.
+  for (const off of [0, 5, 7, 4, 8, 1, 2, 3]) {
+    const sec = fhapiRsaDecrypt(t.slice(off));
+    if (sec) return { flag: off >= 6 ? Number(t.slice(5, 6)) : 0, secret: sec };
+  }
+  return { flag: Number(t.slice(5, 6)), secret: null };
 }
 
 // ─── مفتاح AES ───
