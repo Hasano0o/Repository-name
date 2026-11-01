@@ -24,6 +24,7 @@ function router(stok = 'a1b2c3d4e5f60718') {
       }
       return res(403, LOGIN);
     }
+    if (u.pathname.endsWith('/admin/status/nr_icons') && session && u.pathname.includes(`;stok=${session}`)) return res(200, '{"mode":"NR5G-NSA","signal":"4","status":"connected","sms_num":"0"}');
     if (u.pathname.startsWith('/cgi-bin/luci')) return session && u.pathname.includes(`;stok=${session}`) ? res(200, '<html><body class="logged-in">ok</body></html>') : res(403, LOGIN);
     if (u.pathname === '/') return res(200, '<meta http-equiv="refresh" content="0; URL=/cgi-bin/luci" />');
     return res(404, '');
@@ -47,4 +48,15 @@ test('LuCI: كلمة غلط ← رسالة واضحة · الصحيحة ← stok
   assert.ok(pages[0].includes(';stok=a1b2c3d4e5f60718'), pages.join(','));
   assert.equal(await d.isConnected(), true);
   assert.equal(d.name, 'Pro7 (OpenWrt)', 'الاسم بدون «- System Status»');
+});
+
+test('LuCI Pro7: nr_icons ← نوع الشبكة (5G NSA) بدون أرقام مخترعة', async () => {
+  router();
+  const d = new LuciDriver();
+  await d.login('192.168.1.1', 'admin', 'admin');
+  const sig = await d.getSignal();
+  assert.equal(sig.network, '5G NSA');
+  assert.equal(sig.nrActiveFromStatus, true);
+  assert.equal(sig.rsrp, undefined);
+  assert.equal((await d.getNetworkInfo()).mode, '5G NSA');
 });

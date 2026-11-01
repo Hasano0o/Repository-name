@@ -1,4 +1,4 @@
-import { RouterDriver, Capability, SignalSnapshot, DeviceDetails } from '../types';
+import { RouterDriver, Capability, SignalSnapshot, DeviceDetails, Signal, NetworkInfo } from '../types';
 import { http } from '../http';
 import { isLanHost } from '../../utils/host';
 import { buildSnapshot } from '../../utils/snapshot';
@@ -20,7 +20,7 @@ import { buildSnapshot } from '../../utils/snapshot';
 export class LuciDriver implements RouterDriver {
   readonly id = 'luci';
   name = 'OpenWrt (LuCI)';
-  readonly capabilities: Capability[] = [];
+  readonly capabilities: Capability[] = ['signal'];
   private host = '';
   /** ;stok=… لو الفيرموير يحطه في الروابط بعد الدخول */
   private stok = '';
@@ -111,7 +111,45 @@ export class LuciDriver implements RouterDriver {
     return { model: this.name.replace(/ \(OpenWrt\)$/, ''), software: 'luci-pages-3' };
   }
 
-  /** ما نقرأ إشارة للحين (صفحاتها تختلف حسب المصنّع) */
+  /**
+   * Pro7 (ثيم bigtmt): أيقونات الهيدر من XHR.poll(5, '<root>/admin/status/nr_icons') ← JSON
+   * {mode: "LTE" | "NR5G-NSA" | "NR5G-SA" | "WCDMA" | "5G", signal: "0"…"5", status, sms_num} — من كود الصفحة نفسها.
+   * ما فيه أرقام (RSRP/SINR/تردد/برج) — هذي في admin/status/nr، نضيفها لما توصل صفحتها. ما نخترع أرقام من الشرطات.
+   */
+  private async icons(): Promise<{ mode?: string; signal?: string; status?: string; sms_num?: string } | null> {
+    try {
+      const r = await http(`${this.base()}${this.root()}/admin/status/nr_icons`, {}, 8000);
+      const t = await r.text();
+      if (/name=["']?luci_password/i.test(t)) throw new Error('انتهت الجلسة');
+      const j = JSON.parse(t);
+      return j && typeof j === 'object' ? j : null;
+    } catch (e) {
+      if (String((e as any)?.message ?? '').includes('انتهت الجلسة')) throw e;
+      return null;
+    }
+  }
+  private static netName(mode?: string): string | undefined {
+    const m = String(mode ?? '').toUpperCase();
+    if (m === 'LTE') return '4G LTE';
+    if (m === 'NR5G-NSA') return '5G NSA';
+    if (m === 'NR5G-SA') return '5G SA';
+    if (m === '5G') return '5G';
+    if (m === 'WCDMA') return '3G';
+    return undefined;
+  }
+
+  async getSignal(): Promise<Signal> {
+    const st = await this.icons();
+    const network = LuciDriver.netName(st?.mode);
+    return { network, nrActiveFromStatus: /NR5G|^5G$/i.test(String(st?.mode ?? '')) || undefined };
+  }
+
+  async getNetworkInfo(): Promise<NetworkInfo> {
+    const st = await this.icons();
+    return { mode: LuciDriver.netName(st?.mode), supports5g: true };
+  }
+
+  /** ما نقرأ أرقام الإشارة للحين (صفحتها تختلف حسب المصنّع) */
   async getSnapshot(): Promise<SignalSnapshot> {
     return buildSnapshot(null, [], [], { driverId: this.id, driverName: this.name });
   }
