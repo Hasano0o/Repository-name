@@ -282,7 +282,11 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
     if (hwErr) { misses.push(`✗ ${p} ← رد هواوي ${hwErr}${hwErr === '100002' ? ' (مو موجود)' : hwErr === '100003' ? ' (يحتاج دخول)' : ''}`); continue; }
     if (p === '/') homeSample = r.text.slice(0, 400);
     const t = scrub(r.text.slice(0, MAX_FILE));
-    files.push({ p: p === '/' ? '/index.html' : p, t });
+    // مسار بدون امتداد (صفحات LuCI: /cgi-bin/luci و /cgi-bin/luci/;stok=X/admin/…) ← نحفظه <المسار>/index.html.
+    // قبل: «/cgi-bin/luci/;stok=X» ينحفظ ملف، وبعدين «…/;stok=X/admin/status/nr» يبي نفس الاسم مجلد ← السيرفر
+    // يطيح والصفحات «ما وصل» كلها (Pro7 — ١ نوفمبر).
+    const last = p.replace(/\/+$/, '').split('/').pop() ?? '';
+    files.push({ p: p === '/' ? '/index.html' : !last.includes('.') ? `${p.replace(/\/+$/, '')}/index.html` : p, t });
     total += t.length;
     onStep?.(files.length);
     // FiberHome LG6851F: checkBrowser.js يحمّل polyfill.min.js (فيه $post والتشفير) بكود مخفي (hex) — ما يبان كرابط

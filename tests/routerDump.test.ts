@@ -389,5 +389,7 @@ test('OpenWrt/LuCI (5G CPE Pro 7): index.html بـ meta refresh ← نلحق cgi
   const { files } = await collectRouterFiles('192.168.1.1');
   const ps = files.map(f => f.p);
   assert.ok(asked.includes('/cgi-bin/luci'), `طلب صفحة LuCI: ${asked.join(',')}`);
-  assert.ok(ps.includes('/cgi-bin/luci') && ps.includes('/luci-static/resources/cbi.js'), ps.join(','));
+  assert.ok(ps.includes('/cgi-bin/luci/index.html') && ps.includes('/luci-static/resources/cbi.js'), ps.join(','));
+  // ما فيه ملف اسمه نفس بداية ملف ثاني (السيرفر يكتبها ملفات ومجلدات — التصادم كان يضيّع صفحات LuCI)
+  for (const a of ps) for (const b of ps) assert.ok(a === b || !b.startsWith(a + '/'), `تصادم ${a} و ${b}`);
 });
