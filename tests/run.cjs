@@ -73,6 +73,7 @@ const files = [
   'src/drivers/huawei/wifi.ts',
   'src/utils/linkHealth.ts',
   'src/utils/nrprobe.ts',
+  'src/drivers/luci/index.ts',
   ...fs.readdirSync(path.join(root, 'tests')).filter(f => f.endsWith('.test.ts')).map(f => `tests/${f}`),
 ];
 

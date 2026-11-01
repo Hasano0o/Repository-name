@@ -16,6 +16,7 @@ import { fhBody, fhDecrypt, fhKey } from '../drivers/fiberhome/crypto';
 
 // مكتبات كبيرة ما تنعدّل — أسماؤها تكفي. ما نتخطى polyfill/vue-i18n/vue-router/axios/bootstrap بعد:
 // FiberHome يخبّي فيها RequireJS ودوال الاتصال ($post) وأسماء الإعدادات (تقرير ٢٦ أكتوبر) — صغيرة ونحتاجها
+const LUCI_DANGER = /\/cgi-bin\/luci.*\/(logout|reboot|reset|factory|flash\w*|sysupgrade|upgrade|restore|backup|poweroff|shutdown|apply|commit|save|call|exec|remove|delete)\b/i;
 const SKIP = /(copyrightPage|opensource|privatePolicy|\/faq[\w-]*\.html|chunk-vendors|jquery(?!\.tp)|element-plus|elementui|chunk-libs|echarts|tinymce|lottie|jtopo|topo\.min|\/element(\.min)?\.js|font-?awesome|moment|lodash|highcharts|chart\.min|swiper|\.min\.js.*(forge|elliptic))/i;
 // Nokia FastMile 3.1 (تقرير ٢٧ أكتوبر): main-es2015.js (Angular) أكبر من ١٫٥ ميقا — انقطع قبل شاشة الدخول والترددات.
 // الملفات الكبيرة تنقسم أجزاء ٣٠٠ك على الإرسال، والسيرفر يجمعها (حده ٢٠ ميقا للتقرير)
@@ -268,6 +269,8 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
     if (seen.has(p)) continue;
     seen.add(p);
     if (SKIP.test(p)) { skipped.push(p); continue; }
+    // LuCI بعد الدخول: روابط القائمة فيها خروج/إعادة تشغيل/ضبط مصنع… — ما نفتحها (الخروج يقتل الجلسة ونخسر الباقي)
+    if (LUCI_DANGER.test(p)) { skipped.push(`${p} (ما نفتحه — أمر)`); continue; }
     if (ES5_TWIN.test(p) && (seen.has(p.replace(/-es5\./i, '-es2015.')) || queue.includes(p.replace(/-es5\./i, '-es2015.')))) { skipped.push(p); continue; }
     const r = await get(base + p);
     // LuCI (OpenWrt — 5G CPE Pro 7، ١ نوفمبر) يرد صفحة الدخول نفسها بحالة 403 لما ما فيه جلسة — هي اللي نبيها

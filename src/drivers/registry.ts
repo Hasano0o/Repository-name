@@ -9,6 +9,7 @@ import { GreenPacketDriver } from './greenpacket';
 import { NokiaDriver } from './nokia';
 import { NokiaFwaDriver } from './nokia/fwa';
 import { ZteUfiDriver } from './zteufi';
+import { LuciDriver } from './luci';
 import { UnknownDriver } from './unknown';
 import { DeviceDriver } from './device';
 import { DemoDriver } from './demo';
@@ -41,6 +42,8 @@ const factories: (() => RouterDriver)[] = [
   () => new NokiaDriver(),
   // Nokia FastMile 6.1 (Angular جديد بدون main-es2015، دخول بـ salt، ubus service_function) — درايفر لحاله، من ملفات صفحة عضو (٣١ أكتوبر)
   () => new NokiaFwaDriver(),
+  // OpenWrt / LuCI القديم (5G CPE Pro 7 — ١ نوفمبر): الدخول + ملفات FULL، والإشارة بعد ما نشوف صفحاتها
+  () => new LuciDriver(),
   () => new UnknownDriver(),
 ];
 
