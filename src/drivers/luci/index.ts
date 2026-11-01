@@ -1,4 +1,4 @@
-import { RouterDriver, Capability, SignalSnapshot } from '../types';
+import { RouterDriver, Capability, SignalSnapshot, DeviceDetails } from '../types';
 import { http } from '../http';
 import { isLanHost } from '../../utils/host';
 import { buildSnapshot } from '../../utils/snapshot';
@@ -101,6 +101,14 @@ export class LuciDriver implements RouterDriver {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * software = رقم «نسخة الصفحات اللي نطلبها» — ملفات FULL تنرسل مرة لكل بصمة (الموديل|software)،
+   * فلما نضيف صفحات جديدة للجامع نرفع الرقم ويرجع الكرت مرة وحدة. (2 = صفحات المودم بالاسم — ١ نوفمبر)
+   */
+  async getDeviceDetails(): Promise<DeviceDetails> {
+    return { model: this.name.replace(/ \(OpenWrt\)$/, ''), software: 'luci-pages-2' };
   }
 
   /** ما نقرأ إشارة للحين (صفحاتها تختلف حسب المصنّع) */
