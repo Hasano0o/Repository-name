@@ -2,6 +2,7 @@ import { RouterDriver, Capability, SignalSnapshot, DeviceDetails, Signal, Networ
 import { http } from '../http';
 import { isLanHost } from '../../utils/host';
 import { buildSnapshot } from '../../utils/snapshot';
+import { pro7Signal, pro7Network, Pro7Status } from './pro7';
 
 /**
  * راوترات OpenWrt بواجهة LuCI القديمة (Lua) — أول واحد: «5G CPE Pro 7» (موبايلي، ١ نوفمبر ٢٠٢٦، ثيم bigtmt).
@@ -128,29 +129,45 @@ export class LuciDriver implements RouterDriver {
       return null;
     }
   }
-  private static netName(mode?: string): string | undefined {
-    const m = String(mode ?? '').toUpperCase();
-    if (m === 'LTE') return '4G LTE';
-    if (m === 'NR5G-NSA') return '5G NSA';
-    if (m === 'NR5G-SA') return '5G SA';
-    if (m === '5G') return '5G';
-    if (m === 'WCDMA') return '3G';
-    return undefined;
+
+  /** Pro7: admin/status/nr?status=1 ← JSON بالأرقام (pro7.ts). null لو الراوتر ما عنده هالصفحة (LuCI ثاني) */
+  private async status(): Promise<Pro7Status | null> {
+    try {
+      const r = await http(`${this.base()}${this.root()}/admin/status/nr?status=1`, {}, 12000);
+      const t = await r.text();
+      if (/name=["']?luci_password/i.test(t)) throw new Error('انتهت الجلسة');
+      const j = JSON.parse(t);
+      return j && typeof j === 'object' ? j as Pro7Status : null;
+    } catch (e) {
+      if (String((e as any)?.message ?? '').includes('انتهت الجلسة')) throw e;
+      return null;
+    }
   }
 
   async getSignal(): Promise<Signal> {
+    const j = await this.status();
+    if (j) return pro7Signal(j);
+    // احتياط: نوع الشبكة بس من أيقونات الهيدر
     const st = await this.icons();
-    const network = LuciDriver.netName(st?.mode);
-    return { network, nrActiveFromStatus: /NR5G|^5G$/i.test(String(st?.mode ?? '')) || undefined };
+    return { network: pro7Network(st?.mode), nrActiveFromStatus: /NR5G|^5G$/i.test(String(st?.mode ?? '')) || undefined };
   }
 
   async getNetworkInfo(): Promise<NetworkInfo> {
+    const j = await this.status();
+    if (j) {
+      const ds = String(j.data_status ?? '').toUpperCase();
+      return {
+        operator: String(j.name ?? '').trim() || undefined,
+        connected: ds === 'CONNECT' ? true : ds === 'DISCONNECT' ? false : undefined,
+        mode: pro7Network(j.mode), supports5g: true,
+      };
+    }
     const st = await this.icons();
-    return { mode: LuciDriver.netName(st?.mode), supports5g: true };
+    return { mode: pro7Network(st?.mode), supports5g: true };
   }
 
-  /** ما نقرأ أرقام الإشارة للحين (صفحتها تختلف حسب المصنّع) */
   async getSnapshot(): Promise<SignalSnapshot> {
-    return buildSnapshot(null, [], [], { driverId: this.id, driverName: this.name });
+    const sig = await this.getSignal();
+    return buildSnapshot(sig, [], [], { driverId: this.id, driverName: this.name });
   }
 }
