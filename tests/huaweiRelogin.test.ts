@@ -36,7 +36,7 @@ const { bytesToHex, hexToBytes, utf8ToBytes } = require('@noble/hashes/utils');
 const PW = 'Pass1234';
 const rnd = () => Math.random().toString(36).slice(2, 12);
 
-function router(opts: { noScram?: boolean; tokenRotates?: boolean; htmlAll?: boolean; slowParallel?: boolean } = {}) {
+function router(opts: { noScram?: boolean; tokenRotates?: boolean; htmlAll?: boolean; slowParallel?: boolean; lockAfter?: number; stateLock?: boolean } = {}) {
   // logged: 'full' = SCRAM · 'limited' = الدخول القديم user/login (جلسة ناقصة: net/lock-freq ← 100003، تعليق الدرايفر)
   type Sess = { tok: string[]; logged: false | 'full' | 'limited'; scram?: { first: string; server: string } };
   const sessions = new Map<string, Sess>();
@@ -46,6 +46,7 @@ function router(opts: { noScram?: boolean; tokenRotates?: boolean; htmlAll?: boo
   const salt = bytesToHex(utf8ToBytes('salt-salt-salt-1'));
   const log: string[] = [];
   let par = 0;
+  let wrong = 0;                      // محاولات غلط ← بعد lockAfter الراوتر يقفل (108007) مثل هواوي
   const newSess = () => { const id = rnd(); sessions.set(id, { tok: [rnd()], logged: false }); return id; };
   const xml = (b: string) => `<?xml version="1.0" encoding="UTF-8"?><response>${b}</response>`;
   const err = (c: string) => `<?xml version="1.0" encoding="UTF-8"?><error><code>${c}</code><message></message></error>`;
@@ -73,7 +74,7 @@ function router(opts: { noScram?: boolean; tokenRotates?: boolean; htmlAll?: boo
       return res(xml(`<token>${'x'.repeat(32)}${sessions.get(id)!.tok[0]}</token>`));
     }
     if (p === 'webserver/token') return res(xml(`<token>${'x'.repeat(32)}${s.tok[0]}</token>`));
-    if (p === 'user/state-login') return res(xml(`<State>${ghost || s.logged ? '0' : '-1'}</State><password_type>4</password_type><username>admin</username>`));
+    if (p === 'user/state-login') return res(xml(`<State>${ghost || s.logged ? '0' : '-1'}</State><password_type>4</password_type><username>admin</username>${opts.stateLock ? '<lockstatus>1</lockstatus><remainwaittime>120</remainwaittime>' : ''}`));
     if (method === 'GET') {
       if (!s.logged) return res(err('100003'));
       if (opts.slowParallel) {
@@ -104,6 +105,7 @@ function router(opts: { noScram?: boolean; tokenRotates?: boolean; htmlAll?: boo
       return res(xml(`<salt>${salt}</salt><servernonce>${s.scram.server}</servernonce><iterations>100</iterations>`));
     }
     if (p === 'user/authentication_login') {
+      if (opts.lockAfter !== undefined && wrong >= opts.lockAfter) return res(err('108007'));
       const sc = s.scram;
       if (!sc) return res(err('125002'));
       const salted = pbkdf2(sha256, utf8ToBytes(PW), hexToBytes(salt), { c: 100, dkLen: 32 });
@@ -112,7 +114,7 @@ function router(opts: { noScram?: boolean; tokenRotates?: boolean; htmlAll?: boo
       const sig = hmac(sha256, utf8ToBytes(`${sc.first},${sc.server},${sc.server}`), storedKey);
       const proof = hexToBytes(tg('clientproof'));
       const ck = proof.map((b: number, i: number) => b ^ sig[i]);
-      if (bytesToHex(sha256(ck)) !== bytesToHex(storedKey)) return res(err('108006'));
+      if (bytesToHex(sha256(ck)) !== bytesToHex(storedKey)) { wrong++; return res(err(opts.lockAfter !== undefined && wrong >= opts.lockAfter ? '108007' : '108006')); }
       s.logged = 'full'; ghost = false;
       return res(xml('OK'));
     }
@@ -129,8 +131,9 @@ function router(opts: { noScram?: boolean; tokenRotates?: boolean; htmlAll?: boo
   };
 }
 
-async function driver() {
-  const { HuaweiDriver } = require('../src/drivers/huawei/index');
+async function driver(reset = true) {
+  const { HuaweiDriver, _resetHuaweiGate } = require('../src/drivers/huawei/index');
+  if (reset) _resetHuaweiGate(); // كل اختبار = راوتر جديد (البوابة المشتركة في الذاكرة)
   return new HuaweiDriver();
 }
 /** نفس اللي يسويه withSession بعد الطرد: markStale ← login ← نكمّل */
@@ -256,4 +259,58 @@ test('هواوي: شكل رد التحدي للتشخيص بدون أسرار', 
   assert.equal(s.split(' · ')[0], 'salt:4 iterations=100 servernonce:6 modeselected=1');
   assert.ok(s.includes('nonce✓'));
   assert.ok(!s.includes('abcd') && !s.includes('ff00aa'));
+});
+
+// ═══ الحل الجذري (٢ نوفمبر): بوابة دخول مشتركة لكل نسخ الدرايفر + ما نحرق محاولات ═══
+test('هواوي أندرويد: شاشتين (نسختين درايفر) يدخلون مع بعض بجرة كوكيز وحدة ← دخول واحد، والاثنين ينجحون (كان 108006)', async () => {
+  OS = 'android';
+  const r = router();
+  const a = await driver();
+  const b = await driver(false);
+  await Promise.all([a.login('192.168.8.1', 'admin', PW), b.login('192.168.8.1', 'admin', PW)]);
+  assert.equal(r.log.filter(x => x === 'POST user/authentication_login').length, 1, r.log.join('\n'));
+  assert.ok(await b.getSignal());
+});
+
+test('هواوي آيفون: نسختين مع بعض ← واحد ورا الثاني (ما يتداخلون)، والاثنين ينجحون', async () => {
+  OS = 'ios';
+  const r = router();
+  const a = await driver();
+  const b = await driver(false);
+  await Promise.all([a.login('192.168.8.1', 'admin', PW), b.login('192.168.8.1', 'admin', PW)]);
+  const auth = r.log.map((x, i) => [x, i] as const).filter(([x]) => x === 'POST user/authentication_login' || x === 'POST user/challenge_login').map(([x]) => x);
+  // تحدي ← تحقق ← تحدي ← تحقق (ما فيه تحدي بين تحدي وتحققه)
+  for (let i = 0; i < auth.length; i += 2) assert.deepEqual(auth.slice(i, i + 2), ['POST user/challenge_login', 'POST user/authentication_login'], auth.join(' > '));
+});
+
+test('هواوي: الكلمة المحفوظة غلط ← المهام الخلفية ما تعيدها (ما تقفل الراوتر) · المستخدم لما يكتبها يتحقق', async () => {
+  OS = 'android';
+  const r = router({ lockAfter: 3 });
+  const a = await driver();
+  await assert.rejects(a.login('192.168.8.1', 'admin', 'old-pass'), /108006/);
+  const n = r.log.length;
+  for (let i = 0; i < 5; i++) {
+    const bg = await driver(false);
+    await assert.rejects(bg.login('192.168.8.1', 'admin', 'old-pass'), /108006/);
+  }
+  assert.equal(r.log.length, n, 'الخلفية ما راسلت الراوتر');
+  // المستخدم كتب الكلمة الصحيحة ← تنجح (الراوتر ما انقفل)
+  const ui = await driver(false);
+  await ui.login('192.168.8.1', 'admin', PW, { fresh: true });
+});
+
+test('هواوي: بعد 108007 (قفل) ما نرسل ولا محاولة لين ينتهي · state-login يقول قافل ← ما نرسل الكلمة', async () => {
+  OS = 'android';
+  const r = router({ lockAfter: 1 });
+  const a = await driver();
+  await assert.rejects(a.login('192.168.8.1', 'admin', 'x1'), /108007|قافل/);
+  const n = r.log.length;
+  const b = await driver(false);
+  await assert.rejects(b.login('192.168.8.1', 'admin', PW, { fresh: true }), /قافل/);
+  assert.equal(r.log.length, n, 'ما راسلنا الراوتر وهو قافل');
+
+  const r2 = router({ stateLock: true });
+  const c = await driver();
+  await assert.rejects(c.login('192.168.8.1', 'admin', PW, { fresh: true }), /قافل/);
+  assert.ok(!r2.log.includes('POST user/challenge_login'), r2.log.join(','));
 });

@@ -90,7 +90,8 @@ function router(redirect: boolean, iosAts = false) {
 
 test('الراوتر يحوّل لـ https://hirouter.net: الدخول والقراءة على نفس الأصل (ما ينطرد)', async () => {
   const r = router(true);
-  const { HuaweiDriver } = require('../src/drivers/huawei/index');
+  const { HuaweiDriver, _resetHuaweiGate } = require('../src/drivers/huawei/index');
+  _resetHuaweiGate(); // كل اختبار = راوتر جديد (البوابة المشتركة في الذاكرة)
   const d = new HuaweiDriver();
   await d.login('192.168.8.1', 'admin', PW, { fresh: true });
   const sig = await d.getSignal();
@@ -101,7 +102,8 @@ test('الراوتر يحوّل لـ https://hirouter.net: الدخول والق
 
 test('راوتر بدون تحويل: كل شي على http://192.168.8.1 مثل قبل', async () => {
   const r = router(false);
-  const { HuaweiDriver } = require('../src/drivers/huawei/index');
+  const { HuaweiDriver, _resetHuaweiGate } = require('../src/drivers/huawei/index');
+  _resetHuaweiGate(); // كل اختبار = راوتر جديد (البوابة المشتركة في الذاكرة)
   const d = new HuaweiDriver();
   await d.login('192.168.8.1', 'admin', PW, { fresh: true });
   assert.equal(String((await d.getSignal()).pci), '134');
@@ -110,7 +112,8 @@ test('راوتر بدون تحويل: كل شي على http://192.168.8.1 مثل
 
 test('الآيفون: hirouter.net مرفوض (ATS) ← نكمّل على https://192.168.8.1', async () => {
   const r = router(true, true);
-  const { HuaweiDriver } = require('../src/drivers/huawei/index');
+  const { HuaweiDriver, _resetHuaweiGate } = require('../src/drivers/huawei/index');
+  _resetHuaweiGate(); // كل اختبار = راوتر جديد (البوابة المشتركة في الذاكرة)
   const d = new HuaweiDriver();
   await d.login('192.168.8.1', 'admin', PW, { fresh: true });
   assert.equal(String((await d.getSignal()).pci), '134');

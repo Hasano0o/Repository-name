@@ -150,10 +150,37 @@ const ERRORS: Record<string, string> = {
 };
 
 export class HuaweiError extends Error {
-  constructor(public code: string) {
-    super(ERRORS[code] ? `${ERRORS[code]} (${code})` : `خطأ من الراوتر (${code})`);
+  constructor(public code: string, msg?: string) {
+    super(msg ?? (ERRORS[code] ? `${ERRORS[code]} (${code})` : `خطأ من الراوتر (${code})`));
   }
 }
+
+/**
+ * ═══ بوابة الدخول المشتركة (٢ نوفمبر — «كلمة غلط» و«محاولات كثيرة» عند الكل، آيفون وأندرويد) ═══
+ * كل شاشة/مهمة تسوي نسخة درايفر لحالها (registry: new HuaweiDriver كل مرة): إضافة الراوتر + الرئيسية + المراقبة
+ * بالخلفية ممكن يسجلون دخول لنفس الراوتر بنفس اللحظة. في الأندرويد جرة الكوكيز وحدة للكل ← التحدي على جلسة
+ * والتحقق على جلسة ثانية ← 108006 بالكلمة الصحيحة، ومع كم محاولة 108007 (قفل). الحل:
+ *  ١. دخول واحد بالمرة لكل راوتر — لكل النسخ (gate).
+ *  ٢. نجاح قريب بنفس الكلمة (جرة مشتركة بس) ← النسخ الثانية ما تعيد الدخول (okAt).
+ *  ٣. الراوتر قافل (108007 أو state-login يقول) ← ما نرسل أي محاولة لين ينتهي (lockUntil) — المحاولات تمدّد القفل.
+ *  ٤. كلمة محفوظة رفضها الراوتر (108006) ← المهام الخلفية ما تعيدها نص ساعة (badPw) — هذي كانت تحرق المحاولات.
+ * القيم في الذاكرة بس (ما تنحفظ).
+ */
+const gate = new Map<string, Promise<unknown>>();
+const okAt = new Map<string, { key: string; at: number }>();
+const lockUntil = new Map<string, number>();
+const badPw = new Map<string, { key: string; at: number }>();
+const OK_REUSE_MS = 15_000;
+const BAD_PW_MS = 30 * 60_000;
+const LOCK_DEFAULT_MS = 5 * 60_000;
+const mins = (ms: number) => Math.max(1, Math.ceil(ms / 60_000));
+function lockedError(host: string): HuaweiError {
+  const left = (lockUntil.get(host) ?? 0) - Date.now();
+  return new HuaweiError('108007',
+    `الراوتر قافل الدخول مؤقتاً بسبب محاولات سابقة (108007). انتظر ${mins(left)} دقيقة وجرّب مرة وحدة بس — كل محاولة وهو قافل تمدّد القفل. لو صفحة الراوتر أو تطبيق هواوي مفتوح في جهاز ثاني، سكّره.`);
+}
+/** للاختبارات بس */
+export function _resetHuaweiGate() { gate.clear(); okAt.clear(); lockUntil.clear(); badPw.clear(); }
 /**
  * راوتر ثاني على 192.168.8.1 يرجّع صفحته (HTML) لأي رابط بـ 200 — كنا نحسب الدخول «نجح» والقراءات فاضية
  * (ملف FULL ٣١ أكتوبر ١٢:٣٧: كل /api/* ← 1027 بايت index.html، صفحة layui/jQuery مو هواوي)
@@ -472,16 +499,16 @@ export class HuaweiDriver implements RouterDriver {
   private loginRun: { key: string; p: Promise<void> } | null = null;
   async login(host: string, username: string, password: string, opts?: { lastTry?: boolean; fresh?: boolean }): Promise<void> {
     const key = `${host}\u0000${username}\u0000${password}`;
+    // نفس النسخة: دخول شغال بنفس الكلمة ← ننتظره
     if (this.loginRun?.key === key) {
       diag('[huawei] فيه دخول شغال بنفس الكلمة — ننتظره بدل دخول ثاني');
       return this.loginRun.p;
     }
-    if (!opts?.fresh && !this.stale && this.lastOk?.key === key && Date.now() - this.lastOk.at < 15_000) {
+    if (!opts?.fresh && !this.stale && this.lastOk?.key === key && Date.now() - this.lastOk.at < OK_REUSE_MS) {
       diag('[huawei] دخلنا قبل ثواني بنفس الكلمة — ما نعيد الدخول');
       return;
     }
-    if (this.loginRun) { try { await this.loginRun.p; } catch {} }
-    const p = this.loginOnce(host, username, password, opts);
+    const p = this.gated(host, username, password, key, opts);
     this.loginRun = { key, p };
     try {
       await p;
@@ -491,6 +518,52 @@ export class HuaweiDriver implements RouterDriver {
       throw e;
     } finally {
       if (this.loginRun?.p === p) this.loginRun = null;
+    }
+  }
+  /** البوابة المشتركة لكل نسخ الدرايفر (فوق) */
+  private async gated(host: string, username: string, password: string, key: string, opts?: { lastTry?: boolean; fresh?: boolean }): Promise<void> {
+    if ((lockUntil.get(host) ?? 0) > Date.now()) {
+      diag('[huawei] الراوتر قافل الدخول — ما نرسل محاولة');
+      throw lockedError(host);
+    }
+    const bad = badPw.get(host);
+    if (!opts?.fresh && bad?.key === key && Date.now() - bad.at < BAD_PW_MS) {
+      diag('[huawei] الكلمة المحفوظة انرفضت قبل شوي — ما نعيدها (ما نحرق محاولات)');
+      throw new HuaweiError('108006', 'الراوتر رفض كلمة المرور المحفوظة (108006). عدّلها من إعدادات الراوتر في التطبيق — ما نعيد المحاولة لحالنا عشان الراوتر ما يقفل.');
+    }
+    const prev = gate.get(host) ?? Promise.resolve();
+    let release!: () => void;
+    const mine = new Promise<void>(r => { release = r; });
+    const chain = prev.then(() => mine, () => mine);
+    gate.set(host, chain);
+    try {
+      await prev.catch(() => {});
+      // نسخة ثانية دخلت للتو بنفس الكلمة (جرة الكوكيز المشتركة) ← الجلسة جاهزة، ما نعيد
+      const ok = okAt.get(host);
+      if (!this.manualCookie && !this.stale && ok?.key === key && Date.now() - ok.at < OK_REUSE_MS) {
+        diag('[huawei] نسخة ثانية دخلت للتو بنفس الكلمة — نستخدم نفس الجلسة');
+        if (this.host !== host) this.origin = '';
+        this.host = host;
+        this.creds = { u: username, p: password };
+        return;
+      }
+      if ((lockUntil.get(host) ?? 0) > Date.now()) throw lockedError(host);
+      try {
+        await this.loginOnce(host, username, password, opts);
+      } catch (e) {
+        if (e instanceof HuaweiError && e.code === '108007') {
+          if ((lockUntil.get(host) ?? 0) <= Date.now()) lockUntil.set(host, Date.now() + LOCK_DEFAULT_MS);
+          throw lockedError(host);
+        }
+        if (e instanceof HuaweiError && e.code === '108006') badPw.set(host, { key, at: Date.now() });
+        throw e;
+      }
+      okAt.set(host, { key, at: Date.now() });
+      badPw.delete(host);
+      lockUntil.delete(host);
+    } finally {
+      release();
+      if (gate.get(host) === chain) gate.delete(host);
     }
   }
   private async loginOnce(host: string, username: string, password: string, opts?: { lastTry?: boolean; fresh?: boolean }): Promise<void> {
@@ -524,6 +597,13 @@ export class HuaweiDriver implements RouterDriver {
       diag('[huawei] https بالاسم انرفض — نجرّب https على العنوان مباشرة');
       this.origin = httpsIp;
       state = await getState();
+    }
+    // الراوتر نفسه يقول إنه قافل (بعض الفيرموير: lockstatus / remainwaittime بالثواني) ← ما نرسل الكلمة أبد
+    const waitS = parseInt(tag(state, 'remainwaittime') ?? '0', 10);
+    if (tag(state, 'lockstatus') === '1' || waitS > 0) {
+      lockUntil.set(host, Date.now() + (waitS > 0 ? waitS * 1000 : LOCK_DEFAULT_MS));
+      diag(`[huawei] state-login: الدخول مقفول (باقي ${waitS || '؟'} ث) — ما نرسل الكلمة`);
+      throw new HuaweiError('108007');
     }
     const type = tag(state, 'password_type');
     this.log('state', tag(state, 'State'), 'password_type', type);
@@ -687,6 +767,7 @@ export class HuaweiDriver implements RouterDriver {
   markStale() {
     this.stale = true;
     this.lastOk = null;
+    okAt.delete(this.host);
     this.queue = [];
     if (this.manualCookie) this.cookie = '';
   }
