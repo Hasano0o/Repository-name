@@ -53,10 +53,18 @@ def model_of(z: Path) -> str:
 
 
 def norm(model: str) -> str:
-    """نفس الراوتر بأسماء مختلفة (Pro7 - System Status (OpenWrt) = Pro7)"""
-    m = re.sub(r"\s*\((OpenWrt|Huawei|ZTE)\)\s*$", "", model, flags=re.I)
+    """الاسم بدون الزوائد: «Pro7 - System Status (OpenWrt)-FULL» = «Pro7»"""
+    m = re.sub(r"-(FULL?|AUTH|add-error|PARTIAL)$", "", model.strip(), flags=re.I)
+    m = re.sub(r"\s*\((OpenWrt)\)\s*$", "", m, flags=re.I)
     m = re.sub(r"\s+-\s+.*$", "", m)
     return m.strip() or model
+
+
+def key_of(name: str) -> str:
+    """مفتاح التجميع: «5G CPE PRO 7» = «5g cpe pro7» = «Pro7»"""
+    k = re.sub(r"[^a-z0-9]", "", name.lower())
+    k = re.sub(r"^(5gcpe|4gcpe|cpe)", "", k)
+    return k or name
 
 
 def collect():
@@ -69,7 +77,13 @@ def collect():
                 continue
             seen.add(z.name)
             out.append((z.stat().st_mtime, norm(model_of(z)), kind_of(z.name)))
-    return out
+    # نفس الجهاز بكتابات مختلفة ← اسم واحد (الأكثر تكرار)
+    names: dict[str, dict[str, int]] = {}
+    for _, m, _k in out:
+        names.setdefault(key_of(m), {}).setdefault(m, 0)
+        names[key_of(m)][m] += 1
+    best = {k: max(v.items(), key=lambda x: x[1])[0] for k, v in names.items()}
+    return [(t, best[key_of(m)], k) for t, m, k in out]
 
 
 def send(text: str) -> bool:
@@ -111,9 +125,14 @@ def main():
             new.setdefault(m, {}).setdefault(k, 0)
             new[m][k] += 1
     top: dict[str, int] = {}
+    errs = 0
     for t, m, k in items:
-        if t > now - 30 * DAY and k in ("جهاز جديد", "FULL", "خطأ إضافة"):
+        if t <= now - 30 * DAY:
+            continue
+        if k in ("جهاز جديد", "FULL"):  # طلبات أجهزة — أخطاء الإضافة غالباً راوترات مدعومة (كلمة غلط…) فنعدّها لحالها
             top[m] = top.get(m, 0) + 1
+        elif k == "خطأ إضافة":
+            errs += 1
 
     hrs = max(1, round((now - since) / 3600))
     lines = [f"📦 ملخص ملفات الراوترات — آخر {hrs} ساعة"]
@@ -126,6 +145,8 @@ def main():
         lines.append("\n🔝 الأكثر طلباً (٣٠ يوم):")
         for i, (m, n) in enumerate(sorted(top.items(), key=lambda x: -x[1])[:10], 1):
             lines.append(f"{i}. {m} — {n}")
+    if errs:
+        lines.append(f"\n⚠️ أخطاء إضافة راوتر (٣٠ يوم): {errs} — في data/reports/bandly-add-login-*")
     lines.append("\nالملفات في /root/bandly-live/data/dumps/")
     text = "\n".join(lines)
 
