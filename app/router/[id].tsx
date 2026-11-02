@@ -1218,8 +1218,9 @@ const s = sheet({
   demoSub: { color: tFg('#5d4a8f'), fontWeight: '600', fontSize: 12, textAlign: 'right', lineHeight: 18, marginTop: 2 },
   demoBtn: { backgroundColor: tFg('#7a51e0'), borderRadius: 12, paddingVertical: 10, alignItems: 'center' },
   demoBtnTxt: { color: '#fff', fontWeight: '800', fontSize: 13.5 },
-  nrPending: { marginTop: 8, borderWidth: 1.5, borderStyle: 'dashed', borderColor: tBd('#7c5cff'), backgroundColor: tBg('#7c5cff'), borderRadius: 14, paddingVertical: 8, paddingHorizontal: 12, gap: 2 },
-  nrPendingTitle: { color: tFg('#7c5cff'), fontWeight: '800', fontSize: 14, textAlign: 'right' },
+  // ألوان فاتحة (tBg ياخذ لون الخلفية نفسه — كان '#7c5cff' ← كرت بنفسجي غامق والكلام ما يبان، حسن ٢ نوفمبر)
+  nrPending: { marginTop: 8, borderWidth: 1.5, borderStyle: 'dashed', borderColor: tBd('#c4b5fd'), backgroundColor: tBg('#f3efff'), borderRadius: 14, paddingVertical: 8, paddingHorizontal: 12, gap: 2 },
+  nrPendingTitle: { color: tFg('#5b3fd6'), fontWeight: '800', fontSize: 14, textAlign: 'right' },
   nrPendingSub: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 17 },
   warnBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.goldSoft, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: 16, padding: 12 },
   warnText: { flex: 1, color: C.text, fontWeight: '700', textAlign: 'right', fontSize: 13 },
