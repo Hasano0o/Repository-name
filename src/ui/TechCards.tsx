@@ -170,6 +170,8 @@ function TechRow({ r, onDetails, hist }: { r: Row; onDetails?: () => void; hist?
     <View style={s.rowWrap}>
     <View style={s.row}>
       {/* ١. شارة التردد */}
+      {/* الشارة نفسها تفتح التفاصيل (حسن ٢ نوفمبر: «اضغط ما يظهر» — كان بس مربعي النقاء والجودة) */}
+      <Pressable onPress={onDetails} disabled={!onDetails} accessibilityRole="button" accessibilityLabel="تفاصيل الإشارة">
       <LinearGradient colors={TECH_TINT[r.tech]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.chip}>
         <Sheen />
         <View style={s.chipTop}>
@@ -179,6 +181,7 @@ function TechRow({ r, onDetails, hist }: { r: Row; onDetails?: () => void; hist?
         <Text style={s.chipBand} numberOfLines={1} adjustsFontSizeToFit>{code}</Text>
         {!!nice && <Text style={s.chipNice} numberOfLines={1} adjustsFontSizeToFit>{nice}</Text>}
       </LinearGradient>
+      </Pressable>
 
       {/* ٢. قوة الإشارة */}
       <View style={s.mid}>
