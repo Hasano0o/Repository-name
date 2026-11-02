@@ -27,6 +27,22 @@ import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { HuaweiLockData, parseNetModeFields, netModeBody, netModeDiff, lockDiffForMode, lockRestoreBody, huaweiSummary } from './lockState';
 import { buildCellLockBody, buildUnlockBody, lockMatches, parseCellLocks, parseLockRaw, LockRaw, Tech as CellTech, bandLockSection, buildChannelLockBody, channelMatches, lockKindOf } from './cellLock';
 
+/**
+ * شكل رد challenge_login للتشخيص — أسماء الخانات وأطوالها، والأرقام الصغيرة (iterations…) بقيمها.
+ * ما فيه أسرار: الملح والـ nonce بطولها بس. «nonce✓» = servernonce يبدأ بالـ firstnonce حقنا.
+ * (٢ نوفمبر: رد ٣٣٨ حرف ينجح و٣٤٣ يرد 108006 بنفس الكلمة — نبي نعرف وش الفرق)
+ */
+export function challengeShape(xml: string, firstNonce: string): string {
+  const body = (xml.match(/<response>([\s\S]*)<\/response>/) ?? [, xml])[1] ?? '';
+  const parts: string[] = [];
+  for (const m of body.matchAll(/<([A-Za-z_][\w-]*)>([^<]*)<\/\1>/g)) {
+    const v = m[2].trim();
+    parts.push(/^\d{1,5}$/.test(v) ? `${m[1]}=${v}` : `${m[1]}:${v.length}`);
+  }
+  const sn = (body.match(/<servernonce>([^<]*)</) ?? [])[1] ?? '';
+  return `${parts.join(' ') || 'فاضي'} · nonce${sn.startsWith(firstNonce) ? '✓' : '✗'} · ${xml.length}`;
+}
+
 const tag = (xml: string, t: string) =>
   xml.match(new RegExp(`<${t}>([\\s\\S]*?)</${t}>`))?.[1];
 const tagsAll = (xml: string, t: string) =>
@@ -446,7 +462,38 @@ export class HuaweiDriver implements RouterDriver {
     const t = await rawHttp(`http://${host}/api/webserver/token`, {}, 3000);
     return isHuaweiSessionReply(await t.text());
   }
+  /**
+   * دخول وحد بالمرة، وما نعيده لو نجح قبل ثواني بنفس الكلمة.
+   * تقارير «أرسل الخطأ للمطوّر» (آيفون، ٢ نوفمبر): الدخول ينجح ← وخلال نص ثانية دخولين ثانيين على نفس الدرايفر،
+   * الوسطاني 108006 («كلمة غلط» وهي صحيحة) — يزيد عدّاد المحاولات لين القفل 108007.
+   * والدخولين مع بعض يتشاركون الكوكي (الآيفون: this.cookie واحد) ← تحدي جلسة وتحقق جلسة ثانية ← 108006.
+   */
+  private lastOk: { key: string; at: number } | null = null;
+  private loginRun: { key: string; p: Promise<void> } | null = null;
   async login(host: string, username: string, password: string, opts?: { lastTry?: boolean; fresh?: boolean }): Promise<void> {
+    const key = `${host}\u0000${username}\u0000${password}`;
+    if (this.loginRun?.key === key) {
+      diag('[huawei] فيه دخول شغال بنفس الكلمة — ننتظره بدل دخول ثاني');
+      return this.loginRun.p;
+    }
+    if (!opts?.fresh && !this.stale && this.lastOk?.key === key && Date.now() - this.lastOk.at < 15_000) {
+      diag('[huawei] دخلنا قبل ثواني بنفس الكلمة — ما نعيد الدخول');
+      return;
+    }
+    if (this.loginRun) { try { await this.loginRun.p; } catch {} }
+    const p = this.loginOnce(host, username, password, opts);
+    this.loginRun = { key, p };
+    try {
+      await p;
+      this.lastOk = { key, at: Date.now() };
+    } catch (e) {
+      this.lastOk = null;
+      throw e;
+    } finally {
+      if (this.loginRun?.p === p) this.loginRun = null;
+    }
+  }
+  private async loginOnce(host: string, username: string, password: string, opts?: { lastTry?: boolean; fresh?: boolean }): Promise<void> {
     if (this.host !== host) this.origin = '';
     this.host = host;
     this.queue = [];
@@ -496,7 +543,7 @@ export class HuaweiDriver implements RouterDriver {
         this.cookie = '';
         this.queue = [];
         this.stale = true;
-        return this.login(host, username, password, opts);
+        return this.loginOnce(host, username, password, opts);
       }
       if (samePwd && e instanceof HuaweiError && /^10800[126]$/.test(e.code)) {
         e.message = `الراوتر رفض الكلمة (${e.code}). في هذا الجهاز كلمة الدخول هي نفسها كلمة الواي فاي — جرّب كلمة الواي فاي (اللي تتصل فيها بالشبكة)`;
@@ -570,7 +617,7 @@ export class HuaweiDriver implements RouterDriver {
               this.manualCookie = false;
               this.stale = false;
               this.queue = [];
-              return this.login(host, username, password);
+              return this.loginOnce(host, username, password);
             }
           }
         }
@@ -605,11 +652,13 @@ export class HuaweiDriver implements RouterDriver {
     const firstNonce = bytesToHex(Crypto.getRandomBytes(32));
     // dev: نفس صفحة المطوّر (main.js: route developermode ← loginflag "2" في الطلبين)
     const flag = dev ? '<loginflag>2</loginflag>' : '';
+    const ck0 = this.cookie;
     const ch = await this.post('user/challenge_login',
       `<username>${esc(username)}</username><firstnonce>${firstNonce}</firstnonce><mode>1</mode>${flag}`);
     const salt = tag(ch, 'salt');
     const serverNonce = tag(ch, 'servernonce');
     const iterations = parseInt(tag(ch, 'iterations') ?? '0', 10);
+    diag(`[huawei] challenge: ${challengeShape(ch, firstNonce)}`);
     if (!salt || !serverNonce || !iterations) throw new Error('الراوتر ما رجّع بيانات تسجيل الدخول');
     const msg = `${firstNonce},${serverNonce},${serverNonce}`;
     const salted = pbkdf2(sha256, utf8ToBytes(password), hexToBytes(salt), { c: iterations, dkLen: 32 });
@@ -617,8 +666,14 @@ export class HuaweiDriver implements RouterDriver {
     const storedKey = sha256(clientKey);
     const signature = hmac(sha256, utf8ToBytes(msg), storedKey);
     const proof = clientKey.map((b, i) => b ^ signature[i]);
-    await this.post('user/authentication_login',
-      `<clientproof>${bytesToHex(proof)}</clientproof><finalnonce>${serverNonce}</finalnonce>${flag}`);
+    const ck1 = this.cookie;
+    try {
+      await this.post('user/authentication_login',
+        `<clientproof>${bytesToHex(proof)}</clientproof><finalnonce>${serverNonce}</finalnonce>${flag}`);
+    } finally {
+      // الآيفون (كوكي يدوي): هل الجلسة تغيّرت بين التحدي والتحقق؟ (بدون قيم)
+      if (this.manualCookie) diag(`[huawei] كوكي: قبل التحدي→بعده ${ck0 === ck1 ? 'نفسه' : 'تغيّر'} · بعد التحقق ${ck1 === this.cookie ? 'نفسه' : 'تغيّر'}`);
+    }
   }
   async logout() {
     try { await this.post('user/logout', '<Logout>1</Logout>'); } catch {}
@@ -631,6 +686,7 @@ export class HuaweiDriver implements RouterDriver {
    */
   markStale() {
     this.stale = true;
+    this.lastOk = null;
     this.queue = [];
     if (this.manualCookie) this.cookie = '';
   }

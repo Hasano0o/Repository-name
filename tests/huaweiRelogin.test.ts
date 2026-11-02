@@ -222,3 +222,38 @@ test('هواوي (H122-373): طلبات متوازية تعلق ← نتحوّل
   const again = await Promise.all([1, 2, 3, 4].map(() => d.getSignal()));
   assert.ok(again.every(x => x.pci === '134'));
 });
+
+// ═══ تقارير «أرسل الخطأ للمطوّر» آيفون ٢ نوفمبر: نجح ← دخولين ورا بعض / مع بعض ← 108006 ثم قفل 108007 ═══
+test('هواوي آيفون: دخولين مع بعض على نفس الدرايفر ← دخول واحد بس، والاثنين ينجحون (كان 108006)', async () => {
+  OS = 'ios';
+  const r = router();
+  const d = await driver();
+  await Promise.all([d.login('192.168.8.1', 'admin', PW), d.login('192.168.8.1', 'admin', PW)]);
+  assert.equal(r.log.filter(x => x === 'POST user/authentication_login').length, 1, r.log.join('\n'));
+  assert.equal(r.log.filter(x => x === 'POST user/challenge_login').length, 1);
+});
+
+test('هواوي: دخول ثاني خلال ثواني بنفس الكلمة ← ما يعيد · بعد الطرد يعيد فعلاً · كلمة ثانية تنفحص', async () => {
+  OS = 'ios';
+  const r = router();
+  const d = await driver();
+  await d.login('192.168.8.1', 'admin', PW);
+  const n = r.log.length;
+  await d.login('192.168.8.1', 'admin', PW);
+  assert.equal(r.log.length, n, 'ما أرسل شي');
+  await relogin(d);
+  assert.ok(r.log.slice(n).includes('POST user/authentication_login'), 'بعد markStale دخول حقيقي');
+  await assert.rejects(d.login('192.168.8.1', 'admin', 'wrong-pass'), /108006|غلط/);
+  // fresh (المستخدم كتب الكلمة بنفسه) دايماً يتحقق
+  const m = r.log.length;
+  await d.login('192.168.8.1', 'admin', PW, { fresh: true });
+  assert.ok(r.log.slice(m).includes('POST user/authentication_login'));
+});
+
+test('هواوي: شكل رد التحدي للتشخيص بدون أسرار', () => {
+  const { challengeShape } = require('../src/drivers/huawei/index');
+  const s = challengeShape('<?xml version="1.0" encoding="UTF-8"?><response><salt>abcd</salt><iterations>100</iterations><servernonce>ff00aa</servernonce><modeselected>1</modeselected></response>', 'ff00');
+  assert.equal(s.split(' · ')[0], 'salt:4 iterations=100 servernonce:6 modeselected=1');
+  assert.ok(s.includes('nonce✓'));
+  assert.ok(!s.includes('abcd') && !s.includes('ff00aa'));
+});
