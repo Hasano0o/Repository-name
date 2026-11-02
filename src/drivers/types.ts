@@ -10,6 +10,8 @@ export interface Signal {
   network?: string; band?: string; cellId?: string; pci?: string; earfcn?: string;
   /** رقم المنطقة (Tracking Area) — مع Cell ID يعرّف البرج في قواعد الأبراج (OpenCelliD) */
   tac?: string;
+  /** الشركة (MCC+MNC، مثل 42004 = زين) */
+  plmn?: string;
   dlBandwidth?: string; ulBandwidth?: string;
   rsrp?: number; rsrq?: number; sinr?: number; rssi?: number;
   nrBand?: string; nrPci?: string; nrArfcn?: string; nrDlBandwidth?: string;

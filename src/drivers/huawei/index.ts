@@ -784,6 +784,8 @@ export class HuaweiDriver implements RouterDriver {
     try { await this.homePage(host); } catch {}
     if (this.manualCookie) { try { await this.sesTok(); } catch {} }
   }
+  /** رقم الشركة من net/current-plmn (احتياط لو device/signal ما فيه plmn) */
+  private plmnNum = '';
   async getSignal(): Promise<Signal> {
     const xml = await this.get('device/signal');
     let network: string | undefined;
@@ -814,6 +816,7 @@ export class HuaweiDriver implements RouterDriver {
       band: tag(xml, 'band'),
       cellId: tag(xml, 'cell_id'),
       tac: tag(xml, 'tac') || undefined,
+      plmn: tag(xml, 'plmn') || this.plmnNum || undefined,
       pci: tag(xml, 'pci'),
       earfcn: tag(xml, 'earfcn'),
       dlBandwidth: tag(xml, 'dlbandwidth'),
@@ -915,6 +918,9 @@ export class HuaweiDriver implements RouterDriver {
     try {
       const plmn = await this.get('net/current-plmn');
       operator = unesc(tag(plmn, 'FullName') || tag(plmn, 'ShortName') || '') || undefined;
+      // رقم الشركة (42004…) — بعض الفيرموير ما يحطه في device/signal، ويحتاجه «بعد البرج»
+      const num = (tag(plmn, 'Numeric') ?? '').replace(/\D/g, '');
+      if (num.length >= 5) this.plmnNum = num;
     } catch {}
     let connected: boolean | undefined;
     try { connected = await this.isConnected(); } catch {}
