@@ -770,9 +770,12 @@ export default function RouterDashboard() {
               {lock.pci
                 ? `مثبّت على برج PCI ${lock.pci} — لو ضعفت الإشارة رجّع للتلقائي`
                 : `مثبّت على ${[...lock.bands.map(b => 'B' + b), ...(lock.nrBands ?? []).map(b => 'n' + b)].join(' + ')}${
-                  lock.bands.length === 1 && !(lock.nrBands?.length)
-                    ? ' — تردد واحد يحد السرعة'
-                    : ' — الدمج و5G يشتغلون وقت التحميل، والراوتر وهو خامل يعرض التردد الأساسي بس'}`}
+                  // نقول اللي نشوفه فعلاً من الراوتر — ما نوعد بـ 5G وهو ما ظهر (حسن ٢ نوفمبر: n78 فوق وما فيه 5G تحت)
+                  (lock.nrBands?.length ?? 0) > 0 && !hasNr
+                    ? ` — 5G (${(lock.nrBands ?? []).map(b => 'n' + b).join('+')}) ما شبك عليه الراوتر الحين`
+                    : lock.bands.length === 1 && !(lock.nrBands?.length)
+                      ? ' — تردد واحد يحد السرعة'
+                      : caIdle ? ' — الدمج يرجع وقت التحميل' : ''}`}
             </Text>
           </View>
         )}
@@ -812,7 +815,20 @@ export default function RouterDashboard() {
         {!loading && info && (
           <LinearGradient colors={HERO_BG[noService ? 'poor' : level]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.heroX, showCards && { paddingHorizontal: 10, paddingTop: 10 }]}>
             {showCards
-              ? <TechCards signal={signal} onDetails={() => router.push(`/details/${info.id}` as Href)} />
+              ? <>
+                <TechCards signal={signal} onDetails={() => router.push(`/details/${info.id}` as Href)} />
+                {/* 5G مثبّت (أو الراوتر يقول متاح) بس ما فيه قراءات 5G ← نبيّنه بدل ما يختفي ونخلي البانر فوق يناقضه */}
+                {!hasNr && ((lock?.nrBands?.length ?? 0) > 0 || nrIdle) && (
+                  <View style={s.nrPending}>
+                    <Text style={s.nrPendingTitle}>5G{lock?.nrBands?.length ? ` · ${lock.nrBands.map(b => 'n' + b).join('+')}` : ''} — ما شبك الحين</Text>
+                    <Text style={s.nrPendingSub}>
+                      {nrIdle
+                        ? 'البرج فيه 5G — الراوتر يشبك عليه وقت التحميل'
+                        : 'الراوتر ما يقرأ 5G الحين. شغّل اختبار السرعة؛ لو ما ظهر، البرج غالباً ما يعطيك 5G مع هالتثبيت — رجّع 5G للتلقائي'}
+                    </Text>
+                  </View>
+                )}
+              </>
               : <ArcGauge score={signalScore(primary)} label={LEVEL_LABEL[level]} color={LEVEL_COLOR[level]} size={172} />}
             {showCards && !noNet ? (
               <View style={s.heroLineRow}>
@@ -1202,6 +1218,9 @@ const s = sheet({
   demoSub: { color: tFg('#5d4a8f'), fontWeight: '600', fontSize: 12, textAlign: 'right', lineHeight: 18, marginTop: 2 },
   demoBtn: { backgroundColor: tFg('#7a51e0'), borderRadius: 12, paddingVertical: 10, alignItems: 'center' },
   demoBtnTxt: { color: '#fff', fontWeight: '800', fontSize: 13.5 },
+  nrPending: { marginTop: 8, borderWidth: 1.5, borderStyle: 'dashed', borderColor: tBd('#7c5cff'), backgroundColor: tBg('#7c5cff'), borderRadius: 14, paddingVertical: 8, paddingHorizontal: 12, gap: 2 },
+  nrPendingTitle: { color: tFg('#7c5cff'), fontWeight: '800', fontSize: 14, textAlign: 'right' },
+  nrPendingSub: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 17 },
   warnBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.goldSoft, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: 16, padding: 12 },
   warnText: { flex: 1, color: C.text, fontWeight: '700', textAlign: 'right', fontSize: 13 },
   // زر واضح إنه ينضغط: برتقالي غامق + ظل (الذهبي الفاتح كان يوحي إنه معطّل)
