@@ -127,15 +127,6 @@
     "plugins": [
       "expo-router",
       [
-        "expo-location",
-        {
-          "locationWhenInUsePermission": "Bandly يستخدم موقعك التقريبي عشان يعرف بعد البرج واتجاهه عنك (يفيد بتوجيه الأنتنا)، ويساعد الأعضاء يعرفون أماكن الأبراج. الموقع ينقرّب لأقرب ١٠٠ متر وما يطلع موقع أي عضو لأحد.",
-          "isIosBackgroundLocationEnabled": false,
-          "isAndroidBackgroundLocationEnabled": false,
-          "isAndroidForegroundServiceEnabled": false
-        }
-      ],
-      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",

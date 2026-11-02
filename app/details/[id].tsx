@@ -19,7 +19,6 @@ import {
 import { tBg, tFg } from '../../src/ui/theme';
 import { hostLabel } from '../../src/drivers/device';
 import { sheet } from '../../src/i18n';import { HubLinks } from '../../src/ui/HubLinks';
-import { TowerDistance } from '../../src/ui/TowerDistance';
 
 type Info = { label: string; value?: string; accent?: string };
 
@@ -175,9 +174,6 @@ export default function DetailsScreen() {
                 ]} />
               </View>
             </Section>
-
-            {/* ═══ بعد البرج (قاعدة الأبراج من الأعضاء) ═══ */}
-            <TowerDistance signal={signal} />
 
             {/* ═══ 5G ═══ */}
             {hasNr && (

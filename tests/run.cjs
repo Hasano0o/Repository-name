@@ -77,7 +77,6 @@ const files = [
   'src/drivers/luci/pro7.ts',
   'src/drivers/luci/cbi.ts',
   'src/drivers/luci/pro7lock.ts',
-  'src/services/towerGeo.ts',
   ...fs.readdirSync(path.join(root, 'tests')).filter(f => f.endsWith('.test.ts')).map(f => `tests/${f}`),
 ];
 

@@ -19,7 +19,6 @@ import { GlassCard } from '../../src/ui/GlassCard';
 import { SignalRing } from '../../src/ui/SignalRing';
 import { ArcGauge } from '../../src/ui/ArcGauge';
 import { TechCards, techRows, Bars } from '../../src/ui/TechCards';
-import { contributeTower } from '../../src/services/towerMap';
 import { RadarPoint } from '../../src/ui/SignalRadar';
 import { MetricRings, RingSpec } from '../../src/ui/MetricRing';
 import { Icon, IconName } from '../../src/ui/Icon';
@@ -209,8 +208,6 @@ export default function RouterDashboard() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signal?.band, signal?.nrBand, signal?.caCount, id]);
-  // قاعدة الأبراج من الأعضاء: لو العضو وافق، نساهم بالبرج الحالي (مرة كل ١٢ ساعة لكل برج — داخل الخدمة)
-  useEffect(() => { if (signal?.cellId) contributeTower(signal); }, [signal?.cellId, signal?.tac]);
 
   // ═══ فحص الإنترنت: الإشارة زينة بس النت واقف؟ (كل ٤٥ ثانية والشاشة مفتوحة) ═══
   const hasSignalNow = !!signal && (signal.rsrp !== undefined || signal.nrRsrp !== undefined);
