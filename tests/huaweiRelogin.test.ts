@@ -36,7 +36,7 @@ const { bytesToHex, hexToBytes, utf8ToBytes } = require('@noble/hashes/utils');
 const PW = 'Pass1234';
 const rnd = () => Math.random().toString(36).slice(2, 12);
 
-function router(opts: { noScram?: boolean; tokenRotates?: boolean; htmlAll?: boolean; slowParallel?: boolean; lockAfter?: number; stateLock?: boolean } = {}) {
+function router(opts: { noScram?: boolean; tokenRotates?: boolean; htmlAll?: boolean; slowParallel?: boolean; lockAfter?: number; stateLock?: boolean; oddNonce?: boolean } = {}) {
   // logged: 'full' = SCRAM · 'limited' = الدخول القديم user/login (جلسة ناقصة: net/lock-freq ← 100003، تعليق الدرايفر)
   type Sess = { tok: string[]; logged: false | 'full' | 'limited'; scram?: { first: string; server: string } };
   const sessions = new Map<string, Sess>();
@@ -101,14 +101,19 @@ function router(opts: { noScram?: boolean; tokenRotates?: boolean; htmlAll?: boo
     const tg = (n: string) => (body.match(new RegExp(`<${n}>([^<]*)</${n}>`)) ?? [])[1] ?? '';
     if (p === 'user/challenge_login') {
       if (opts.noScram) return res(err('125003'));
-      s.scram = { first: tg('firstnonce'), server: tg('firstnonce') + rnd() };
-      return res(xml(`<salt>${salt}</salt><servernonce>${s.scram.server}</servernonce><iterations>100</iterations>`));
+      // oddNonce: جزء الراوتر فيه رموز («"» و«&») — تنكتب في XML مرمّزة (&quot; &amp;) مثل الراوتر الحقيقي
+      s.scram = { first: tg('firstnonce'), server: tg('firstnonce') + (opts.oddNonce ? 'a"b&c' + rnd() : rnd()) };
+      const sx = s.scram.server.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+      return res(xml(`<salt>${salt}</salt><iterations>1000</iterations><servernonce>${sx}</servernonce><newType>0</newType><modeselected>1</modeselected>`.replace('<iterations>1000</iterations>', opts.oddNonce ? '<iterations>1000</iterations>' : '<iterations>100</iterations>')));
     }
     if (p === 'user/authentication_login') {
       if (opts.lockAfter !== undefined && wrong >= opts.lockAfter) return res(err('108007'));
       const sc = s.scram;
       if (!sc) return res(err('125002'));
-      const salted = pbkdf2(sha256, utf8ToBytes(PW), hexToBytes(salt), { c: 100, dkLen: 32 });
+      // الراوتر يقرأ finalnonce بعد فك الترميز — لازم يطابق الـ nonce الأصلي
+      const fin = tg('finalnonce').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+      if (fin !== sc.server) return res(err('108006'));
+      const salted = pbkdf2(sha256, utf8ToBytes(PW), hexToBytes(salt), { c: opts.oddNonce ? 1000 : 100, dkLen: 32 });
       const clientKey = hmac(sha256, utf8ToBytes('Client Key'), salted);
       const storedKey = sha256(clientKey);
       const sig = hmac(sha256, utf8ToBytes(`${sc.first},${sc.server},${sc.server}`), storedKey);
@@ -313,4 +318,16 @@ test('هواوي: بعد 108007 (قفل) ما نرسل ولا محاولة لي�
   const c = await driver();
   await assert.rejects(c.login('192.168.8.1', 'admin', PW, { fresh: true }), /قافل/);
   assert.ok(!r2.log.includes('POST user/challenge_login'), r2.log.join(','));
+});
+
+test('هواوي: nonce الراوتر فيه رموز مرمّزة (&quot; &amp;) ← نفكها قبل الحساب (كان 108006 بالكلمة الصحيحة — تقرير ٢ نوفمبر ٥:٥٣)', async () => {
+  for (const os of ['android', 'ios']) {
+    OS = os;
+    const r = router({ oddNonce: true });
+    const d = await driver();
+    await d.login('192.168.8.1', 'admin', PW, { fresh: true });
+    assert.equal(r.log.filter(x => x === 'POST user/authentication_login').length, 1, os);
+  }
+  const { challengeShape } = require('../src/drivers/huawei/index');
+  assert.match(challengeShape('<response><servernonce>ab&quot;c</servernonce></response>', 'ab'), /رموز مرمّزة 1/);
 });

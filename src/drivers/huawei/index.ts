@@ -40,7 +40,8 @@ export function challengeShape(xml: string, firstNonce: string): string {
     parts.push(/^\d{1,5}$/.test(v) ? `${m[1]}=${v}` : `${m[1]}:${v.length}`);
   }
   const sn = (body.match(/<servernonce>([^<]*)</) ?? [])[1] ?? '';
-  return `${parts.join(' ') || 'فاضي'} · nonce${sn.startsWith(firstNonce) ? '✓' : '✗'} · ${xml.length}`;
+  const ent = (sn.match(/&[#\w]+;/g) ?? []).length;
+  return `${parts.join(' ') || 'فاضي'} · nonce${sn.startsWith(firstNonce) ? '✓' : '✗'}${ent ? ` · رموز مرمّزة ${ent}` : ''} · ${xml.length}`;
 }
 
 const tag = (xml: string, t: string) =>
@@ -50,7 +51,10 @@ const tagsAll = (xml: string, t: string) =>
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const unesc = (s = '') =>
-  s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+  s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&amp;/g, '&');
 const sha256Hex = (s: string) => bytesToHex(sha256(utf8ToBytes(s)));
 const num = (v?: string) => {
   const n = parseFloat(v ?? '');
@@ -735,8 +739,11 @@ export class HuaweiDriver implements RouterDriver {
     const ck0 = this.cookie;
     const ch = await this.post('user/challenge_login',
       `<username>${esc(username)}</username><firstnonce>${firstNonce}</firstnonce><mode>1</mode>${flag}`);
-    const salt = tag(ch, 'salt');
-    const serverNonce = tag(ch, 'servernonce');
+    // الـ nonce من الراوتر ممكن فيه رموز مكتوبة بصيغة XML (&quot; …) — لازم نفكها قبل الحساب ونرجّعها مرمّزة.
+    // كنا نحسب على النص المرمّز ← 108006 «كلمة غلط» وهي صحيحة، وبس لما يطلع رمز (عشان كذا نفس الراوتر ينجح
+    // مرة ويفشل مرة). تقرير ٢ نوفمبر ٥:٥٣: servernonce:101 بدل 96 (+5 = &quot;) ← 108006.
+    const salt = unesc(tag(ch, 'salt') ?? '').trim() || undefined;
+    const serverNonce = unesc(tag(ch, 'servernonce') ?? '') || undefined;
     const iterations = parseInt(tag(ch, 'iterations') ?? '0', 10);
     diag(`[huawei] challenge: ${challengeShape(ch, firstNonce)}`);
     if (!salt || !serverNonce || !iterations) throw new Error('الراوتر ما رجّع بيانات تسجيل الدخول');
@@ -749,7 +756,7 @@ export class HuaweiDriver implements RouterDriver {
     const ck1 = this.cookie;
     try {
       await this.post('user/authentication_login',
-        `<clientproof>${bytesToHex(proof)}</clientproof><finalnonce>${serverNonce}</finalnonce>${flag}`);
+        `<clientproof>${bytesToHex(proof)}</clientproof><finalnonce>${esc(serverNonce)}</finalnonce>${flag}`);
     } finally {
       // الآيفون (كوكي يدوي): هل الجلسة تغيّرت بين التحدي والتحقق؟ (بدون قيم)
       if (this.manualCookie) diag(`[huawei] كوكي: قبل التحدي→بعده ${ck0 === ck1 ? 'نفسه' : 'تغيّر'} · بعد التحقق ${ck1 === this.cookie ? 'نفسه' : 'تغيّر'}`);
