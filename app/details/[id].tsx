@@ -163,6 +163,7 @@ export default function DetailsScreen() {
                 <InfoGrid rows={[
                   { label: 'الباند', value: signal.band, accent: P.blue },
                   { label: 'Cell ID', value: str(signal.cellId) },
+                  { label: 'TAC (المنطقة)', value: str(signal.tac) },
                   { label: 'PCI', value: str(signal.pci) },
                   { label: 'EARFCN', value: str(signal.earfcn) },
                   { label: 'عرض النطاق', value: [signal.dlBandwidth, signal.ulBandwidth].filter(Boolean).join(' / ') || undefined },

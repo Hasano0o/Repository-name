@@ -813,6 +813,7 @@ export class HuaweiDriver implements RouterDriver {
       network,
       band: tag(xml, 'band'),
       cellId: tag(xml, 'cell_id'),
+      tac: tag(xml, 'tac') || undefined,
       pci: tag(xml, 'pci'),
       earfcn: tag(xml, 'earfcn'),
       dlBandwidth: tag(xml, 'dlbandwidth'),
