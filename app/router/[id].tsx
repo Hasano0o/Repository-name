@@ -759,16 +759,20 @@ export default function RouterDashboard() {
           </View>
         )}
 
-        {!loading && lock && (lock.bands.length > 0 || lock.pci) && (
+        {!loading && lock && (lock.bands.length > 0 || (lock.nrBands?.length ?? 0) > 0 || lock.pci) && (
           <View style={s.warnBanner}>
             <Pressable style={[s.warnBtn, busy && { opacity: 0.5 }]} onPress={onClearLock} disabled={busy}>
               <Text style={s.warnBtnText}>رجوع للتلقائي</Text>
             </Pressable>
             <Text style={s.warnText}>
+              {/* ٢ نوفمبر (حسن): المحسّن ثبّت B20+B1+B3+n78 والبانر يقول «مقفل على B1+B3+B20 — قد يمنع 5G»:
+                  كان يتجاهل 5G ويحذّر من التثبيت اللي اخترناه نحن. والدمج و5G يناموا لين يصير تحميل */}
               {lock.pci
-                ? `مثبّت على برج PCI ${lock.pci}`
-                : `مقفل على ${lock.bands.map(b => 'B' + b).join(' + ')}`}
-              {' — '}قد يمنع 5G ويحد السرعة
+                ? `مثبّت على برج PCI ${lock.pci} — لو ضعفت الإشارة رجّع للتلقائي`
+                : `مثبّت على ${[...lock.bands.map(b => 'B' + b), ...(lock.nrBands ?? []).map(b => 'n' + b)].join(' + ')}${
+                  lock.bands.length === 1 && !(lock.nrBands?.length)
+                    ? ' — تردد واحد يحد السرعة'
+                    : ' — الدمج و5G يشتغلون وقت التحميل، والراوتر وهو خامل يعرض التردد الأساسي بس'}`}
             </Text>
           </View>
         )}
