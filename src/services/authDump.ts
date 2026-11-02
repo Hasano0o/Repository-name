@@ -31,7 +31,7 @@ export async function sendAfterLoginPagesFor(r: SavedRouter, onStep?: (msg: stri
   onStep?.(`نرسل ${send.length} ملف…`);
   const res = await sendRouterFiles(send, { model, host: r.host, skipped });
   if (!res.ok) return 'صفحة الإعدادات ما وصلت للمطوّر — تأكد من النت وجرّب مرة ثانية';
-  if (got.length) return `✓ وصلت صفحة الإعدادات للمطوّر (${res.sent} ملف) — شكراً لك`;
+  if (got.length) return `✓ وصلت صفحة الإعدادات للمطوّر (${res.sent} ملف) — شكراً لك. نشتغل على الأجهزة بالدور، ونعلن في القروب أول ما يجهز`;
   return 'الراوتر ما عطى صفحة الإعدادات — وصل السبب للمطوّر';
 }
 
@@ -87,5 +87,5 @@ export async function sendFullRouterFiles(r: SavedRouter, fp: string, onStep?: (
   const res = await sendRouterFiles(send, { model: `${label}-FULL`, host: r.host, skipped });
   if (!res.ok) return 'ما وصلت الملفات للمطوّر — تأكد من النت وجرّب مرة ثانية';
   try { await AsyncStorage.setItem(FULL_KEY(r.id), fp); } catch {}
-  return `✓ وصلت ملفات راوترك للمطوّر (${res.sent} ملف) — شكراً لك`;
+  return `✓ وصلت ملفات راوترك للمطوّر (${res.sent} ملف) — شكراً لك. نشتغل على الأجهزة بالدور، ونعلن في القروب أول ما يجهز`;
 }

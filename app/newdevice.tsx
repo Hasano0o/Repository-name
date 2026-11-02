@@ -170,7 +170,7 @@ ${r.failed.slice(0, 20).map(f => `  ✗ ${f}`).join('\n')}`, { driverName: model
       <View style={[s.page, s.center, { flex: 1, backgroundColor: C.bg }]}>
         <View style={[s.doneIcon]}><Icon name="check" size={34} color={tFg('#12b76a')} stroke={3} /></View>
         <Text style={s.title}>وصل طلبك ✓</Text>
-        <Text style={s.sub}>{tg.trim() ? 'المبرمج بيتواصل معك على تليجرام.' : 'كلّمنا على تليجرام عشان نكمّل معك أسرع.'}{'\n'}وأول ما ندعم راوترك يوصلك تحديث للتطبيق.</Text>
+        <Text style={s.sub}>{'جهازك انضاف لقائمة الانتظار. نضيف الأجهزة حسب عدد الطلبات، ونعلن في القروب أول ما يجهز جهازك 🌹'}{'\n'}ولما يجهز يوصلك تحديث للتطبيق بدون ما تسوي شي.</Text>
         <Pressable style={[s.btn, { backgroundColor: '#2a9fd8' }]} onPress={() => Linking.openURL(TELEGRAM).catch(() => {})}>
           <Icon name="send" size={17} color={C.onAccent} /><Text style={s.btnTxt}>كلّمنا على تليجرام</Text>
         </Pressable>
@@ -185,7 +185,7 @@ ${r.failed.slice(0, 20).map(f => `  ✗ ${f}`).join('\n')}`, { driverName: model
         <View style={s.hero}>
           <View style={s.heroIcon}><Icon name="compass" size={30} color={tFg('#ea580c')} /></View>
           <Text style={s.title}>راوترك مو مدعوم؟ نضيفه لك</Text>
-          <Text style={s.sub}>عبّي هالبيانات والمبرمج يتواصل معك ويضيف جهازك للتطبيق</Text>
+          <Text style={s.sub}>عبّي هالبيانات ونضيف جهازك للتطبيق — بالأولوية حسب عدد اللي طلبوا نفس الجهاز</Text>
         </View>
 
         <View style={s.card}>

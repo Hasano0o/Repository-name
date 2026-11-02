@@ -280,7 +280,7 @@ export default function WifiChannel() {
     const full = `Bandly — قناة الواي فاي\nالراوتر: ${info.driverName}\n${error ? `الخطأ: ${error}\n` : ''}\n${txt}`;
     const ok = await sendSupportReport('wifich', full, info);
     setSendingDbg(false);
-    if (ok) Alert.alert('✓ وصلت التفاصيل', 'وصلت للمطوّر مباشرة. بنشوفها ونضيف دعم راوترك في تحديث قريب.');
+    if (ok) Alert.alert('✓ وصلت التفاصيل', 'وصلت للمطوّر. نشتغل على الأجهزة بالدور، ونعلن في القروب أول ما يجهز راوترك.');
     else Share.share({ message: full }).catch(() => {});
   };
   const DevButtons = ({ top = 0 }: { top?: number }) => (
