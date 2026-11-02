@@ -603,7 +603,7 @@ const s = sheet({
   grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
   tile: {
     flexBasis: '47%', flexGrow: 1, borderRadius: 16, borderWidth: 1, gap: 8,
-    borderColor: isDark ? '#334055' : '#edf0f6', backgroundColor: isDark ? '#232c3e' : '#ffffff',
+    borderColor: isDark ? '#263753' : '#edf0f6', backgroundColor: isDark ? '#111f35' : '#ffffff',
     paddingVertical: 10, paddingHorizontal: 10,
   },
   tileOn: { borderColor: isDark ? '#3d4c66' : '#dfe7fb', backgroundColor: isDark ? '#28324a' : '#fbfcff' },
@@ -690,7 +690,7 @@ const o = sheet({
   row: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12, minHeight: 62,
     marginHorizontal: 10, borderRadius: 16, borderWidth: 1, borderColor: isDark ? '#334055' : '#edf0f6',
-    backgroundColor: isDark ? '#232c3e' : '#ffffff',
+    backgroundColor: isDark ? '#111f35' : '#ffffff',
   },
   rowOn: { borderColor: isDark ? '#3d4c66' : '#dfe7fb', backgroundColor: isDark ? '#28324a' : '#fbfcff' },
   badge: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },

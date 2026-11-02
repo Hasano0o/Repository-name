@@ -95,55 +95,56 @@ const LIGHT = {
   shadow: '#0d2350',
 };
 
-// داكن كحلي خافت (مو أسود) — نفس هوية التطبيق: الأزرق يبقى أزرق، مريح للعين
+// داكن كحلي — نفس ألوان الوضع المسائي في موقع bandly.store (٣ نوفمبر ٢٠٢٦): خلفية #0a1425، بطاقات #111f35،
+// حدود #263753، نص #e5edff، نص ثانوي #a5b4ce. الأزرق يبقى أزرق. (القديم كان يقلب الرمادي بني/برتقالي)
 const DARK: typeof LIGHT = {
-  bg: '#1a2130',
-  bgTop: '#1d2535',
-  bgBottom: '#171d2a',
-  card: '#232c3e',
-  cardBorder: '#3a4760',
-  rowBg: '#2a3448',
-  track: '#34507e',
+  bg: '#0a1425',
+  bgTop: '#0d1a30',
+  bgBottom: '#0a1425',
+  card: '#111f35',
+  cardBorder: '#293b56',
+  rowBg: '#172640',
+  track: '#20385e',
 
-  heroFrom: '#22304a',
-  heroMid: '#263656',
-  heroTo: '#2b3d62',
-  dangerTop: '#3a2633',
-  dangerBottom: '#42293a',
+  heroFrom: '#10264b',
+  heroMid: '#15305b',
+  heroTo: '#183e7c',
+  dangerTop: '#2a1a2b',
+  dangerBottom: '#331d33',
 
-  text: '#e8edf5',
-  sub: '#a9b4c8',
-  muted: '#97a3b8',
+  text: '#e5edff',
+  sub: '#a5b4ce',
+  muted: '#94a6c3',
 
-  blue: '#4f80ff',
-  blueIcon: '#6a96ff',
-  blueLight: '#89aaff',
-  blueSoft: '#2c3f66',
+  blue: '#2f6bff',
+  blueIcon: '#82aaff',
+  blueLight: '#8eb3ff',
+  blueSoft: '#20385e',
   blueDeep: '#c9d8ff',
 
   violet: '#b099f7',
   violetBright: '#a67cff',
-  violetSoft: '#3b3566',
+  violetSoft: '#29204e',
   cyan: '#6fd2ec',
-  cyanSoft: '#21404d',
+  cyanSoft: '#123548',
   mint: '#6adcbd',
-  mintSoft: '#22463f',
+  mintSoft: '#123d39',
   pink: '#f478a8',
-  pinkSoft: '#4a2a3d',
+  pinkSoft: '#3a1f36',
   crimson: '#f07099',
 
   green: '#4fdc9a',
   greenBright: '#5cef7e',
-  greenSoft: '#1f4335',
-  gold: '#ffcb8c',
-  goldSoft: '#3a3528',
-  amber: '#ffcb8c',
-  amberSoft: '#4a3d25',
+  greenSoft: '#123a33',
+  gold: '#ffd477',
+  goldSoft: '#2b2a24',
+  amber: '#ffd477',
+  amberSoft: '#3a3122',
   red: '#ff7d6b',
-  redSoft: '#4a2b33',
+  redSoft: '#3a1f2b',
 
-  line: '#334055',
-  lineSoft: '#2c3749',
+  line: '#263753',
+  lineSoft: '#1f2f49',
   onAccent: '#ffffff',
   onAccentSoft: '#d6e2ff',
   shadow: '#000000',
@@ -204,13 +205,15 @@ function adapt(c: string, role: 'bg' | 'bd' | 'fg'): string {
   if (p) {
     let [h, s, l] = toHsl(p);
     // الرمادي والأبيض ياخذون الكحلي حق الثيم بدل الرمادي الباهت
-    if (s < 0.12) { h = 32; s = 0.22; }
+    // كان h=32 (بني/برتقالي) — الحين كحلي مثل الموقع
+    if (s < 0.12) { h = 218; s = 0.4; }
     if (role === 'fg') {
       if (l < 0.3 || (l <= 0.42 && s < 0.5)) out = fromHsl(h, Math.min(s, 0.45), Math.min(0.95, 1 - l * 0.45), p.a);
     } else if (l >= 0.8 && p.a >= 0.5) {
       // الشفاف الخفيف (زجاج فوق تدرّج ملوّن) نخليه زي ما هو
-      const nl = 0.23 + (1 - l) * 0.45 + (role === 'bd' ? 0.1 : 0);
-      out = fromHsl(h, Math.min(s, 0.3), nl, p.a);
+      // أبيض ← #111f35 تقريباً (بطاقات الموقع)، والباستيل أفتح شوي بنفس لونه
+      const nl = 0.14 + (1 - l) * 0.4 + (role === 'bd' ? 0.1 : 0);
+      out = fromHsl(h, Math.min(s, 0.42), nl, p.a);
     }
   }
   cache.set(key, out);

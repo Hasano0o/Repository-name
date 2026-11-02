@@ -45,7 +45,7 @@ export function SignalGauge({ ratio, color, size = 120, has = true, dial = false
   const tip = pt(cx, cy, r - stroke - 4, valAng);
   const gid = `g${Math.round(size)}${color.replace(/[^0-9a-z]/gi, '')}`;
   const dr = dr0;
-  const face = isDark ? ['#3a465c', '#232c3e'] : ['#ffffff', '#d3dae4'];
+  const face = isDark ? ['#20324e', '#111f35'] : ['#ffffff', '#d3dae4'];
 
   return (
     <View style={{ width: size, height: h, alignSelf: 'center' }}>
