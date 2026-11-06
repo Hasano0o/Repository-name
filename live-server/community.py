@@ -4,6 +4,8 @@
   POST /live-api/community/report   ← نتيجة فحص (برج + إعداد + درجة اللعب)
   POST /live-api/community/outage   ← انقطاع صار عند المستخدم (من / إلى)
   GET  /live-api/community/tower    ← أفضل إعداد على البرج + انقطاعات حديثة
+  POST /live-api/community/obs      ← قراءة: البرج + تجميعة الترددات + الإشارة + البنق (٧ نوفمبر)
+  GET  /live-api/community/combos   ← وش أفضل تجميعة على هالبرج عند الأعضاء (بدون GPS)
 
 ما نستقبل أي موقع أو رقم جوال أو اسم — فقط رقم البرج والمشغّل ومعرّف عشوائي
 للتطبيق (نخزن بصمته فقط) عشان ما يحسب نفس الجهاز مرتين.
@@ -20,6 +22,9 @@ DB = Path(__file__).resolve().parent / "data" / "community.db"
 router = APIRouter(prefix="/live-api/community")
 
 KEEP_DAYS = 45
+OBS_KEEP_DAYS = 120
+# أقل عدد أعضاء مختلفين على نفس التجميعة عشان نقول «أعضاء حصّلوا كذا»
+MIN_USERS = 3
 MAX_PER_DEVICE_HOUR = 60
 _hits: dict[str, list[float]] = {}
 
@@ -38,6 +43,12 @@ def _db() -> sqlite3.Connection:
     c.execute("CREATE INDEX IF NOT EXISTS i_tests ON tests(tower, op, at)")
     c.execute("CREATE INDEX IF NOT EXISTS i_area ON tests(area, at)")
     c.execute("CREATE INDEX IF NOT EXISTS i_out ON outages(tower, op, t_to)")
+    # ٧ نوفمبر — مستشار البرج: كل قراءة = تجميعة الترددات اللي شغالة + جودتها + البنق
+    c.execute("""CREATE TABLE IF NOT EXISTS obs(
+        at INTEGER, tower TEXT, op TEXT, dev TEXT, model TEXT, combo TEXT, carriers INTEGER,
+        rsrp INTEGER, sinr INTEGER, nr_rsrp INTEGER, ping INTEGER, jitter INTEGER, score INTEGER,
+        hour INTEGER, src TEXT)""")
+    c.execute("CREATE INDEX IF NOT EXISTS i_obs ON obs(tower, op, at)")
     return c
 
 
@@ -99,6 +110,7 @@ def _prune(c: sqlite3.Connection):
     cut = int(time.time()) - KEEP_DAYS * 86400
     c.execute("DELETE FROM tests WHERE at < ?", (cut,))
     c.execute("DELETE FROM outages WHERE at < ?", (cut,))
+    c.execute("DELETE FROM obs WHERE at < ?", (int(time.time()) - OBS_KEEP_DAYS * 86400,))
 
 
 @router.post("/report")
@@ -214,3 +226,104 @@ async def area_info(area: str, region: str = "", device: str = ""):
     ]
     out.sort(key=lambda x: -(x["score"] or 0))
     return {"area": ar, "operators": out}
+
+
+# ═══ مستشار البرج (٧ نوفمبر) — بدون موقع: رقم البرج نفسه هو المكان ═══
+_COMBO = re.compile(r"^(?:[Bn]\d{1,3})(?:\+[Bn]\d{1,3}){0,7}$")
+
+
+def _combo(v) -> str:
+    """«B3 + B1 + n78» ← «B1+B3+n78» (4G أول بالترتيب، بعدها 5G) — نفس التجميعة تنكتب بشكل واحد"""
+    parts = [x.strip() for x in str(v or "").replace(" ", "").split("+") if x.strip()]
+    lte = sorted({int(x[1:]) for x in parts if re.fullmatch(r"[Bb]\d{1,3}", x)})
+    nr = sorted({int(x[1:]) for x in parts if re.fullmatch(r"[Nn]\d{1,3}", x)})
+    out = "+".join([f"B{b}" for b in lte] + [f"n{b}" for b in nr])
+    return out if _COMBO.match(out or "-") else ""
+
+
+def _opt(v, lo, hi):
+    try:
+        x = int(round(float(v)))
+    except Exception:
+        return None
+    return x if lo <= x <= hi else None
+
+
+@router.post("/obs")
+async def obs(req: Request):
+    b = await req.json()
+    dev = _dev(b.get("device"))
+    _limit(dev)
+    tower, op = _clean(b.get("tower"), 24), _op(b.get("operator"))
+    combo = _combo(b.get("combo"))
+    if not tower or not combo:
+        raise HTTPException(400, "missing")
+    src = _clean(b.get("src"), 10) or "scan"
+    hour = time.localtime().tm_hour
+    row = (int(time.time()), tower, op, dev, _clean(b.get("model"), 30), combo,
+           _opt(b.get("carriers"), 1, 10) or combo.count("+") + 1,
+           _opt(b.get("rsrp"), -160, -20), _opt(b.get("sinr"), -30, 50), _opt(b.get("nrRsrp"), -160, -20),
+           _opt(b.get("ping"), 1, 3000), _opt(b.get("jitter"), 0, 3000), _opt(b.get("score"), 0, 100),
+           hour, src)
+    with _db() as c:
+        # نفس الجهاز ونفس التجميعة خلال ١٠ دقايق = قراءة وحدة (نحدّثها)
+        c.execute("DELETE FROM obs WHERE dev=? AND tower=? AND combo=? AND at>?", (dev, tower, combo, row[0] - 600))
+        c.execute("INSERT INTO obs VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", row)
+        if row[0] % 20 == 0:
+            _prune(c)
+    return {"ok": True}
+
+
+def _med(xs):
+    xs = sorted(x for x in xs if x is not None)
+    if not xs:
+        return None
+    n = len(xs)
+    return xs[n // 2] if n % 2 else round((xs[n // 2 - 1] + xs[n // 2]) / 2)
+
+
+def summarize(rows, me: str = "", min_users: int = MIN_USERS) -> dict:
+    """rows = [(dev, combo, rsrp, sinr, ping, jitter, score, hour)] ← ملخص لكل تجميعة.
+    كل جهاز ينحسب مرة لكل تجميعة (وسيط قراءاته) — عشان عضو واحد كثير الفحص ما يغلب الباقي."""
+    per: dict[str, dict[str, list]] = {}
+    for dev, combo, rsrp, sinr, ping, jitter, score, hour in rows:
+        d = per.setdefault(combo, {}).setdefault(dev, [])
+        d.append((rsrp, sinr, ping, jitter, score, hour))
+    combos = []
+    for combo, devs in per.items():
+        pts = {k: [] for k in ("rsrp", "sinr", "ping", "jitter", "score")}
+        night, day = [], []
+        for dv, xs in devs.items():
+            for i, k in enumerate(("rsrp", "sinr", "ping", "jitter", "score")):
+                v = _med([x[i] for x in xs])
+                if v is not None:
+                    pts[k].append(v)
+            for x in xs:
+                if x[2] is not None:
+                    (night if x[5] >= 20 or x[5] < 1 else day).append(x[2])
+        users = len(devs)
+        combos.append({
+            "combo": combo, "users": users, "tests": sum(len(v) for v in devs.values()),
+            "mine": me in devs, "enough": users >= min_users,
+            **{k: _med(v) for k, v in pts.items()},
+            # الزحمة: بنق الليل (٨م–١ص) مقابل باقي اليوم — بس لو فيه قراءات كافية للاثنين
+            "night_ping": _med(night) if len(night) >= 3 and len(day) >= 3 else None,
+            "day_ping": _med(day) if len(night) >= 3 and len(day) >= 3 else None,
+        })
+    combos.sort(key=lambda x: (not x["enough"], -(x["score"] or 0), x["ping"] or 9999))
+    users = len({dev for devs in per.values() for dev in devs})
+    return {"users": users, "combos": combos[:8], "min_users": min_users}
+
+
+@router.get("/combos")
+async def combos(tower: str, operator: str = "", device: str = ""):
+    tw, op = _clean(tower, 24), _op(operator)
+    if not tw:
+        raise HTTPException(400, "missing")
+    me = _dev(device) if device else ""
+    with _db() as c:
+        rows = c.execute(
+            "SELECT dev, combo, rsrp, sinr, ping, jitter, score, hour FROM obs WHERE tower=? AND op=? AND at>=?",
+            (tw, op, int(time.time()) - 60 * 86400),
+        ).fetchall()
+    return {"tower": tw, "operator": op, **summarize(rows, me)}

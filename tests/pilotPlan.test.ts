@@ -104,3 +104,67 @@ test('5G SA بس (بدون 4G) ← المستوى من قراءة 5G', () => {
   assert.equal(p.level, 'good');
   assert.ok(p.facts.some(f => f.startsWith('5G n78')));
 });
+
+// ═══ أعضاء برجك (٧ نوفمبر) ═══
+import { communityAdvice, parseCombo, comboOf } from '../src/assistant/pilotPlan';
+
+const cc = (combo: string, users: number, ping: number | null, score: number | null = null, extra: object = {}) =>
+  ({ combo, users, enough: users >= 3, ping, score, ...extra });
+
+test('شكل التجميعة: نفس ترتيب السيرفر', () => {
+  assert.equal(comboOf([{ tech: 'NR', band: 78 }, { tech: 'LTE', band: 3 }, { tech: 'LTE', band: 1 }]), 'B1+B3+n78');
+  assert.deepEqual(parseCombo('B1+B3+n78'), { lte: [1, 3], nr: [78] });
+});
+
+test('تجميعة أعضاء برجك أفضل بوضوح ← تنحط أول ونجرّبها كدمج', () => {
+  const p = buildPlan(base({
+    sig: { rsrp: -82, sinr: 18, band: '3' },
+    carriers: [{ tech: 'LTE', band: 3 }, { tech: 'LTE', band: 20 }],
+    ping: { median: 70, jitter: 10 },
+    community: { users: 6, combos: [cc('B1+B3', 4, 40), cc('B3+B20', 3, 72)] },
+  }));
+  const band = p.items.find(i => i.key === 'band')!;
+  // مدموج وجيد كان «ما ننصح» — الحين ننصح لأن أعضاء برجه حصّلوا أفضل
+  assert.equal(band.on, true);
+  assert.deepEqual(band.bands!.slice(0, 2), [1, 3]);
+  assert.deepEqual(band.prefer, [1, 3]);
+  assert.match(band.why, /أعضاء على نفس برجك/);
+  assert.ok(p.facts.some(f => f.includes('6 أعضاء')));
+});
+
+test('أقل من ٣ أعضاء ← ما نوصي (ولو بنقهم أحسن)', () => {
+  const a = communityAdvice('B3', 70, { users: 2, combos: [cc('B1+B3', 2, 30)] });
+  assert.equal(a.best, undefined);
+  assert.match(a.facts[0], /لسا ما فيه تجميعة/);
+});
+
+test('الفرق صغير (أقل من ٢٠٪) ← ما نوصي', () => {
+  const a = communityAdvice('B3', 50, { users: 5, combos: [cc('B1+B3', 4, 45)] });
+  assert.equal(a.best, undefined);
+});
+
+test('الفرق بس في 5G ← معلومة، مو تغيير ترددات 4G', () => {
+  const a = communityAdvice('B1+B3', 70, { users: 5, combos: [cc('B1+B3+n78', 4, 35)] });
+  assert.equal(a.nrOnly, true);
+  assert.equal(a.lte, undefined);
+});
+
+test('تثبيت 4G يطفي 5G ← حتى لو أعضاء برجه أفضل، ما ننصح', () => {
+  const p = buildPlan(base({
+    sig: { rsrp: -98, sinr: 6, band: '3', nrRsrp: -100 },
+    bandCfg: { supported: [1, 3, 8, 20], locked: [], lteLockKills5g: true },
+    ping: { median: 80, jitter: 10 },
+    community: { users: 5, combos: [cc('B1+B3', 4, 40)] },
+  }));
+  assert.equal(p.items.find(i => i.key === 'band')!.on, false);
+});
+
+test('برجك يزحم بالليل ← نقولها', () => {
+  const a = communityAdvice('B3', 60, { users: 4, combos: [cc('B3', 4, 60, null, { night_ping: 95, day_ping: 40 })] });
+  assert.ok(a.facts.some(f => f.includes('يزحم بالليل')));
+});
+
+test('ما فيه أحد على برجك ← نقول بصراحة', () => {
+  const a = communityAdvice('B3', 60, { users: 0, combos: [] });
+  assert.match(a.facts[0], /ما عندنا قراءات/);
+});

@@ -43,7 +43,79 @@ export interface PlanInput {
   caps: { band: boolean; tower: boolean; towerRisk?: string; wifi: boolean };
   /** الأبراج المرشحة (من groupTowers — الشاشة/المحرك يحسبها) */
   towerTargets: PlanTarget[];
+  /** وش حصّل الأعضاء على نفس برجك (السيرفر — بدون موقع) */
+  community?: CommunityInput | null;
 }
+
+/** نفس ComboStat في services/community.ts (هنا بدون react-native) */
+export interface CommunityCombo {
+  combo: string; users: number; enough: boolean; mine?: boolean;
+  ping: number | null; jitter?: number | null; score: number | null; sinr?: number | null;
+  night_ping?: number | null; day_ping?: number | null;
+}
+export interface CommunityInput { users: number; combos: CommunityCombo[] }
+
+export interface CommunityAdvice {
+  facts: string[];
+  /** تجميعة أعضاء برجك اللي أفضل من وضعك بوضوح */
+  best?: CommunityCombo;
+  /** ترددات 4G فيها (اللي نقدر نثبّتها) */
+  lte?: number[];
+  /** الفرق بس في 5G — ما نقدر نوصله من «أفضل تردد» */
+  nrOnly?: boolean;
+}
+
+/** «B1+B3+n78» ← { lte: [1,3], nr: [78] } */
+export function parseCombo(c: string): { lte: number[]; nr: number[] } {
+  const lte: number[] = [], nr: number[] = [];
+  for (const x of c.split('+')) {
+    const m = x.trim().match(/^([BbNn])(\d{1,3})$/);
+    if (!m) continue;
+    (m[1].toUpperCase() === 'B' ? lte : nr).push(Number(m[2]));
+  }
+  return { lte: [...new Set(lte)].sort((a, b) => a - b), nr: [...new Set(nr)].sort((a, b) => a - b) };
+}
+export const comboOf = (carriers: { tech: 'LTE' | 'NR'; band: number }[]) => {
+  const lte = [...new Set(carriers.filter(c => c.tech === 'LTE').map(c => c.band))].sort((a, b) => a - b);
+  const nr = [...new Set(carriers.filter(c => c.tech === 'NR').map(c => c.band))].sort((a, b) => a - b);
+  return [...lte.map(b => `B${b}`), ...nr.map(b => `n${b}`)].join('+');
+};
+const sameSet = (a: number[], b: number[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+const members = (n: number) => (n === 1 ? 'عضو واحد' : n === 2 ? 'عضوين' : n <= 10 ? `${n} أعضاء` : `${n} عضو`);
+
+/**
+ * أعضاء على نفس برجك: هل فيه تجميعة أفضل من وضعك بوضوح؟
+ * «أفضل بوضوح» = بنق أقل ٢٠٪ و ٨ms على الأقل، أو درجة لعب أعلى بـ ٨ — ومن ٣ أعضاء مختلفين على الأقل.
+ * الأمانة: هذي نتايجهم، مو ضمان عندك — التوصية «نجرّبها ونقيس».
+ */
+export function communityAdvice(cur: string, curPing: number | undefined, comm?: CommunityInput | null): CommunityAdvice {
+  const facts: string[] = [];
+  if (!comm) return { facts };
+  if (!comm.users) {
+    facts.push('على برجك: ما عندنا قراءات أعضاء للحين — كل ما شارك أعضاء أكثر تصير التوصية أدق');
+    return { facts };
+  }
+  const mine = comm.combos.find(c => c.combo === cur);
+  const ref = curPing ?? mine?.ping ?? undefined;
+  const refScore = mine?.enough ? mine.score : null;
+  const better = comm.combos.filter(c => c.enough && c.combo !== cur && (
+    (c.ping !== null && ref !== undefined && c.ping <= ref * 0.8 && ref - c.ping >= 8)
+    || (c.score !== null && refScore !== null && c.score >= refScore + 8)
+  ));
+  const top = comm.combos.find(c => c.enough);
+  facts.push(top
+    ? `على برجك ${members(comm.users)} شاركوا · أفضل نتيجة عندهم ${top.combo}${top.ping !== null ? ` (بنق ${top.ping}ms` : ' ('}${top.ping !== null ? '، ' : ''}${members(top.users)})`
+    : `على برجك ${members(comm.users)} شاركوا — لسا ما فيه تجميعة عندها ${MIN_COMMUNITY} أعضاء نحكم منها`);
+  const busy = mine?.night_ping && mine.day_ping && mine.night_ping >= mine.day_ping * 1.4 && mine.night_ping - mine.day_ping >= 15;
+  if (busy) facts.push(`برجك يزحم بالليل: البنق عند الأعضاء ~${mine!.day_ping}ms بالنهار و ~${mine!.night_ping}ms من ٨م`);
+  const best = better[0];
+  if (!best) return { facts };
+  const b = parseCombo(best.combo), c = parseCombo(cur);
+  if (sameSet(b.lte, c.lte)) return { facts, best, nrOnly: true };
+  return { facts, best, lte: b.lte };
+}
+export const MIN_COMMUNITY = 3;
+
 
 export interface PlanItem {
   key: PlanKey;
@@ -56,6 +128,8 @@ export interface PlanItem {
   /** تقدير المدة بالثواني */
   secs: number;
   bands?: number[];
+  /** تجميعة أعضاء برجك — المحرك يجرّبها كدمج بنفسها */
+  prefer?: number[];
   targets?: PlanTarget[];
 }
 
@@ -147,13 +221,22 @@ export function buildPlan(p: PlanInput): PilotPlan {
   const items: PlanItem[] = [];
   const skipped: PilotPlan['skipped'] = [];
 
+  // ═══ أعضاء برجك ═══
+  const cur = comboOf(p.carriers);
+  const comm = communityAdvice(cur, p.ping?.median, p.community);
+  facts.push(...comm.facts);
+  if (comm.best && comm.nrOnly) facts.push(`أعضاء برجك حصّلوا أفضل مع ${comm.best.combo} — الفرق في 5G، تقدر تجرّبه من شاشة 5G`);
+
   // ═══ الترددات ═══
   if (!p.caps.band || !p.bandCfg) skipped.push({ key: 'band', title: 'أفضل تردد', why: 'راوترك ما يدعم تثبيت الترددات من التطبيق' });
   else {
-    const bands = bandCandidates(p.cells, p.bandCfg.supported, p.opLte);
+    const supported = p.bandCfg.supported;
+    const prefer = comm.lte?.length && comm.lte.every(b => supported.includes(b)) ? comm.lte : undefined;
+    let bands = bandCandidates(p.cells, supported, p.opLte);
+    if (prefer) bands = [...prefer, ...bands.filter(b => !prefer.includes(b))].slice(0, Math.max(4, prefer.length));
     if (bands.length < 2) skipped.push({ key: 'band', title: 'أفضل تردد', why: 'راوترك يدعم تردد واحد بس — ما فيه شي نجرّبه' });
     else {
-      const tests = bands.length + (bands.length >= 3 ? 2 : 1);
+      const tests = bands.length + (bands.length >= 3 ? 2 : 1) + (prefer && prefer.length >= 2 ? 1 : 0);
       const secs = tests * SECS_BAND;
       const last = recent(p.trials, /^pilot:band/, now);
       let on = true;
@@ -161,6 +244,9 @@ export function buildPlan(p: PlanInput): PilotPlan {
       if (p.bandCfg.lteLockKills5g && has5g) {
         on = false;
         why = 'تثبيت تردد 4G في راوترك يحوّله «4G بس» ويطفي 5G — ما ننصح فيها.';
+      } else if (prefer && comm.best) {
+        why = `أعضاء على نفس برجك (${members(comm.best.users)}) حصّلوا أفضل مع ${prefer.map(b => bandLabel('LTE', b)).join(' + ')}`
+          + `${comm.best.ping !== null ? ` (بنق ${comm.best.ping}ms)` : ''} — نجرّبها عندك ونقيس، ونثبّت بس لو فرق فعلاً.`;
       } else if (merged && level === 'good') {
         on = false;
         why = 'إشارتك مدموجة ونقاؤها جيد — التجربة غالباً ما بتزيد، وبتقطع النت عالفاضي.';
@@ -169,7 +255,7 @@ export function buildPlan(p: PlanInput): PilotPlan {
         why = `جرّبناها ${daysAgo(now, last.at)} وما فرقت — ما ننصح نعيدها الحين.`;
       }
       items.push({
-        key: 'band', title: 'أفضل تردد', on, why, bands, secs,
+        key: 'band', title: 'أفضل تردد', on, why, bands, secs, prefer: prefer && prefer.length >= 2 ? prefer : undefined,
         cut: `${tests} تجارب · النت ينقطع ١٠–٣٠ ثانية مع كل وحدة`,
       });
     }

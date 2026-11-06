@@ -13,6 +13,7 @@ import { SavedRouter, getRouter } from '../../src/store/routers';
 import { driverById } from '../../src/drivers/registry';
 import { runAutopilot, freshSteps, PilotStep, Measure, StepStatus, scanPlan, choiceFromPlan } from '../../src/assistant/autopilot';
 import { PilotPlan, PlanKey, planDuration } from '../../src/assistant/pilotPlan';
+import { setConsent } from '../../src/services/community';
 import { LEVEL_COLOR, rsrpLevel, sinrLevel } from '../../src/utils/signal';
 import { Icon, IconName } from '../../src/ui/Icon';
 import { C, R, S, tBg, tBd, tFg } from '../../src/ui/theme';
@@ -98,6 +99,10 @@ export default function AutopilotScreen() {
   const [picks, setPicks] = useState<Partial<Record<PlanKey, boolean>>>({});
   const [scanning, setScanning] = useState(false);
   const [scanErr, setScanErr] = useState('');
+  /** مشاركة قراءات البرج (نفس موافقة «مجتمع Bandly») — null = ما سألناه */
+  const [consent, setConsentS] = useState<'on' | 'off' | null>('on');
+  const [hasTower, setHasTower] = useState(false);
+  const answerConsent = (v: 'on' | 'off') => { setConsent(v).catch(() => {}); setConsentS(v); };
   const scan = async () => {
     if (!info || running || scanning) return;
     setScanning(true); setScanErr(''); setDone(false); setPlan(null); setPicks({});
@@ -105,6 +110,7 @@ export default function AutopilotScreen() {
       const res = await scanPlan(info, t => alive.current && setStatus(t));
       if (!alive.current) return;
       setPlan(res.plan); setPlanBefore(res.before); setBefore(res.before); setAfter(undefined);
+      setConsentS(res.consent); setHasTower(!!res.tower);
     } catch (e: any) {
       if (alive.current) setScanErr(String(e?.message ?? e));
     } finally {
@@ -205,6 +211,20 @@ export default function AutopilotScreen() {
             {plan.facts.map(f => <Text key={f} style={s.fact}>• {f}</Text>)}
             <Text style={s.cmpHint}>✓ هذا كله قراءة — ما غيّرنا شي في الراوتر</Text>
           </View>
+
+          {hasTower && consent === null && (
+            <View style={[s.card, { borderColor: tBd('#2f6bff55') }]}>
+              <Text style={s.planTitle}>تشارك نتايج برجك؟</Text>
+              <Text style={s.note}>
+                نرسل رقم البرج والترددات المدموجة وقوة الإشارة والبنق بس — بدون موقع ولا رقم جوال ولا اسم.
+                كذا نعرف وش أفضل إعداد على كل برج، ونوصي لك ولغيرك من نتايج حقيقية.
+              </Text>
+              <View style={s.row}>
+                <Pressable style={[s.btn2, { borderColor: tBd('#2f6bff66') }]} onPress={() => answerConsent('on')}><Text style={[s.btn2Txt, { color: tFg('#2f6bff') }]}>شارك</Text></Pressable>
+                <Pressable style={[s.btn2, { borderColor: C.cardBorder }]} onPress={() => answerConsent('off')}><Text style={[s.btn2Txt, { color: C.muted }]}>لا شكراً</Text></Pressable>
+              </View>
+            </View>
+          )}
 
           {plan.items.length > 0 && (
             <View style={s.card}>

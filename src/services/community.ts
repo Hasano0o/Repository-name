@@ -140,3 +140,50 @@ export async function fetchTower(t: TowerRef, region?: string): Promise<TowerInf
     clearTimeout(tm);
   }
 }
+
+/* ═══ مستشار البرج (٧ نوفمبر) — بدون GPS: رقم البرج نفسه هو المكان ═══ */
+
+/** «B3 + B1 + n78» ← «B1+B3+n78» (نفس شكل السيرفر) */
+export function comboKey(carriers: { tech: 'LTE' | 'NR'; band: number }[]): string {
+  const lte = [...new Set(carriers.filter(c => c.tech === 'LTE' && c.band > 0).map(c => c.band))].sort((a, b) => a - b);
+  const nr = [...new Set(carriers.filter(c => c.tech === 'NR' && c.band > 0).map(c => c.band))].sort((a, b) => a - b);
+  return [...lte.map(b => `B${b}`), ...nr.map(b => `n${b}`)].join('+');
+}
+
+export interface ObsReading {
+  combo: string; carriers: number; model?: string;
+  rsrp?: number; sinr?: number; nrRsrp?: number;
+  ping?: number; jitter?: number; score?: number;
+  /** scan = الفحص الصامت · after = بعد «اضبط لي كل شي» · kept = إعداد ثبّتناه لأنه أفضل */
+  src: 'scan' | 'after' | 'kept';
+}
+
+/** يرسل قراءة لبرجك — بس لو العضو وافق على المشاركة */
+export async function reportObs(t: TowerRef, x: ObsReading): Promise<void> {
+  if ((await getConsent()) !== 'on' || !t.tower || !x.combo) return;
+  await post('obs', { device: await deviceId(), tower: t.tower, operator: t.operator, ...x });
+}
+
+export interface ComboStat {
+  combo: string; users: number; tests: number; mine: boolean; enough: boolean;
+  rsrp: number | null; sinr: number | null; ping: number | null; jitter: number | null; score: number | null;
+  night_ping: number | null; day_ping: number | null;
+}
+export interface TowerCombos { tower: string; operator: string; users: number; combos: ComboStat[]; min_users: number }
+
+/** وش حصّل الأعضاء على نفس برجك (قراءة بس — ما يحتاج موافقة لأنه أرقام مجمّعة) */
+export async function fetchCombos(t: TowerRef): Promise<TowerCombos | null> {
+  if (!t.tower) return null;
+  const ctrl = new AbortController();
+  const tm = setTimeout(() => ctrl.abort(), 6000);
+  try {
+    const q = new URLSearchParams({ tower: t.tower, operator: t.operator, device: await deviceId() });
+    const r = await fetch(`${LIVE_BASE}/live-api/community/combos?${q.toString()}`, { signal: ctrl.signal });
+    if (!r.ok) return null;
+    return (await r.json()) as TowerCombos;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(tm);
+  }
+}

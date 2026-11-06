@@ -24,6 +24,7 @@ import { operatorBands } from '../store/operator';
 import { loadTrials } from '../utils/safeLock';
 import type { Carrier } from '../drivers/types';
 import { buildPlan, PilotPlan, PlanTarget } from './pilotPlan';
+import { fetchCombos, reportObs, comboKey, getConsent, TowerRef, TowerCombos } from '../services/community';
 
 export type StepKey = 'check' | 'band' | 'tower' | 'wifi' | 'final';
 export type StepStatus = 'wait' | 'run' | 'done' | 'ok' | 'same' | 'skip' | 'fail';
@@ -125,7 +126,7 @@ function towerTargetsFrom(cells: CellTower[], confirmed: Set<string>): PlanTarge
  * المرحلة الأولى: فحص صامت — **قراءة بس**، ما يرسل أي أمر تغيير للراوتر.
  * يرجّع التقرير (وش نقترح نجرّب وليش وكم بينقطع النت) + قياس «قبل» عشان التجارب ما تعيده.
  */
-export async function scanPlan(r: SavedRouter, onStatus?: (s: string) => void): Promise<{ plan: PilotPlan; before: Measure }> {
+export async function scanPlan(r: SavedRouter, onStatus?: (s: string) => void): Promise<{ plan: PilotPlan; before: Measure; tower: TowerRef | null; consent: 'on' | 'off' | null }> {
   const proto = driverById(r.driverId);
   onStatus?.('أقرأ الإشارة وأقيس البنق…');
   const before = await measureNow(r);
@@ -136,11 +137,25 @@ export async function scanPlan(r: SavedRouter, onStatus?: (s: string) => void): 
     const cfg = d.getBandConfig ? await d.getBandConfig().catch(() => null) : null;
     const cells = d.getCells ? await d.getCells().catch(() => [] as CellTower[]) : [];
     const carriers = d.getCarriers ? await d.getCarriers().catch(() => [] as Carrier[]) : [];
-    return { sig, cfg, cells, carriers };
+    const net = d.getNetworkInfo ? await d.getNetworkInfo().catch(() => null) : null;
+    const dev = d.getDeviceDetails ? await d.getDeviceDetails().catch(() => null) : null;
+    return { sig, cfg, cells, carriers, net, dev };
   }, false);
-  const [opBands, trials, confirmed] = await Promise.all([
+  // البرج = رقم الموقع (eNodeB) أو رقم الخلية — نفس مفتاح «مجتمع Bandly»
+  const tw = rd.sig?.enodebId || rd.sig?.cellId;
+  const tower: TowerRef | null = tw ? { tower: String(tw), operator: rd.net?.operator ?? rd.dev?.operator ?? '' } : null;
+  const combo = comboOf(rd.carriers, rd.sig);
+  onStatus?.('أشوف وش حصّل الأعضاء على نفس برجك…');
+  const [opBands, trials, confirmed, community] = await Promise.all([
     operatorBands(r.id).catch(() => null), loadTrials(r.id), loadConfirmed(r.id),
+    tower ? fetchCombos(tower).catch(() => null) : Promise.resolve(null as TowerCombos | null),
   ]);
+  if (tower && combo) {
+    reportObs(tower, {
+      combo, carriers: Math.max(1, rd.carriers.length), model: rd.dev?.model ?? r.driverName, src: 'scan',
+      rsrp: before.rsrp, sinr: before.sinr, nrRsrp: before.nrRsrp, ping: before.ping, jitter: before.jitter, score: before.game,
+    }).catch(() => {});
+  }
   const local = r.host === 'demo' || r.host === 'device';
   const plan = buildPlan({
     now: Date.now(),
@@ -149,7 +164,7 @@ export async function scanPlan(r: SavedRouter, onStatus?: (s: string) => void): 
       band: before.band ?? rd.sig?.band, nrBand: before.nrBand ?? rd.sig?.nrBand, rsrq: rd.sig?.rsrq, pci: rd.sig?.pci,
     },
     ping: before.ping !== undefined ? { median: before.ping, jitter: before.jitter ?? 0 } : undefined,
-    carriers: rd.carriers.map(c => ({ tech: c.tech, band: c.band })),
+    carriers: rd.carriers.length ? rd.carriers.map(c => ({ tech: c.tech, band: c.band })) : carriersFromSig(rd.sig),
     bandCfg: rd.cfg,
     cells: rd.cells,
     opLte: opBands?.lte ?? null,
@@ -161,14 +176,46 @@ export async function scanPlan(r: SavedRouter, onStatus?: (s: string) => void): 
       wifi: !!(proto?.getWifiRadios && proto.setWifiChannel) && !local,
     },
     towerTargets: towerTargetsFrom(rd.cells, confirmed),
+    community: community ? { users: community.users, combos: community.combos } : null,
   });
   onStatus?.('');
-  return { plan, before };
+  return { plan, before, tower, consent: await getConsent() };
+}
+
+/** راوترات ما تعطي النواقل (getCarriers) ← الأساسي من قراءة الإشارة */
+function carriersFromSig(sig: Signal | null): { tech: 'LTE' | 'NR'; band: number }[] {
+  const n = (v?: string) => Number(String(v ?? '').match(/\d+/)?.[0] ?? NaN);
+  const out: { tech: 'LTE' | 'NR'; band: number }[] = [];
+  if (sig && Number.isFinite(n(sig.band))) out.push({ tech: 'LTE', band: n(sig.band) });
+  if (sig && Number.isFinite(n(sig.nrBand)) && (sig.nrRsrp !== undefined || sig.nrActiveFromStatus)) out.push({ tech: 'NR', band: n(sig.nrBand) });
+  return out;
+}
+function comboOf(carriers: Carrier[], sig: Signal | null): string {
+  return comboKey(carriers.length ? carriers.map(c => ({ tech: c.tech, band: c.band })) : carriersFromSig(sig));
+}
+
+/** بعد «اضبط لي كل شي»: قراءة برجك وتجميعتك الحين (بموافقتك) — تبني توصيات الأعضاء الثانيين */
+async function observeAfter(r: SavedRouter, m: Measure, kept: boolean): Promise<void> {
+  if ((await getConsent()) !== 'on') return;
+  const rd = await withSession(r, async d => ({
+    sig: d.getSignal ? await d.getSignal().catch(() => null) : null,
+    carriers: d.getCarriers ? await d.getCarriers().catch(() => [] as Carrier[]) : [],
+    net: d.getNetworkInfo ? await d.getNetworkInfo().catch(() => null) : null,
+  }), false).catch(() => null);
+  const tw = rd?.sig?.enodebId || rd?.sig?.cellId;
+  const combo = rd ? comboOf(rd.carriers, rd.sig) : '';
+  if (!rd || !tw || !combo) return;
+  await reportObs({ tower: String(tw), operator: rd.net?.operator ?? '' }, {
+    combo, carriers: Math.max(1, rd.carriers.length), model: r.driverName, src: kept ? 'kept' : 'after',
+    rsrp: m.rsrp, sinr: m.sinr, nrRsrp: m.nrRsrp, ping: m.ping, jitter: m.jitter, score: m.game,
+  });
 }
 
 /** اللي وافق عليه المستخدم من التقرير — null = ما اختارها (نتخطاها) */
 export interface PilotChoice {
   band: number[] | null;
+  /** تجميعة أعضاء برجك — نجرّبها كدمج بنفسها */
+  prefer?: number[];
   tower: TrialTarget[] | null;
   wifi: boolean;
 }
@@ -177,6 +224,7 @@ export function choiceFromPlan(plan: PilotPlan, on: Partial<Record<'band' | 'tow
   const pick = (k: 'band' | 'tower' | 'wifi') => !!it(k) && (on[k] ?? it(k)!.on);
   return {
     band: pick('band') ? it('band')!.bands ?? null : null,
+    prefer: pick('band') ? it('band')!.prefer : undefined,
     tower: pick('tower') ? (it('tower')!.targets ?? []).map(({ rsrp: _r, ...t }) => t) : null,
     wifi: pick('wifi'),
   };
@@ -276,6 +324,12 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
           const singles = [...tried].sort((a, b) => b.score - a.score).map(x => x.bands[0]);
           if (singles.length >= 2) await tryBands(singles.slice(0, 2), `أجرّب الدمج ${label(singles.slice(0, 2))}`);
           if (singles.length >= 3) await tryBands(singles.slice(0, 3), `أجرّب الدمج ${label(singles.slice(0, 3))}`);
+          // تجميعة أعضاء برجك (لو ما جرّبناها بنفسها فوق)
+          const pref = o.choice?.prefer?.filter(b => cfg?.supported.includes(b));
+          const key = (bs: number[]) => [...bs].sort((a, b) => a - b).join('+');
+          if (pref && pref.length >= 2 && !tried.some(t => key(t.bands) === key(pref))) {
+            await tryBands(pref, `أجرّب ${label(pref)} (اللي نجحت عند أعضاء برجك)`);
+          }
           const best = [...tried].sort((a, b) => b.score - a.score)[0];
           o.onStatus('أرجّع إعدادك قبل ما أقرر…');
           // قبل: الإرجاع ينبلع لو فشل ← الراوتر يبقى على آخر تجربة (بدون دمج) — تعليقات الأعضاء ٦ نوفمبر
@@ -452,6 +506,7 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
   }
   report.after = after;
   o.onMeasure?.('after', after);
+  observeAfter(r, after, changed.length > 0).catch(() => {});
   set('final', changed.length ? 'ok' : 'same', changed.length ? `غيّرت: ${changed.join('، ')}` : 'ما احتاج أغيّر شي — إعدادك الحالي هو الأفضل');
   o.onStatus('');
   return report;
