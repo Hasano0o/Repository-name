@@ -14,7 +14,8 @@ import { withSession, withSessionPatient, withRouterLock, RouterOp } from '../st
 import { driverById } from '../drivers/registry';
 import type { CellTower, CellLockState, BandConfig, Signal, WifiRadio } from '../drivers/types';
 import type { LockSnapshot } from '../drivers/lockSnapshot';
-import { readSnapOrStop, safeApply, waitOnline, snapshot } from '../utils/safeLock';
+import { readSnapOrStop, safeApply, waitOnline, snapshot, restoreOrFree } from '../utils/safeLock';
+import { savePending, clearPending } from '../store/pendingRestore';
 import { measureUrl, regionUrls, selectedRegion, gameScore, gamingGrade, LatencyResult } from '../utils/latency';
 import { runTowerTrials, TrialTarget } from '../utils/towerTrial';
 import { groupTowers, loadConfirmed, bandName } from '../utils/towers';
@@ -151,6 +152,8 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
         o.onStatus('أحفظ إعدادك الحالي…');
         const snap = await readSnapOrStop(r) as LockSnapshot;
         startSnap = snap;
+        // لو انقطعت التجارب في النص (التطبيق بالخلفية / الجوال طلع من الشبكة) نرجّعه أول ما يرجع (recoverPending)
+        await savePending(r.id, snap, 'pilot:band', 'اضبط لي كل شي');
         const [cfg, cells] = await withSession(r, async d => Promise.all([
           d.getBandConfig ? d.getBandConfig() : Promise.resolve(null as BandConfig | null),
           d.getCells ? d.getCells().catch(() => [] as CellTower[]) : Promise.resolve([] as CellTower[]),
@@ -194,8 +197,14 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
           if (singles.length >= 3) await tryBands(singles.slice(0, 3), `أجرّب الدمج ${label(singles.slice(0, 3))}`);
           const best = [...tried].sort((a, b) => b.score - a.score)[0];
           o.onStatus('أرجّع إعدادك قبل ما أقرر…');
-          await withSession(r, d => d.restoreLockState!(snap), false).catch(() => {});
-          await waitOnline(r, 150_000, () => false);
+          // قبل: الإرجاع ينبلع لو فشل ← الراوتر يبقى على آخر تجربة (بدون دمج) — تعليقات الأعضاء ٦ نوفمبر
+          const back = await restoreOrFree(r, snap, o.onStatus, op);
+          if (back.freed) {
+            set('band', 'fail', back.online
+              ? 'ما قدرت أرجّع إعدادك بالضبط بعد التجارب، ففكّيت التثبيتات والراوتر رجع يلقط أقوى برج (إعدادك القديم محفوظ في صفحة الراوتر)'
+              : 'ما رجع الاتصال بعد التجارب — من صفحة الراوتر اضغط «رجّع الإشارة»');
+            return;
+          }
           if (cancelled()) { set('band', 'skip', 'وقّفته — رجّعت إعدادك'); return; }
           if (best && (!base || best.score >= base.score * 1.12)) {
             const name = label(best.bands);
@@ -205,7 +214,7 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
               r, key: `pilot:band:${best.bands.join('+')}`, label: `تثبيت ${name}`, op,
               apply: d => d.setBand!(best.bands, undefined),
               revert: d => d.restoreLockState!(snap),
-              onStatus: o.onStatus, isCancelled: cancelled,
+              onStatus: o.onStatus, isCancelled: cancelled, keepSame: false,
             });
             if (res.kept) {
               set('band', 'ok', `ثبّتت ${name}${merged ? ` · مدموج (${best.carriers} نواقل)` : best.bands.length > 1 ? ' · البرج ما دمجها الحين' : ' · لحاله أنظف من الدمج'}`);
@@ -253,7 +262,7 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
               r, key: `pilot:cell:${t.tech}:${t.pci}`, label: `التثبيت على ${t.name}`, op, withNr: t.tech === 'NR',
               apply: d => d.lockCell!({ tech: t.tech, band: t.band, arfcn: t.arfcn, pci: t.pci }),
               revert: d => d.restoreLockState!(snap),
-              onStatus: o.onStatus, isCancelled: cancelled,
+              onStatus: o.onStatus, isCancelled: cancelled, keepSame: false,
             });
             if (res.kept) { set('tower', 'ok', `ثبّتت ${t.name} (بنق ${top.ping!.ping}ms)`); changed.push(t.name); }
             else set('tower', 'same', 'جرّبت الأفضل وما فرق — رجّعت إعدادك');

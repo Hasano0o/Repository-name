@@ -13,6 +13,7 @@ import { withSession, withRouterLock, RouterOp } from '../store/sessions';
 import { CellLockState, Signal } from '../drivers/types';
 import { isNoChange } from '../drivers/noChange';
 import { waitOnline, freeRelease, readSnapOrStop, undoPin } from './safeLock';
+import { savePending, clearPending } from '../store/pendingRestore';
 import type { LockSnapshot } from '../drivers/lockSnapshot';
 import { settleMsFor } from '../drivers/lockSnapshot';
 import { measureUrl, regionUrls, selectedRegion, gameScore } from './latency';
@@ -100,6 +101,7 @@ export async function runTowerTrials(r: SavedRouter, targets: TrialTarget[], pre
   await withRouterLock(r, async op => {
     // لقطة إعدادك قبل أول برج — ما قدرنا نقرأها = ما نجرّب ولا نكتب شي
     snap = await readSnapOrStop(r);
+    if (snap) await savePending(r.id, snap, 'towers', 'فحص الأبراج');
     try {
       for (let i = 0; i < n; i++) {
         if (cancelled()) break;
@@ -170,13 +172,18 @@ export async function runTowerTrials(r: SavedRouter, targets: TrialTarget[], pre
       // نرجّع التثبيت اللي كان — حتى لو انلغى أو صار خطأ في النص
       if (!freed && touched.size) {
         step({ i: n, n, name: '', step: 'نرجّع إعدادك السابق...' });
-        try { await restoreAll(); } catch {}
-        if (!(await waitOnline(r, snap ? settleMsFor(r.driverId) : 120000, () => false))) {
+        // قبل: فشل الإرجاع ينبلع، ولو الراوتر متصل على برج التجربة يبقى مثبّت عليه
+        let back = true;
+        try { await restoreAll(); } catch (e) { back = false; diag(`[towers] restore failed: ${String((e as any)?.message ?? e).slice(0, 80)}`); }
+        if (snap && !exact) back = false;   // رجع ناقص (notRestored) = ممكن لسا مثبّت على برج التجربة
+        if (!back || !(await waitOnline(r, snap ? settleMsFor(r.driverId) : 120000, () => false))) {
           // الإرجاع ما رجّع الخدمة — نفك كل شي ويلقط أقوى برج بدل ما يعلق بدون خدمة
           freed = true;
           restored = await freeRelease(r, st => step({ i: n, n, name: '', step: st }), snap ?? undefined, op).catch(() => false);
         }
       }
+      // الراوتر رجع على إعداد نهائي (إعدادك أو فك وصار متصل) ← ما فيه شي نكمّله بعدين
+      if (restored) await clearPending(r.id);
     }
   }, { op: o.op, label: 'فحص الأبراج' });
   return { rows, restored, freed, cancelled: cancelled(), exact, notRestored };

@@ -2,7 +2,7 @@ import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Carrier, RouterDriver, Signal } from '../drivers/types';
 import { SavedRouter } from '../store/routers';
-import { withSession, withSessionPatient, withRouterLock, dropSession, RouterOp } from '../store/sessions';
+import { withSession, withSessionPatient, withRouterLock, dropSession, RouterOp, isRouterBusyAnywhere } from '../store/sessions';
 import { reportError } from '../services/errors';
 import { diag } from '../services/diag';
 import { getBaseline } from '../store/baseline';
@@ -14,6 +14,7 @@ import { runApply, trackWrites } from './applyGuard';
 import { LockSnapshot, mismatchOf, settleMsFor } from '../drivers/lockSnapshot';
 import { saveReleaseSnap, getReleaseSnap, clearReleaseSnap, releaseNeedsReboot, setReleaseNeedsReboot } from '../store/lockSnap';
 import type { BandConfig } from '../drivers/types';
+import { savePending, getPending, clearPending, PENDING_MAX_AGE } from '../store/pendingRestore';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 /** يرجّع undefined لو الخطوة طوّلت أكثر من المسموح (بدل ما يعلق المستخدم ٤٠ دقيقة) */
@@ -398,6 +399,67 @@ export async function readSnapOrStop(r: SavedRouter): Promise<LockSnapshot | nul
 }
 
 /**
+ * يرجّع إعدادك بعد سلسلة تجارب (اضبط لي كل شي / الأبراج) — وما يبلع الفشل.
+ * قبل: `restoreLockState(snap).catch(() => {})` ← لو الراوتر مشغول بعد ٦ تغييرات ورا بعض، يبقى على آخر
+ * تجربة (تردد لحاله = بدون دمج) والتطبيق يكمّل كأنه رجع.
+ * الحين: إرجاع بصبر (٩٠ث) + تأكد بالقراءة + ننتظر الخدمة؛ ما رجع بالضبط أو ما اتصل ← نفك كل التثبيتات
+ * (الراوتر يلقط أقوى برج) مع حفظ إعدادك. لازم داخل withRouterLock (op).
+ */
+export async function restoreOrFree(
+  r: SavedRouter, snap: LockSnapshot, say: (s: string) => void, op?: RouterOp,
+): Promise<{ exact: boolean; online: boolean; freed: boolean; error?: string }> {
+  let exact = false;
+  let error: string | undefined;
+  try {
+    await withSessionPatient(r, d => d.restoreLockState!(snap), 90_000,
+      n => n && say('الراوتر مشغول — نحاول ندخل ونرجّع إعدادك...'));
+    exact = true;
+  } catch (e) {
+    const items = mismatchOf(e);
+    error = items ? `ما رجع: ${items.join('، ')}` : String((e as any)?.message ?? e).slice(0, 100);
+    reportError('restore-chain', error, r);
+  }
+  diag(`[restore-chain] ${exact ? 'exact' : 'failed: ' + error}`);
+  let online = await waitOnline(r, exact ? settleMsFor(r.driverId) : 45_000, () => false);
+  if (exact && online) { await clearPending(r.id); return { exact, online, freed: false }; }
+  say(exact ? 'ما اتصل على إعدادك — نفك التثبيتات عشان يلقط أقوى برج...' : 'ما قدرنا نرجّع إعدادك بالضبط — نفك التثبيتات عشان يلقط أقوى برج...');
+  online = await freeRelease(r, say, snap, op).catch(() => false);
+  if (online) await clearPending(r.id);
+  return { exact, online, freed: true, error };
+}
+
+/**
+ * «تجربة ما خلصت» (store/pendingRestore): نرجّع إعداد ما قبل التجربة لو لقيناه والتطبيق ما يسوي شي على الراوتر.
+ * يرجّع null لو ما فيه شي نسويه أو ما وصلنا للراوتر (تبقى محفوظة للمرة الجاية)،
+ * وإلا رسالة للعضو. ما يفك شي من نفسه — لو الإرجاع ما ضبط يخليها للعضو (زر «رجّع الإشارة»).
+ */
+export async function recoverPending(r: SavedRouter): Promise<{ ok: boolean; label: string; note: string } | null> {
+  const p0 = await getPending(r.id);
+  if (!p0) return null;
+  if (p0.snap.driver !== r.driverId || Date.now() - p0.at > PENDING_MAX_AGE) { await clearPending(r.id); return null; }
+  if (await isRouterBusyAnywhere(r)) return null;            // تجربة شغالة الحين — هي تكمّل
+  // الجوال على شبكة الراوتر؟ (ما نحاول وإحنا برا — تبقى للمرة الجاية)
+  const reach = await withTimeout(withSession(r, d => d.readLockState!(), false), 20_000).catch(() => STEP_TIMEOUT);
+  if (reach === STEP_TIMEOUT || !reach) return null;
+  return withRouterLock(r, async () => {
+    const p = await getPending(r.id);                         // ممكن انمسحت وإحنا ننتظر الحجز
+    if (!p) return null;
+    diag(`[recover] ${p.key}: ${p.snap.summary}`);
+    try {
+      await withSessionPatient(r, d => d.restoreLockState!(p.snap), 90_000);
+    } catch (e) {
+      const items = mismatchOf(e);
+      reportError('recover-pending', (items ? `mismatch: ${items.join(',')}` : String((e as any)?.message ?? e)).slice(0, 200), r);
+      await saveReleaseSnap(r.id, p.snap);                    // يقدر يرجّعه من زر «رجّع إعدادي»
+      return { ok: false, label: p.label, note: `«${p.label}» انقطعت قبل ما تخلص، وحاولنا نرجّع إعدادك اللي كان قبلها بس ما رجع بالضبط${items ? ` (${items.join('، ')})` : ''}. من صفحة الراوتر اضغط «رجّع الإشارة».` };
+    }
+    await clearPending(r.id);
+    await waitOnline(r, settleMsFor(r.driverId), () => false);
+    return { ok: true, label: p.label, note: `«${p.label}» انقطعت قبل ما تخلص (التطبيق طلع أو الجوال طلع من شبكة الراوتر) — رجّعنا إعدادك اللي كان قبلها بالضبط ✓` };
+  }, { label: 'نرجّع إعدادك (تجربة ما خلصت)' });
+}
+
+/**
  * يرجّع اللي كان قبل تثبيت سوّته الشاشة نفسها — وبس:
  * فيه لقطة ← نرجّعها ونتأكد منها (تقنية ثانية وأقفال ترددات/قنوات ما تنلمس إلا لو تغيّرت).
  * ما فيه لقطة (ماركات ثانية) ← نفك تثبيت التقنية اللي ثبّتناها بس، مو الكل.
@@ -473,6 +535,11 @@ export interface SafeApplyOpts {
   withNr?: boolean;
   /** عملية شغالة على الراوتر (فحص فيه كذا تجربة) — التجربة تكمّل جواها بدل ما تنرفض */
   op?: RouterOp;
+  /**
+   * «نفس الشي» نخليه؟ (الافتراضي إيه — العضو هو اللي طلب التثبيت).
+   * التجارب التلقائية (اضبط لي كل شي) تحط false: تثبيت ما فرق = نرجّع، ما تتراكم التثبيتات على الراوتر.
+   */
+  keepSame?: boolean;
 }
 
 /** يطبّق بأمان، ومقفول لكل راوتر عشان ما تشتغل عمليتان معاً */
@@ -607,6 +674,9 @@ async function safeApplyInner(o: SafeApplyOpts, track: Tracker = progress.none):
   const before = b0;
 
   say('نطبّق التغيير...');
+  // التجربة ممكن تنقطع في النص (التطبيق بالخلفية / الجوال طلع من شبكة الراوتر) — نحفظ إعدادك على الجوال
+  // قبل أول أمر، وينمسح بس لما يرجع الراوتر على إعداد نهائي (recoverPending يكمّل لو انقطعت)
+  if (snap) await savePending(o.r.id, snap, o.key, o.label);
   // لو الأمر طوّل (مثلاً ZTE يعيد التشغيل بعد تثبيت البرج) ننتظره يخلص بدل ما نرجّع ونفك وهو في النص.
   let wrote = false;
   const step = await runApply<RouterDriver>({
@@ -630,6 +700,7 @@ async function safeApplyInner(o: SafeApplyOpts, track: Tracker = progress.none):
     // الخطأ صار قبل ما نرسل أي أمر — الراوتر على حاله، فما نرجّع ولا نفك أي تثبيت
     const msg = String((step.error as any)?.message ?? step.error);
     diag(`[${o.key}] stopped before any change: ${msg.slice(0, 80)}`);
+    await clearPending(o.r.id);
     const err = new Error(/لم ننفذ|ما غيّرنا/.test(msg) ? msg : `${msg}\n\nما غيّرنا أي شي في الراوتر — إعدادك الحالي على حاله.`);
     (err as any).noChange = true;
     (err as any).reverted = false;
@@ -640,6 +711,7 @@ async function safeApplyInner(o: SafeApplyOpts, track: Tracker = progress.none):
     say('الراوتر رفض — نرجّع إعدادك...');
     const msg = String((step.error as any)?.message ?? step.error);
     const rs = await restorePrev();
+    if (rs.online) await clearPending(o.r.id);
     const err = new Error(`${msg}\n\n${restoreText(rs)}`);
     (err as any).reverted = rs.exact || (rs.sent && !snap) || (rs.freed && rs.online);
     throw err;
@@ -650,6 +722,7 @@ async function safeApplyInner(o: SafeApplyOpts, track: Tracker = progress.none):
   if (!online) {
     say('ما اتصل — نرجّع إعدادك السابق...');
     const rs = await restorePrev();
+    if (rs.online) await clearPending(o.r.id);
     const res: TrialResult = { verdict: 'noconn', kept: false, before, after: null, reason: 'offline', ...restoreFields(rs) };
     await record(o.r.id, o.key, o.label, res);
     return res;
@@ -667,7 +740,7 @@ async function safeApplyInner(o: SafeApplyOpts, track: Tracker = progress.none):
   if (!after) verdict = 'noconn';
   else if (change !== undefined && change <= WORSE) verdict = 'worse';
   else if (change !== undefined && change >= BETTER) verdict = 'better';
-  let kept = verdict === 'better' || verdict === 'same';
+  let kept = verdict === 'better' || (verdict === 'same' && o.keepSame !== false);
   let userKeptAnyway = false;
 
   // لو الجديد أسوأ — نسأل المستخدم: يثبت الجديد أم نرجع للسابق؟
@@ -686,8 +759,10 @@ async function safeApplyInner(o: SafeApplyOpts, track: Tracker = progress.none):
   let extra: Partial<TrialResult> = { restoreFailed: false };
   if (!kept) {
     // خطأ الإرجاع ما ينبلع: النتيجة تقول بالضبط وش رجع ووش ما رجع
-    extra = restoreFields(await restorePrev());
-  }
+    const rs = await restorePrev();
+    extra = restoreFields(rs);
+    if (rs.online) await clearPending(o.r.id);
+  } else await clearPending(o.r.id);
 
   const res: TrialResult = {
     verdict, kept, before, after, change, towerChanged, userKeptAnyway, ...extra,

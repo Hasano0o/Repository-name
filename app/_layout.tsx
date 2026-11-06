@@ -2,6 +2,7 @@ import '../src/desktop/install'; // نسخة الويندوز: توجيه الط
 import '../src/desktop/scrollbar'; // نسخة الويندوز: شريط تمرير ظاهر تسحبه بالماوس
 import { patchAlert, tr } from '../src/i18n';
 import { useEffect } from 'react';
+import { AppState } from 'react-native';
 import { pingDaily, markScreen } from '../src/services/stats';
 import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -105,6 +106,14 @@ export default function RootLayout() {
     const seg = (path || '/').split('/').filter(Boolean)[0] ?? 'index';
     if (seg !== 'index') markScreen(SCREEN_NAME[seg] ?? seg);
   }, [path]);
+
+  // «تجربة ما خلصت»: لو انقطعت تجربة (التطبيق طلع / الجوال طلع من شبكة الراوتر) نرجّع إعداد الراوتر اللي كان قبلها
+  useEffect(() => {
+    const go = () => { import('../src/services/pendingRecovery').then(m => m.runPendingRecovery()).catch(() => {}); };
+    const t = setTimeout(go, 6000);
+    const sub = AppState.addEventListener('change', st => { if (st === 'active') setTimeout(go, 3000); });
+    return () => { clearTimeout(t); sub.remove(); };
+  }, []);
 
   useEffect(() => {
     if (loaded || error) {

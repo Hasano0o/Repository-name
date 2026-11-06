@@ -77,6 +77,11 @@ const files = [
   'src/drivers/luci/pro7.ts',
   'src/drivers/luci/cbi.ts',
   'src/drivers/luci/pro7lock.ts',
+  // القفل الآمن (الجلسات والواجهة بدائل داخل الاختبار)
+  'src/utils/safeLock.ts',
+  'src/utils/applyGuard.ts',
+  'src/store/lockSnap.ts',
+  'src/store/pendingRestore.ts',
   ...fs.readdirSync(path.join(root, 'tests')).filter(f => f.endsWith('.test.ts')).map(f => `tests/${f}`),
 ];
 
