@@ -93,3 +93,19 @@ test('MU5250: الكلمة الصحيحة ← الكتابة تنجح من أو�
   assert.equal(r.mode(), 'Only_LTE');
   assert.equal(r.log.filter(x => x.endsWith('web_login')).length, 1);
 });
+
+test('MU5250 ملفه لحاله وغير مؤكد ← كرت FULL يطلع (U60 Pro يبقى مؤكد)', () => {
+  const { identifyZte, MODELS } = require('../src/drivers/models');
+  const { fullDumpEligible } = require('../src/services/fullDumpRule');
+  const mu = identifyZte('BD_MU5250V1.0.0B05');
+  assert.equal(mu.id, 'mu5250');
+  assert.equal(fullDumpEligible('zte-ng', mu, 'huawei'), true);
+  assert.equal(identifyZte('U60Pro_V1.0').id, 'u60-pro');
+  assert.equal(fullDumpEligible('zte-ng', MODELS.u60Pro, 'huawei'), false);
+});
+
+test('zte-ng يطلب صفحات الشبكة (lte_ext_band) في FULL', () => {
+  const pages: string[] = new ZteNgDriver().afterLoginPages();
+  assert.ok(pages.includes('/js/auth/network/net_select.js'));
+  assert.ok(pages.includes('/tmpl/auth/adm/developer_options.html'));
+});

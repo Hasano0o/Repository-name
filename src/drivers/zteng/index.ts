@@ -24,6 +24,7 @@ import { buildSnapshot } from '../../utils/snapshot';
 import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import { MODELS, ModelProfile } from '../models';
+import { diag } from '../../services/diag';
 
 const ZERO = '00000000000000000000000000000000';
 const sha = (s: string) => bytesToHex(sha256(utf8ToBytes(s))).toUpperCase();
@@ -133,6 +134,8 @@ export class ZteNgDriver implements RouterDriver {
     // MU5250: الراوتر يرجّع ubus_rpc_session حتى لو رفض الدخول (result ≠ 0) — جلسة بدون صلاحيات
     // ← كل أمر كتابة «Access denied (-32002)». صفحة الراوتر نفسها تشيك result === 0 (مثل MU5250-OpenUI).
     const res = r && r.result !== undefined && r.result !== null ? str(r.result) : '';
+    // للتشخيص (FULL / «أرسل تشخيص»): رمز الدخول وأسماء الخانات بس — بدون الجلسة
+    diag(`[zte-ng] web_login: result=${res || '—'} · جلسة=${s2 ? 'فيه' : 'لا'} · خانات=${r ? Object.keys(r).join(',') : '—'}`);
     if (!s2 || (res !== '' && res !== '0')) {
       await markBadPassword(this.host, fp);
       throw new Error(`الراوتر رفض الدخول${res ? ` (رمز ${res})` : ''} — غالباً كلمة المرور غلط. تأكد منها (الملصق تحت الراوتر أو اللي غيّرتها أنت)، واطلع من صفحة الراوتر لو فاتحها من جهاز ثاني — ما بنجرّب مرة ثانية لحالنا.`);
@@ -175,6 +178,17 @@ export class ZteNgDriver implements RouterDriver {
         await new Promise(r => setTimeout(r, 300));
       }
     }
+  }
+
+  /**
+   * صفحات إعدادات الشبكة (ملفات ثابتة — المسارات من js/router.js في ملف FULL ٦ نوفمبر):
+   * فيرموير MU5250 يثبّت 4G بـ nwinfo_set_lte_ext_band (setBandSelect) مو gwl_bandlock، وخاناته في صفحة الشبكة.
+   * GET بس — تطلع في FULL و«أرسل تشخيص».
+   */
+  afterLoginPages(): string[] {
+    const pages = ['network/net_select', 'network/network_mode', 'network/mobile_network', 'network/preferred_position',
+      'adm/developer_options', 'adm/developer_options_login', 'adm/network_info'];
+    return pages.flatMap(x => [`/tmpl/auth/${x}.html`, `/js/auth/${x}.js`]);
   }
 
   async logout(): Promise<void> {
@@ -299,7 +313,8 @@ export class ZteNgDriver implements RouterDriver {
     try {
       const i = await this.call('zwrt_web', 'web_info', {}, ZERO).catch(() => ({} as Record<string, unknown>));
       const txt = JSON.stringify(i);
-      if (/MU5250|U60/i.test(txt)) return MODELS.u60Pro;
+      if (/MU5250/i.test(txt)) return MODELS.mu5250;
+      if (/U60/i.test(txt)) return MODELS.u60Pro;
     } catch {}
     return MODELS.zteNg;
   }

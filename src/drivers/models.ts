@@ -73,6 +73,8 @@ export const MODELS = {
   u10sPro: P({ id: 'u10s-pro', label: 'ZTE U10S Pro', brand: 'zte', tech: '4G', write: 'goform', nrLock: false, note: 'راوتر جيب 4G — ما فيه 5G' }),
   zteG5: P({ id: 'zte-g5', label: 'ZTE (G5)', brand: 'zte', tech: '5G', write: 'ubus', nrLock: true }),
   zte: P({ id: 'zte', label: 'ZTE', brand: 'zte', tech: '5G', write: 'goform' }),
+  // MU5250 (zwrt): نفس درايفر U60 Pro بس فيرمويره يرفض gwl_bandlock (مو في ACL «web») — لسا ما تأكد ← كرت FULL يطلع
+  mu5250: P({ id: 'mu5250', label: 'ZTE MU5250', brand: 'zte', tech: '5G', write: 'ubus', nrLock: true, note: 'تثبيت 5G يسري على وضع SA بس' }),
   u60Pro: P({ id: 'u60-pro', label: 'ZTE U60 Pro', brand: 'zte', tech: '5G', write: 'ubus', nrLock: true, verified: true, note: 'تثبيت 5G يسري على وضع SA بس' }),
   zteNg: P({ id: 'zte-ng', label: 'ZTE (الجيل الجديد)', brand: 'zte', tech: '5G', write: 'ubus' }),
   h158: P({ id: 'h158', label: 'Huawei H158-381', brand: 'huawei', tech: '5G', nrLock: false, note: 'يقبل تثبيت 4G بس — 5G يبقى تلقائي' }),
@@ -83,7 +85,8 @@ export const MODELS = {
 export function identifyZte(wa?: string, web?: string, hw?: string): ModelProfile {
   const s = `${wa ?? ''} ${hw ?? ''}`;
   if (/MU5001/i.test(s)) return MODELS.mu5001;
-  if (/MU5250|U60/i.test(s)) return MODELS.u60Pro;
+  if (/MU5250/i.test(s)) return MODELS.mu5250;
+  if (/U60/i.test(s)) return MODELS.u60Pro;
   // MU3351 = منصة صفحة U30 Pro (config.js: DEVICE "ufi/mu3351") — تقرير ٢٧ أكتوبر
   if (/U30\s*Air/i.test(s)) return MODELS.u30Air;
   if (/U30\s*Pro|MU5358|MU3351/i.test(s)) return MODELS.u30Pro;
