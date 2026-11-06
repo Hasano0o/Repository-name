@@ -84,6 +84,15 @@ def clean_model(m: str) -> str:
     return m.strip()
 
 
+def model_key(name: str) -> str:
+    """مفتاح التجميع: بدون الماركة والزوائد والرموز — «FiberHome 5G CPE Pro LG6851F» = «lg6851f»"""
+    k = re.sub(r"[^a-z0-9\u0600-\u06ff]", "", name.lower())
+    k = re.sub(r"^(zte|huawei|fiberhome|zyxel|nokia|oppo|greenpacket|tplink|dlink|tenda|totolink|inseego)", "", k)
+    k = re.sub(r"^(5gcpepro|5gcpe|4gcpe|cpe)", "", k)
+    m = re.search(r"(lg6\d{3}[a-z]?|mc8\d{2,3}[a-z]?|mu5\d{3}|mf\d{3}[a-z]*|nr5103e?v?2?|h1\d{2}-?\d{3}|dwr-?\d{4}m?)", k)
+    return m.group(1).replace("-", "") if m else (k or "_")
+
+
 def slug(s: str) -> str:
     s = re.sub(r"[^\w.+-]+", "-", s.strip(), flags=re.U).strip("-")
     return s[:60] or "unknown"
@@ -223,7 +232,9 @@ def ingest(z: Path, idx: dict) -> bool:
             if Path(rel).suffix.lower() in TEXT_EXT and not rel.startswith("_bandly/"):
                 cmds |= commands_in(data.decode("utf-8", "replace"))
         brand = brand_of(meta, cmds)
-        mkey = f"{brand}/{slug(meta['model'])}"
+        # نفس الجهاز بكتابات مختلفة («FiberHome-LG6851F» = «Fiberhome LG6851F» = «5G CPE Pro LG6851F») ← مجلد واحد
+        mk = model_key(meta["model"])
+        mkey = f"{brand}/" + idx.setdefault("names", {}).setdefault(f"{brand}/{mk}", slug(meta["model"]))
         mdir = LIB / "models" / mkey
         nfiles = 0
         for rel, data, fsize in files:

@@ -7,7 +7,7 @@
  *    (مرجع: dklasens/MU5250-OpenUI، MIT). ما ندخل إلا لما نحتاج نكتب، ومرة وحدة بس:
  *    لو انرفضت الكلمة نتذكرها وما نعيدها (نفس حماية MU5001) — عشان ما ينقفل الدخول.
  *  - الكتابة (نفس أوامر صفحة الراوتر):
- *      4G: nwinfo_set_gwl_bandlock  lte_band_mask = قناع **عشري** كنص
+ *      4G: nwinfo_set_gwl_bandlock  lte_band_mask = قناع **عشري** كنص (MC8830/MU5250: lte_ext_band بقناع 0x hex — lteLock)
  *      5G: nwinfo_set_nrbandlock    nr5g_band = "78,41" (يطبّق على SA بس — في NSA ما له أثر)
  *      وضع الشبكة: nwinfo_set_netselect  net_select
  *      إعادة التشغيل: zwrt_mc.device.manager.device_reboot
@@ -503,15 +503,37 @@ export class ZteNgDriver implements RouterDriver {
   async setBand(bands: number[] | 'keep', nrBands?: number[]): Promise<void> {
     if (bands !== 'keep') {
       const lte = bands.length ? bands : (this.baseLte() ?? LTE_BANDS);
-      await this.write('zte_nwinfo_api', 'nwinfo_set_gwl_bandlock', {
-        is_gw_band: '0', gw_band_mask: '0', is_lte_band: '1', lte_band_mask: maskOf(lte),
-      });
+      await this.lteLock(lte);
     }
     if (nrBands) {
       const nr = nrBands.length ? nrBands : (this.baseNr() ?? NR_BANDS);
       const cur = nrListOf((await this.net()).nr5g_sa_band_lock);
       if (!sameSet(cur, nr)) await this.write('zte_nwinfo_api', 'nwinfo_set_nrbandlock', { nr5g_type: 'SA', nr5g_band: nr.join(',') });
     }
+  }
+
+  /**
+   * تثبيت 4G. U60 Pro: nwinfo_set_gwl_bandlock (قناع عشري). فيرموير MC8830/MU5250: مافيه gwl_bandlock
+   * (ACL «web» ما فيه ← Access denied)، وصفحته تثبّت بـ setBandSelect = nwinfo_set_lte_ext_band بنفس الخانات
+   * والقناع hex: "0x" + ١٦ خانة (developer_options.js / network_debug.js في نفس كود ZTE — G5 · MC888 · MC801A،
+   * مكتبة الملفات ٦ نوفمبر). نجرّب gwl أول؛ رفض صلاحية/أمر مو موجود ← ext ونتذكره لهالراوتر.
+   */
+  private lteExt = false;
+  private async lteLock(bands: number[]): Promise<void> {
+    const dec = maskOf(bands);
+    if (!this.lteExt) {
+      try {
+        await this.write('zte_nwinfo_api', 'nwinfo_set_gwl_bandlock', { is_gw_band: '0', gw_band_mask: '0', is_lte_band: '1', lte_band_mask: dec });
+        return;
+      } catch (e: any) {
+        if (e?.code !== -32002 && e?.code !== 3 && e?.code !== -32601) throw e;
+        diag(`[zte-ng] gwl_bandlock مرفوض (${e?.code}) ← lte_ext_band`);
+      }
+    }
+    const hex = '0x' + BigInt(dec).toString(16).padStart(16, '0');
+    await this.write('zte_nwinfo_api', 'nwinfo_set_lte_ext_band', { is_gw_band: '0', gw_band_mask: '0', is_lte_band: '1', lte_band_mask: hex });
+    this.lteExt = true;
+    diag(`[zte-ng] lte_ext_band ✓ ${hex}`);
   }
 
   /** لأجهزة G5 (MC801A Pro…): 5G بوضع NSA يحتاج nr5g_type=nsa — لو رفض نجرّب SA */
@@ -567,7 +589,7 @@ export class ZteNgDriver implements RouterDriver {
     const d = await this.net();
     const wl = bandsOfMask(want.lte_band_lock), wn = nrListOf(want.nr5g_sa_band_lock);
     if (wl.length && !sameSet(bandsOfMask(d.lte_band_lock), wl)) {
-      await this.write('zte_nwinfo_api', 'nwinfo_set_gwl_bandlock', { is_gw_band: '0', gw_band_mask: '0', is_lte_band: '1', lte_band_mask: maskOf(wl) });
+      await this.lteLock(wl);
     }
     if (wn.length && !sameSet(nrListOf(d.nr5g_sa_band_lock), wn)) {
       await this.write('zte_nwinfo_api', 'nwinfo_set_nrbandlock', { nr5g_type: 'SA', nr5g_band: wn.join(',') });
@@ -589,7 +611,7 @@ export class ZteNgDriver implements RouterDriver {
     const b = baseline ?? this.orig;
     const lte = bandsOfMask(b?.lte_band_lock);
     const nr = nrListOf(b?.nr5g_sa_band_lock);
-    try { await this.write('zte_nwinfo_api', 'nwinfo_set_gwl_bandlock', { is_gw_band: '0', gw_band_mask: '0', is_lte_band: '1', lte_band_mask: maskOf(lte.length >= 4 ? lte : LTE_BANDS) }); } catch {}
+    try { await this.lteLock(lte.length >= 4 ? lte : LTE_BANDS); } catch {}
     try { await this.write('zte_nwinfo_api', 'nwinfo_set_nrbandlock', { nr5g_type: 'SA', nr5g_band: (nr.length ? nr : NR_BANDS).join(',') }); } catch {}
     try { await this.write('zte_nwinfo_api', 'nwinfo_set_netselect', { net_select: b?.net_select || 'WL_AND_5G' }); } catch {}
     try { await this.unlockCell(); } catch {}

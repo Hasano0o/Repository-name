@@ -33,12 +33,13 @@ const { publicKey } = nc.generateKeyPairSync('rsa', { modulusLength: 1024, publi
 
 /** راوتر محاكى. flaky = كم مرة يرد Access denied على أمر مسموح قبل ما يقبله ·
  *  enstr = MU5250: الكتابة ما تنقبل إلا بعد web_http_enstr_set بنفس الجلسة */
-function router(opts: { flaky?: number; enstr?: boolean } = {}) {
+function router(opts: { flaky?: number; enstr?: boolean; ext?: boolean } = {}) {
   const good = new Set<string>();
   const keyed = new Set<string>();
   const log: string[] = [];
   let flaky = opts.flaky ?? 0;
   let netSelect = 'WL_AND_5G';
+  let lteMask = '';
   const res = (body: unknown) => ({ ok: true, status: 200, headers: { get: () => null },
     json: async () => body, text: async () => JSON.stringify(body) } as any);
   (globalThis as any).fetch = async (_url: string, init?: any) => {
@@ -60,11 +61,14 @@ function router(opts: { flaky?: number; enstr?: boolean } = {}) {
       keyed.add(sess); return ok({ result: 'success' });
     }
     if (opts.enstr && /set_/.test(method) && !keyed.has(sess)) return denied();
+    if (opts.ext && method === 'nwinfo_set_gwl_bandlock') return denied();          // مو في ACL «web» (MU5250)
+    if (method === 'nwinfo_set_gwl_bandlock') { lteMask = 'dec:' + p.lte_band_mask; return ok({ result: 'success' }); }
+    if (method === 'nwinfo_set_lte_ext_band') { lteMask = 'ext:' + p.lte_band_mask; return ok({ result: 'success' }); }
     if (flaky > 0) { flaky--; return denied(); }
     if (method === 'nwinfo_set_netselect') { netSelect = p.net_select; return ok({ result: 'success' }); }
     return ok({});
   };
-  return { log, mode: () => netSelect };
+  return { log, mode: () => netSelect, lte: () => lteMask };
 }
 
 const { ZteNgDriver } = require('../src/drivers/zteng/index');
@@ -138,4 +142,25 @@ test('zte-ng: قبل سحب صفحات بعد الدخول ندخل (كوكي ا
   await d.prepareAfterLogin();
   await d.prepareAfterLogin();
   assert.equal(r.log.filter(x => x.endsWith('web_login')).length, 1);
+});
+
+test('MU5250/MC8830: gwl_bandlock مرفوض ← lte_ext_band بقناع 0x hex (مثل صفحة ZTE)، ومرة ثانية مباشرة', async () => {
+  const r = router({ ext: true });
+  const d = new ZteNgDriver();
+  await d.login('192.168.0.7', 'admin', PW);
+  await (d as any).lteLock([1, 3]);
+  assert.equal(r.lte(), 'ext:0x0000000000000005');
+  const n = r.log.filter(x => x.endsWith('gwl_bandlock')).length;
+  await (d as any).lteLock([3]);
+  assert.equal(r.lte(), 'ext:0x0000000000000004');
+  assert.equal(r.log.filter(x => x.endsWith('gwl_bandlock')).length, n);   // ما نعيد gwl
+});
+
+test('U60 Pro: gwl_bandlock يمشي ← نفس القديم (عشري) وما نلمس ext', async () => {
+  const r = router();
+  const d = new ZteNgDriver();
+  await d.login('192.168.0.8', 'admin', PW);
+  await (d as any).lteLock([1, 3]);
+  assert.equal(r.lte(), 'dec:5');
+  assert.equal(r.log.filter(x => x.endsWith('lte_ext_band')).length, 0);
 });
