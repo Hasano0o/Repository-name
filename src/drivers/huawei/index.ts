@@ -1504,6 +1504,22 @@ export class HuaweiDriver implements RouterDriver {
         await new Promise(r => setTimeout(r, 2000));
       }
     }
+    // «نوع 5G (SA/NSA)» ما رجع (٦ تقارير std:*-revert، ٢٦ أكتوبر–١ نوفمبر، كلها بعد تجربة SA/NSA):
+    // الجسم الكامل (كل حقول net-mode) يرجّع الوضع والترددات بس الراوتر يتجاهل networkOption فيه.
+    // صفحة المطورين نفسها تغيّره بطلب حقلين بس (NetworkMode + networkOption) — ونفس setNetStandard اللي نجح بالتجربة.
+    const opt = d.netMode.find(f => f[0] === 'networkOption')?.[1];
+    const bOpt = d.netMode.find(f => f[0] === 'LTEBandOption')?.[1];
+    const left0 = netModeDiff(d.netMode, parseNetModeFields(await this.get('net/net-mode')));
+    if (mode === '00' && opt !== undefined && left0.includes('نوع 5G (SA/NSA)')) {
+      const body = `<NetworkMode>00</NetworkMode><networkOption>${opt}</networkOption>`;
+      diag(`[huawei] restore networkOption (حقلين): ${opt}`);
+      await this.post('net/net-mode', body);
+      await new Promise(r => setTimeout(r, 2000));
+    } else if (mode === '03' && bOpt !== undefined && left0.includes('خيار ترددات 4G')) {
+      diag(`[huawei] restore LTEBandOption (حقلين): ${bOpt}`);
+      await this.post('net/net-mode', `<NetworkMode>03</NetworkMode><LTEBandOption>${bOpt}</LTEBandOption>`);
+      await new Promise(r => setTimeout(r, 2000));
+    }
     if (d.lockFreq) {
       const cur = parseLockRaw(await this.get('net/lock-freq'));
       if (lockDiffForMode(d.lockFreq, cur, mode).length) {
@@ -1522,6 +1538,12 @@ export class HuaweiDriver implements RouterDriver {
     const left = netModeDiff(d.netMode, parseNetModeFields(await this.get('net/net-mode')), skip);
     left.push(...lfLeft);
     this.log('restore verify', left.join(',') || 'match');
+    // يوصل لتقارير الأعضاء (this.log في نسخة التطوير بس) — عشان نعرف وش ما رجع ومن وين
+    if (left.length) {
+      const now = parseNetModeFields(await this.get('net/net-mode').catch(() => ''));
+      const pick = (f: [string, string][]) => f.filter(([k]) => /^(NetworkMode|networkOption|LTEBandOption|LTEBand)$/.test(k)).map(([k, v]) => `${k}=${v}`).join(' ');
+      diag(`[huawei] restore verify ✗ ${left.join(',')} · اللقطة: ${pick(d.netMode)} · الحين: ${pick(now)}`);
+    }
     if (left.length) throw restoreMismatch(left);
   }
   async lockCell(target: CellLockTarget) {
