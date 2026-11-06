@@ -21,6 +21,9 @@ import { runTowerTrials, TrialTarget } from '../utils/towerTrial';
 import { groupTowers, loadConfirmed, bandName } from '../utils/towers';
 import { bandLabel, SCAN_PREFERRED } from '../utils/bands';
 import { operatorBands } from '../store/operator';
+import { loadTrials } from '../utils/safeLock';
+import type { Carrier } from '../drivers/types';
+import { buildPlan, PilotPlan, PlanTarget } from './pilotPlan';
 
 export type StepKey = 'check' | 'band' | 'tower' | 'wifi' | 'final';
 export type StepStatus = 'wait' | 'run' | 'done' | 'ok' | 'same' | 'skip' | 'fail';
@@ -108,11 +111,86 @@ async function afterChannelChange(host: string, cancelled: () => boolean): Promi
   return { wasOn: true, back: false };
 }
 
+/** الأبراج المرشحة للتجربة (مو اللي عليه الحين) — نفس اللي يجرّبه المحرك */
+function towerTargetsFrom(cells: CellTower[], confirmed: Set<string>): PlanTarget[] {
+  const out: PlanTarget[] = [];
+  for (const g of groupTowers(cells, confirmed).filter(g => !g.inUse && g.pci && g.cells.some(c => c.arfcn)).slice(0, 3)) {
+    const cell = g.cells.find(c => c === g.best && c.arfcn) ?? g.cells.find(c => c.arfcn)!;
+    out.push({ tech: cell.tech, band: cell.band, arfcn: cell.arfcn!, pci: g.pci!, name: `برج ${g.pci} · ${bandName(cell)}`, rsrp: cell.rsrp });
+  }
+  return out;
+}
+
+/**
+ * المرحلة الأولى: فحص صامت — **قراءة بس**، ما يرسل أي أمر تغيير للراوتر.
+ * يرجّع التقرير (وش نقترح نجرّب وليش وكم بينقطع النت) + قياس «قبل» عشان التجارب ما تعيده.
+ */
+export async function scanPlan(r: SavedRouter, onStatus?: (s: string) => void): Promise<{ plan: PilotPlan; before: Measure }> {
+  const proto = driverById(r.driverId);
+  onStatus?.('أقرأ الإشارة وأقيس البنق…');
+  const before = await measureNow(r);
+  if (before.rsrp === undefined && before.nrRsrp === undefined) throw new Error('ما قدرت أقرأ من الراوتر — تأكد إن جوالك على واي فاي الراوتر');
+  onStatus?.('أشوف الترددات والأبراج حولك…');
+  const rd = await withSession(r, async d => {
+    const sig = d.getSignal ? await d.getSignal().catch(() => null) : null;
+    const cfg = d.getBandConfig ? await d.getBandConfig().catch(() => null) : null;
+    const cells = d.getCells ? await d.getCells().catch(() => [] as CellTower[]) : [];
+    const carriers = d.getCarriers ? await d.getCarriers().catch(() => [] as Carrier[]) : [];
+    return { sig, cfg, cells, carriers };
+  }, false);
+  const [opBands, trials, confirmed] = await Promise.all([
+    operatorBands(r.id).catch(() => null), loadTrials(r.id), loadConfirmed(r.id),
+  ]);
+  const local = r.host === 'demo' || r.host === 'device';
+  const plan = buildPlan({
+    now: Date.now(),
+    sig: {
+      rsrp: before.rsrp, sinr: before.sinr, nrRsrp: before.nrRsrp, nrSinr: before.nrSinr,
+      band: before.band ?? rd.sig?.band, nrBand: before.nrBand ?? rd.sig?.nrBand, rsrq: rd.sig?.rsrq, pci: rd.sig?.pci,
+    },
+    ping: before.ping !== undefined ? { median: before.ping, jitter: before.jitter ?? 0 } : undefined,
+    carriers: rd.carriers.map(c => ({ tech: c.tech, band: c.band })),
+    bandCfg: rd.cfg,
+    cells: rd.cells,
+    opLte: opBands?.lte ?? null,
+    trials,
+    caps: {
+      band: !!(proto?.setBand && proto.readLockState && proto.restoreLockState),
+      tower: !!(proto?.lockCell && proto.readLockState),
+      towerRisk: proto?.cellLockRisk,
+      wifi: !!(proto?.getWifiRadios && proto.setWifiChannel) && !local,
+    },
+    towerTargets: towerTargetsFrom(rd.cells, confirmed),
+  });
+  onStatus?.('');
+  return { plan, before };
+}
+
+/** اللي وافق عليه المستخدم من التقرير — null = ما اختارها (نتخطاها) */
+export interface PilotChoice {
+  band: number[] | null;
+  tower: TrialTarget[] | null;
+  wifi: boolean;
+}
+export function choiceFromPlan(plan: PilotPlan, on: Partial<Record<'band' | 'tower' | 'wifi', boolean>>): PilotChoice {
+  const it = (k: 'band' | 'tower' | 'wifi') => plan.items.find(i => i.key === k);
+  const pick = (k: 'band' | 'tower' | 'wifi') => !!it(k) && (on[k] ?? it(k)!.on);
+  return {
+    band: pick('band') ? it('band')!.bands ?? null : null,
+    tower: pick('tower') ? (it('tower')!.targets ?? []).map(({ rsrp: _r, ...t }) => t) : null,
+    wifi: pick('wifi'),
+  };
+}
+
 export interface PilotOpts {
   onSteps: (s: PilotStep[]) => void;
   onStatus: (s: string) => void;
   onMeasure?: (which: 'before' | 'after', m: Measure) => void;
   isCancelled: () => boolean;
+  /** من التقرير: نجرّب اللي وافق عليه بس (بدونها = الكل مثل قبل) */
+  choice?: PilotChoice;
+  /** قياس «قبل» من الفحص الصامت (لو حديث ما نعيده) */
+  before?: Measure;
 }
 
 export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotReport> {
@@ -130,7 +208,7 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
   // ═══ ١) قبل ═══
   set('check', 'run');
   o.onStatus('أقرأ الإشارة وأقيس البنق…');
-  const before = await measureNow(r);
+  const before = o.before ?? await measureNow(r);
   report.before = before;
   o.onMeasure?.('before', before);
   if (before.rsrp === undefined && before.nrRsrp === undefined) {
@@ -145,7 +223,8 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
   await withRouterLock(r, async (op: RouterOp) => {
     // ═══ ٢) أفضل تردد 4G ═══
     if (cancelled()) return;
-    if (!proto?.setBand || !proto.readLockState || !proto.restoreLockState) set('band', 'skip', 'راوترك ما يدعم تثبيت الترددات من التطبيق');
+    if (o.choice && !o.choice.band) set('band', 'skip', 'ما اخترتها في التقرير');
+    else if (!proto?.setBand || !proto.readLockState || !proto.restoreLockState) set('band', 'skip', 'راوترك ما يدعم تثبيت الترددات من التطبيق');
     else {
       set('band', 'run');
       try {
@@ -166,6 +245,8 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
         const opBands = await operatorBands(r.id);
         for (const b of (opBands?.lte ?? SCAN_PREFERRED)) if (cands.length < 4 && cfg?.supported.includes(b) && !cands.includes(b)) cands.push(b);
         cands = cands.slice(0, 4);
+        // من التقرير: نفس الترددات اللي شافها المستخدم ووافق عليها (لو لسا مدعومة)
+        if (o.choice?.band?.length) cands = o.choice.band.filter(b => cfg?.supported.includes(b)).slice(0, 4);
         if (cands.length < 2) set('band', 'same', 'راوترك يدعم تردد واحد بس — ما فيه شي نجرّبه');
         else {
           // الحكم بالسعة (عرض النطاق × الصفاء = السرعة الفعلية) + البنق — مو القوة بس:
@@ -227,7 +308,8 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
 
     // ═══ ٣) أفضل برج ═══
     if (cancelled()) return;
-    if (proto?.cellLockRisk) set('tower', 'skip', 'نوع راوترك يطيح لو ثبّتناه على برج — تخطيناها لسلامتك');
+    if (o.choice && !o.choice.tower) set('tower', 'skip', 'ما اخترتها في التقرير');
+    else if (proto?.cellLockRisk) set('tower', 'skip', 'نوع راوترك يطيح لو ثبّتناه على برج — تخطيناها لسلامتك');
     else if (!proto?.lockCell || !proto.readLockState) set('tower', 'skip', 'راوترك ما يدعم التثبيت على برج');
     else {
       set('tower', 'run');
@@ -237,12 +319,11 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
           d.getCells ? d.getCells().catch(() => [] as CellTower[]) : Promise.resolve([] as CellTower[]),
           d.getCellLocks ? d.getCellLocks().catch(() => [] as CellLockState[]) : Promise.resolve([] as CellLockState[]),
         ]), false);
-        const groups = groupTowers(cells, await loadConfirmed(r.id));
-        const targets: TrialTarget[] = [];
-        for (const g of groups.filter(g => !g.inUse && g.pci && g.cells.some(c => c.arfcn)).slice(0, 3)) {
-          const cell = g.cells.find(c => c === g.best && c.arfcn) ?? g.cells.find(c => c.arfcn)!;
-          targets.push({ tech: cell.tech, band: cell.band, arfcn: cell.arfcn!, pci: g.pci!, name: `برج ${g.pci} · ${bandName(cell)}` });
-        }
+        // من التقرير: نفس الأبراج اللي وافق عليها (لو لسا يشوفها الراوتر) — وإلا اللي حوله الحين
+        const fresh: TrialTarget[] = towerTargetsFrom(cells, await loadConfirmed(r.id)).map(({ rsrp: _r, ...t }) => t);
+        const targets: TrialTarget[] = o.choice?.tower?.length
+          ? o.choice.tower.filter(t => cells.some(c => c.tech === t.tech && String(c.pci) === t.pci))
+          : fresh;
         if (!targets.length) set('tower', 'same', 'ما فيه أبراج ثانية حولك — برجك الحالي هو المتاح');
         else {
           const snap = await readSnapOrStop(r) as LockSnapshot;
@@ -273,7 +354,8 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
 
     // ═══ ٤) أفضل قناة واي فاي ═══
     if (cancelled()) return;
-    if (!proto?.getWifiRadios || !proto.setWifiChannel || r.host === 'demo' || r.host === 'device') set('wifi', 'skip', 'راوترك ما يسمح بتغيير القناة من التطبيق');
+    if (o.choice && !o.choice.wifi) set('wifi', 'skip', 'ما اخترتها في التقرير');
+    else if (!proto?.getWifiRadios || !proto.setWifiChannel || r.host === 'demo' || r.host === 'device') set('wifi', 'skip', 'راوترك ما يسمح بتغيير القناة من التطبيق');
     else {
       set('wifi', 'run');
       try {

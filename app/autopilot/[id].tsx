@@ -11,7 +11,8 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useAutoStart } from '../../src/assistant/auto';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { driverById } from '../../src/drivers/registry';
-import { runAutopilot, freshSteps, PilotStep, Measure, StepStatus } from '../../src/assistant/autopilot';
+import { runAutopilot, freshSteps, PilotStep, Measure, StepStatus, scanPlan, choiceFromPlan } from '../../src/assistant/autopilot';
+import { PilotPlan, PlanKey, planDuration } from '../../src/assistant/pilotPlan';
 import { LEVEL_COLOR, rsrpLevel, sinrLevel } from '../../src/utils/signal';
 import { Icon, IconName } from '../../src/ui/Icon';
 import { C, R, S, tBg, tBd, tFg } from '../../src/ui/theme';
@@ -91,10 +92,48 @@ export default function AutopilotScreen() {
     if (alive.current) setHealer(h);
   };
 
+  // ═══ المرحلة ١: فحص صامت (قراءة بس) ← تقرير ═══
+  const [plan, setPlan] = useState<PilotPlan | null>(null);
+  const [planBefore, setPlanBefore] = useState<Measure | undefined>();
+  const [picks, setPicks] = useState<Partial<Record<PlanKey, boolean>>>({});
+  const [scanning, setScanning] = useState(false);
+  const [scanErr, setScanErr] = useState('');
+  const scan = async () => {
+    if (!info || running || scanning) return;
+    setScanning(true); setScanErr(''); setDone(false); setPlan(null); setPicks({});
+    try {
+      const res = await scanPlan(info, t => alive.current && setStatus(t));
+      if (!alive.current) return;
+      setPlan(res.plan); setPlanBefore(res.before); setBefore(res.before); setAfter(undefined);
+    } catch (e: any) {
+      if (alive.current) setScanErr(String(e?.message ?? e));
+    } finally {
+      if (alive.current) { setScanning(false); setStatus(''); }
+    }
+  };
+  const isOn = (k: PlanKey) => {
+    const it = plan?.items.find(i => i.key === k);
+    return !!it && (picks[k] ?? it.on);
+  };
+  const chosen = plan ? plan.items.map(i => ({ ...i, on: isOn(i.key) })) : [];
+  const approve = () => {
+    if (!plan) return;
+    const sel = chosen.filter(i => i.on);
+    if (!sel.length) return;
+    const cuts = sel.some(i => i.key !== 'wifi');
+    Alert.alert('أبدأ التجارب؟',
+      `${sel.map(i => `• ${i.title}`).join('\n')}\n\nالمدة ${planDuration(chosen)}${cuts ? '\n\n• النت بينقطع ثواني مع كل تجربة\n• خلّ جوالك على واي فاي الراوتر وطفّ بيانات الجوال\n• بالآخر نرجّع إعدادك أو نثبّت بس اللي فرق بوضوح' : ''}`,
+      [{ text: 'لا', style: 'cancel' }, { text: 'ابدأ', onPress: () => start() }]);
+  };
+
   const start = async () => {
-    if (!info || running) return;
+    if (!info || running || !plan) return;
+    // التقرير قديم (أكثر من ١٠ دقايق) ← نعيد قياس «قبل» (الاختيارات تبقى)
+    const fresh = Date.now() - plan.at < 10 * 60_000;
+    const choice = choiceFromPlan(plan, picks);
     cancel.current = false;
-    setRunning(true); setDone(false); setBefore(undefined); setAfter(undefined); setChanged([]); setSteps(freshSteps());
+    setRunning(true); setDone(false); setAfter(undefined); setChanged([]); setSteps(freshSteps());
+    if (!fresh) setBefore(undefined);
     activateKeepAwakeAsync('pilot').catch(() => {});
     try {
       const rep = await runAutopilot(info, {
@@ -102,8 +141,10 @@ export default function AutopilotScreen() {
         onStatus: t => alive.current && setStatus(t),
         onMeasure: (w, m) => { if (!alive.current) return; if (w === 'before') setBefore(m); else setAfter(m); },
         isCancelled: () => cancel.current || !alive.current,
+        choice,
+        before: fresh ? planBefore : undefined,
       });
-      if (alive.current) { setChanged(rep.changed); setDone(true); }
+      if (alive.current) { setChanged(rep.changed); setDone(true); setPlan(null); }
     } catch (e: any) {
       if (alive.current) Alert.alert('ما كمّلت', String(e?.message ?? e));
     } finally {
@@ -112,18 +153,15 @@ export default function AutopilotScreen() {
     }
   };
 
-  const ask = () => Alert.alert('أضبط لك كل شي؟',
-    `بجرّب الترددات (لحالها ومدموجة)${zte ? '' : ' والأبراج'} وقنوات الواي فاي، وأثبّت الأفضل.\n\n• النت بينقطع شوي مع كل تجربة (١٥–٢٠ دقيقة تقريباً)\n• خلّ التطبيق مفتوح وجوالك على واي فاي الراوتر\n• لو أي شي صار أسوأ أرجّعه لحاله`,
-    [{ text: 'لا', style: 'cancel' }, { text: 'ابدأ', onPress: start }]);
-
-  useAutoStart(!!info && !running, ask);
+  // المساعد يفتحها بـ auto ← نبدأ بالفحص الصامت بس (ما يغيّر شي) — التجارب تحتاج موافقتك على التقرير
+  useAutoStart(!!info && !running && !scanning, scan);
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 40 }]}>
       <View style={s.hero}>
         <View style={s.heroIcon}><Text style={{ fontSize: 30 }}>🤖</Text></View>
         <Text style={s.heroTitle}>أضبط لك كل شي بنفسي</Text>
-        <Text style={s.heroSub}>أفحص · أجرّب · أثبّت الأفضل · وأرجّع أي شي صار أسوأ</Text>
+        <Text style={s.heroSub}>أفحص بدون تغيير · أعطيك تقرير · أجرّب اللي توافق عليه بس</Text>
       </View>
 
       {/* ═══ الحارس: مفتاح واحد ═══ */}
@@ -150,8 +188,61 @@ export default function AutopilotScreen() {
         </View>
       )}
 
+      {/* ═══ التقرير (قبل أي تغيير) ═══ */}
+      {!plan && !running && !done && (
+        <View style={s.card}>
+          <Text style={s.planTitle}>أول شي: فحص بدون ما نغيّر شي</Text>
+          <Text style={s.note}>نقرأ إشارتك والترددات والأبراج حولك ونقيس البنق — النت ما ينقطع أبداً. بعدها نعطيك تقرير مبسط، وأنت تختار وش نجرّب.</Text>
+          {scanning && <View style={s.scanRow}><ActivityIndicator color={tFg('#7c5cff')} /><Text style={s.stepNote}>{status || 'أفحص…'}</Text></View>}
+          {!!scanErr && <Text style={[s.note, { color: C.red }]}>{scanErr}</Text>}
+        </View>
+      )}
+
+      {plan && !running && (
+        <>
+          <View style={[s.card, { borderColor: tBd(LEVEL_BD[plan.level]) }]}>
+            <Text style={[s.verdict, { color: tFg(LEVEL_FG[plan.level]) }]}>{plan.headline}</Text>
+            {plan.facts.map(f => <Text key={f} style={s.fact}>• {f}</Text>)}
+            <Text style={s.cmpHint}>✓ هذا كله قراءة — ما غيّرنا شي في الراوتر</Text>
+          </View>
+
+          {plan.items.length > 0 && (
+            <View style={s.card}>
+              <Text style={s.cardTitle}>وش نقترح نجرّب</Text>
+              {plan.items.map((it, i) => (
+                <View key={it.key} style={[s.planRow, i > 0 && s.stepLine]}>
+                  <Switch value={isOn(it.key)} onValueChange={v => setPicks(p => ({ ...p, [it.key]: v }))} trackColor={{ true: '#7c5cff', false: C.track }} thumbColor={C.onAccent} />
+                  <View style={{ flex: 1 }}>
+                    <View style={s.planHead}>
+                      <Text style={s.stepTitle}>{it.title}</Text>
+                      <Text style={[s.tag, it.on ? { color: tFg('#12b76a'), backgroundColor: tBg('#12b76a18') } : { color: C.muted, backgroundColor: tBg('#9aa1bd18') }]}>{it.on ? 'ننصح' : 'ما ننصح'}</Text>
+                    </View>
+                    <Text style={s.stepNote}>{it.why}</Text>
+                    <Text style={[s.stepNote, { color: tFg('#b26b00') }]}>⏱ {it.cut}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {plan.skipped.length > 0 && (
+            <View style={s.card}>
+              <Text style={s.cardTitle}>ما بنجرّبها</Text>
+              {plan.skipped.map(k => <Text key={k.key} style={s.fact}>• {k.title}: {k.why}</Text>)}
+            </View>
+          )}
+
+          {chosen.some(i => i.on) && plan.tips.length > 0 && (
+            <View style={[s.card, { backgroundColor: tBg('#f59e0b0d'), borderColor: tBd('#f59e0b55') }]}>
+              <Text style={s.cardTitle}>قبل ما نبدأ</Text>
+              {plan.tips.map(t => <Text key={t} style={s.fact}>• {t}</Text>)}
+            </View>
+          )}
+        </>
+      )}
+
       {/* الخطوات */}
-      <View style={s.card}>
+      {(running || done) && <View style={s.card}>
         {steps.map((st, i) => {
           const look = ST[st.status];
           return (
@@ -173,10 +264,10 @@ export default function AutopilotScreen() {
             </View>
           );
         })}
-      </View>
+      </View>}
 
       {/* قبل وبعد */}
-      {(before || after) && (
+      {(running || done) && (before || after) && (
         <View style={s.card}>
           <Text style={s.cardTitle}>قبل ← بعد</Text>
           {done && !changed.length && <Text style={s.cmpHint}>ما غيّرت شي — أي فرق صغير هنا تذبذب طبيعي في الشبكة</Text>}
@@ -203,26 +294,59 @@ export default function AutopilotScreen() {
         </View>
       )}
 
-      <Pressable
-        style={({ pressed }) => [s.btn, running && { backgroundColor: C.red }, !info && { opacity: 0.5 }, pressed && { opacity: 0.8 }]}
-        disabled={!info}
-        onPress={() => (running ? (cancel.current = true, setStatus('أوقف وأرجّع إعدادك…')) : ask())}
-        accessibilityRole="button"
-      >
-        <Icon name={running ? 'power' : 'spark'} size={17} color={C.onAccent} />
-        <Text style={s.btnTxt}>{running ? 'وقّف ورجّع إعدادي' : done ? 'أعد الضبط' : 'ابدأ'}</Text>
-      </Pressable>
+      {running ? (
+        <Pressable
+          style={({ pressed }) => [s.btn, { backgroundColor: C.red }, pressed && { opacity: 0.8 }]}
+          onPress={() => { cancel.current = true; setStatus('أوقف وأرجّع إعدادك…'); }}
+          accessibilityRole="button"
+        >
+          <Icon name="power" size={17} color={C.onAccent} />
+          <Text style={s.btnTxt}>وقّف ورجّع إعدادي</Text>
+        </Pressable>
+      ) : plan ? (
+        <>
+          {chosen.some(i => i.on) ? (
+            <Pressable style={({ pressed }) => [s.btn, pressed && { opacity: 0.8 }]} onPress={approve} accessibilityRole="button">
+              <Icon name="spark" size={17} color={C.onAccent} />
+              <Text style={s.btnTxt}>موافق — جرّب ({planDuration(chosen)})</Text>
+            </Pressable>
+          ) : (
+            <Text style={s.note}>ما اخترت شي نجرّبه — إعدادك يبقى مثل ما هو.</Text>
+          )}
+          <Pressable style={s.logToggle} onPress={scan} disabled={scanning}>
+            <Text style={s.logToggleTxt}>{scanning ? 'أفحص…' : 'افحص من جديد'}</Text>
+          </Pressable>
+        </>
+      ) : (
+        <Pressable
+          style={({ pressed }) => [s.btn, (!info || scanning) && { opacity: 0.5 }, pressed && { opacity: 0.8 }]}
+          disabled={!info || scanning}
+          onPress={scan}
+          accessibilityRole="button"
+        >
+          {scanning ? <ActivityIndicator color={C.onAccent} /> : <Icon name="spark" size={17} color={C.onAccent} />}
+          <Text style={s.btnTxt}>{done ? 'افحص مرة ثانية' : 'افحص بدون تغيير'}</Text>
+        </Pressable>
+      )}
 
       <Text style={s.foot}>
-        🛡️ ما أسوي ضبط مصنع ولا أغيّر كلمات المرور. كل تثبيت أقيس قبله وبعده، ولو صار أسوأ أرجّعه.
+        🛡️ ما أغيّر شي قبل ما توافق على التقرير. ما أسوي ضبط مصنع ولا أغيّر كلمات المرور. كل تثبيت أقيس قبله وبعده، ولو صار أسوأ أرجّعه.
         {zte ? '\nراوترك ZTE: نتخطى تثبيت البرج لأنه ممكن يطيّح الراوتر.' : ''}
       </Text>
     </ScrollView>
   );
 }
 
+const LEVEL_FG = { good: '#0f9a5f', ok: '#b26b00', weak: '#e5484d' } as const;
+const LEVEL_BD = { good: '#12b76a77', ok: '#f59e0b77', weak: '#e5484d77' } as const;
+
 const s = sheet({
   page: { padding: S.lg, gap: S.md },
+  planTitle: { color: C.text, fontWeight: '900', fontSize: 15.5, textAlign: 'center' },
+  scanRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 4 },
+  fact: { color: C.text, fontSize: 13.5, lineHeight: 21, textAlign: 'right' },
+  planRow: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: 12, paddingVertical: 10 },
+  planHead: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   hero: { alignItems: 'center', gap: 6, paddingVertical: 6 },
   heroIcon: { width: 64, height: 64, borderRadius: 22, backgroundColor: tBg('#7c5cff1a'), alignItems: 'center', justifyContent: 'center' },
   heroTitle: { color: C.text, fontSize: 22, fontWeight: '900', textAlign: 'center' },

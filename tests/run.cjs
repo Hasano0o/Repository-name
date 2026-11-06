@@ -18,6 +18,7 @@ const files = [
   'src/utils/applyGuard.ts',
   'src/utils/bands.ts',
   'src/utils/advisor.ts',
+  'src/assistant/pilotPlan.ts',
   'src/drivers/huawei/netStandard.ts',
   'src/drivers/lockSnapshot.ts',
   'src/drivers/huawei/lockState.ts',
