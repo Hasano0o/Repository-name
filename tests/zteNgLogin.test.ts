@@ -164,3 +164,17 @@ test('U60 Pro: gwl_bandlock يمشي ← نفس القديم (عشري) وما �
   assert.equal(r.lte(), 'dec:5');
   assert.equal(r.log.filter(x => x.endsWith('lte_ext_band')).length, 0);
 });
+
+test('أندرويد: ProtocolException مرة على POST /ubus/ ← نعيد مرة وحدة (كان: «تعذر الاتصال» وقت الإضافة)', async () => {
+  const r = router();
+  const f0 = (globalThis as any).fetch;
+  let failed = 0;
+  (globalThis as any).fetch = async (u: string, init?: any) => {
+    if (!failed && /nwinfo_get_netinfo/.test(String(init?.body))) { failed++; throw new Error('fetch failed: java.net.ProtocolException'); }
+    return f0(u, init);
+  };
+  const d = new ZteNgDriver();
+  assert.equal(await d.detect('192.168.0.9'), true);
+  assert.equal(failed, 1);
+  assert.ok(r.log.length >= 1);
+});

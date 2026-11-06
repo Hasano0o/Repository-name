@@ -104,7 +104,9 @@ export async function http(
         : 'راوترك يفتح صفحته باتصال مشفّر (https) — يحتاج آخر نسخة من Bandly من المتجر');
     }
     // نذكر الطلب اللي انقطع (المسار بس، بدون أي قيم) — الراوتر يرد على غيره، فنعرف وش اللي يقطعه بالضبط
-    throw new Error(`تعذر الاتصال بالراوتر (${what.split(' ').slice(0, 2).join(' ')})`);
+    const err: any = new Error(`تعذر الاتصال بالراوتر (${what.split(' ').slice(0, 2).join(' ')})`);
+    err.raw = String(e?.message ?? e).slice(0, 200);   // الخطأ الأصلي (ProtocolException…) — الدرايفر يقرر يعيد ولا لا
+    throw err;
   } finally {
     clearTimeout(t);
   }

@@ -83,7 +83,7 @@ export class ZteNgDriver implements RouterDriver {
   /** نداء ubus واحد — يرجع الكائن (result[1]) أو يرمي لو الكود مو 0 */
   private async call(obj: string, method: string, params: Record<string, unknown> = {}, session?: string): Promise<Record<string, unknown>> {
     const body = JSON.stringify([{ jsonrpc: '2.0', id: 1, method: 'call', params: [session ?? this.session, obj, method, params] }]);
-    const res = await http(`${this.base()}/ubus/?t=${Date.now()}`, {
+    const send = () => http(`${this.base()}/ubus/?t=${Date.now()}`, {
       method: 'POST',
       // نفس هيدرات صفحة الراوتر (G5/U60): Z-Mode 1 بعد الدخول، Z-Tag = اسم الأمر
       headers: {
@@ -92,6 +92,17 @@ export class ZteNgDriver implements RouterDriver {
       },
       body,
     }, 6000);
+    let res: Response;
+    try {
+      res = await send();
+    } catch (e: any) {
+      // أندرويد (OkHttp): «java.net.ProtocolException» على POST بين فترة وفترة — سيرفر الراوتر يسكّر الاتصال
+      // المحفوظ (keep-alive) وOkHttp ما يعيد POST لحاله. كان يطلع «تعذر الاتصال بالراوتر» وقت الإضافة
+      // (setup-login ٦ نوفمبر ١١:٥٢ — بعده بـ٣ ثواني نفس الطلب نجح). نعيد مرة وحدة — إلا الدخول (يعدّ المحاولات)
+      if (method === 'web_login' || !/ProtocolException|unexpected end of stream|connection (reset|closed)/i.test(`${e?.raw ?? ''} ${e?.message ?? e}`)) throw e;
+      await new Promise(r => setTimeout(r, 300));
+      res = await send();
+    }
     const j: any = await res.json();
     const r = Array.isArray(j) ? j[0] : j;
     const out = r?.result;
