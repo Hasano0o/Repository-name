@@ -25,6 +25,8 @@
   python3 router_library.py --has PATH      ← مين عنده ملف بهالمسار (مثل auth/network/net_select)
   python3 router_library.py --model NAME    ← ملخص موديل واحد
   python3 router_library.py --unknown       ← الأجهزة المجهولة مجمّعة ببصمة الصفحة (وش هي؟)
+  python3 router_library.py --benefit       ← الأجهزة اللي ما ندعمها مرتبة بالفائدة (إشارة · ترددات · أبراج · وضع)
+  python3 router_library.py --benefit --all ← نفسها لكل الموديلات (وش ناقص في المدعومة)
 """
 import hashlib
 import json
@@ -205,6 +207,31 @@ def commands_in(text: str) -> set:
     return out
 
 
+# ─── الفائدة: وش نقدر نبني من ملفات هالموديل (نفس أوزان «النسبة» في bandly-status) ───
+FEATURES = [  # (المفتاح، الاسم، الوزن، نمط في كود الصفحة)
+    ("login", "دخول", 20, r"password|passwd|login|salt|nonce"),
+    ("signal", "إشارة", 20, r"\brsrp|\bsinr|\brsrq|signal_?strength|\brssi"),
+    ("bands", "ترددات", 20, r"band_?lock|bandlock|band_select|lte_band_mask|lteband|lock-freq|set_?\w*band|cellularbands|"
+                            r"ltediscretebandsetting|modem/band|band_?selection|lockband|nr5g_band"),
+    ("mode", "وضع الشبكة", 10, r"net_?select|networkmode|bearer_preference|network_?mode|netselect|workmode|cellularaccessconfig|"
+                              r"rat_?mode|preferred_?mode|net_?mode"),
+    ("towers", "أبراج", 10, r"cell_?lock|lockcell|lock_(?:lte|nr)_cell|celllock|cellselect|lock_?pci|pci_?lock|earfcn_?lock|cell_?select"),
+    ("reboot", "إعادة تشغيل", 5, r"reboot|restart_?device|device_?restart"),
+    ("sms", "رسائل", 5, r"\bsms|send_?message|wms_"),
+    ("devices", "الأجهزة", 5, r"station_?(?:info|list)|connected_?devices|dhcp_?(?:client|lease)|hostlist|lan_?hosts|access_?device"),
+    ("wifi", "واي فاي", 5, r"\bssid|wifi_?(?:main|setting|basic)|wlan"),
+]
+FEAT_RX = [(k, n, w, re.compile(rx, re.I)) for k, n, w, rx in FEATURES]
+
+
+def features_in(text: str) -> set:
+    return {k for k, _n, _w, rx in FEAT_RX if rx.search(text)}
+
+
+def potential(feats) -> int:
+    return sum(w for k, _n, w, _rx in FEAT_RX if k in feats)
+
+
 # ─── البناء ───
 
 def load_json(p: Path, default):
@@ -252,6 +279,7 @@ def ingest(z: Path, idx: dict) -> bool:
         meta["at"] = int(z.stat().st_mtime)
         files = []
         cmds = set()
+        feats = set()
         for info in zf.infolist():
             if info.is_dir() or info.file_size > MAX_FILE:
                 continue
@@ -260,9 +288,12 @@ def ingest(z: Path, idx: dict) -> bool:
                 continue
             data = zf.read(info)
             files.append((rel, data, info.file_size))
-            if Path(rel).suffix.lower() in TEXT_EXT and not rel.startswith("_bandly/"):
-                cmds |= commands_in(data.decode("utf-8", "replace"))
+            if Path(rel).suffix.lower() in TEXT_EXT and not rel.startswith("_bandly/") and rel != "README.txt":
+                t = data.decode("utf-8", "replace")
+                cmds |= commands_in(t)
+                feats |= features_in(t)
         brand = brand_of(meta, cmds)
+        meta["feats"] = ",".join(sorted(feats))
         # نفس الجهاز بكتابات مختلفة («FiberHome-LG6851F» = «Fiberhome LG6851F» = «5G CPE Pro LG6851F») ← مجلد واحد
         mk = model_key(meta["model"])
         mkey = f"{brand}/" + idx.setdefault("names", {}).setdefault(f"{brand}/{mk}", slug(meta["model"]))
@@ -287,6 +318,7 @@ def ingest(z: Path, idx: dict) -> bool:
         meta["files"] = nfiles
         m["zips"] = [x for x in m["zips"] if x["zip"] != z.name] + [meta]
         m["commands"] = sorted(set(m["commands"]) | cmds)
+        m["features"] = sorted(set(m.get("features", [])) | feats)
         mdir.mkdir(parents=True, exist_ok=True)
         (mdir / "commands.txt").write_text("\n".join(m["commands"]) + "\n", "utf-8")
         rows = ["at\tkind\tzip\tdevice\tapp\tdriver\tprofile\tfingerprint\tplatform\tfiles\ttitle\thints"]
@@ -299,18 +331,46 @@ def ingest(z: Path, idx: dict) -> bool:
     return True
 
 
+def feat_names(feats) -> str:
+    return " · ".join(n for k, n, _w, _rx in FEAT_RX if k in feats)
+
+
+SUPPORTED = {"Huawei", "ZTE", "FiberHome", "Zyxel", "Nokia", "OPPO", "GreenPacket", "OpenWrt"}
+
+
+def by_benefit(only_new=True):
+    """الموديلات مرتبة بالفائدة الممكنة من ملفاتها (إشارة · ترددات · أبراج · وضع…) — للي ما عندنا لها درايفر"""
+    idx = load_json(LIB / "index.json", {"models": {}})
+    rows = []
+    for key, m in idx["models"].items():
+        if only_new and m["brand"] in SUPPORTED:
+            continue
+        f = m.get("features", [])
+        hints = {h for x in m["zips"] for h in (x.get("hints") or "").split(",") if h}
+        if "FIBER/ONT" in hints and "signal" not in f:
+            continue  # فايبر بدون إشارة 4G = خارج النطاق
+        rows.append((potential(f), len(m["zips"]), key, f))
+    print(f"{'%':>4} {'zip':>4}  {'الموديل':<38} إشارة ترددات أبراج وضع  باقي")
+    for pot, nz, key, f in sorted(rows, key=lambda r: (-r[0], -r[1])):
+        if pot < 25:
+            continue
+        mk = lambda k: " ✓ " if k in f else " · "
+        rest = " ".join(n for k, n, _w, _rx in FEAT_RX if k in f and k in ("reboot", "sms", "devices", "wifi"))
+        print(f"{pot:>3}% {nz:>4}  {key[:38]:<38} {mk('signal')}  {mk('bands')}   {mk('towers')}  {mk('mode')}  {rest}")
+
+
 def write_index(idx: dict):
     lines = ["# مكتبة ملفات الراوترات", "",
              f"آخر تحديث: {time.strftime('%Y-%m-%d %H:%M')} · {len(idx['models'])} موديل · {len(idx['files'])} ملف فريد", "",
-             "| الماركة | الموديل | zip | FULL | AUTH | جهاز جديد | خطأ إضافة | المنصة/الفيرموير | أوامر | بصمات الصفحة | آخر ملف |",
-             "|---|---|---|---|---|---|---|---|---|---|---|"]
+             "| الماركة | الموديل | zip | FULL | AUTH | جهاز جديد | خطأ إضافة | المنصة/الفيرموير | أوامر | الممكن من ملفاته | % | بصمات الصفحة | آخر ملف |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for key, m in sorted(idx["models"].items(), key=lambda kv: (kv[1]["brand"], -len(kv[1]["zips"]))):
         z = m["zips"]
         c = lambda k: sum(1 for x in z if x["kind"] == k)
         fw = sorted({x.get("platform") or (x.get("fingerprint") or "").split("|")[-1] for x in z} - {""})
         last = time.strftime("%m-%d", time.localtime(max(x["at"] for x in z)))
         lines.append(f"| {m['brand']} | `{key.split('/', 1)[1]}` | {len(z)} | {c('FULL')} | {c('AUTH')} | {c('newdevice')} | {c('add-error')} | "
-                     f"{' · '.join(fw)[:60]} | {len(m['commands'])} | {' '.join(sorted({h for x in z for h in (x.get('hints') or '').split(',') if h}))[:70]} | {last} |")
+                     f"{' · '.join(fw)[:60]} | {len(m['commands'])} | {feat_names(m.get('features', []))} | {potential(m.get('features', []))} | {' '.join(sorted({h for x in z for h in (x.get('hints') or '').split(',') if h}))[:70]} | {last} |")
     (LIB / "INDEX.md").write_text("\n".join(lines) + "\n", "utf-8")
     tmp = LIB / "index.json.tmp"
     tmp.write_text(json.dumps(idx, ensure_ascii=False), "utf-8")
@@ -413,5 +473,7 @@ if __name__ == "__main__":
         model(a[1])
     elif a[:1] == ["--unknown"]:
         unknown()
+    elif a[:1] == ["--benefit"]:
+        by_benefit(only_new="--all" not in a)
     else:
         build(rebuild="--rebuild" in a)
