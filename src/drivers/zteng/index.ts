@@ -207,9 +207,15 @@ export class ZteNgDriver implements RouterDriver {
    * GET بس — تطلع في FULL و«أرسل تشخيص».
    */
   afterLoginPages(): string[] {
-    const pages = ['network/net_select', 'network/network_mode', 'network/mobile_network', 'network/preferred_position',
-      'adm/developer_options', 'adm/developer_options_login', 'adm/network_info'];
+    // من قائمة الصفحة نفسها (js/config/cpe/MC8830/menu.js في FULL ٦ نوفمبر) — الصفحات الموجودة فعلاً
+    const pages = ['network/net_select', 'network/internet_setting', 'network/dial_setting', 'network/apn_setting',
+      'adm/developer_options', 'adm/developer_options_login', 'adm/others'];
     return pages.flatMap(x => [`/tmpl/auth/${x}.html`, `/js/auth/${x}.js`]);
+  }
+
+  /** AUTH ٦ نوفمبر: بدون دخول كل /tmpl/auth ترد 405 و /js/auth ترد 404 — سيرفر الصفحة يعطي كوكي الجلسة مع web_login */
+  async prepareAfterLogin(): Promise<void> {
+    if (this.session === ZERO && this.password) await this.doLogin();
   }
 
   async logout(): Promise<void> {

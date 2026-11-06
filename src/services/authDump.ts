@@ -20,6 +20,7 @@ export async function sendAfterLoginPagesFor(r: SavedRouter, onStep?: (msg: stri
   const d = await connect(r);
   const pages = d.afterLoginPages?.() ?? [];
   if (!pages.length) return null;
+  await d.prepareAfterLogin?.().catch(() => {});
   const model = `${(r.driverName || r.name || r.driverId).slice(0, 40)}-AUTH`;
   onStep?.('نسحب صفحة الإعدادات…');
   const { files, skipped } = await collectRouterFiles(r.host, n => onStep?.(`نسحب صفحة الإعدادات… ${n}`), { start: pages, afterLogin: true });
@@ -77,6 +78,7 @@ export async function sendFullRouterFiles(r: SavedRouter, fp: string, onStep?: (
   onStep?.('نجمع ملفات الراوتر…');
   // من "/" (مثل «جهاز جديد» بالفحوص الحية) + صفحات بعد الدخول لو الدرايفر يعرفها — والكوكي من جلسة التطبيق
   const start = ['/', ...(d.afterLoginPages?.() ?? [])];
+  if (start.length > 1) await d.prepareAfterLogin?.().catch(() => {});
   const { files, skipped } = await collectRouterFiles(r.host, n => onStep?.(`نجمع ملفات الراوتر… ${n}`), { start });
   const extra: DumpFile[] = [
     { p: '/_bandly/router.txt', t: scrub([`driver: ${r.driverId}`, `model: ${label}`, `profile: ${prof?.id ?? '—'}`, `fingerprint: ${fp}`].join('\n')) },

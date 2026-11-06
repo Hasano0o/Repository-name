@@ -260,6 +260,11 @@ export interface RouterDriver {
    * فاضي/غير موجود = ما فيه شي نحتاجه. (FiberHome الجديد: main.html — ٣١ أكتوبر)
    */
   afterLoginPages?(): string[];
+  /**
+   * يدخل قبل سحب صفحات بعد الدخول (FULL / AUTH) — للراوترات اللي ما تدخل إلا وقت الكتابة (ZTE zwrt):
+   * سيرفر الصفحة يعطي كوكي الجلسة مع web_login، وبدونه صفحات /tmpl/auth و /js/auth ترد 404/405.
+   */
+  prepareAfterLogin?(): Promise<void>;
   /** عندنا ملفات صفحة هالراوتر كاملة (ما نحتاج «أرسل ملفات راوترك») — FiberHome */
   pageFilesKnown?(): boolean;
   readonly id: string;

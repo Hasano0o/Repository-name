@@ -119,6 +119,7 @@ test('zte-ng يطلب صفحات الشبكة (lte_ext_band) في FULL', () => {
   const pages: string[] = new ZteNgDriver().afterLoginPages();
   assert.ok(pages.includes('/js/auth/network/net_select.js'));
   assert.ok(pages.includes('/tmpl/auth/adm/developer_options.html'));
+  assert.equal(typeof new ZteNgDriver().prepareAfterLogin, 'function');
 });
 
 test('MU5250: الكتابة تحتاج web_http_enstr_set بعد الدخول (مثل he() في صفحة الراوتر)', async () => {
@@ -128,4 +129,13 @@ test('MU5250: الكتابة تحتاج web_http_enstr_set بعد الدخول (
   await (d as any).write('zte_nwinfo_api', 'nwinfo_set_netselect', { net_select: 'Only_5G' });
   assert.equal(r.mode(), 'Only_5G');
   assert.ok(r.log.indexOf('zwrt_web.web_http_enstr_set') < r.log.indexOf('zte_nwinfo_api.nwinfo_set_netselect'));
+});
+
+test('zte-ng: قبل سحب صفحات بعد الدخول ندخل (كوكي الجلسة) — مرة وحدة بس', async () => {
+  const r = router();
+  const d = new ZteNgDriver();
+  await d.login('192.168.0.6', 'admin', PW);
+  await d.prepareAfterLogin();
+  await d.prepareAfterLogin();
+  assert.equal(r.log.filter(x => x.endsWith('web_login')).length, 1);
 });
