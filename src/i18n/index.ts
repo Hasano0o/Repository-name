@@ -10,6 +10,7 @@ import { Alert, Platform, StyleSheet } from 'react-native';
 import { File, Paths } from 'expo-file-system';
 import * as Updates from 'expo-updates';
 import { EN, EN_PATTERNS } from './en';
+import { C, isDark } from '../ui/theme';
 
 export type Lang = 'ar' | 'en';
 const PREF_FILE = 'bandly-lang.txt';
@@ -218,10 +219,47 @@ export function fx<T>(style: T): T {
 
 /** بديل StyleSheet.create: بالإنجليزي يقلب الاتجاه مرة وحدة وقت الإنشاء */
 export function sheet<T extends StyleSheet.NamedStyles<T> | StyleSheet.NamedStyles<any>>(o: T & StyleSheet.NamedStyles<any>): T {
-  if (!EN_MODE) return o;
+  if (!EN_MODE && !isDark) return o;
   const out: any = {};
-  for (const k of Object.keys(o)) out[k] = flipObj((o as any)[k]);
+  for (const k of Object.keys(o)) {
+    const v = EN_MODE ? flipObj((o as any)[k]) : (o as any)[k];
+    out[k] = isDark ? darkEdge(v) : v;
+  }
   return out;
+}
+
+/**
+ * الوضع الداكن (٧ نوفمبر): البطاقات تاخذ حد خفيف + حافة علوية أفتح (لمعة بسيطة، بدون توهج —
+ * ظل الأندرويد الملوّن ما ينرسم زين). من مكان واحد عشان كل الشاشات تتوحد.
+ * البطاقة = زوايا ١٦ وأكثر (مو حبة/زر دائري) و:
+ *  • حدها cardBorder ← نضيف الحافة العلوية
+ *  • أو خلفيتها card (أو rowBg مع ظل) بدون أي حد ← نضيف الحد والحافة
+ * أي شي فيه حد علوي خاص به ما نلمسه.
+ */
+export function darkEdge(st: any): any {
+  if (!st || typeof st !== 'object' || Array.isArray(st)) return st;
+  const r = st.borderRadius;
+  if (typeof r !== 'number' || r < 16 || r >= 100) return st;
+  if (st.borderTopColor !== undefined || st.borderTopWidth !== undefined) return st;
+  if (st.fontSize !== undefined) return st; // نص (شارة/وسم) — مو بطاقة
+  if (st.borderColor === C.cardBorder && (st.borderWidth ?? 0) >= 1) return { ...st, borderTopColor: C.cardEdge };
+  const shadowed = !!st.elevation || !!st.shadowOpacity;
+  if (st.borderWidth === undefined && st.borderColor === undefined
+    && (st.backgroundColor === C.card || (st.backgroundColor === C.rowBg && shadowed))) {
+    return { ...st, borderWidth: 1, borderColor: C.cardBorder, borderTopColor: C.cardEdge };
+  }
+  return st;
+}
+
+/**
+ * لو الشاشة غيّرت لون حد البطاقة (أخضر/أحمر حسب الحالة) الحافة العلوية تاخذ نفس اللون —
+ * عشان ما يطلع خط كحلي فوق إطار ملوّن. للمصفوفات بس (التغيير يجي دايماً [s.card, {...}]).
+ */
+export function edgeFix(style: any): any {
+  if (!isDark || !Array.isArray(style)) return style;
+  const f = StyleSheet.flatten(style) as any;
+  if (!f || f.borderTopColor !== C.cardEdge || !f.borderColor || f.borderColor === C.cardBorder) return style;
+  return [style, { borderTopColor: f.borderColor }];
 }
 
 // ═══ نوافذ التنبيه ═══

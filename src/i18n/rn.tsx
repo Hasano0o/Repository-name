@@ -7,7 +7,8 @@ import { Children } from 'react';
 import {
   View as RNView, Text as RNText, TextInput as RNTextInput, Pressable as RNPressable, ScrollView as RNScrollView,
 } from 'react-native';
-import { EN_MODE, fx, tr } from './index';
+import { EN_MODE, fx, tr, edgeFix } from './index';
+import { isDark } from '../ui/theme';
 
 const AR = /[؀-ۿ]/;
 
@@ -28,15 +29,16 @@ function TextW(p: any) {
   return <RNText {...p} style={fx(p.style)}>{trChildren(p.children)}</RNText>;
 }
 function ViewW(p: any) {
-  return <RNView {...p} style={fx(p.style)} />;
+  return <RNView {...p} style={edgeFix(EN_MODE ? fx(p.style) : p.style)} />;
 }
 function TextInputW(p: any) {
   return <RNTextInput {...p} style={fx(p.style)} placeholder={typeof p.placeholder === 'string' ? tr(p.placeholder) : p.placeholder} />;
 }
 function PressableW(p: any) {
   const st = p.style;
-  const style = typeof st === 'function' ? (s: any) => fx(st(s)) : fx(st);
-  const a11y = typeof p.accessibilityLabel === 'string' ? tr(p.accessibilityLabel) : p.accessibilityLabel;
+  const f = (x: any) => edgeFix(EN_MODE ? fx(x) : x);
+  const style = typeof st === 'function' ? (s: any) => f(st(s)) : f(st);
+  const a11y = EN_MODE && typeof p.accessibilityLabel === 'string' ? tr(p.accessibilityLabel) : p.accessibilityLabel;
   return <RNPressable {...p} style={style} accessibilityLabel={a11y} />;
 }
 function ScrollViewW(p: any) {
@@ -44,9 +46,9 @@ function ScrollViewW(p: any) {
 }
 
 export const Text = (EN_MODE ? TextW : RNText) as unknown as typeof RNText;
-export const View = (EN_MODE ? ViewW : RNView) as unknown as typeof RNView;
+export const View = (EN_MODE || isDark ? ViewW : RNView) as unknown as typeof RNView;
 export const TextInput = (EN_MODE ? TextInputW : RNTextInput) as unknown as typeof RNTextInput;
-export const Pressable = (EN_MODE ? PressableW : RNPressable) as unknown as typeof RNPressable;
+export const Pressable = (EN_MODE || isDark ? PressableW : RNPressable) as unknown as typeof RNPressable;
 export const ScrollView = (EN_MODE ? ScrollViewW : RNScrollView) as unknown as typeof RNScrollView;
 // أنواع (useRef<View> وغيره)
 export type Text = RNText;

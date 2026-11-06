@@ -43,6 +43,8 @@ const LIGHT = {
   bgBottom: '#e2e8f0',
   card: '#f8fafc',
   cardBorder: '#b7c3d3',
+  /** الحافة العلوية للبطاقة (لمعة الداكن) — في الفاتح نفس الحد */
+  cardEdge: '#b7c3d3',
   rowBg: '#eff2f7',
   track: '#bdd9fd',
 
@@ -102,7 +104,9 @@ const DARK: typeof LIGHT = {
   bgTop: '#0d1a30',
   bgBottom: '#0a1425',
   card: '#111f35',
-  cardBorder: '#293b56',
+  // ٧ نوفمبر: الحد أفتح شوي (كان #293b56 — الكروت تذوب في الخلفية) + حافة علوية أفتح = لمعة خفيفة بدون توهج
+  cardBorder: '#304868',
+  cardEdge: '#4b6892',
   rowBg: '#172640',
   track: '#20385e',
 
