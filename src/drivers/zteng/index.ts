@@ -130,9 +130,12 @@ export class ZteNgDriver implements RouterDriver {
     let r: Record<string, unknown> | null = null;
     try { r = await this.call('zwrt_web', 'web_login', { password: sha(sha(this.password) + salt) }, ZERO); } catch {}
     const s2 = r ? str(r.ubus_rpc_session) : '';
-    if (!s2) {
+    // MU5250: الراوتر يرجّع ubus_rpc_session حتى لو رفض الدخول (result ≠ 0) — جلسة بدون صلاحيات
+    // ← كل أمر كتابة «Access denied (-32002)». صفحة الراوتر نفسها تشيك result === 0 (مثل MU5250-OpenUI).
+    const res = r && r.result !== undefined && r.result !== null ? str(r.result) : '';
+    if (!s2 || (res !== '' && res !== '0')) {
       await markBadPassword(this.host, fp);
-      throw new Error('كلمة المرور غلط. تأكد منها (الملصق تحت الراوتر أو اللي غيّرتها أنت) — ما بنجرّب مرة ثانية لحالنا.');
+      throw new Error(`الراوتر رفض الدخول${res ? ` (رمز ${res})` : ''} — غالباً كلمة المرور غلط. تأكد منها (الملصق تحت الراوتر أو اللي غيّرتها أنت)، واطلع من صفحة الراوتر لو فاتحها من جهاز ثاني — ما بنجرّب مرة ثانية لحالنا.`);
     }
     await markBadPassword(this.host, null);
     this.session = s2;
@@ -142,14 +145,35 @@ export class ZteNgDriver implements RouterDriver {
   private async write(obj: string, method: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
     if (this.session === ZERO) await this.doLogin();
     try {
-      return await this.call(obj, method, params);
+      return await this.callRetry(obj, method, params);
     } catch (e: any) {
       if (e?.code === 6 || e?.code === -32002) {
         this.session = ZERO;
         await this.doLogin();
-        return await this.call(obj, method, params);
+        try {
+          return await this.callRetry(obj, method, params);
+        } catch (e2: any) {
+          if (e2?.code === 6 || e2?.code === -32002) {
+            const x: any = new Error('الراوتر رفض الأمر حتى بعد الدخول (Access denied) — اطلع من صفحة الراوتر لو فاتحها من جهاز ثاني، وتأكد إن كلمة المرور حق حساب المدير، وبعدها جرّب مرة ثانية.');
+            x.code = e2.code;
+            throw x;
+          }
+          throw e2;
+        }
       }
       throw e;
+    }
+  }
+
+  /** ويب ZTE (zwrt) أحياناً يرد Access denied على أمر مسموح — الصفحة نفسها تعيده لين ٥ مرات بنفس الجلسة */
+  private async callRetry(obj: string, method: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    for (let i = 0; ; i++) {
+      try {
+        return await this.call(obj, method, params);
+      } catch (e: any) {
+        if (e?.code !== -32002 || i >= 3) throw e;
+        await new Promise(r => setTimeout(r, 300));
+      }
     }
   }
 
