@@ -24,6 +24,7 @@
   python3 router_library.py --find REGEX    ← وين يطلع النص (أي موديل · أي ملف)
   python3 router_library.py --has PATH      ← مين عنده ملف بهالمسار (مثل auth/network/net_select)
   python3 router_library.py --model NAME    ← ملخص موديل واحد
+  python3 router_library.py --unknown       ← الأجهزة المجهولة مجمّعة ببصمة الصفحة (وش هي؟)
 """
 import hashlib
 import json
@@ -126,6 +127,13 @@ def read_meta(zf: zipfile.ZipFile, zname: str) -> dict:
     if mm:
         meta["app"] = mm.group(1).strip()
     # الفيرموير/المنصة من الصفحة نفسها (ZTE: js/config/cpe/<موديل>/)
+    idxh = rd("index.html")
+    mm = re.search(r"<title>\s*([^<]{1,60})", idxh or live, re.I)
+    if mm and mm.group(1).strip():
+        meta["title"] = re.sub(r"\s+", " ", mm.group(1)).strip()
+    blob = "\n".join(rd(n)[:400000] for n in zf.namelist()
+                     if Path(n).suffix.lower() in (".js", ".html", ".htm") and not n.startswith("_bandly/"))  # live.txt/README فيها فحوص كل الماركات
+    meta["hints"] = ",".join(h for h, rx in HINTS if re.search(rx, blob, re.I))
     plats = sorted({p.split("/")[3] for p in zf.namelist() if p.startswith("js/config/cpe/") and p.count("/") >= 4})
     if plats:
         meta["platform"] = ",".join(plats)
@@ -140,6 +148,13 @@ def brand_of(meta: dict, cmds: set = frozenset()) -> str:
     for b, rx in BRANDS:
         if re.search(rx, hay):
             return b
+    hints = (meta.get("hints") or "").split(",")
+    for h in hints:
+        hb = {"ZTE-goform": "ZTE", "ZTE-ubus": "ZTE", "Huawei-api": "Huawei", "OpenWrt-LuCI": "OpenWrt", "FiberHome": "FiberHome",
+              "Zyxel": "Zyxel", "Nokia": "Nokia", "Tenda": "Tenda", "TOTOLINK": "TOTOLINK", "TP-Link": "TP-Link", "D-Link": "D-Link",
+              "Inseego": "Inseego", "ZLT": "ZLT", "GreenPacket": "GreenPacket"}.get(h)
+        if hb:
+            return hb
     # الاسم ما يقول شي («http://192.168.8.1/#/login») ← من أوامر الصفحة نفسها
     kinds = {c.split(":", 1)[0] for c in cmds}
     if "huawei-api" in kinds and sum(c.startswith("huawei-api") for c in cmds) > 20:
@@ -161,6 +176,22 @@ CMD_RX = [
     ("fiberhome", re.compile(r"ajaxmethod[\"']?\s*[:=]\s*[\"']?([A-Za-z_]{3,})")),
     ("cgi", re.compile(r"(/cgi-bin/[\w./\-]+)")),
     ("luci", re.compile(r"(admin/(?:modem|status|network|system)/[\w/]+)")),
+    # صفحات حديثة (React/Vue — D-Link/Tenda/TP-Link…): روابط الطلبات نفسها
+    ("endpoint", re.compile(r"[\"'`](/(?:api|cgi-bin|goform|action|boaform|web|webapi|rest|jrd|login|reqproc|cgi)/[\w/\-.]{2,60})[\"'`?]")),
+    ("endpoint", re.compile(r"(?:url|fetch|post|get|ajax)\s*[:(]\s*[\"'`](/[\w/\-.]{3,60})[\"'`?]")),
+    ("jsonrpc", re.compile(r"[\"']method[\"']\s*:\s*[\"']([A-Za-z][\w.]{3,50})[\"']")),
+]
+
+# بصمات الصفحة: وش نوع الجهاز (حتى لو العضو ما كتب الموديل)
+HINTS = [
+    ("ZTE-goform", r"goform_(?:get|set)_cmd_process"), ("ZTE-ubus", r"zte_nwinfo_api|zwrt_web"),
+    ("Huawei-api", r"/api/webserver/(?:SesTokInfo|token)"), ("OpenWrt-LuCI", r"cgi-bin/luci"),
+    ("FiberHome", r"fh_api|FHNCAPIS|fiberhome"), ("Zyxel", r"zyxel|DAL\?oid="), ("Nokia", r"fastmile|web_whw"),
+    ("Tenda", r"\btenda\b"), ("TOTOLINK", r"totolink|cstecgi"), ("TP-Link", r"\btp-?link\b|tplinkwifi"), ("D-Link", r"\bd-link\b|\bdlink\b"),
+    ("Inseego", r"inseego|novatel|mifi"), ("ZLT", r"\bzlt\b|zlt_"), ("Quectel", r"quectel|AT\+QENG"), ("Sunmi/MiFi-CN", r"jrd/webapi"),
+    ("Tozed", r"tozed"), ("GreenPacket", r"greenpacket|/web/v1/"), ("OPPO", r"\boppo\b"),
+    ("FIBER/ONT", r"\bgpon\b|\bont\b|optix|\bpon\b|epon|orange fiber"),
+    ("LTE-data", r"rsrp|sinr|\bearfcn\b|lte_band|band_?lock"),
 ]
 
 
@@ -258,11 +289,12 @@ def ingest(z: Path, idx: dict) -> bool:
         m["commands"] = sorted(set(m["commands"]) | cmds)
         mdir.mkdir(parents=True, exist_ok=True)
         (mdir / "commands.txt").write_text("\n".join(m["commands"]) + "\n", "utf-8")
-        rows = ["at\tkind\tzip\tdevice\tapp\tdriver\tprofile\tfingerprint\tplatform\tfiles"]
+        rows = ["at\tkind\tzip\tdevice\tapp\tdriver\tprofile\tfingerprint\tplatform\tfiles\ttitle\thints"]
         for x in sorted(m["zips"], key=lambda x: x["at"]):
             rows.append("\t".join(str(v) for v in [time.strftime("%Y-%m-%d %H:%M", time.localtime(x["at"])), x["kind"], x["zip"],
                                                     x.get("device", ""), x.get("app", ""), x.get("driver", ""), x.get("profile", ""),
-                                                    x.get("fingerprint", ""), x.get("platform", ""), x.get("files", "")]))
+                                                    x.get("fingerprint", ""), x.get("platform", ""), x.get("files", ""),
+                                                    x.get("title", ""), x.get("hints", "")]))
         (mdir / "zips.tsv").write_text("\n".join(rows) + "\n", "utf-8")
     return True
 
@@ -270,15 +302,15 @@ def ingest(z: Path, idx: dict) -> bool:
 def write_index(idx: dict):
     lines = ["# مكتبة ملفات الراوترات", "",
              f"آخر تحديث: {time.strftime('%Y-%m-%d %H:%M')} · {len(idx['models'])} موديل · {len(idx['files'])} ملف فريد", "",
-             "| الماركة | الموديل | zip | FULL | AUTH | جهاز جديد | خطأ إضافة | المنصة/الفيرموير | أوامر | آخر ملف |",
-             "|---|---|---|---|---|---|---|---|---|---|"]
+             "| الماركة | الموديل | zip | FULL | AUTH | جهاز جديد | خطأ إضافة | المنصة/الفيرموير | أوامر | بصمات الصفحة | آخر ملف |",
+             "|---|---|---|---|---|---|---|---|---|---|---|"]
     for key, m in sorted(idx["models"].items(), key=lambda kv: (kv[1]["brand"], -len(kv[1]["zips"]))):
         z = m["zips"]
         c = lambda k: sum(1 for x in z if x["kind"] == k)
         fw = sorted({x.get("platform") or (x.get("fingerprint") or "").split("|")[-1] for x in z} - {""})
         last = time.strftime("%m-%d", time.localtime(max(x["at"] for x in z)))
         lines.append(f"| {m['brand']} | `{key.split('/', 1)[1]}` | {len(z)} | {c('FULL')} | {c('AUTH')} | {c('newdevice')} | {c('add-error')} | "
-                     f"{' · '.join(fw)[:60]} | {len(m['commands'])} | {last} |")
+                     f"{' · '.join(fw)[:60]} | {len(m['commands'])} | {' '.join(sorted({h for x in z for h in (x.get('hints') or '').split(',') if h}))[:70]} | {last} |")
     (LIB / "INDEX.md").write_text("\n".join(lines) + "\n", "utf-8")
     tmp = LIB / "index.json.tmp"
     tmp.write_text(json.dumps(idx, ensure_ascii=False), "utf-8")
@@ -356,6 +388,21 @@ def model(name: str):
             print(f"  الملفات: {LIB}/models/{key}/tree/")
 
 
+def unknown():
+    """كل zip ماركته «Other» (أو موديله مجهول): العنوان · بصمات الصفحة · عدد الأوامر — مجمّعة بالبصمة"""
+    idx = load_json(LIB / "index.json", {"models": {}})
+    groups = {}
+    for key, m in idx["models"].items():
+        if m["brand"] != "Other" and not re.search(r"unknown|غير-معروف|partial|^_$", key.split("/", 1)[1]):
+            continue
+        for x in m["zips"]:
+            g = (x.get("hints") or "—", x.get("title") or "—", x.get("host") or "?")
+            groups.setdefault(g, []).append(x["zip"])
+    for (h, t, host), zs in sorted(groups.items(), key=lambda kv: -len(kv[1])):
+        print(f"{len(zs):>3} · {host:<15} · {t[:28]:<28} · {h[:70]}")
+        print(f"      مثال: {zs[-1]}")
+
+
 if __name__ == "__main__":
     a = sys.argv[1:]
     if a[:1] == ["--find"] and len(a) > 1:
@@ -364,5 +411,7 @@ if __name__ == "__main__":
         has(a[1])
     elif a[:1] == ["--model"] and len(a) > 1:
         model(a[1])
+    elif a[:1] == ["--unknown"]:
+        unknown()
     else:
         build(rebuild="--rebuild" in a)
