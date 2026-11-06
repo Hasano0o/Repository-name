@@ -614,6 +614,9 @@ export class HuaweiDriver implements RouterDriver {
     // H122 (5G CPE Pro 2) وغيره: wifipwdsamewithwebpwd=1 ← كلمة دخول الراوتر هي نفسها كلمة الواي فاي،
     // مو الكلمة المطبوعة تحت IP. فلو رفض الكلمة نقول للمستخدم يجرّب كلمة الواي فاي
     const samePwd = tag(state, 'wifipwdsamewithwebpwd') === '1';
+    // H155-383 (5G CPE 5) وغيره: accounts_number=2 ← حسابين، وصفحة الراوتر تعرض خانة اسم المستخدم بدل admin الثابت.
+    // التحدي ينجح حتى باسم غلط (هواوي ما يكشف الأسماء) وبعدها 108006 — تقارير الآيفون ٦ نوفمبر: التحدي سليم والكوكي ثابت
+    const twoAccounts = tag(state, 'accounts_number') === '2';
     try {
       return await this.loginWith(host, type, state, username, password, opts);
     } catch (e) {
@@ -631,6 +634,9 @@ export class HuaweiDriver implements RouterDriver {
       }
       if (samePwd && e instanceof HuaweiError && /^10800[126]$/.test(e.code)) {
         e.message = `الراوتر رفض الكلمة (${e.code}). في هذا الجهاز كلمة الدخول هي نفسها كلمة الواي فاي — جرّب كلمة الواي فاي (اللي تتصل فيها بالشبكة)`;
+      } else if (twoAccounts && e instanceof HuaweiError && /^10800[126]$/.test(e.code)) {
+        diag('[huawei] الراوتر فيه حسابين (accounts_number=2) — اسم المستخدم ممكن مو admin');
+        e.message = `الراوتر رفض اسم المستخدم أو الكلمة (${e.code}). راوترك فيه حسابين — تأكد من اسم المستخدم (مو دايماً admin) وكلمته من ملصق الراوتر أو صفحة الدخول، وجرّب مرة وحدة بس عشان ما يقفل`;
       }
       throw e;
     }
@@ -648,6 +654,7 @@ export class HuaweiDriver implements RouterDriver {
       try { await this.homePage(host); } catch {}
     }
     this.stale = false;
+    await this.updateCookie();
     if (this.manualCookie) { try { await this.sesTok(); } catch { this.manualCookie = false; } }
     // صفحة الراوتر الجديدة (H158/H155…) تسجّل دخول بـ SCRAM (challenge_login) — والدخول القديم (user/login)
     // يعطي جلسة ناقصة الصلاحيات: net/lock-freq وغيره يرد 100003 مع إنها شغالة من المتصفح. فنبدأ بـ SCRAM.
@@ -782,7 +789,24 @@ export class HuaweiDriver implements RouterDriver {
   private async freshSession(host: string) {
     this.queue = [];
     try { await this.homePage(host); } catch {}
+    await this.updateCookie();
     if (this.manualCookie) { try { await this.sesTok(); } catch {} }
+  }
+  /**
+   * صفحة الراوتر نفسها قبل كل دخول: GET monitoring/status مع ترويسة «Update-Cookie: UpdateCookie» (الراوتر يجدد كوكي
+   * الجلسة) ← webserver/token ← challenge_login. (main.js في H155-383 / 5G CPE 5 — ملفات add-error ٦ نوفمبر:
+   * `"/api/monitoring/status"===c&&(s["Update-Cookie"]="UpdateCookie")` وتسلسل الدخول monitoringStatus ← getToken ← challenge).
+   * بدونها بعض الأجهزة ترفض كل رمز من أول طلب (125003) — ٦٤ مرة بالأندرويد ٣–٦ نوفمبر، ولا مرة وصلنا التحدي.
+   * جرة النظام بس: في الآيفون (كوكي يدوي) set-cookie ما يوصل للتطبيق؛ لو الكوكي اليدوي انرفض نرجع لجرة النظام وتنطلب هناك.
+   * قراءة بس — وأي خطأ نتجاهله (الراوترات القديمة تتجاهل الترويسة).
+   */
+  private async updateCookie() {
+    if (this.manualCookie) return;
+    try {
+      const r = await this.http(this.url('monitoring/status'), { headers: this.headers({ 'Update-Cookie': 'UpdateCookie' }) });
+      await r.text();
+      this.queue = [];
+    } catch {}
   }
   async getSignal(): Promise<Signal> {
     const xml = await this.get('device/signal');
