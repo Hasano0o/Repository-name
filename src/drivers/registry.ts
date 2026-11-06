@@ -10,6 +10,7 @@ import { NokiaDriver } from './nokia';
 import { NokiaFwaDriver } from './nokia/fwa';
 import { ZteUfiDriver } from './zteufi';
 import { LuciDriver } from './luci';
+import { DlinkDriver } from './dlink';
 import { UnknownDriver } from './unknown';
 import { DeviceDriver } from './device';
 import { DemoDriver } from './demo';
@@ -44,6 +45,8 @@ const factories: (() => RouterDriver)[] = [
   () => new NokiaFwaDriver(),
   // OpenWrt / LuCI القديم (5G CPE Pro 7 — ١ نوفمبر): الدخول + ملفات FULL، والإشارة بعد ما نشوف صفحاتها
   () => new LuciDriver(),
+  // D-Link DWR-2000M / DWR-3000M (React «cpe-webui»، JSON على /acfun/، دخول HMAC-MD5) — من ملفات صفحة ٣ أعضاء (٣١ أكتوبر). قراءة بس للحين
+  () => new DlinkDriver(),
   () => new UnknownDriver(),
 ];
 

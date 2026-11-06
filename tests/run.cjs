@@ -78,6 +78,10 @@ const files = [
   'src/drivers/luci/pro7.ts',
   'src/drivers/luci/cbi.ts',
   'src/drivers/luci/pro7lock.ts',
+  'src/drivers/dlink/crypto.ts',
+  'src/drivers/dlink/parse.ts',
+  'src/drivers/dlink/index.ts',
+  'src/utils/arfcn.ts',
   // القفل الآمن (الجلسات والواجهة بدائل داخل الاختبار)
   'src/utils/safeLock.ts',
   'src/utils/applyGuard.ts',
