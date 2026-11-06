@@ -318,3 +318,20 @@ export const planDuration = (items: PlanItem[]) => {
   const s = planSecs(items);
   return s ? `حوالي ${mins(s)}` : '';
 };
+
+/**
+ * بعد التغيير: هل الأرقام صارت أسوأ بوضوح؟ (صورة حسن ٧ نوفمبر: قال «حسّنت» والبنق ١٥٨←٢١٧ والدرجة ٣٧←٠)
+ * أسوأ بوضوح = البنق +٢٥٪ و١٥ms على الأقل · التذبذب ×١٫٥ و+١٥ms · درجة اللعب −١٥.
+ * يرجّع وصف بسيط أو null.
+ */
+export function worseAfter(
+  b?: { ping?: number; jitter?: number; game?: number },
+  a?: { ping?: number; jitter?: number; game?: number },
+): string | null {
+  if (!b || !a) return null;
+  const out: string[] = [];
+  if (b.ping !== undefined && a.ping !== undefined && a.ping > b.ping * 1.25 && a.ping - b.ping >= 15) out.push(`البنق ${b.ping}←${a.ping}ms`);
+  if (b.jitter !== undefined && a.jitter !== undefined && a.jitter > b.jitter * 1.5 && a.jitter - b.jitter >= 15) out.push(`التذبذب ${b.jitter}←${a.jitter}ms`);
+  if (b.game !== undefined && a.game !== undefined && b.game - a.game >= 15) out.push(`درجة اللعب ${b.game}←${a.game}`);
+  return out.length ? out.join(' · ') : null;
+}

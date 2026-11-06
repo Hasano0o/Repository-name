@@ -11,7 +11,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useAutoStart } from '../../src/assistant/auto';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { driverById } from '../../src/drivers/registry';
-import { runAutopilot, freshSteps, PilotStep, Measure, StepStatus, scanPlan, choiceFromPlan } from '../../src/assistant/autopilot';
+import { runAutopilot, freshSteps, PilotStep, Measure, StepStatus, scanPlan, choiceFromPlan, revertPilot, PilotReport } from '../../src/assistant/autopilot';
 import { PilotPlan, PlanKey, planDuration } from '../../src/assistant/pilotPlan';
 import { setConsent } from '../../src/services/community';
 import { LEVEL_COLOR, rsrpLevel, sinrLevel } from '../../src/utils/signal';
@@ -66,6 +66,24 @@ export default function AutopilotScreen() {
   const [before, setBefore] = useState<Measure | undefined>();
   const [after, setAfter] = useState<Measure | undefined>();
   const [changed, setChanged] = useState<string[]>([]);
+  /** آخر تقرير — للإرجاع لو الأرقام صارت أسوأ */
+  const [lastRep, setLastRep] = useState<PilotReport | null>(null);
+  const [reverting, setReverting] = useState(false);
+  const [revertMsg, setRevertMsg] = useState('');
+  const revert = async () => {
+    if (!info || !lastRep || reverting) return;
+    setReverting(true); setRevertMsg('');
+    activateKeepAwakeAsync('pilot').catch(() => {});
+    try {
+      const msg = await revertPilot(info, lastRep, t => alive.current && setStatus(t));
+      if (alive.current) { setRevertMsg(`✓ ${msg}`); setChanged([]); setLastRep(null); }
+    } catch (e: any) {
+      if (alive.current) setRevertMsg(`ما قدرت أرجّع: ${String(e?.message ?? e)} — من صفحة الراوتر اضغط «رجّع الإشارة»`);
+    } finally {
+      deactivateKeepAwake('pilot');
+      if (alive.current) { setReverting(false); setStatus(''); }
+    }
+  };
   const cancel = useRef(false);
   const alive = useRef(true);
 
@@ -150,7 +168,7 @@ export default function AutopilotScreen() {
         choice,
         before: fresh ? planBefore : undefined,
       });
-      if (alive.current) { setChanged(rep.changed); setDone(true); setPlan(null); }
+      if (alive.current) { setChanged(rep.changed); setLastRep(rep); setRevertMsg(''); setDone(true); setPlan(null); }
     } catch (e: any) {
       if (alive.current) Alert.alert('ما كمّلت', String(e?.message ?? e));
     } finally {
@@ -300,7 +318,20 @@ export default function AutopilotScreen() {
         </View>
       )}
 
-      {done && (
+      {done && lastRep?.worse && changed.length > 0 && (
+        <View style={[s.card, { borderColor: tBd('#e5484d77'), backgroundColor: tBg('#e5484d0e') }]}>
+          <Text style={[s.verdict, { color: tFg('#d92d20') }]}>الأرقام صارت أسوأ بعد التغيير</Text>
+          <Text style={s.note}>{lastRep.worse}. غيّرت: {changed.join('، ')}. ممكن تكون زحمة لحظية — لو تبي، أرجّع كل شي زي ما كان.</Text>
+          {reverting && !!status && <Text style={[s.stepNote, { textAlign: 'center', color: tFg('#2f6bff') }]}>{status}</Text>}
+          <Pressable style={({ pressed }) => [s.btn, { backgroundColor: C.red }, (pressed || reverting) && { opacity: 0.8 }]} onPress={revert} disabled={reverting}>
+            {reverting ? <ActivityIndicator color={C.onAccent} /> : <Icon name="refresh" size={17} color={C.onAccent} />}
+            <Text style={s.btnTxt}>رجّع إعدادي</Text>
+          </Pressable>
+        </View>
+      )}
+      {done && !!revertMsg && <Text style={[s.note, { fontWeight: '800' }]}>{revertMsg}</Text>}
+
+      {done && !lastRep?.worse && (
         <View style={[s.card, { borderColor: tBd(changed.length ? '#12b76a77' : '#2f6bff55'), backgroundColor: tBg(changed.length ? '#12b76a10' : '#2f6bff0c') }]}>
           <Text style={[s.verdict, { color: tFg(changed.length ? '#0f9a5f' : '#2f6bff') }]}>
             {changed.length ? `✓ خلصت — حسّنت ${changed.length === 1 ? 'شي واحد' : `${changed.length} أشياء`}` : '✓ خلصت — إعدادك الحالي هو الأفضل'}

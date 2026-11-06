@@ -23,7 +23,7 @@ import { bandLabel, SCAN_PREFERRED } from '../utils/bands';
 import { operatorBands } from '../store/operator';
 import { loadTrials } from '../utils/safeLock';
 import type { Carrier } from '../drivers/types';
-import { buildPlan, PilotPlan, PlanTarget } from './pilotPlan';
+import { buildPlan, PilotPlan, PlanTarget, worseAfter } from './pilotPlan';
 import { fetchCombos, reportObs, comboKey, getConsent, TowerRef, TowerCombos } from '../services/community';
 
 export type StepKey = 'check' | 'band' | 'tower' | 'wifi' | 'final';
@@ -35,7 +35,48 @@ export interface Measure {
   band?: string; nrBand?: string;
   ping?: number; jitter?: number; game?: number;
 }
-export interface PilotReport { before?: Measure; after?: Measure; steps: PilotStep[]; changed: string[] }
+export interface PilotReport {
+  before?: Measure; after?: Measure; steps: PilotStep[]; changed: string[];
+  /** الأرقام بعد التغيير أسوأ بوضوح — وصف (والشاشة تعرض «رجّع إعدادي») */
+  worse?: string;
+  /** للإرجاع: إعداد الترددات/الأبراج قبل أي تغيير + قناة الواي فاي الأصلية */
+  startSnap?: LockSnapshot;
+  wifiOrig?: { band: '2.4' | '5'; channel: string };
+}
+
+/** «رجّع إعدادي» بعد «اضبط لي كل شي»: القناة الأصلية + الترددات/الأبراج زي ما كانت (بتأكد) */
+export async function revertPilot(r: SavedRouter, rep: PilotReport, onStatus: (s: string) => void): Promise<string> {
+  const done: string[] = [];
+  if (rep.wifiOrig) {
+    const w = rep.wifiOrig;
+    onStatus(`أرجّع قناة الواي فاي ${w.channel === '0' ? 'تلقائي' : w.channel}…`);
+    await withSession(r, d => d.setWifiChannel!(w.band, w.channel), false).catch(e => {
+      if (!/network|abort|timeout|مهلة|ما رد/i.test(errText(e))) throw e;
+    });
+    await afterChannelChange(r.host, () => false);
+    done.push('قناة الواي فاي');
+  }
+  const snap = rep.startSnap;
+  if (snap && rep.changed.some(c => !c.startsWith('قناة الواي فاي'))) {
+    onStatus('أرجّع الترددات والبرج زي ما كانت…');
+    const back = await withRouterLock(r, op => restoreOrFree(r, snap, onStatus, op), { label: 'رجّع إعدادي (اضبط لي كل شي)' });
+    done.push(back.freed ? 'الترددات (فكّينا التثبيت — الراوتر يختار أقوى برج)' : 'الترددات والبرج');
+  }
+  onStatus('');
+  return done.length ? `رجّعت: ${done.join('، ')}` : 'ما فيه شي أرجّعه';
+}
+
+/** القياس الأخير بعد ما الشبكة تستقر: نقيس، ولو طلع أسوأ ننتظر ونقيس مرة ثانية وناخذ الأفضل */
+async function measureSettled(r: SavedRouter, before: Measure | undefined, onStatus: (s: string) => void): Promise<Measure> {
+  await sleep(8000);
+  const m1 = await measureNow(r);
+  if (!worseAfter(before, m1)) return m1;
+  onStatus('القراءة الأولى أسوأ — أنتظر الشبكة تستقر وأقيس مرة ثانية…');
+  await sleep(12000);
+  const m2 = await measureNow(r);
+  const score = (m: Measure) => (m.game ?? 0) * 2 - (m.ping ?? 999) / 10 - (m.jitter ?? 99) / 5;
+  return score(m2) >= score(m1) ? m2 : m1;
+}
 
 export const STEP_TITLES: Record<StepKey, string> = {
   check: 'نفحص اتصالك الحين',
@@ -279,6 +320,7 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
         o.onStatus('أحفظ إعدادك الحالي…');
         const snap = await readSnapOrStop(r) as LockSnapshot;
         startSnap = snap;
+        report.startSnap = snap;
         // لو انقطعت التجارب في النص (التطبيق بالخلفية / الجوال طلع من الشبكة) نرجّعه أول ما يرجع (recoverPending)
         await savePending(r.id, snap, 'pilot:band', 'اضبط لي كل شي');
         const [cfg, cells] = await withSession(r, async d => Promise.all([
@@ -427,6 +469,9 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
             o.onStatus(`أقيس الواي فاي (${rad.band})…`);
             const base = await lanQuality(r.host);
             if (base === null) { set('wifi', 'skip', 'جوالك مو متصل بواي فاي الراوتر'); done = true; break; }
+            // بنق الإنترنت قبل — القناة تنحكم كمان بالإنترنت، مو بس بسرعة الوصول للراوتر
+            await latency(3).catch(() => null);
+            const netBase = await latency(10);
             const tried: { ch: string; q: number }[] = [{ ch: orig, q: base }];
             let current = orig;
             let onThis = true;
@@ -454,6 +499,20 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
             }
             if (!onThis) continue;
             done = true;
+            if (keep && netBase?.samples) {
+              o.onStatus(`أتأكد إن الإنترنت ما ساء على قناة ${target}…`);
+              await sleep(5000);
+              await latency(3).catch(() => null);
+              const netNew = await latency(10);
+              if (netNew?.samples && netNew.median > netBase.median * 1.3 && netNew.median - netBase.median >= 15) {
+                o.onStatus('أرجّع قناتك الأصلية');
+                await withSession(r, d => d.setWifiChannel!(rad.band, orig), false).catch(() => {});
+                await afterChannelChange(r.host, () => false);
+                set('wifi', 'same', `قناة ${target} أنظف للراوتر بس بنق الإنترنت صار أسوأ (${Math.round(netBase.median)}←${Math.round(netNew.median)}ms) — رجّعت قناتك`);
+                continue;
+              }
+            }
+            if (keep) report.wifiOrig = { band: rad.band, channel: orig };
             if (keep) { set('wifi', 'ok', `ثبّتت قناة ${target} (${rad.band}) — أنظف بحوالي ${Math.round((1 - bestCh.q / base) * 100)}٪`); changed.push(`قناة الواي فاي ${target}`); }
             else set('wifi', 'same', `قناتك (${orig === '0' ? 'تلقائي' : orig}) هي الأفضل`);
           }
@@ -469,9 +528,8 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
 
   // ═══ ٥) بعد ═══
   set('final', 'run');
-  o.onStatus('أقيس مرة ثانية…');
-  await sleep(3000);
-  let after = await measureNow(r);
+  o.onStatus(changed.length ? 'أنتظر الشبكة تستقر وأقيس مرة ثانية…' : 'أقيس مرة ثانية…');
+  let after = changed.length ? await measureSettled(r, report.before, o.onStatus) : (await sleep(3000), await measureNow(r));
   // ═══ حماية أخيرة: لو الشبكة طاحت بعد التغييرات (تقرير MU5001: ثبّت B7 وبعد دقيقة صار «بدون خدمة»)
   // ننتظر شوي، ولو ما رجعت نرجّع إعدادك الأصلي بالضبط ونتأكد
   const down = async () => {
@@ -506,8 +564,12 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
   }
   report.after = after;
   o.onMeasure?.('after', after);
-  observeAfter(r, after, changed.length > 0).catch(() => {});
-  set('final', changed.length ? 'ok' : 'same', changed.length ? `غيّرت: ${changed.join('، ')}` : 'ما احتاج أغيّر شي — إعدادك الحالي هو الأفضل');
+  // الصدق: «تحسّن» بس لو الأرقام ما ساءت — مو لأننا غيّرنا شي
+  const worse = changed.length ? worseAfter(report.before, after) : null;
+  if (worse) report.worse = worse;
+  observeAfter(r, after, changed.length > 0 && !worse).catch(() => {});
+  if (worse) set('final', 'fail', `غيّرت: ${changed.join('، ')} — بس الأرقام صارت أسوأ (${worse}). اضغط «رجّع إعدادي»`);
+  else set('final', changed.length ? 'ok' : 'same', changed.length ? `غيّرت: ${changed.join('، ')}` : 'ما احتاج أغيّر شي — إعدادك الحالي هو الأفضل');
   o.onStatus('');
   return report;
 }

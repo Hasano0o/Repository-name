@@ -168,3 +168,22 @@ test('ما فيه أحد على برجك ← نقول بصراحة', () => {
   const a = communityAdvice('B3', 60, { users: 0, combos: [] });
   assert.match(a.facts[0], /ما عندنا قراءات/);
 });
+
+// ═══ «تحسّن» بس لو الأرقام ما ساءت (صورة حسن ٧ نوفمبر) ═══
+import { worseAfter } from '../src/assistant/pilotPlan';
+
+test('صورة حسن: البنق ١٥٨←٢١٧ والتذبذب ٢٥←٩٨ والدرجة ٣٧←٠ ← أسوأ', () => {
+  const w = worseAfter({ ping: 158, jitter: 25, game: 37 }, { ping: 217, jitter: 98, game: 0 });
+  assert.ok(w);
+  assert.match(w!, /البنق 158←217/);
+  assert.match(w!, /درجة اللعب 37←0/);
+});
+
+test('تذبذب طبيعي صغير ← مو أسوأ', () => {
+  assert.equal(worseAfter({ ping: 40, jitter: 6, game: 80 }, { ping: 46, jitter: 9, game: 74 }), null);
+});
+
+test('أحسن ← مو أسوأ · بدون قياس ← null', () => {
+  assert.equal(worseAfter({ ping: 90, jitter: 30, game: 40 }, { ping: 50, jitter: 8, game: 75 }), null);
+  assert.equal(worseAfter(undefined, { ping: 50 }), null);
+});
