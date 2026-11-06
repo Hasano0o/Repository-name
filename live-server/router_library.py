@@ -133,9 +133,6 @@ def read_meta(zf: zipfile.ZipFile, zname: str) -> dict:
     mm = re.search(r"<title>\s*([^<]{1,60})", idxh or live, re.I)
     if mm and mm.group(1).strip():
         meta["title"] = re.sub(r"\s+", " ", mm.group(1)).strip()
-    blob = "\n".join(rd(n)[:400000] for n in zf.namelist()
-                     if Path(n).suffix.lower() in (".js", ".html", ".htm") and not n.startswith("_bandly/"))  # live.txt/README فيها فحوص كل الماركات
-    meta["hints"] = ",".join(h for h, rx in HINTS if re.search(rx, blob, re.I))
     plats = sorted({p.split("/")[3] for p in zf.namelist() if p.startswith("js/config/cpe/") and p.count("/") >= 4})
     if plats:
         meta["platform"] = ",".join(plats)
@@ -197,6 +194,29 @@ HINTS = [
 ]
 
 
+HINT_RX = [(h, re.compile(rx.lower(), re.A)) for h, rx in HINTS]
+# مكتبات معروفة (jquery/echarts/crypto/vendor…) — كبيرة وما فيها شي يخص الراوتر: نتخطاها في الفحص (تنحفظ عادي)
+LIBLIKE = re.compile(r"(^|/)(lib|libs|vendor|vendors|node_modules)/|jquery|echarts|bootstrap|crypto-js|forge|polyfill|"
+                     r"chunk-vendors|vue(\.runtime)?(\.min)?\.js$|react(-dom)?|lodash|moment|knockout|require\.js|i18n", re.I)
+MAX_SCAN = 1_500_000
+
+
+def scan_file(rel: str, data: bytes, h: str, cache: dict) -> dict:
+    """أوامر + ميزات + بصمات ملف واحد — محفوظة بالبصمة (نفس الملف في ١٠٠ zip ينفحص مرة)"""
+    got = cache.get(h)
+    if got is not None:
+        return got
+    out = {"c": [], "f": [], "h": []}
+    if (Path(rel).suffix.lower() in TEXT_EXT and not rel.startswith("_bandly/") and rel != "README.txt"
+            and len(data) <= MAX_SCAN and not LIBLIKE.search(rel)):
+        t = data.decode("utf-8", "replace")
+        tl = t.lower()
+        out = {"c": sorted(commands_in(t)), "f": sorted(features_in(tl)),
+               "h": [k for k, rx in HINT_RX if rx.search(tl)] if Path(rel).suffix.lower() in (".js", ".html", ".htm") else []}
+    cache[h] = out
+    return out
+
+
 def commands_in(text: str) -> set:
     out = set()
     for tag, rx in CMD_RX:
@@ -221,7 +241,8 @@ FEATURES = [  # (المفتاح، الاسم، الوزن، نمط في كود �
     ("devices", "الأجهزة", 5, r"station_?(?:info|list)|connected_?devices|dhcp_?(?:client|lease)|hostlist|lan_?hosts|access_?device"),
     ("wifi", "واي فاي", 5, r"\bssid|wifi_?(?:main|setting|basic)|wlan"),
 ]
-FEAT_RX = [(k, n, w, re.compile(rx, re.I)) for k, n, w, rx in FEATURES]
+# النص ينصغّر مرة وحدة والأنماط بدون re.I (re.I على ملفات كبيرة أبطأ ×١٠)
+FEAT_RX = [(k, n, w, re.compile(rx.lower(), re.A)) for k, n, w, rx in FEATURES]
 
 
 def features_in(text: str) -> set:
@@ -269,7 +290,7 @@ def safe_rel(name: str) -> str | None:
     return "/".join(parts)
 
 
-def ingest(z: Path, idx: dict) -> bool:
+def ingest(z: Path, idx: dict, cache: dict) -> bool:
     try:
         zf = zipfile.ZipFile(z)
     except Exception:
@@ -278,8 +299,7 @@ def ingest(z: Path, idx: dict) -> bool:
         meta = read_meta(zf, z.name)
         meta["at"] = int(z.stat().st_mtime)
         files = []
-        cmds = set()
-        feats = set()
+        cmds, feats, hints = set(), set(), []
         for info in zf.infolist():
             if info.is_dir() or info.file_size > MAX_FILE:
                 continue
@@ -287,11 +307,13 @@ def ingest(z: Path, idx: dict) -> bool:
             if not rel:
                 continue
             data = zf.read(info)
-            files.append((rel, data, info.file_size))
-            if Path(rel).suffix.lower() in TEXT_EXT and not rel.startswith("_bandly/") and rel != "README.txt":
-                t = data.decode("utf-8", "replace")
-                cmds |= commands_in(t)
-                feats |= features_in(t)
+            h = store_blob(data)
+            files.append((rel, h, info.file_size))
+            r = scan_file(rel, data, h, cache)
+            cmds |= set(r["c"])
+            feats |= set(r["f"])
+            hints += [x for x in r["h"] if x not in hints]
+        meta["hints"] = ",".join(k for k, _rx in HINT_RX if k in hints)
         brand = brand_of(meta, cmds)
         meta["feats"] = ",".join(sorted(feats))
         # نفس الجهاز بكتابات مختلفة («FiberHome-LG6851F» = «Fiberhome LG6851F» = «5G CPE Pro LG6851F») ← مجلد واحد
@@ -299,8 +321,7 @@ def ingest(z: Path, idx: dict) -> bool:
         mkey = f"{brand}/" + idx.setdefault("names", {}).setdefault(f"{brand}/{mk}", slug(meta["model"]))
         mdir = LIB / "models" / mkey
         nfiles = 0
-        for rel, data, fsize in files:
-            h = store_blob(data)
+        for rel, h, fsize in files:
             nfiles += 1
             # tree: أحدث نسخة لكل مسار (_bandly لكل zip لحاله)
             trel = f"_bandly/{z.stem}/{rel[len('_bandly/'):]}" if rel.startswith("_bandly/") else rel
@@ -380,21 +401,23 @@ def write_index(idx: dict):
 def build(rebuild=False):
     if rebuild and LIB.exists():
         shutil.rmtree(LIB / "models", ignore_errors=True)
-        for p in ("index.json", "seen.json"):
+        for p in ("index.json", "seen.json", "scan.json"):
             (LIB / p).unlink(missing_ok=True)
     LIB.mkdir(parents=True, exist_ok=True)
     idx = load_json(LIB / "index.json", {"models": {}, "files": {}})
     seen = load_json(LIB / "seen.json", {})
+    cache = load_json(LIB / "scan.json", {})
     added = 0
     for z in zips():
         sig = f"{z.stat().st_size}:{int(z.stat().st_mtime)}"
         if seen.get(z.name) == sig:
             continue
-        if ingest(z, idx):
+        if ingest(z, idx, cache):
             seen[z.name] = sig
             added += 1
     write_index(idx)
     (LIB / "seen.json").write_text(json.dumps(seen), "utf-8")
+    (LIB / "scan.json").write_text(json.dumps(cache), "utf-8")
     print(f"✓ المكتبة: {added} zip جديد · {len(idx['models'])} موديل · {len(idx['files'])} ملف فريد → {LIB}/INDEX.md")
 
 
@@ -464,6 +487,8 @@ def unknown():
 
 
 if __name__ == "__main__":
+    import signal
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)  # «| head» بدون BrokenPipeError
     a = sys.argv[1:]
     if a[:1] == ["--find"] and len(a) > 1:
         find(a[1])
