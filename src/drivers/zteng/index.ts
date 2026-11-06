@@ -25,6 +25,8 @@ import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import { MODELS, ModelProfile } from '../models';
 import { diag } from '../../services/diag';
+import { u30NewKey } from '../zte/u30crypto';
+const rnd = async () => { const C = await import('expo-crypto'); return (n: number) => C.getRandomBytes(n); };
 
 const ZERO = '00000000000000000000000000000000';
 const sha = (s: string) => bytesToHex(sha256(utf8ToBytes(s))).toUpperCase();
@@ -142,6 +144,25 @@ export class ZteNgDriver implements RouterDriver {
     }
     await markBadPassword(this.host, null);
     this.session = s2;
+    await this.setEnstr();
+  }
+
+  /**
+   * بعد الدخول صفحة الراوتر تسوي he(): web_crt_get (مفتاح RSA) ← مفتاح AES عشوائي ← web_http_enstr_set.
+   * MU5250 (FULL ٦ نوفمبر): الدخول result=0 والقراءة تمشي، بس كل كتابة Access denied — الجلسة ناقصها هالخطوة.
+   * نفس تفاوض U30 (zte/u30crypto). لو الراوتر ما يعرفها (U60 Pro القديم) نكمّل عادي.
+   */
+  private async setEnstr(): Promise<void> {
+    try {
+      const c = await this.call('zwrt_web', 'web_crt_get', {});
+      const pem = str(c.result ?? c.crt);
+      if (pem.length < 100) { diag('[zte-ng] web_crt_get: ما فيه مفتاح'); return; }
+      const { enstr } = u30NewKey(pem, await rnd());
+      const o = await this.call('zwrt_web', 'web_http_enstr_set', { web_enstr: enstr });
+      diag(`[zte-ng] web_http_enstr_set: ${str(o.result) || 'ok'}`);
+    } catch (e: any) {
+      diag(`[zte-ng] مفتاح الجلسة: ${String(e?.message ?? e).slice(0, 80)}`);
+    }
   }
 
   /** أمر كتابة: يدخل لو ما دخلنا، ولو الجلسة انتهت (رفض صلاحية) يدخل مرة ثانية ويعيد */

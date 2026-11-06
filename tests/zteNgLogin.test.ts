@@ -29,8 +29,13 @@ const PW = 'Admin#5250';
 const SALT = 'a1b2c3d4';
 
 /** راوتر محاكى. flaky = كم مرة يرد Access denied على أمر مسموح قبل ما يقبله */
-function router(opts: { flaky?: number } = {}) {
+const { publicKey } = nc.generateKeyPairSync('rsa', { modulusLength: 1024, publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs1', format: 'pem' } });
+
+/** راوتر محاكى. flaky = كم مرة يرد Access denied على أمر مسموح قبل ما يقبله ·
+ *  enstr = MU5250: الكتابة ما تنقبل إلا بعد web_http_enstr_set بنفس الجلسة */
+function router(opts: { flaky?: number; enstr?: boolean } = {}) {
   const good = new Set<string>();
+  const keyed = new Set<string>();
   const log: string[] = [];
   let flaky = opts.flaky ?? 0;
   let netSelect = 'WL_AND_5G';
@@ -49,6 +54,12 @@ function router(opts: { flaky?: number } = {}) {
     }
     if (method === 'nwinfo_get_netinfo') return ok({ network_type: 'LTE', lte_rsrp: '-90', net_select: netSelect });
     if (!good.has(sess)) return denied();
+    if (method === 'web_crt_get') return opts.enstr ? ok({ result: publicKey }) : ok({});
+    if (method === 'web_http_enstr_set') {
+      if (Buffer.from(String(p.web_enstr), 'base64').length !== 128) return ok({ result: 'failure' });
+      keyed.add(sess); return ok({ result: 'success' });
+    }
+    if (opts.enstr && /set_/.test(method) && !keyed.has(sess)) return denied();
     if (flaky > 0) { flaky--; return denied(); }
     if (method === 'nwinfo_set_netselect') { netSelect = p.net_select; return ok({ result: 'success' }); }
     return ok({});
@@ -108,4 +119,13 @@ test('zte-ng يطلب صفحات الشبكة (lte_ext_band) في FULL', () => {
   const pages: string[] = new ZteNgDriver().afterLoginPages();
   assert.ok(pages.includes('/js/auth/network/net_select.js'));
   assert.ok(pages.includes('/tmpl/auth/adm/developer_options.html'));
+});
+
+test('MU5250: الكتابة تحتاج web_http_enstr_set بعد الدخول (مثل he() في صفحة الراوتر)', async () => {
+  const r = router({ enstr: true });
+  const d = new ZteNgDriver();
+  await d.login('192.168.0.5', 'admin', PW);
+  await (d as any).write('zte_nwinfo_api', 'nwinfo_set_netselect', { net_select: 'Only_5G' });
+  assert.equal(r.mode(), 'Only_5G');
+  assert.ok(r.log.indexOf('zwrt_web.web_http_enstr_set') < r.log.indexOf('zte_nwinfo_api.nwinfo_set_netselect'));
 });
