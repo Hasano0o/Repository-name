@@ -161,3 +161,65 @@ export function bandConfigFrom(info: any): BandConfig {
     lockKinds: { lte: on && nt === '4G' ? 'band' : 'none', nr: on && /^5G/.test(nt) ? 'band' : 'none' },
   };
 }
+
+/* ═══ الترددات: رموز الراوتر نفسه ═══ allBands ممكن «1,3» أو «B1,B3» — نرسل بنفس صيغته */
+export function bandTokens(list: unknown): { n: number; t: string }[] {
+  return String(list ?? '').split(',').map(t => t.trim()).filter(Boolean)
+    .map(t => ({ n: num(t.replace(/^[bn]/i, '')) ?? NaN, t })).filter(x => Number.isFinite(x.n) && x.n > 0);
+}
+/** مفتاح 5G في getBandLockInfo: «5G» أو «5GNSA» (3000M) أو «5GNAS» (2000M) */
+export function nrKeys(info: any): string[] { return ['5G', '5GNSA', '5GNAS'].filter(k => info?.[k] && typeof info[k] === 'object'); }
+
+/* ═══ وضع الشبكة (getMobileNetworkBasicConfig.netType) ═══ نفس رموز بقية الدرايفرات: 00 تلقائي · 03 4G · 02 3G */
+export const DL_MODES: { code: string; value: string; label: string; five?: boolean }[] = [
+  { code: '00', value: 'AUTO', label: 'تلقائي' },
+  { code: 'dl:5G', value: '5G', label: '5G فقط', five: true },
+  { code: '03', value: '4G', label: '4G فقط' },
+  { code: '02', value: '3G', label: '3G فقط' },
+];
+export const modeCode = (v: unknown) => DL_MODES.find(m => m.value === String(v ?? '').toUpperCase())?.code ?? String(v ?? '');
+
+/* ═══ الرسائل ═══ getsmsList ← info.smsList [{id, number, content (HTML مرمّز), time}] */
+export function htmlDecode(s: string): string {
+  return s.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '')
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d))).replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
+}
+export function smsFrom(info: any, box: 'inbox' | 'sent'): import('../types').SmsMessage[] {
+  const list: any[] = Array.isArray(info?.smsList) ? info.smsList : [];
+  return list.filter(x => x && x.id !== undefined).map(x => ({
+    index: String(x.id), phone: String(x.number ?? ''), content: htmlDecode(String(x.content ?? '')), date: String(x.time ?? ''),
+    // الصفحة ما تعرض «مقروءة/غير مقروءة» — نعتمد على خانة status لو موجودة
+    unread: box === 'inbox' && x.status !== undefined ? /unread|^0$|new/i.test(String(x.status)) : false,
+  }));
+}
+
+/**
+ * رقم الجوال ← (رمز الدولة، الرقم) مثل خانات الصفحة: countryCode «+966» (/^[0+]\d{1,4}$/) و contacts أرقام ١–١١.
+ * دولي (+/00) ← رمز الدولة من القائمة · محلي يبدأ بـ 0 ← رمز دولة الشريحة (MCC) والرقم بدون الصفر · قصير (خدمات) كما هو.
+ */
+const CC = ['966', '971', '965', '973', '974', '968', '967', '962', '963', '964', '961', '218', '216', '213', '212', '249', '20', '90', '92', '91', '1', '44'];
+const MCC_CC: Record<string, string> = { '420': '966', '424': '971', '419': '965', '426': '973', '427': '974', '422': '968', '606': '218', '421': '967', '416': '962', '602': '20' };
+export function splitPhone(phone: string, plmn?: string): { countryCode: string; number: string } | null {
+  let p = String(phone ?? '').replace(/[\s()-]/g, '');
+  const cc0 = MCC_CC[String(plmn ?? '').slice(0, 3)] ?? '966';
+  if (/^\+|^00/.test(p)) {
+    p = p.replace(/^\+|^00/, '');
+    const cc = CC.find(c => p.startsWith(c) && p.length - c.length >= 4);
+    if (!cc) return null;
+    const n = p.slice(cc.length).replace(/^0/, '');
+    return /^\d{1,11}$/.test(n) ? { countryCode: '+' + cc, number: n } : null;
+  }
+  if (!/^\d+$/.test(p)) return null;
+  if (p.length <= 6) return { countryCode: '+' + cc0, number: p };
+  const n = p.replace(/^0/, '');
+  return /^\d{1,11}$/.test(n) ? { countryCode: '+' + cc0, number: n } : null;
+}
+
+/** NR SCS للتثبيت: n77/78/79 = 30 (TDD) · FDD = 15 · غيرها ما نخمّن (نفس قاعدة Pro 7) */
+export function nrScs(band?: number): number | undefined {
+  if (!band) return undefined;
+  if ([77, 78, 79].includes(band)) return 30;
+  if ([1, 3, 5, 7, 8, 20, 28, 71].includes(band)) return 15;
+  return undefined;
+}

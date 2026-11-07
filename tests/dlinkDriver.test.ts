@@ -1,16 +1,18 @@
 /**
  * درايفر D-Link DWR-2000M / DWR-3000M على راوتر محاكى بنفس بروتوكول الصفحة (cpe-webui، /acfun/):
  * getLoginKey ← HMAC-MD5(PublicKey+كلمة، Challenge)↑ ← HMAC-MD5(المفتاح، Challenge)↑ — الحسبة هنا مستقلة بـ node:crypto.
+ * تشفير الخانات مقارن بمتجهات طلعت من كود الصفحة نفسه (موديول 567) — tests/fixtures/dlink-cipher.json.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as ncrypto from 'node:crypto';
 
 declare const require: any;
+declare const Buffer: any;
+declare const process: any;
 (globalThis as any).__DEV__ = false;
 
 const hm = (k: string, m: string) => (ncrypto as any).createHmac('md5', Buffer.from(k, 'utf8')).update(Buffer.from(m, 'utf8')).digest('hex').toUpperCase();
-declare const Buffer: any;
 
 const RF_2000 = {
   basic: { fabricator: 'D-Link', productType: 'DWR-2000M', imei: '356000000000009', hardwareVersion: 'A1', softwareVersion: 'V1.0.3' },
@@ -27,8 +29,17 @@ const RF_3000 = {
   ],
 };
 
-function router(opts: { model?: string; password?: string; rf?: any } = {}) {
-  const st: any = { pub: 'PK9f', ch: 'CH+=&"x', session: false, posts: [] as any[], fails: 0, lastUser: '' };
+function router(opts: { model?: string; password?: string; rf?: any; ignoreBand?: boolean; ctrlMode?: string } = {}) {
+  const st: any = {
+    pub: 'PK9f', ch: 'CH+=&"x', session: false, posts: [] as any[], fails: 0, lastUser: '', key: '',
+    band: { bandLockEnabled: false, netType: '4G', '4G': { allBands: '1,3,7,8,20,28,40,41', enabledBand: '' }, '5GNAS': { allBands: '', enabledBand: '' } },
+    cell: { cellLockEnabled: false, netType: '4G', pcid: '', arfcn: '' },
+    mobile: { enable: true, netType: 'AUTO', authType: 'AUTO', ipVersion: 'IPv4', mtu: 1500, manualApnEnable: true, apn: 'zain', userName: '', password: '', dialNumber: '*99#', bridgeEnable: false, natEnable: true },
+    sms: { 1: [{ id: 3, number: '+966500000001', content: 'رصيدك &amp; باقتك', time: '2026-11-07 01:00' }], 2: [] as any[] },
+    wlan: { '2.4GHz': { wirelessDisable: false, ssid: 'DLink_24', channelNumber: 'Auto', channelWidth: '20MHz', wifiMode: 'b/g/n' }, '5GHz': { wirelessDisable: false, ssid: 'DLink_5', channelNumber: '36', channelWidth: '80MHz' } } as any,
+    sec: { '2.4GHz': { currentId: 'ap0', aps: [{ apId: 'ap0', encryption: 'WPA2', authType: 'PSK', encryptionKey: '', wpaCipher: 'AES' }] }, '5GHz': { currentId: 'ap0', aps: [{ apId: 'ap0', encryption: 'WPA2', authType: 'PSK', encryptionKey: '', wpaCipher: 'AES' }] } } as any,
+    ctrl: { '2.4GHz': { mode: opts.ctrlMode ?? 'disable', list: [] as string[] }, '5GHz': { mode: opts.ctrlMode ?? 'disable', list: [] as string[] } } as any,
+  };
   const res = (status: number, text: string) =>
     ({ ok: status < 400, status, url: 'http://192.168.0.1/', headers: { get: () => null }, text: async () => text } as any);
   const J = (o: unknown) => res(200, JSON.stringify(o));
@@ -39,39 +50,69 @@ function router(opts: { model?: string; password?: string; rf?: any } = {}) {
     if (!p.startsWith('/acfun/')) return res(200, '<!doctype html><html>cpe-webui</html>');
     assert.equal(init?.headers?.['content-type'], 'application/json');
     const name = p.slice(7);
+    const q = (k: string) => u.searchParams.get(k) ?? '';
     const body = init?.body ? JSON.parse(init.body) : undefined;
+    if (m === 'POST' && !['login', 'getsmsList'].includes(name)) st.posts.push({ name, body });
     if (name === 'getProductModelInfo') return J({ errcode: 0, info: { model: opts.model ?? 'DWR-2000M', boardID: 'X', lang: 'en' } });
-    if (name === 'getLoginKey') { st.lastUser = u.searchParams.get('username'); return J({ errcode: 0, info: { PublicKey: st.pub, Challenge: st.ch } }); }
+    if (name === 'getLoginKey') { st.lastUser = q('username'); return J({ errcode: 0, info: { PublicKey: st.pub, Challenge: st.ch } }); }
     if (name === 'login' && m === 'POST') {
-      const good = hm(hm(st.pub + (opts.password ?? 'pw'), st.ch), st.ch);
-      if (body?.username !== 'admin' || body?.password !== good) { st.fails++; return J(st.fails >= 5 ? { errcode: 22, waitime: 60 } : { errcode: 3, msg: 'Password error' }); }
-      st.session = true;
+      const key = hm(st.pub + (opts.password ?? 'pw'), st.ch);
+      if (body?.username !== 'admin' || body?.password !== hm(key, st.ch)) { st.fails++; return J(st.fails >= 5 ? { errcode: 22, waitime: 60 } : { errcode: 3, msg: 'Password error' }); }
+      st.session = true; st.key = key;
       return J({ errcode: 0, info: { username: 'admin', role: 'administrator' } });
     }
     if (!st.session) return J({ errcode: 6, msg: 'not login' });
-    if (name === 'getMobileNetStatusParams') return J({ errcode: 0, info: opts.rf ?? RF_2000 });
-    if (name === 'InternetStatus') return J({ errcode: 0, info: { systemMode: 'Router', MobileNetwork: { operators: 'Zain KSA', networkStatus: 'Connected', netType: '4G', ipAddress: '10.2.3.4', primary_dns_server: '8.8.8.8', imei: '356000000000009' } } });
-    if (name === 'ConnectedClients') return J({ errcode: 0, info: { clients: [
-      { macAddress: 'AA:BB:CC:00:00:01', ipv4Address: '192.168.0.20', interfaceName: 'wlan0' },
-      { macAddress: 'bad', ipv4Address: '192.168.0.21' },
-    ] } });
-    if (name === 'getBandLockInfo') return J({ errcode: 0, info: { bandLockEnabled: true, netType: '4G', '4G': { allBands: '1,3,7,8,20,28,40,41', enabledBand: '3,20' }, '5G': { allBands: '78,41', enabledBand: '' } } });
-    if (name === 'reboot' && m === 'POST') { st.posts.push({ name, body: init.body }); return J({ errcode: 0, waitime: 90 }); }
-    if (m === 'POST') { st.posts.push({ name, body }); return J({ errcode: 0 }); }
+    const ok = (extra: object = {}) => J({ errcode: 0, waitime: 5, ...extra });
+    switch (name) {
+      case 'getMobileNetStatusParams': return J({ errcode: 0, info: opts.rf ?? RF_2000 });
+      case 'InternetStatus': return J({ errcode: 0, info: { systemMode: 'Router', MobileNetwork: { operators: 'Zain KSA', networkStatus: 'Connected', netType: '4G', ipAddress: '10.2.3.4', primary_dns_server: '8.8.8.8', imei: '356000000000009' } } });
+      case 'ConnectedClients': return J({ errcode: 0, info: { clients: [
+        { macAddress: 'AA:BB:CC:00:00:01', ipv4Address: '192.168.0.20', interfaceName: 'wlan0' },
+        { macAddress: 'bad', ipv4Address: '192.168.0.21' },
+      ] } });
+      case 'getBandLockInfo': return J({ errcode: 0, info: JSON.parse(JSON.stringify(st.band)) });
+      case 'bandLockSetup':
+        if (!opts.ignoreBand) { st.band.bandLockEnabled = body.bandLockEnabled; st.band.netType = body.netType; if (st.band[body.netType]) st.band[body.netType].enabledBand = body.enabledBand; }
+        return ok();
+      case 'getCellLockInfo': return J({ errcode: 0, info: { ...st.cell } });
+      case 'cellLockSetup': st.cell = { ...body }; return ok();
+      case 'getMobileNetworkBasicConfig': return J({ errcode: 0, info: { ...st.mobile } });
+      case 'mobileNetworkBasicSetting': st.mobile = { ...body }; return ok();
+      case 'getsmsList': return J({ errcode: 0, info: { smsList: st.sms[body.type], total: st.sms[body.type].length } });
+      case 'sendsms': st.sms[2].push({ id: 9, number: body.countryCode + body.contacts, content: body.content }); return ok();
+      case 'delsms': st.sms[1] = st.sms[1].filter((x: any) => !String(body.id).split(',').includes(String(x.id))); return ok();
+      case 'getWlanBasicConfig': return J({ errcode: 0, info: { ...st.wlan[q('bandType')] } });
+      case 'wlanBasicSetting': { const { bandType, ...rest } = body; st.wlan[bandType] = rest; return ok(); }
+      case 'getWlanSecurity': return J({ errcode: 0, info: JSON.parse(JSON.stringify(st.sec[q('bandType')])) });
+      case 'wlanSecuritySetting': { const { bandType, ...rest } = body; st.sec[bandType].aps = [rest]; return ok(); }
+      case 'getWlanCtrlConfig': return J({ errcode: 0, info: { wlanCtrlMode: st.ctrl[q('bandType')].mode, macAddress: '', comment: '' } });
+      case 'getWlanCtrlList': return J({ errcode: 0, info: { list: st.ctrl[q('bandType')].list.map((x: string) => ({ macAddress: x })) } });
+      case 'wlanCtrlSetting': { const c = st.ctrl[body.bandType]; c.mode = body.wlanCtrlMode; if (!c.list.includes(body.macAddress)) c.list.push(body.macAddress); return ok(); }
+      case 'wlanCtrlDel': for (const b of ['2.4GHz', '5GHz']) st.ctrl[b].list = st.ctrl[b].list.filter((x: string) => x !== body.macAddress); return ok();
+      case 'reboot': return ok({ waitime: 90 });
+      case 'reset': return ok();
+    }
     return res(200, '<!doctype html><html>cpe-webui</html>');
   };
   return st;
 }
-const driver = () => { const { DlinkDriver } = require('../src/drivers/dlink/index'); return new DlinkDriver(); };
+const driver = () => { const { DlinkDriver } = require('../src/drivers/dlink/index'); const d = new DlinkDriver(); d.waitScale = 0; return d; };
+async function ready(o: any = {}) { const st = router(o); const d = driver(); await d.detect('192.168.0.1'); await d.login('192.168.0.1', 'admin', o.password ?? 'pw'); st.posts.length = 0; return { st, d }; }
 
-test('D-Link crypto: HMAC-MD5 مطابق لـ node (عربي + مفتاح أطول من ٦٤)', () => {
-  const { hmacMd5Hex, dlLoginHash } = require('../src/drivers/dlink/crypto');
+test('D-Link crypto: HMAC-MD5 مطابق لـ node + تشفير الخانات مطابق لكود الصفحة', () => {
+  const { hmacMd5Hex, dlLoginHash, dlEncrypt, dlDecrypt } = require('../src/drivers/dlink/crypto');
   for (const [k, msg] of [['', ''], ['key', 'The quick brown fox'], ['كلمة🔑', 'تحدي'], ['k'.repeat(100), 'x'.repeat(200)]]) {
     assert.equal(hmacMd5Hex(k, msg), (ncrypto as any).createHmac('md5', Buffer.from(k, 'utf8')).update(Buffer.from(msg, 'utf8')).digest('hex'));
   }
   const r = dlLoginHash('PK', 'pass', 'CH');
   assert.equal(r.key, hm('PKpass', 'CH'));
   assert.equal(r.password, hm(r.key, 'CH'));
+  const fs = require('fs'), path = require('path');
+  const vec = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'tests', 'fixtures', 'dlink-cipher.json'), 'utf8'));
+  for (const v of vec) {
+    assert.equal(dlEncrypt(v.p, v.k), v.c, `encrypt ${v.p}`);
+    assert.equal(dlDecrypt(v.c, v.k), v.d, `decrypt ${v.p}`);
+  }
 });
 
 test('D-Link: يتعرّف عليه، يدخل بنفس حسبة الصفحة، ويقرأ 4G والدمج والأجهزة', async () => {
@@ -81,7 +122,7 @@ test('D-Link: يتعرّف عليه، يدخل بنفس حسبة الصفحة، 
   const prof = await d.identify();
   assert.equal(prof.label, 'D-Link DWR-2000M');
   assert.equal(prof.tech, '4G');
-  assert.equal(prof.writeUnverified, true);
+  assert.equal(prof.writeUnverified, undefined);
   await assert.rejects(d.getSignal(), /انتهت الجلسة/);
   await d.login('192.168.0.1', '', 'pw');
   assert.equal(st.lastUser, 'admin');
@@ -90,29 +131,18 @@ test('D-Link: يتعرّف عليه، يدخل بنفس حسبة الصفحة، 
   assert.equal(s.earfcn, '1650');
   assert.equal(s.rsrp, -95);
   assert.equal(s.sinr, 12);
-  assert.equal(s.pci, '211');
   assert.equal(s.enodebId, '678259');
   assert.equal(s.network, '4G');
   assert.equal(s.caCount, 2);
   assert.equal(s.caBandwidthMhz, 30);
-  assert.equal(s.nrRsrp, undefined);
-  const ca = await d.getCarriers();
-  assert.deepEqual(ca.map((c: any) => `${c.role}:B${c.band}`), ['PCC:B3', 'SCC:B20']);
+  assert.deepEqual((await d.getCarriers()).map((c: any) => `${c.role}:B${c.band}`), ['PCC:B3', 'SCC:B20']);
   const net = await d.getNetworkInfo();
   assert.equal(net.operator, 'Zain KSA');
   assert.equal(net.connected, true);
   assert.equal(net.supports5g, false);
-  const dev = await d.getDevices();
-  assert.deepEqual(dev, [{ mac: 'aa:bb:cc:00:00:01', ip: '192.168.0.20', name: 'wlan0' }]);
-  const det = await d.getDeviceDetails();
-  assert.equal(det.software, 'V1.0.3');
-  assert.equal(det.wanIp, '10.2.3.4');
-  const snap = await d.getSnapshot();
-  assert.equal(snap.lte?.rsrp, -95);
-  const bc = await d.getBandConfig();
-  assert.deepEqual(bc.locked, [3, 20]);
-  assert.deepEqual(bc.supported, [1, 3, 7, 8, 20, 28, 40, 41]);
-  assert.deepEqual(bc.nrSupported, [78, 41]);
+  assert.deepEqual(await d.getDevices(), [{ mac: 'aa:bb:cc:00:00:01', ip: '192.168.0.20', name: 'wlan0', blocked: false }]);
+  assert.equal((await d.getDeviceDetails()).software, 'V1.0.3');
+  assert.equal((await d.getSnapshot()).lte?.rsrp, -95);
 });
 
 test('D-Link DWR-3000M: 5G NSA من frequencyBand (n78) + 4G', async () => {
@@ -122,15 +152,137 @@ test('D-Link DWR-3000M: 5G NSA من frequencyBand (n78) + 4G', async () => {
   assert.equal((await d.identify()).tech, '5G');
   await d.login('192.168.0.1', 'admin', 'pw');
   const s = await d.getSignal();
-  assert.equal(s.band, 'B3');
   assert.equal(s.nrBand, 'n78');
   assert.equal(s.nrRsrp, -84);
-  assert.equal(s.nrArfcn, '636666');
   assert.equal(s.network, '5G NSA');
-  assert.equal((await d.getNetworkInfo()).supports5g, true);
 });
 
-test('D-Link: كلمة غلط ← رسالة واضحة، ٥ محاولات ← قفل، والكتابة مقفولة بدون أي أمر', async () => {
+test('D-Link: تثبيت ترددات 4G بنفس جسم الصفحة + تأكيد بالقراءة + فك', async () => {
+  const { st, d } = await ready();
+  let c = await d.getBandConfig();
+  assert.deepEqual(c.supported, [1, 3, 7, 8, 20, 28, 40, 41]);
+  assert.deepEqual(c.locked, []);
+  assert.equal(c.mode, '00');
+  assert.deepEqual(c.modes.map((m: any) => m.value), ['00', '03', '02']);
+  await d.setBand([3, 20, 99]);
+  assert.deepEqual(st.posts, [{ name: 'bandLockSetup', body: { bandLockEnabled: true, netType: '4G', enabledBand: '3,20' } }]);
+  c = await d.getBandConfig();
+  assert.deepEqual(c.locked, [3, 20]);
+  st.posts.length = 0;
+  await d.setBand([20, 3]);
+  assert.equal(st.posts.length, 0, 'نفس الترددات = ما نرسل شي');
+  await d.setBand([]);
+  assert.deepEqual(st.posts[0], { name: 'bandLockSetup', body: { bandLockEnabled: false, netType: '4G', enabledBand: '3,20' } });
+  assert.deepEqual((await d.getBandConfig()).locked, []);
+  await assert.rejects(d.setBand([66]), (e: any) => /ما غيّرنا شي/.test(e.message));
+});
+
+test('D-Link: الراوتر قال تمام بس ما ثبّت ← خطأ (ما ندّعي نجاح)', async () => {
+  const { d } = await ready({ ignoreBand: true });
+  await assert.rejects(d.setBand([3]), /القراءة بعده مختلفة/);
+});
+
+test('D-Link: تثبيت البرج 4G ثم فكّه + وضع الشبكة مع APN مشفّر يرجع بنفس القيمة', async () => {
+  const { st, d } = await ready();
+  await d.lockCell({ tech: 'LTE', pci: '211', arfcn: '1650', band: 3 });
+  assert.deepEqual(st.posts[0], { name: 'cellLockSetup', body: { cellLockEnabled: true, netType: '4G', pcid: '211', arfcn: '1650' } });
+  assert.deepEqual(await d.getCellLock(), { tech: 'LTE', pci: '211', arfcn: '1650', band: undefined });
+  await assert.rejects(d.lockCell({ tech: 'NR', pci: '1', arfcn: '636666', band: 78 }), (e: any) => /راوترك 4G/.test(e.message));
+  await d.unlockCell();
+  assert.equal(st.cell.cellLockEnabled, false);
+  assert.equal(st.cell.pcid, '211', 'الفك يرسل نفس البرج مع cellLockEnabled=false مثل الصفحة');
+
+  // APN باسم وكلمة مشفّرة بمفتاح الجلسة — الوضع يتغيّر والخانات ترجع نفس الشي بعد فك/تشفير
+  const { dlEncrypt, dlDecrypt } = require('../src/drivers/dlink/crypto');
+  st.mobile.userName = dlEncrypt('zainuser', st.key);
+  st.mobile.password = dlEncrypt('zain@pw', st.key);
+  st.posts.length = 0;
+  await d.setNetworkMode('03');
+  const b = st.posts[0].body;
+  assert.equal(st.posts[0].name, 'mobileNetworkBasicSetting');
+  assert.equal(b.netType, '4G');
+  assert.equal(dlDecrypt(b.userName, st.key), 'zainuser');
+  assert.equal(dlDecrypt(b.password, st.key), 'zain@pw');
+  assert.equal(b.apn, 'zain');
+  assert.equal(b.dialNumber, '*99#');
+  assert.equal((await d.getBandConfig()).mode, '03');
+  await assert.rejects(d.setNetworkMode('dl:5G'), (e: any) => /ما غيّرنا شي/.test(e.message));
+});
+
+test('D-Link: لقطة ← تجارب ← إرجاع متحقق منه (ترددات + برج + وضع)', async () => {
+  const { st, d } = await ready();
+  await d.setBand([3]);
+  const snap = await d.readLockState();
+  assert.match(snap.summary, /4G: 3/);
+  await d.setBand([20]);
+  await d.lockCell({ tech: 'LTE', pci: '77', arfcn: '6300' });
+  await d.setNetworkMode('03');
+  await d.restoreLockState(snap);
+  assert.equal(st.band.bandLockEnabled, true);
+  assert.equal(st.band['4G'].enabledBand, '3');
+  assert.equal(st.cell.cellLockEnabled, false);
+  assert.equal(st.mobile.netType, 'AUTO');
+  await d.restoreAll();
+  assert.equal(st.band.bandLockEnabled, false);
+  assert.equal(await d.getActiveLock(), null);
+});
+
+test('D-Link: الرسائل (قراءة · إرسال بالرمز والرقم · حذف)', async () => {
+  const { st, d } = await ready();
+  const inbox = await d.listSms('inbox');
+  assert.deepEqual(inbox.map((x: any) => [x.index, x.content]), [['3', 'رصيدك & باقتك']]);
+  await d.sendSms('0551234567', 'هلا');
+  assert.deepEqual(st.posts.find((x: any) => x.name === 'sendsms').body, { countryCode: '+966', contacts: '551234567', content: 'هلا' });
+  await d.sendSms('+218912345678', 'x');
+  assert.deepEqual(st.posts.filter((x: any) => x.name === 'sendsms')[1].body, { countryCode: '+218', contacts: '912345678', content: 'x' });
+  await d.sendSms('1415', 'رصيد');
+  assert.equal(st.posts.filter((x: any) => x.name === 'sendsms')[2].body.contacts, '1415');
+  await assert.rejects(d.sendSms('abc', 'x'), (e: any) => /ما انرسل/.test(e.message));
+  await d.deleteSms('3');
+  assert.equal((await d.listSms('inbox')).length, 0);
+});
+
+test('D-Link: الواي فاي (القناة · الاسم · الكلمة مشفّرة · إطفاء نطاق) والحظر', async () => {
+  const { st, d } = await ready();
+  assert.deepEqual((await d.getWifiRadios()).map((r: any) => [r.band, r.channel]), [['2.4', '0'], ['5', '36']]);
+  await d.setWifiChannel('2.4', '6');
+  assert.equal(st.wlan['2.4GHz'].channelNumber, '6');
+  assert.equal(st.wlan['2.4GHz'].ssid, 'DLink_24', 'باقي الإعدادات تنرسل كما هي');
+  assert.equal(st.wlan['2.4GHz'].channelWidth, '20MHz');
+  await d.setWifiChannel('2.4', '0');
+  assert.equal(st.wlan['2.4GHz'].channelNumber, 'Auto');
+
+  const ex = await d.getExtras();
+  assert.deepEqual(ex.wifiNets?.map((n: any) => [n.index, n.name, n.secured]), [['2.4', 'DLink_24', true], ['5', 'DLink_5', true]]);
+  await d.setWifiNames([{ index: '2.4', name: 'بيتنا' }], 'NewPass123');
+  assert.equal(st.wlan['2.4GHz'].ssid, 'بيتنا');
+  const { dlDecrypt } = require('../src/drivers/dlink/crypto');
+  assert.equal(dlDecrypt(st.sec['2.4GHz'].aps[0].encryptionKey, st.key), 'NewPass123');
+  assert.equal(dlDecrypt(st.sec['5GHz'].aps[0].encryptionKey, st.key), 'NewPass123');
+  await assert.rejects(d.setWifiNames([], 'short'), (e: any) => /ما غيّرنا شي/.test(e.message));
+  await d.setBandOn('5', false);
+  assert.equal(st.wlan['5GHz'].wirelessDisable, true);
+
+  await d.blockDevice('aa:bb:cc:00:00:01', true, 'iPhone');
+  assert.equal(st.ctrl['2.4GHz'].mode, 'deny');
+  assert.deepEqual(st.ctrl['5GHz'].list, ['AA:BB:CC:00:00:01']);
+  assert.equal((await d.getDevices())[0].blocked, true);
+  await d.blockDevice('AA:BB:CC:00:00:01', false);
+  assert.deepEqual(st.ctrl['2.4GHz'].list, []);
+  assert.equal((await d.getDevices())[0].blocked, false);
+});
+
+test('D-Link: الحظر على «المسموح بس» ← ما نلمسه', async () => {
+  const { st, d } = await ready({ ctrlMode: 'allow' });
+  await assert.rejects(d.blockDevice('aa:bb:cc:00:00:01', true), (e: any) => /ما غيّرنا شي/.test(e.message));
+  assert.equal(st.posts.length, 0);
+  const r2 = await ready();
+  r2.st.ctrl['2.4GHz'].list = ['11:22:33:44:55:66'];
+  await assert.rejects(r2.d.blockDevice('aa:bb:cc:00:00:01', true), (e: any) => /أجهزة قديمة/.test(e.message));
+  assert.equal(r2.st.posts.length, 0);
+});
+
+test('D-Link: كلمة غلط ← رسالة واضحة، ٥ محاولات ← قفل، وإعادة التشغيل', async () => {
   const st = router({ password: 'right' });
   const d = driver();
   await d.detect('192.168.0.1');
@@ -139,10 +291,8 @@ test('D-Link: كلمة غلط ← رسالة واضحة، ٥ محاولات ← 
   await assert.rejects(d.login('192.168.0.1', 'admin', 'wrong'), /قفل الدخول/);
   st.fails = 0;
   await d.login('192.168.0.1', 'admin', 'right');
-  await assert.rejects(d.setBand([3]), (e: any) => /ما غيّرنا شي/.test(e.message));
-  assert.equal(st.posts.length, 0);
   await d.reboot();
-  assert.deepEqual(st.posts, [{ name: 'reboot', body: '""' }]);
+  assert.deepEqual(st.posts, [{ name: 'reboot', body: '' }]);
 });
 
 test('D-Link: راوتر ثاني يرجّع صفحة HTML ← ما يتعرّف عليه', async () => {

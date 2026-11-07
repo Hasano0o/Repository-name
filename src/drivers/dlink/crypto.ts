@@ -67,3 +67,65 @@ export function dlLoginHash(publicKey: string, password: string, challenge: stri
   const key = hmacMd5Hex(publicKey + password, challenge).toUpperCase();
   return { key, password: hmacMd5Hex(key, challenge).toUpperCase() };
 }
+
+/* ═══ تشفير الخانات (موديول 567 في الصفحة) ═══
+ * الصفحة تشفّر الخانات الحساسة (كلمة الواي فاي، اسم/كلمة APN، رمز PIN) بالمفتاح الأول من الدخول (cipherKey):
+ * النص ← hex لكل حرف ← ٦٤ بايت (أصفار) ← ٤ كتل × ١٦: XOR المفتاح، S-box، تبديل المواقع، XOR النص الثاني من المفتاح (أصفار).
+ * منقول حرف بحرف — ومختبر مقابل كود الصفحة نفسه (tests/fixtures/dlink-cipher.json). */
+const SBOX = (() => {
+  const s = new Array<number>(256);
+  let p = 1, q = 1;
+  do {
+    p = (p ^ ((p << 1) & 0xff) ^ (p & 0x80 ? 0x1b : 0)) & 0xff;
+    q ^= q << 1; q ^= q << 2; q ^= q << 4; q &= 0xff; if (q & 0x80) q ^= 0x09;
+    const x = q ^ ((q << 1) | (q >> 7)) ^ ((q << 2) | (q >> 6)) ^ ((q << 3) | (q >> 5)) ^ ((q << 4) | (q >> 4));
+    s[p] = (x ^ 0x63) & 0xff;
+  } while (p !== 1);
+  s[0] = 0x63;
+  return s;
+})();
+const INV_SBOX = (() => { const r = new Array<number>(256); SBOX.forEach((v, i) => { r[v] = i; }); return r; })();
+const PERM = [0, 5, 10, 15, 4, 9, 14, 3, 8, 13, 2, 7, 12, 1, 6, 11];
+const INV_PERM = (() => { const r = new Array<number>(16); PERM.forEach((v, i) => { r[v] = i; }); return r; })();
+
+function hexBytes(h: string, n: number): number[] {
+  const out = new Array<number>(n).fill(0);
+  for (let i = 0; i < n; i++) if (i < h.length / 2) out[i] = parseInt(h.substr(2 * i, 2), 16);
+  return out;
+}
+const xor = (b: number[], k: number[]) => { for (let i = 0; i < 16; i++) b[i] ^= k[i]; };
+const sub = (b: number[], t: number[]) => { for (let i = 0; i < 16; i++) b[i] = t[b[i]]; };
+const perm = (b: number[], p: number[]) => { const c = b.slice(); for (let i = 0; i < 16; i++) b[i] = c[p[i]]; };
+const toHex = (a: number[]) => a.map(x => x.toString(16).padStart(2, '0')).join('');
+
+/** l(n, r) في الصفحة — النص فاضي يرجع كما هو */
+export function dlEncrypt(text: string, key: string): string {
+  if (!text) return text;
+  let h = '';
+  for (let i = 0; i < text.length; i++) h += text.charCodeAt(i).toString(16);
+  const k = hexBytes(key.length > 32 ? key.substr(0, 32) : key, 32);
+  const d = hexBytes(h, 64);
+  const out: number[] = [];
+  for (let c = 0; c < 4; c++) {
+    const b = d.slice(16 * c, 16 * c + 16);
+    xor(b, k.slice(0, 16)); sub(b, SBOX); perm(b, PERM); xor(b, k.slice(16, 32));
+    out.push(...b);
+  }
+  return toHex(out);
+}
+
+/** g(n, r) في الصفحة — يوقف عند أول بايت صفر */
+export function dlDecrypt(hex: string, key: string): string {
+  if (!hex) return '';
+  const k = hexBytes(key.length > 32 ? key.substr(0, 32) : key, 32);
+  const d = hexBytes(hex, 64);
+  const out: number[] = [];
+  for (let c = 0; c < 4; c++) {
+    const b = d.slice(16 * c, 16 * c + 16);
+    xor(b, k.slice(16, 32)); perm(b, INV_PERM); sub(b, INV_SBOX); xor(b, k.slice(0, 16));
+    out.push(...b);
+  }
+  let s = '';
+  for (const x of out) { if (x === 0) break; s += String.fromCharCode(x); }
+  return s;
+}
