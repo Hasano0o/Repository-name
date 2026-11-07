@@ -12,9 +12,25 @@ export function hasSesTok(xml: string): boolean {
   return /<TokInfo>[^<]+<\/TokInfo>/.test(xml);
 }
 
-/** الرمز من رد api/webserver/token — نفس الصفحة: token.substr(32) */
+/**
+ * نص خانة XML بعد فك الترميز (&quot; &amp; …) — الصفحة تقراه بـ DOM فيوصلها مفكوك.
+ * ٧ نوفمبر: ردود SesTokInfo/token تجي أحياناً أطول بـ ٥ (262 بدل 257، 143/148 بدل 138) = «&quot;» داخل الرمز أو SessionID.
+ * كنا نرسلها مرمّزة ← 125003 على كل محاولة (الطرد بعد logout، و«رمز الجلسة غير صالح» عند الإضافة).
+ */
+export function xmlUnesc(s = ''): string {
+  return s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&amp;/g, '&');
+}
+/** عدد الرموز المرمّزة في نص (للتشخيص) */
+export function escCount(s = ''): number {
+  return (s.match(/&(lt|gt|quot|apos|amp|#\d+|#x[0-9a-f]+);/gi) ?? []).length;
+}
+
+/** الرمز من رد api/webserver/token — نفس الصفحة: token.substr(32) (بعد فك الترميز) */
 export function tokenFromReply(xml: string): string {
-  const t = xml.match(/<token>([^<]*)<\/token>/)?.[1]?.trim() ?? '';
+  const t = xmlUnesc(xml.match(/<token>([^<]*)<\/token>/)?.[1]?.trim() ?? '');
   return t.length > 32 ? t.slice(32) : t;
 }
 

@@ -10,7 +10,7 @@ import {
   BandConfig, SmsMessage, DeviceDetails, CellTower, CellLockTarget, CellLockState, DataPlan, ActiveLock,
   ApnProfile, DnsConfig, Carrier, SignalSnapshot, TimeRule, BandRoles } from '../types';
 import { http as rawHttp } from '../http';
-import { hasSesTok, tokenFromReply, isHuaweiSessionReply, cookieShape } from './session';
+import { hasSesTok, tokenFromReply, isHuaweiSessionReply, cookieShape, xmlUnesc, escCount } from './session';
 import { Platform } from 'react-native';
 import { trafficBurst } from '../../utils/nrprobe';
 import { getApnProfiles, setApn, selectApn, getDns, setDns } from './apn-dns';
@@ -355,7 +355,8 @@ export class HuaweiDriver implements RouterDriver {
     this.cookie = '';
     const r = await this.http(this.url('webserver/SesTokInfo'), { headers: this.headers() });
     const x = await r.text();
-    const ses = tag(x, 'SesInfo') ?? '';
+    const ses = xmlUnesc(tag(x, 'SesInfo') ?? '');
+    this.noteEsc('SesTokInfo', x);
     const m = ses.match(/SessionID=([^;,\s]+)/);
     if (m) this.cookie = `SessionID=${m[1]}`;
     // H155-383 (فيرموير Vue ٢٠٢٥): ما فيه SesTokInfo — الكوكي يجي من رأس set-cookie والرمز من webserver/token
@@ -368,7 +369,15 @@ export class HuaweiDriver implements RouterDriver {
       } catch {}
     }
     if (!m && !this.cookie) this.manualCookie = false;
-    return tag(x, 'TokInfo') ?? '';
+    return xmlUnesc(tag(x, 'TokInfo') ?? '');
+  }
+  /** تشخيص: الرد فيه رموز مرمّزة (&quot;…) — مرة لكل نوع بالدخول، بدون القيم */
+  private escNoted = new Set<string>();
+  private noteEsc(what: string, xml: string) {
+    const n = escCount(xml.replace(/^<\?xml[^>]*>/, ''));
+    if (!n || this.escNoted.has(what)) return;
+    this.escNoted.add(what);
+    diag(`[huawei] ${what}: رموز مرمّزة ${n} — نفكها قبل الإرسال`);
   }
   /** الراوتر يرد؟ (بعد إعادة اتصال/تشغيل) — SesTokInfo أو webserver/token للفيرموير الجديدة */
   private async answers(): Promise<boolean> {
@@ -409,14 +418,17 @@ export class HuaweiDriver implements RouterDriver {
     if (this.manualCookie) viaSes = true;
     if (!viaSes) try {
       const r = await this.http(this.url('webserver/token'), { headers: this.headers() });
-      const t = tokenFromReply(await r.text());
+      const tx = await r.text();
+      this.noteEsc('token', tx);
+      const t = tokenFromReply(tx);
       if (t) return t;
     } catch {}
     const r = await this.http(this.url('webserver/SesTokInfo'), { headers: this.headers() });
     const x = await r.text();
     if (hasSesTok(x)) {
-      if (this.manualCookie) { const m = (tag(x, 'SesInfo') ?? '').match(/SessionID=([^;,\s]+)/); if (m) this.cookie = `SessionID=${m[1]}`; }
-      return tag(x, 'TokInfo') ?? '';
+      this.noteEsc('SesTokInfo', x);
+      if (this.manualCookie) { const m = xmlUnesc(tag(x, 'SesInfo') ?? '').match(/SessionID=([^;,\s]+)/); if (m) this.cookie = `SessionID=${m[1]}`; }
+      return xmlUnesc(tag(x, 'TokInfo') ?? '');
     }
     // H155-383: ما فيه SesTokInfo — نرجع لـ webserver/token (حتى لو طُلب viaSes)
     const t = await this.http(this.url('webserver/token'), { headers: this.headers() });
