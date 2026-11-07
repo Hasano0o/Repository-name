@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Icon, IconName } from '../src/ui/Icon';
 import { C, R, S, T, tBd, tBg, tFg } from '../src/ui/theme';
-import { isLanHost } from '../src/utils/host';
+import { isLanHost, cleanHostInput } from '../src/utils/host';
 import { detectDriver } from '../src/drivers/registry';
 import { addDemoRouter } from '../src/drivers/demo';
 import { DesktopNetCard, explainDetectFailure, useDesktopNet } from '../src/ui/DesktopNet';
@@ -99,7 +99,8 @@ export default function AddRouterScreen() {
   // نسخة الويندوز: حالة الشبكة + تعبئة عنوان الراوتر تلقائياً (ما لم يغيّره المستخدم)
   const net = useDesktopNet();
   const hostTouched = useRef(false);
-  const pickHost = (h: string) => { hostTouched.current = true; setHost(h); };
+  // لصق رابط كامل (https://…/html/…#home) ← نخلي العنوان بس. الكتابة العادية ما نلمسها
+  const pickHost = (h: string) => { hostTouched.current = true; setHost(/[/\s@]|:\/\//.test(h.trim()) ? cleanHostInput(h) : h); };
   useEffect(() => {
     const gw = net.diag?.gateway;
     if (gw && !editId && !hostTouched.current && !net.diag?.noAddress) setHost(gw);
@@ -251,7 +252,7 @@ export default function AddRouterScreen() {
   // غيّر العنوان بنفسه ← نتعرّف على اللي كتبه (بعد ما يوقف كتابة)
   useEffect(() => {
     if (!hostTouched.current || editId) return;
-    const h = host.trim();
+    const h = cleanHostInput(host);
     if (!isLanHost(h)) return;
     let alive = true;
     const t = setTimeout(async () => {
@@ -399,7 +400,7 @@ export default function AddRouterScreen() {
       }
       return;
     }
-    let h = (over?.host ?? host).trim();
+    let h = cleanHostInput(over?.host ?? host);
     const u = (over?.username ?? username).trim() || 'admin';
     const password = over?.password ?? passwordState;
     const wifiNow = over?.wifi ?? wifi;

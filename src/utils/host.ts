@@ -35,6 +35,21 @@ const PRIVATE_V6 = [
 // H112-370 (Three) يحوّل لـ https باسم بدل العنوان، فكنا نرفضه «redirect خارجي».
 const LOCAL_SUFFIXES = ['.local', '.lan', '.home', '.internal', '.cpe', '.router', '.box', '.gateway'];
 
+/**
+ * خانة «عنوان الراوتر»: الأعضاء يلصقون رابط الصفحة كامل من المتصفح
+ * (add-login ٧ نوفمبر: «https://hirouter.net/html/content.html#home») — كان يوصل للدرايفر كما هو ويفشل «ما رد».
+ * نشيل البروتوكول والمسار والاستعلام والـ # ونخلي العنوان (والمنفذ لو موجود).
+ */
+export function cleanHostInput(raw: string): string {
+  let s = (raw ?? '').trim();
+  if (!s) return s;
+  s = s.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/^\/+/, '');
+  s = s.replace(/^[^@/?#]*@/, '');
+  if (s.startsWith('[')) { const m = s.match(/^\[[^\]]+\](:\d+)?/); return m ? m[0] : s; }
+  s = s.split(/[/?#\s]/)[0];
+  return s.replace(/\.$/, '').toLowerCase();
+}
+
 export function hostOnly(raw: string): string {
   let s = raw.trim().replace(/^https?:\/\//i, '').replace(/^\/+/, '');
   // IPv6 bracketed: [::1]:8080 → ::1
