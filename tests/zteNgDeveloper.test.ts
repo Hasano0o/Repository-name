@@ -33,16 +33,18 @@ const { publicKey } = nc.generateKeyPairSync('rsa', { modulusLength: 1024, publi
 const DEV_ONLY = /nwinfo_set_(lte_ext_band|nrbandlock)$/;
 
 /** devPw: كلمة خيارات المطوّر (الافتراضي = كلمة الدخول) · ACL: الترددات تبي جلسة دخلت خيارات المطوّر، وgwl_bandlock مو موجود */
-function router(opts: { devPw?: string } = {}) {
+function router(opts: { devPw?: string; httpsOnly?: boolean } = {}) {
   const good = new Set<string>();
   const dev = new Set<string>();
   const log: string[] = [];
   let lte = '', nr = '', netSelect = 'WL_AND_5G';
   const devPw = opts.devPw ?? PW;
   const res = (body: unknown) => ({ ok: true, status: 200, headers: { get: () => null }, json: async () => body, text: async () => JSON.stringify(body) } as any);
-  (globalThis as any).fetch = async (_url: string, init?: any) => {
+  (globalThis as any).fetch = async (url: string, init?: any) => {
+    const https = url.startsWith('https://');
     const [{ params: [sess, , method, p] }] = JSON.parse(String(init.body));
     log.push(method);
+    if (https) log.push('https');
     const ok = (o: unknown) => res([{ jsonrpc: '2.0', id: 1, result: [0, o] }]);
     const denied = () => res([{ jsonrpc: '2.0', id: 1, error: { code: -32002, message: 'Access denied' } }]);
     if (method === 'web_login_info') return ok({ zte_web_sault: SALT });
@@ -61,6 +63,12 @@ function router(opts: { devPw?: string } = {}) {
       return ok({ result: '1' });
     }
     if (method === 'nwinfo_set_gwl_bandlock') return denied();
+    // httpsOnly: الكتابة على http مرفوضة كلها (مثل MU5250 ٧ نوفمبر: GET / على http = 405)
+    if (opts.httpsOnly && /set_/.test(method) && !https) return denied();
+    if (opts.httpsOnly && https && /set_/.test(method)) {
+      if (method === 'nwinfo_set_lte_ext_band') { lte = p.lte_band_mask; return ok({ result: 'success' }); }
+      if (method === 'nwinfo_set_netselect') { netSelect = p.net_select; return ok({ result: 'success' }); }
+    }
     if (DEV_ONLY.test(method) && !dev.has(sess)) return denied();
     if (method === 'nwinfo_set_lte_ext_band') { lte = p.lte_band_mask; return ok({ result: 'success' }); }
     if (method === 'nwinfo_set_nrbandlock') { nr = p.nr5g_band; return ok({ result: 'success' }); }
@@ -100,11 +108,12 @@ test('MU5250: كلمة المطوّر غير كلمة الدخول ← رسال�
   const d = new ZteNgDriver();
   await d.login('192.168.0.13', 'admin', PW);
   await assert.rejects(d.setBand([3], undefined), (e: any) => /خيارات المطوّر/.test(e.message));
-  assert.equal(count(r.log, 'web_developer_option_login'), 1);
+  const n = count(r.log, 'web_developer_option_login');
+  assert.ok(n >= 1 && n <= 2, `محاولات كلمة المطوّر: ${n} (مرة لكل أصل http/https)`);
   const d2 = new ZteNgDriver();
   await d2.login('192.168.0.13', 'admin', PW);
   await assert.rejects(d2.setBand([3], undefined), (e: any) => /خيارات المطوّر/.test(e.message));
-  assert.equal(count(r.log, 'web_developer_option_login'), 1, 'ما جرّبنا الكلمة المرفوضة مرة ثانية');
+  assert.equal(count(r.log, 'web_developer_option_login'), n, 'ما جرّبنا الكلمة المرفوضة مرة ثانية');
 });
 
 test('MU5250: وضع الشبكة (صفحة عادية) ← بدون خيارات المطوّر', async () => {
@@ -114,4 +123,17 @@ test('MU5250: وضع الشبكة (صفحة عادية) ← بدون خيارا�
   await d.setNetworkMode('03');
   assert.equal(count(r.log, 'web_developer_option_login'), 0);
   assert.ok(r.mode() !== 'WL_AND_5G', r.mode());
+});
+
+test('MU5250: الكتابة على http مرفوضة كلها ← نكمّل على https (أصل الصفحة) وننجح، والمرة الجاية مباشرة', async () => {
+  const r = router({ httpsOnly: true, devPw: 'other' });
+  const d = new ZteNgDriver();
+  await d.login('192.168.0.15', 'admin', PW);
+  await d.setNetworkMode('03');
+  assert.ok(r.mode() !== 'WL_AND_5G', r.mode());
+  assert.ok(r.log.includes('https'), 'رحنا https');
+  const before = r.log.length;
+  await d.setNetworkMode('0803');
+  const after = r.log.slice(before);
+  assert.ok(!after.includes('web_login'), after.join(' | '));
 });

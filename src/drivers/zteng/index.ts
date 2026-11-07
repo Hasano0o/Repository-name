@@ -67,6 +67,12 @@ const LTE_EARFCN: [number, number, number][] = [
 ];
 const lteBandOf = (e?: number) => (e === undefined ? undefined : LTE_EARFCN.find(([, a, b]) => e >= a && e <= b)?.[0]);
 
+/** راوترات ZTE الجيل الجديد اللي الكتابة فيها تمشي على https بس (نفس أصل صفحتها) */
+const httpsHosts = new Set<string>();
+/** جرّبنا https مرة لهالراوتر (نجح أو لا) — ما نعيده مع كل أمر */
+const httpsTried = new Set<string>();
+export function _resetZteNgHttps() { httpsHosts.clear(); httpsTried.clear(); }
+
 export class ZteNgDriver implements RouterDriver {
   id = 'zte-ng';
   name = 'ZTE (الجيل الجديد)';
@@ -78,7 +84,12 @@ export class ZteNgDriver implements RouterDriver {
   private password = '';
   private orig: Record<string, string> | null = null;
 
-  private base() { return 'http://' + this.host.replace(/^https?:\/\//, '').replace(/\/+$/, ''); }
+  /**
+   * MU5250 (FULL ٧ نوفمبر ١:٤٩ م، SM-S938B): «GET / → 405» على http و https يرجّع الصفحة (25KB) — صفحة الراوتر
+   * نفسها تشتغل على https، والقراءة على http تمشي بس كل كتابة Access denied حتى بعد دخول result=0 + التفاوض.
+   * لو الكتابة انرفضت على http بعد دخول جديد وخيارات المطوّر ← نكمّل على https (نفس أصل الصفحة) ونتذكره للراوتر.
+   */
+  private base() { return `${httpsHosts.has(this.host) ? 'https' : 'http'}://` + this.host.replace(/^https?:\/\//, '').replace(/\/+$/, ''); }
 
   /** نداء ubus واحد — يرجع الكائن (result[1]) أو يرمي لو الكود مو 0 */
   private async call(obj: string, method: string, params: Record<string, unknown> = {}, session?: string): Promise<Record<string, unknown>> {
@@ -175,7 +186,7 @@ export class ZteNgDriver implements RouterDriver {
       const wi = await this.call('zwrt_web', 'web_info', {});
       if (str(wi.developer_option_loginfo) === '1') { this.devOk = true; diag('[zte-ng] خيارات المطوّر: مفتوحة أصلاً'); return true; }
     } catch {}
-    const key = 'dev:' + this.host;
+    const key = 'dev:' + this.base();   // لكل أصل (http/https) لحاله — رفض على http ما يحجب https
     const fp = bytesToHex(sha256(utf8ToBytes('bandly-ng-dev:' + this.password)));
     if (await isBadPassword(key, fp)) {
       this.devRejected = true;
@@ -221,7 +232,8 @@ export class ZteNgDriver implements RouterDriver {
   }
 
   /** أمر كتابة: يدخل لو ما دخلنا، ولو الجلسة انتهت (رفض صلاحية) يدخل مرة ثانية ويعيد */
-  private async write(obj: string, method: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
+  /** probe: أمر نجرّبه ونرجع لغيره لو رُفض (gwl_bandlock) — ما يستهلك تجربة https */
+  private async write(obj: string, method: string, params: Record<string, unknown>, probe = false): Promise<Record<string, unknown>> {
     if (this.session === ZERO) await this.doLogin();
     try {
       return await this.callRetry(obj, method, params);
@@ -235,6 +247,31 @@ export class ZteNgDriver implements RouterDriver {
           // الجلسة سليمة (دخلنا للتو) والأمر لسا مرفوض = صلاحية: أوامر «خيارات المطوّر» ← ندخلها ونعيد مرة
           if ((e2?.code === 6 || e2?.code === -32002) && await this.devLogin()) {
             try { return await this.callRetry(obj, method, params); } catch (e3: any) { e2 = e3; }
+          }
+          // لسا مرفوض على http ← صفحة الراوتر نفسها على https: ندخل هناك ونعيد مرة (مرة لكل راوتر)
+          if (!probe && (e2?.code === 6 || e2?.code === -32002) && !httpsTried.has(this.host)) {
+            diag('[zte-ng] الكتابة مرفوضة على http بعد الدخول — نجرّب https (أصل صفحة الراوتر)');
+            httpsTried.add(this.host);
+            httpsHosts.add(this.host);
+            try {
+              this.session = ZERO;
+              await this.doLogin();
+              try {
+                const out = await this.callRetry(obj, method, params);
+                diag('[zte-ng] https: الكتابة انقبلت ✓');
+                return out;
+              } catch (e3: any) {
+                if ((e3?.code === 6 || e3?.code === -32002) && await this.devLogin()) return await this.callRetry(obj, method, params);
+                throw e3;
+              }
+            } catch (e4: any) {
+              diag(`[zte-ng] https ما نفع: ${String(e4?.message ?? e4).slice(0, 80)}`);
+              // https ما يفرق (أو ما يرد) ← نرجع http للقراءة
+              httpsHosts.delete(this.host);
+              this.session = ZERO;
+              if (e4?.code !== 6 && e4?.code !== -32002) throw e4;
+              e2 = e4;
+            }
           }
           if ((e2?.code === 6 || e2?.code === -32002) && this.devRejected) {
             const x: any = new Error('هالإعداد في راوترك داخل «خيارات المطوّر»، وكلمتها مو نفس كلمة الدخول — الراوتر رفضها. نفس الشي يصير من صفحة الراوتر نفسها؛ لو تعرف كلمة المطوّر من الشركة كلّمنا في قروب الدعم.');
@@ -588,7 +625,7 @@ export class ZteNgDriver implements RouterDriver {
     const dec = maskOf(bands);
     if (!this.lteExt) {
       try {
-        await this.write('zte_nwinfo_api', 'nwinfo_set_gwl_bandlock', { is_gw_band: '0', gw_band_mask: '0', is_lte_band: '1', lte_band_mask: dec });
+        await this.write('zte_nwinfo_api', 'nwinfo_set_gwl_bandlock', { is_gw_band: '0', gw_band_mask: '0', is_lte_band: '1', lte_band_mask: dec }, true);
         return;
       } catch (e: any) {
         if (e?.devNeeded || (e?.code !== -32002 && e?.code !== 3 && e?.code !== -32601)) throw e;
