@@ -187,3 +187,62 @@ export async function fetchCombos(t: TowerRef): Promise<TowerCombos | null> {
     clearTimeout(tm);
   }
 }
+
+/* ═══ أفضل شركة في منطقتك (٧ نوفمبر) — زي OpenSignal، من فحوصات الأعضاء ═══ */
+
+/** المدينة/الحي: من «الحي» المحفوظ، ولو ما فيه ← مدينة الإحصائيات */
+export async function myPlace(): Promise<{ city: string; area: string }> {
+  const area = await getArea();
+  let city = area.split('/')[0]?.trim() ?? '';
+  if (!city) {
+    try {
+      const { getCity } = await import('./stats');
+      const c = await getCity();
+      if (c && c !== '-') city = c;
+    } catch {}
+  }
+  return { city, area };
+}
+
+/** نتيجة اختبار سرعة على خط الراوتر — بموافقة المشاركة، وبس لو نعرف المدينة والشركة */
+export async function reportSpeed(x: { operator: string; down: number; up: number; ping: number; loaded?: number; nr?: boolean }): Promise<void> {
+  if ((await getConsent()) !== 'on' || !x.operator) return;
+  const { city, area } = await myPlace();
+  if (!city) return;
+  await post('speed', { device: await deviceId(), area: area || city, ...x });
+}
+
+export type CarrierCat = 'down' | 'up' | 'ping' | 'steady' | 'night_ping' | 'nr_pct';
+
+export interface CarrierStat {
+  operator: string; users: number; tests: number; mine: boolean; enough: boolean;
+  score: number | null; ping: number | null; jitter: number | null;
+  /** ٪ فحوصات «جاهز للعب؟» اللي طلعت ٧٠+ (وسيط الأعضاء) */
+  steady: number | null;
+  down: number | null; up: number | null;
+  /** كم يزيد البنق وقت التحميل */
+  bloat: number | null;
+  /** ٪ اختبارات السرعة اللي كان فيها 5G */
+  nr_pct: number | null;
+  night_ping: number | null; day_ping: number | null;
+  wins: CarrierCat[];
+}
+export interface CarrierBoard { operators: CarrierStat[]; winner: string | null; min_users: number; users: number }
+export interface CarrierReport { city: string; area: string; city_stats: CarrierBoard; area_stats: CarrierBoard | null }
+
+/** قراءة بس — أرقام مجمّعة، ما تحتاج موافقة */
+export async function fetchCarriers(city: string, area: string): Promise<CarrierReport | null> {
+  if (!city.trim()) return null;
+  const ctrl = new AbortController();
+  const tm = setTimeout(() => ctrl.abort(), 8000);
+  try {
+    const q = new URLSearchParams({ city, area, device: await deviceId() });
+    const r = await fetch(`${LIVE_BASE}/live-api/community/carriers?${q.toString()}`, { signal: ctrl.signal });
+    if (!r.ok) return null;
+    return (await r.json()) as CarrierReport;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(tm);
+  }
+}

@@ -11,6 +11,9 @@ import Svg, { Path, Circle, Line, Defs, LinearGradient as SvgGrad, Stop, Text as
 import { runSpeedTest, SpeedResult, SpeedProgress, SpeedPhase, ratingsFor } from '../../src/utils/speedtest';
 import { getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
+import { reportSpeed } from '../../src/services/community';
+import { selfLanIp } from '../../src/services/selfIp';
+import { sameLan } from '../../src/utils/gameNet';
 import { Icon, IconName } from '../../src/ui/Icon';
 import { C, R, S, tBg, tBd, tFg } from '../../src/ui/theme';
 import { sheet } from '../../src/i18n';
@@ -155,6 +158,21 @@ export default function SpeedScreen() {
       .catch(() => {});
   }, [id]);
 
+  /** «أفضل شركة في منطقتك»: النتيجة تنضاف لمقارنة الشركات — بموافقة المشاركة، وبس لو الجوال على شبكة الراوتر */
+  const contribute = async (r: SpeedResult) => {
+    try {
+      const rt = id ? await getRouter(id) : null;
+      if (!rt || rt.host === 'demo' || rt.host === 'device') return;
+      if (sameLan(await selfLanIp(rt.host), rt.host) === false) return; // الاختبار مشى على شريحة الجوال
+      const [net, sig] = await withSession(rt, d => Promise.all([
+        d.getNetworkInfo ? d.getNetworkInfo().catch(() => null) : Promise.resolve(null),
+        d.getSignal ? d.getSignal().catch(() => null) : Promise.resolve(null),
+      ]), false);
+      const nr = !!sig && (sig.nrRsrp !== undefined || !!sig.nrActiveFromStatus);
+      await reportSpeed({ operator: net?.operator ?? '', down: r.downloadMbps, up: r.uploadMbps, ping: r.pingMs, loaded: r.loadedPingMs, nr });
+    } catch {}
+  };
+
   const run = useCallback(async () => {
     if (running) return;
     cancel.current = false;
@@ -162,6 +180,7 @@ export default function SpeedScreen() {
     try {
       const r = await runSpeedTest(p => { if (alive.current) setProg(p); }, () => cancel.current || !alive.current);
       if (alive.current) setRes(r);
+      contribute(r);
     } catch (e: any) {
       if (alive.current) setErr(e?.message ?? 'فشل الاختبار');
     } finally {

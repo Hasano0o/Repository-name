@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, } from 'react-native';
 import { View, Text, TextInput, Pressable } from '../i18n/rn';
+import { router, Href } from 'expo-router';
 import { AreaOp, Consent, fetchArea, getArea, setArea } from '../services/community';
 import { C } from './theme';
 import { GlassCard } from './GlassCard';
@@ -81,6 +82,11 @@ export function AreaCompare({ consent, region, regionName, refresh }: {
           {!loading && (!ops || ops.length === 0) && (
             <Text style={s.hint}>ما فيه نتائج في حيّك للحين. كل ما أحد فحص «جاهز للعب؟» تتجمع النتائج — شارك التطبيق مع جيرانك وقروبك 😄</Text>
           )}
+          {!loading && (
+            <Pressable onPress={() => router.push('/carriers' as Href)} hitSlop={6}>
+              <Text style={s.more}>المقارنة الكاملة: السرعة والثبات والليل و5G ‹</Text>
+            </Pressable>
+          )}
           {!loading && ops && ops.length === 1 && (
             <Text style={s.hint}>للحين شريحة وحدة بس في حيّك — نحتاج مستخدمين من شركات ثانية عشان تصير مقارنة</Text>
           )}
@@ -107,4 +113,5 @@ const s = sheet({
   of: { color: C.sub, fontSize: 11, fontWeight: '700' },
   opName: { color: C.text, fontWeight: '800', fontSize: 15 },
   opSub: { color: C.sub, fontSize: 11, textAlign: 'right' },
+  more: { color: C.blue, fontWeight: '800', fontSize: 12, textAlign: 'right' },
 });

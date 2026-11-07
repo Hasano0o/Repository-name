@@ -6,6 +6,8 @@
   GET  /live-api/community/tower    ← أفضل إعداد على البرج + انقطاعات حديثة
   POST /live-api/community/obs      ← قراءة: البرج + تجميعة الترددات + الإشارة + البنق (٧ نوفمبر)
   GET  /live-api/community/combos   ← وش أفضل تجميعة على هالبرج عند الأعضاء (بدون GPS)
+  POST /live-api/community/speed    ← نتيجة اختبار سرعة (الشركة + الحي + تنزيل/رفع/بنق) (٧ نوفمبر)
+  GET  /live-api/community/carriers ← أفضل شركة في مدينتك/حيّك (زي OpenSignal) من فحوصات الأعضاء
 
 ما نستقبل أي موقع أو رقم جوال أو اسم — فقط رقم البرج والمشغّل ومعرّف عشوائي
 للتطبيق (نخزن بصمته فقط) عشان ما يحسب نفس الجهاز مرتين.
@@ -49,6 +51,11 @@ def _db() -> sqlite3.Connection:
         rsrp INTEGER, sinr INTEGER, nr_rsrp INTEGER, ping INTEGER, jitter INTEGER, score INTEGER,
         hour INTEGER, src TEXT)""")
     c.execute("CREATE INDEX IF NOT EXISTS i_obs ON obs(tower, op, at)")
+    # ٧ نوفمبر — أفضل شركة في منطقتك: اختبارات السرعة لكل حي
+    c.execute("""CREATE TABLE IF NOT EXISTS speeds(
+        at INTEGER, op TEXT, dev TEXT, area TEXT, city TEXT,
+        down REAL, up REAL, ping INTEGER, loaded INTEGER, nr INTEGER, hour INTEGER)""")
+    c.execute("CREATE INDEX IF NOT EXISTS i_speeds ON speeds(city, at)")
     return c
 
 
@@ -111,6 +118,7 @@ def _prune(c: sqlite3.Connection):
     c.execute("DELETE FROM tests WHERE at < ?", (cut,))
     c.execute("DELETE FROM outages WHERE at < ?", (cut,))
     c.execute("DELETE FROM obs WHERE at < ?", (int(time.time()) - OBS_KEEP_DAYS * 86400,))
+    c.execute("DELETE FROM speeds WHERE at < ?", (int(time.time()) - OBS_KEEP_DAYS * 86400,))
 
 
 @router.post("/report")
@@ -327,3 +335,147 @@ async def combos(tower: str, operator: str = "", device: str = ""):
             (tw, op, int(time.time()) - 60 * 86400),
         ).fetchall()
     return {"tower": tw, "operator": op, **summarize(rows, me)}
+
+
+# ═══ أفضل شركة في منطقتك (٧ نوفمبر) — زي OpenSignal: من فحوصات الأعضاء الحقيقية ═══
+CARRIER_DAYS = 60
+
+
+def _city(area: str) -> str:
+    return (area or "").split("/")[0].strip()
+
+
+def _fopt(v, lo, hi):
+    try:
+        x = float(v)
+    except Exception:
+        return None
+    return round(x, 1) if lo <= x <= hi else None
+
+
+def _night(hour) -> bool:
+    return hour is not None and (hour >= 20 or hour < 1)
+
+
+@router.post("/speed")
+async def speed(req: Request):
+    b = await req.json()
+    dev = _dev(b.get("device"))
+    _limit(dev)
+    area = _area(b.get("area"))
+    city = _city(area)
+    op = _op(b.get("operator"))
+    down, up = _fopt(b.get("down"), 0, 5000), _fopt(b.get("up"), 0, 5000)
+    if not city or op == "غير معروف" or down is None:
+        raise HTTPException(400, "missing")
+    now = int(time.time())
+    row = (now, op, dev, area, city, down, up, _opt(b.get("ping"), 1, 3000), _opt(b.get("loaded"), 1, 5000),
+           1 if b.get("nr") else 0, time.localtime().tm_hour)
+    with _db() as c:
+        # نفس الجهاز خلال ١٠ دقايق = اختبار واحد (آخر نتيجة)
+        c.execute("DELETE FROM speeds WHERE dev=? AND at>?", (dev, now - 600))
+        c.execute("INSERT INTO speeds VALUES (?,?,?,?,?,?,?,?,?,?,?)", row)
+        if now % 20 == 0:
+            _prune(c)
+    return {"ok": True}
+
+
+# الفئات: (المفتاح، الأفضل أعلى؟، أقل عدد أعضاء عندهم القيمة)
+CATS = [("down", True), ("up", True), ("ping", False), ("steady", True), ("night_ping", False), ("nr_pct", True)]
+
+
+def rank_carriers(tests, speeds, me: str = "", min_users: int = MIN_USERS) -> dict:
+    """tests = [(op, dev, score, ping, jitter, hour)] من «جاهز للعب؟»
+    speeds = [(op, dev, down, up, ping, loaded, nr, hour)] من اختبار السرعة
+    كل جهاز ينحسب مرة (وسيط قراءاته) — عضو كثير الفحص ما يغلب الباقي."""
+    per: dict[str, dict] = {}
+    for op, dev, score, ping, jitter, hour in tests:
+        d = per.setdefault(_op(op), {}).setdefault(dev, {"t": [], "s": []})
+        d["t"].append((score, ping, jitter, hour))
+    for op, dev, down, up, ping, loaded, nr, hour in speeds:
+        d = per.setdefault(_op(op), {}).setdefault(dev, {"t": [], "s": []})
+        d["s"].append((down, up, ping, loaded, nr, hour))
+
+    ops = []
+    for op, devs in per.items():
+        k = {x: [] for x in ("score", "ping", "jitter", "steady", "down", "up", "bloat", "nr_pct")}
+        night, day = [], []
+        n_tests = 0
+        for dv, x in devs.items():
+            t, sp = x["t"], x["s"]
+            n_tests += len(t) + len(sp)
+            if t:
+                for i, key in enumerate(("score", "ping", "jitter")):
+                    v = _med([r[i] for r in t])
+                    if v is not None:
+                        k[key].append(v)
+                sc = [r[0] for r in t if r[0] is not None]
+                if sc:
+                    k["steady"].append(round(100 * sum(1 for v in sc if v >= 70) / len(sc)))
+            if sp:
+                for key, i in (("down", 0), ("up", 1)):
+                    v = _med([r[i] for r in sp])
+                    if v is not None:
+                        k[key].append(v)
+                # البنق من اختبار السرعة لو ما عنده فحص لعب
+                if not t:
+                    v = _med([r[2] for r in sp])
+                    if v is not None:
+                        k["ping"].append(v)
+                b = _med([r[3] - r[2] for r in sp if r[3] is not None and r[2] is not None])
+                if b is not None:
+                    k["bloat"].append(max(0, b))
+                k["nr_pct"].append(round(100 * sum(1 for r in sp if r[4]) / len(sp)))
+            for r in t:
+                if r[1] is not None:
+                    (night if _night(r[3]) else day).append(r[1])
+        users = len(devs)
+        enough_night = len(night) >= 3 and len(day) >= 3
+        ops.append({
+            "operator": op, "users": users, "tests": n_tests, "mine": me in devs, "enough": users >= min_users,
+            **{key: _med(v) for key, v in k.items()},
+            "night_ping": _med(night) if enough_night else None,
+            "day_ping": _med(day) if enough_night else None,
+            "wins": [],
+        })
+
+    # الفائز بكل فئة: بس بين الشركات اللي عندها أعضاء كفاية، وبس لو فيه أكثر من شركة تنقارن
+    for key, high in CATS:
+        cand = [o for o in ops if o["enough"] and o[key] is not None]
+        if len(cand) < 2:
+            continue
+        best = max(cand, key=lambda o: o[key]) if high else min(cand, key=lambda o: o[key])
+        # تعادل = ما فيه فائز
+        if sum(1 for o in cand if o[key] == best[key]) == 1:
+            best["wins"].append(key)
+    ops.sort(key=lambda o: (not o["enough"], -len(o["wins"]), -(o["score"] or 0), -(o["down"] or 0)))
+    winner = ops[0]["operator"] if ops and ops[0]["enough"] and ops[0]["wins"] else None
+    return {"operators": ops, "winner": winner, "min_users": min_users,
+            "users": sum(o["users"] for o in ops)}
+
+
+def _carrier_rows(c, where: str, args: list):
+    since = int(time.time()) - CARRIER_DAYS * 86400
+    tests = [
+        (op, dev, sc, pg, jt, time.localtime(at).tm_hour)
+        for op, dev, sc, pg, jt, at in c.execute(
+            f"SELECT op, dev, score, ping, jitter, at FROM tests WHERE setup='_check' AND at>=? AND ({where})",
+            [since, *args]).fetchall()
+    ]
+    speeds = c.execute(
+        f"SELECT op, dev, down, up, ping, loaded, nr, hour FROM speeds WHERE at>=? AND ({where})",
+        [since, *args]).fetchall()
+    return tests, speeds
+
+
+@router.get("/carriers")
+async def carriers(city: str = "", area: str = "", device: str = ""):
+    ar = _area(area)
+    ct = _area(city).split("/")[0] or _city(ar)
+    if not ct:
+        raise HTTPException(400, "missing")
+    me = _dev(device) if device else ""
+    with _db() as c:
+        city_res = rank_carriers(*_carrier_rows(c, "area=? OR area LIKE ?", [ct, ct + "/%"]), me)
+        area_res = rank_carriers(*_carrier_rows(c, "area=?", [ar]), me) if "/" in ar else None
+    return {"city": ct, "area": ar if area_res else "", "city_stats": city_res, "area_stats": area_res}
