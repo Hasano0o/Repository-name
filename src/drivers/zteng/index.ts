@@ -343,8 +343,17 @@ export class ZteNgDriver implements RouterDriver {
   }
 
   private async net(): Promise<NetInfo> {
-    try { return await this.call('zte_nwinfo_api', 'nwinfo_get_netinfo', {}); }
-    catch { return await this.call('zte_nwinfo_api', 'nwinfo_get_netinfo', {}, ZERO); }
+    let d: NetInfo;
+    try { d = await this.call('zte_nwinfo_api', 'nwinfo_get_netinfo', {}); }
+    catch { d = await this.call('zte_nwinfo_api', 'nwinfo_get_netinfo', {}, ZERO); }
+    // MU5250/MU5252 (تشخيص ٨ نوفمبر ١:٢٦): بعد lte_ext_band بالقائمة، lte_band_lock (القناع) يتأخر كتابة وحدة
+    // (كتبنا 3 ← القناع لسا B3+B8 من قبل)، و lte_band = المثبّت الحين بالضبط. لهالعائلة نبني القناع من lte_band —
+    // وإلا التأكد والإرجاع يقولون «ما رجع» والراوتر راجع.
+    if (extHosts.get(this.host) === 'list') {
+      const l = str((d as any).lte_band).split(',').map(Number).filter(n => Number.isInteger(n) && n > 0 && n < 129);
+      if (l.length) (d as any).lte_band_lock = '0x' + BigInt(maskOf(l)).toString(16);
+    }
+    return d;
   }
 
   /** «pci,band,?,earfcn,bw;…» — أول سطر يطابق الأساسي نتخطاه */
@@ -530,13 +539,22 @@ export class ZteNgDriver implements RouterDriver {
     return out;
   }
 
+  private infoLogged = false;
   async getDeviceDetails(): Promise<DeviceDetails> {
     const d = await this.net().catch(() => ({} as NetInfo));
     let i: Record<string, unknown> = {};
-    try { i = await this.call('zwrt_mc.device.manager', 'get_device_info', {}); } catch {}
+    try { i = await this.call('zwrt_mc.device.manager', 'get_device_info', {}); }
+    catch (e: any) {
+      // بدون دخول يرجع Access denied ← كان الموديل يطلع «ZTE U60 Pro» (اسم ثابت) عند صاحب MU5252
+      if ((e?.code === 6 || e?.code === -32002) && this.password && this.session === ZERO) {
+        try { await this.doLogin(); i = await this.call('zwrt_mc.device.manager', 'get_device_info', {}); } catch {}
+      }
+    }
+    if (!this.infoLogged) { this.infoLogged = true; diag(`[zte-ng] get_device_info خانات: ${Object.keys(i).join(',') || '—'}`); }
     const pickS = (o: Record<string, unknown>, ...k: string[]) => { for (const x of k) { const v = str(o[x]); if (v) return v; } return undefined; };
     return {
-      model: pickS(i, 'model_name', 'device_name', 'hardware_model', 'product_name') ?? 'ZTE U60 Pro',
+      // ما نخمّن اسم: صفحة MU5250 و MU5252 و U60 Pro وحدة (config.js DEVICE_MODEL "MU5250" حتى عند MU5252)
+      model: pickS(i, 'model_name', 'device_name', 'hardware_model', 'product_name', 'model', 'device_model') ?? 'ZTE (الجيل الجديد)',
       imei: pickS(i, 'imei', 'IMEI'),
       software: pickS(i, 'software_version', 'wa_inner_version', 'sw_version', 'firmware_version'),
       hardware: pickS(i, 'hardware_version', 'hw_version'),

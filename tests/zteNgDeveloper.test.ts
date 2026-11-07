@@ -53,7 +53,8 @@ function router(opts: { devPw?: string; httpsOnly?: boolean; model?: string; gwl
       if (p.password === sha(sha(PW) + SALT)) { good.add(s); return ok({ result: 0, ubus_rpc_session: s }); }
       return ok({ result: 1, ubus_rpc_session: s });
     }
-    if (method === 'nwinfo_get_netinfo') return ok({ network_type: 'LTE', lte_rsrp: '-90', net_select: netSelect, nr5g_sa_band_lock: nr });
+    // listFmt: lte_band = المثبّت الحين · lte_band_lock يتأخر (ثابت قديم) مثل MU5252 ٨ نوفمبر
+    if (method === 'nwinfo_get_netinfo') return ok({ network_type: 'LTE', lte_rsrp: '-90', net_select: netSelect, nr5g_sa_band_lock: nr, ...(opts.listFmt ? { lte_band: lte || '1,3,7,8,20,28,38,40,41', lte_band_lock: '0x84' } : {}) });
     if (method === 'web_info') return ok({ developer_option_loginfo: dev.has(sess) ? '1' : '0', model: opts.model ?? 'MU5250' });
     if (!good.has(sess)) return denied();
     if (method === 'web_crt_get') return ok({ result: publicKey });
@@ -78,6 +79,7 @@ function router(opts: { devPw?: string; httpsOnly?: boolean; model?: string; gwl
       if (!p.lte_band_mask) return bad();
     }
     if (method === 'nwinfo_set_nrbandlock' && opts.nrNumeric !== undefined && /^\d$/.test(p.nr5g_type) !== opts.nrNumeric) return bad();
+    if (method === 'get_device_info') return ok({ model_name: 'ZTE TOPFLOW MU5252', software_version: 'BD_MU5252V1.0' });
     if (method === 'get' && p.config === 'zwrt_zte_nwinfo') return opts.defaults ? ok({ values: opts.defaults }) : ok({});
     if (method === 'nwinfo_set_lte_ext_band') { lte = p.lte_band_mask; return ok({ result: 'success' }); }
     if (method === 'nwinfo_set_nrbandlock') { nr = p.nr5g_band; return ok({ result: 'success' }); }
@@ -195,4 +197,24 @@ test('رفض بعد الدخول وخيارات المطوّر ← ما نعيد
   const n = count(r.log, 'web_login');
   for (const b of [1, 8, 20]) await assert.rejects(d.setBand([b], undefined));
   assert.equal(count(r.log, 'web_login'), n);
+});
+
+test('MU5252: القناع lte_band_lock يتأخر ← المثبّت من lte_band (اللقطة والتأكد صح)', async () => {
+  router(MU5252);
+  const d = new ZteNgDriver();
+  await d.login('192.168.0.26', 'admin', PW);
+  await d.setBand([3], undefined);
+  const snap = await d.readLockState();
+  assert.equal(snap.data.lte_band_lock, '0x4');
+  await d.setBand([1, 28], undefined);
+  assert.equal((await d.readLockState()).data.lte_band_lock, '0x8000001');
+});
+
+test('معلومات الجهاز: get_device_info يحتاج دخول ← ندخل ونقراه (كان «ZTE U60 Pro» ثابت)', async () => {
+  router(MU5252);
+  const d = new ZteNgDriver();
+  await d.login('192.168.0.27', 'admin', PW);
+  const i = await d.getDeviceDetails();
+  assert.equal(i.model, 'ZTE TOPFLOW MU5252');
+  assert.equal(i.software, 'BD_MU5252V1.0');
 });
