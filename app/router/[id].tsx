@@ -31,6 +31,7 @@ import { DiagnosisCard } from '../../src/ui/Diagnosis';
 import { UsageRing } from '../../src/ui/UsageRing';
 import { DeviceRow } from '../../src/ui/DeviceRow';
 import { SyncIcon } from '../../src/ui/SyncIcon';
+import { FONT } from '../../src/ui/fonts';
 import { StoreAd } from '../../src/ui/StoreAd';
 import { TechStrip } from '../../src/ui/TechStrip';
 import { ComboCard } from '../../src/ui/ComboCard';
@@ -876,9 +877,28 @@ export default function RouterDashboard() {
               </>
             )}
             {!!traffic && traffic.connectedSecs > 0 && (
-              <View style={s.sinceRow}>
-                <SyncIcon active={syncing} />
-                <Text style={s.sinceText}>متصل منذ {fmtDuration(traffic.connectedSecs)}{details?.wanIp ? `  ·  الآي بي ${details.wanIp}` : ''}</Text>
+              // إطار «مدة الاتصال · الآي بي» — تفاصيل يهتم فيها البعض (الآي بي يتغيّر مع «آي بي جديد»)، فتبان لحالها
+              <View style={s.sinceBox}>
+                <View style={s.sinceCell}>
+                  <View style={s.sinceIcon}><Icon name="clock" size={14} color={C.blue} stroke={2.2} /></View>
+                  <View style={s.sinceTxt}>
+                    <Text style={s.sinceLbl}>متصل منذ</Text>
+                    <Text style={s.sinceVal} numberOfLines={1} adjustsFontSizeToFit>{fmtDuration(traffic.connectedSecs)}</Text>
+                  </View>
+                </View>
+                {!!details?.wanIp && (
+                  <>
+                    <View style={s.sinceDiv} />
+                    <View style={s.sinceCell}>
+                      <View style={[s.sinceIcon, s.sinceIconV]}><Icon name="globe" size={14} color={C.violet} stroke={2.2} /></View>
+                      <View style={s.sinceTxt}>
+                        <Text style={s.sinceLbl}>الآي بي</Text>
+                        <Text style={s.sinceIp} numberOfLines={1} adjustsFontSizeToFit selectable>{details.wanIp}</Text>
+                      </View>
+                    </View>
+                  </>
+                )}
+                <View style={s.sinceSync}><SyncIcon active={syncing} /></View>
               </View>
             )}
           </LinearGradient>
@@ -1198,8 +1218,21 @@ const s = sheet({
   statText: { flex: 1, alignItems: 'flex-end' },
   statLbl: { color: C.muted, fontSize: 10.5, fontWeight: '600' },
   statNum: { fontSize: 14, fontWeight: '800' },
-  sinceRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: -4 },
-  sinceText: { color: C.muted, fontSize: 11 },
+  // نفس لغة heroBox (البرج/الدمج/الترددات) بس أصغر · زوايا ١٤ (أقل من ١٦ ← بدون لمعة الداكن التلقائية)
+  sinceBox: {
+    flexDirection: 'row-reverse', alignItems: 'center', alignSelf: 'stretch', gap: 8, marginTop: 2,
+    backgroundColor: tBg('#ffffff8c'), borderRadius: 14, borderWidth: 1, borderColor: isDark ? '#304868' : tBd('#ffffff'),
+    paddingVertical: 8, paddingHorizontal: 10,
+  },
+  sinceCell: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: 7, minWidth: 0 },
+  sinceIcon: { width: 26, height: 26, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#2f6bff26' : '#2f6bff14' },
+  sinceIconV: { backgroundColor: isDark ? '#8448f529' : '#7a51e014' },
+  sinceTxt: { flex: 1, alignItems: 'flex-end', minWidth: 0 },
+  sinceLbl: { color: C.muted, fontSize: 10.5, fontWeight: '600', textAlign: 'right' },
+  sinceVal: { color: C.text, fontSize: 12.5, fontWeight: '800', textAlign: 'right' },
+  sinceIp: { color: C.text, fontSize: 13, fontFamily: FONT.numSemi, letterSpacing: 0.3, textAlign: 'right', fontVariant: ['tabular-nums'] },
+  sinceDiv: { width: 1, alignSelf: 'stretch', backgroundColor: C.line, marginVertical: 2 },
+  sinceSync: { width: 22, alignItems: 'center', transform: [{ scale: 0.85 }] },
   heroRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
   heroInfo: { flex: 1, alignItems: 'flex-end', gap: 7 },
   heroTop: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, alignSelf: 'stretch', justifyContent: 'flex-start' },

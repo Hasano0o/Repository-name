@@ -402,6 +402,7 @@ export const EN: Record<string, string> = {
   'الترددات': 'Bands',
   'السرعة الحين': 'Speed now',
   'متصل منذ': 'Connected for',
+  'الآي بي': 'IP',
   'الأبراج طايحة — رجّع الإشارة': 'Towers down — restore signal',
   'شارك الواي فاي': 'Share Wi-Fi',
   'الرسائل': 'Messages',
