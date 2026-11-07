@@ -30,6 +30,8 @@ export default function DeviceScreen() {
   const [plan, setPlan] = useState<DataPlan | null>(null);
   const [devices, setDevices] = useState<ConnectedDevice[]>([]);
   const [blocked, setBlocked] = useState<ConnectedDevice[]>([]);
+  // ok = قرينا القائمة · none = درايفر راوترك ما يقرا الأجهزة للحين · fail = حاولنا وما قدرنا — ما نعرض «0» إلا لو قرينا فعلاً
+  const [devState, setDevState] = useState<'ok' | 'none' | 'fail'>('ok');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [canPlan, setCanPlan] = useState(false);
@@ -44,11 +46,12 @@ export default function DeviceScreen() {
       drv.getDeviceDetails ? drv.getDeviceDetails().catch(() => null) : Promise.resolve(null),
       drv.getUsage ? drv.getUsage().catch(() => null) : Promise.resolve(null),
       drv.getDataPlan ? drv.getDataPlan().catch(() => null) : Promise.resolve(null),
-      drv.getDevices ? drv.getDevices().catch(() => [] as ConnectedDevice[]) : Promise.resolve([] as ConnectedDevice[]),
+      drv.getDevices ? drv.getDevices().catch(() => null) : Promise.resolve(undefined),
       drv.getBlockedDevices ? drv.getBlockedDevices().catch(() => [] as ConnectedDevice[]) : Promise.resolve([] as ConnectedDevice[]),
-    ])) as [DeviceDetails | null, Usage | null, DataPlan | null, ConnectedDevice[], ConnectedDevice[]];
+    ])) as [DeviceDetails | null, Usage | null, DataPlan | null, ConnectedDevice[] | null | undefined, ConnectedDevice[]];
     if (!alive.current) return;
-    setDetails(d); setUsage(u); setPlan(p); setDevices(dev); setBlocked(blk);
+    setDetails(d); setUsage(u); setPlan(p); setDevices(dev ?? []); setBlocked(blk);
+    setDevState(dev === undefined ? 'none' : dev === null ? 'fail' : 'ok');
     const caps = await withSession(r, async drv => ({
       plan: typeof drv.setDataPlan === 'function',
       block: typeof drv.blockDevice === 'function',
@@ -161,13 +164,15 @@ export default function DeviceScreen() {
       )}
 
       <GlassCard
-        title={`الأجهزة المتصلة (${devices.length})`}
+        title={devState === 'ok' ? `الأجهزة المتصلة (${devices.length})` : 'الأجهزة المتصلة'}
        
         icon="🔗"
         tint={C.violetSoft}
         collapsible={false}
       >
-        {devices.length === 0 && <Text style={s.hint}>ما فيه أجهزة متصلة</Text>}
+        {devState === 'none' && <Text style={s.hint}>قائمة الأجهزة لسا ما انضافت لراوترك — نضيفها قريب</Text>}
+        {devState === 'fail' && <Text style={s.hint}>ما قدرنا نقرا الأجهزة من الراوتر — جرّب بعد شوي</Text>}
+        {devState === 'ok' && devices.length === 0 && <Text style={s.hint}>ما فيه أجهزة متصلة</Text>}
         {devices.map(d => (
           <DeviceRow key={d.mac} device={d} onBlock={() => canBlock ? toggleBlock(d, true) : Alert.alert('غير مدعوم', 'راوترك ما يدعم حظر الأجهزة')} onLimit={() => {}} />
         ))}

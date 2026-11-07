@@ -172,3 +172,16 @@ export function fgHost(host: string): string {
   if (/^\[.*\]:\d+$/.test(h) || /^[^:\[\]]+:\d+$/.test(h)) return h;
   return h + ':8088';
 }
+
+/** رمز الشبكة (MCC+MNC) ← اسمها — بعض الفيرمويرات ترجع «60601» بدل الاسم. المجهول يبقى رقم كما هو. */
+const PLMN: Record<string, string> = {
+  '42001': 'stc', '42003': 'موبايلي', '42004': 'زين',
+  '60600': 'ليبيانا', '60601': 'المدار',
+};
+export function opName(v: unknown): string | undefined {
+  const s = String(v ?? '').trim();
+  if (!s) return undefined;
+  const code = s.replace(/\s+/g, '');
+  if (/^\d{5,6}$/.test(code)) return PLMN[code] ? `${PLMN[code]} (${code})` : code;
+  return s;
+}

@@ -181,3 +181,12 @@ test('وضع الشبكة + البرج + اللقطة والإرجاع', async (
   assert.equal(st.net.rat, '20'); assert.equal(st.locked, false);
   await assert.rejects(d.setNetworkMode('99'), (e: any) => e.noChange === true);
 });
+
+test('المشغّل: رمز PLMN «60601» ← «المدار (60601)» · الاسم يبقى كما هو · رمز مجهول يبقى رقم', async () => {
+  const { opName } = await import('../src/drivers/fg360/parse');
+  assert.equal(opName('60601'), 'المدار (60601)');
+  assert.equal(opName('42004'), 'زين (42004)');
+  assert.equal(opName('STC'), 'STC');
+  assert.equal(opName('99999'), '99999');
+  assert.equal(opName(''), undefined);
+});

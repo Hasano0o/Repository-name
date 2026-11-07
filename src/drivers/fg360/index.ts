@@ -20,7 +20,7 @@ import { diag } from '../../services/diag';
 import { isLanHost } from '../../utils/host';
 import { buildSnapshot } from '../../utils/snapshot';
 import type { ModelProfile } from '../models';
-import { fgSignal, fgCells, fgCarriers, fgNetwork, FG_MODES, nums, scrub, fgHost } from './parse';
+import { fgSignal, fgCells, fgCarriers, fgNetwork, FG_MODES, nums, scrub, fgHost, opName } from './parse';
 
 const API = '/cgi-bin/api.cgi';
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -148,7 +148,7 @@ export class Fg360Driver implements RouterDriver {
   async getNetworkInfo(): Promise<NetworkInfo> {
     const c = await this.cell();
     return {
-      operator: String(c.operator_name || c.operator || '').trim() || undefined,
+      operator: opName(c.operator_name || c.operator),
       connected: c.status === 'connected', mode: fgNetwork(c) || undefined, supports5g: true,
     };
   }
@@ -156,7 +156,7 @@ export class Fg360Driver implements RouterDriver {
   async getDeviceDetails(): Promise<DeviceDetails> {
     const c = await this.cell().catch(() => ({} as any));
     return {
-      model: this.name, operator: String(c.operator_name || c.operator || '').trim() || undefined,
+      model: this.name, operator: opName(c.operator_name || c.operator),
       simStatus: c.sim_status || undefined, software: 'fg360-1',
     };
   }
