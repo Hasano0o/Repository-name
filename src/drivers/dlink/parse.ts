@@ -37,33 +37,91 @@ export interface DlRow {
   caActive?: boolean;
 }
 
+/* حقول الإشارة بأي اسم: «rsrp» · «nrRsrp» · «NR_RSRP» · «ss_rsrp» … — نشيل البادئة والشرطات ونقارن */
+const FIELD: Record<string, RegExp> = {
+  rsrp: /^rsrp$/, rsrq: /^rsrq$/, rssi: /^rssi$/, sinr: /^(sinr|snr)$/, pci: /^(pcid|pci|physicalcellid)$/,
+  cellid: /^(cellid|ci|eci|nci)$/, enodebid: /^(enodebid|enbid|gnodebid|gnbid)$/, arfcn: /^(earfcn|arfcn|nrarfcn|channel|dlearfcn)$/,
+  bw: /^(bandwidth|bw|dlbandwidth)$/, cqi: /^cqi$/, mcs: /^(dlmcs|mcs)$/, rank: /^(rank|ri)$/, plmn: /^plmn$/, band: /^(frequencyband|band|nrband|lteband)$/,
+};
+const NR_PREFIX = /^(nr5g|nr|5g|ss)[_-]?/i;
+const LTE_PREFIX = /^(lte|4g)[_-]?/i;
+const norm = (k: string) => k.replace(NR_PREFIX, '').replace(LTE_PREFIX, '').replace(/[_\-\s]/g, '').toLowerCase();
+const SIG_KEY = /rsrp|sinr|rsrq|pcid|earfcn|arfcn/i;
+
+/** كل الكائنات اللي فيها حقول إشارة (rf[] أول، وبعدها أي مكان ثاني في الرد — عمق ٣) */
+function candidates(info: any): any[] {
+  const out: any[] = [];
+  const seen = new Set<any>();
+  const walk = (v: any, d: number) => {
+    if (!v || typeof v !== 'object' || seen.has(v) || d > 3) return;
+    seen.add(v);
+    if (Array.isArray(v)) { v.forEach(x => walk(x, d + 1)); return; }
+    if (Object.keys(v).some(k => SIG_KEY.test(k) && v[k] !== null && typeof v[k] !== 'object')) out.push(v);
+    for (const k of Object.keys(v)) if (v[k] && typeof v[k] === 'object') walk(v[k], d + 1);
+  };
+  walk(info?.rf, 0);
+  for (const k of Object.keys(info ?? {})) if (k !== 'rf' && k !== 'basic') walk(info[k], 0);
+  return out;
+}
+
+function rowOf(fields: Record<string, unknown>, hintNr: boolean): DlRow | null {
+  const g = (f: keyof typeof FIELD) => { const k = Object.keys(fields).find(x => FIELD[f].test(x)); return k === undefined ? undefined : fields[k]; };
+  const fb = String(g('band') ?? '').trim();
+  const arfcn = num(g('arfcn'));
+  const nrByName = /^n\d+/i.test(fb) || /nr|5g/i.test(fb);
+  const tech: 'LTE' | 'NR' = hintNr || nrByName || (arfcn !== undefined && arfcn > 100000) ? 'NR' : 'LTE';
+  const band = num(fb.replace(/^[bn]/i, '')) ?? (arfcn !== undefined ? bandOfArfcn(tech, arfcn) : undefined);
+  const pci = num(g('pci'));
+  const caA = fields['caactive'];
+  const row: DlRow = {
+    tech, band: band && band > 0 ? band : undefined,
+    arfcn: arfcn !== undefined ? String(arfcn) : undefined,
+    pci: pci !== undefined ? String(pci) : undefined,
+    cellId: str(g('cellid')), enodebId: str(g('enodebid')),
+    bandwidth: num(g('bw')),
+    rsrp: num(g('rsrp')), rsrq: num(g('rsrq')), rssi: num(g('rssi')), sinr: num(g('sinr')),
+    cqi: num(g('cqi')), dlMcs: num(g('mcs')), rank: num(g('rank')),
+    plmn: str(g('plmn')),
+    caActive: caA === undefined ? undefined : !!caA && String(caA) !== '0' && String(caA).toLowerCase() !== 'false',
+  };
+  // قيم مستحيلة (0 أو أكبر من صفر لـ RSRP) = ما فيه قراءة
+  if (row.rsrp !== undefined && (row.rsrp >= 0 || row.rsrp < -160)) row.rsrp = undefined;
+  if (row.rsrp === undefined && row.pci === undefined && row.arfcn === undefined) return null;
+  return row;
+}
+
 export function rowsFrom(info: any): DlRow[] {
-  const rf = info?.rf;
-  const list: any[] = Array.isArray(rf) ? rf : rf && typeof rf === 'object' ? [rf] : [];
   const out: DlRow[] = [];
-  for (const r of list) {
-    if (!r || typeof r !== 'object') continue;
-    const fb = String(r.frequencyBand ?? '').trim();
-    const arfcn = num(r.earfcn);
-    const nrByName = /^n\d+/i.test(fb) || /nr|5g/i.test(fb);
-    const tech: 'LTE' | 'NR' = nrByName || (arfcn !== undefined && arfcn > 100000) ? 'NR' : 'LTE';
-    const band = num(fb.replace(/^[bn]/i, '')) ?? (arfcn !== undefined ? bandOfArfcn(tech, arfcn) : undefined);
-    const row: DlRow = {
-      tech, band: band && band > 0 ? band : undefined,
-      arfcn: arfcn !== undefined ? String(arfcn) : undefined,
-      pci: num(r.pcid) !== undefined ? String(num(r.pcid)) : undefined,
-      cellId: str(r.cellid), enodebId: str(r.enodebid),
-      bandwidth: num(r.bandwidth),
-      rsrp: num(r.rsrp), rsrq: num(r.rsrq), rssi: num(r.rssi), sinr: num(r.sinr),
-      cqi: num(r.CQI), dlMcs: num(r.DLMCS), rank: num(r.RANK),
-      plmn: str(r.plmn),
-      caActive: r.caActive === undefined ? undefined : !!r.caActive && String(r.caActive) !== '0' && String(r.caActive).toLowerCase() !== 'false',
-    };
-    // سطر فاضي (بدون إشارة ولا برج) ما نحسبه
-    if (row.rsrp === undefined && row.pci === undefined && row.arfcn === undefined) continue;
-    out.push(row);
+  for (const r of candidates(info)) {
+    // نفس الكائن ممكن فيه 4G و 5G مع بعض (lteRsrp + nrRsrp) — نقسمه بالبادئة
+    const groups: Record<'lte' | 'nr' | 'plain', Record<string, unknown>> = { lte: {}, nr: {}, plain: {} };
+    for (const k of Object.keys(r)) {
+      if (r[k] !== null && typeof r[k] === 'object') continue;
+      const g = NR_PREFIX.test(k) ? 'nr' : LTE_PREFIX.test(k) ? 'lte' : 'plain';
+      groups[g][norm(k)] = r[k];
+    }
+    const shared = groups.plain;
+    const parts: [Record<string, unknown>, boolean][] = [];
+    if (Object.keys(groups.lte).some(k => /rsrp|sinr|pci|arfcn/.test(k))) parts.push([{ ...shared, ...groups.lte }, false]);
+    if (Object.keys(groups.nr).some(k => /rsrp|sinr|pci|arfcn/.test(k))) parts.push([{ ...shared, ...groups.nr }, true]);
+    if (!parts.length) parts.push([shared, false]);
+    for (const [f, nr] of parts) {
+      const row = rowOf(f, nr);
+      if (row && !out.some(o => o.tech === row.tech && o.pci === row.pci && o.arfcn === row.arfcn && o.rsrp === row.rsrp)) out.push(row);
+    }
   }
   return out;
+}
+
+/** نوع الشبكة من InternetStatus.netType («NR5G-NSA» · «LTE» · «NR5G-SA») */
+export function netLabel(nt: string): string | undefined {
+  const t = nt.toUpperCase();
+  if (!t) return undefined;
+  if (/NSA/.test(t)) return '5G NSA';
+  if (/(NR|5G)/.test(t)) return /SA/.test(t) ? '5G SA' : '5G';
+  if (/LTE|4G/.test(t)) return '4G';
+  if (/WCDMA|UMTS|HSPA|3G/.test(t)) return '3G';
+  return nt;
 }
 
 export function signalFrom(info: any, mobile?: any): Signal {
@@ -88,7 +146,9 @@ export function signalFrom(info: any, mobile?: any): Signal {
     });
   }
   const nt = String(mobile?.netType ?? '').trim();
-  s.network = n && p ? '5G NSA' : n ? '5G SA' : p ? (/5g/i.test(nt) ? '5G' : '4G') : (nt || undefined);
+  const lbl = netLabel(nt);
+  s.network = n && p ? '5G NSA' : n ? (lbl === '5G NSA' ? lbl : '5G SA') : p ? (lbl && /^5G/.test(lbl) ? lbl : '4G') : lbl;
+  if (!n && lbl && /^5G/.test(lbl)) s.nrActiveFromStatus = true;
   if (lte.length > 1) {
     s.caCount = lte.length;
     const bw = lte.reduce((a, r) => a + (r.bandwidth ?? 0), 0);

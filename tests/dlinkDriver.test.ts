@@ -29,7 +29,7 @@ const RF_3000 = {
   ],
 };
 
-function router(opts: { model?: string; password?: string; rf?: any; ignoreBand?: boolean; ctrlMode?: string } = {}) {
+function router(opts: { model?: string; board?: string; password?: string; rf?: any; ignoreBand?: boolean; ctrlMode?: string } = {}) {
   const st: any = {
     pub: 'PK9f', ch: 'CH+=&"x', session: false, posts: [] as any[], fails: 0, lastUser: '', key: '',
     band: { bandLockEnabled: false, netType: '4G', '4G': { allBands: '1,3,7,8,20,28,40,41', enabledBand: '' }, '5GNAS': { allBands: '', enabledBand: '' } },
@@ -53,7 +53,7 @@ function router(opts: { model?: string; password?: string; rf?: any; ignoreBand?
     const q = (k: string) => u.searchParams.get(k) ?? '';
     const body = init?.body ? JSON.parse(init.body) : undefined;
     if (m === 'POST' && !['login', 'getsmsList'].includes(name)) st.posts.push({ name, body });
-    if (name === 'getProductModelInfo') return J({ errcode: 0, info: { model: opts.model ?? 'DWR-2000M', boardID: 'X', lang: 'en' } });
+    if (name === 'getProductModelInfo') return J({ errcode: 0, info: { model: opts.model ?? 'DWR-2000M', boardID: opts.board ?? (opts.model ? 'X' : '96755REF1_4G'), lang: 'en' } });
     if (name === 'getLoginKey') { st.lastUser = q('username'); return J({ errcode: 0, info: { PublicKey: st.pub, Challenge: st.ch } }); }
     if (name === 'login' && m === 'POST') {
       const key = hm(st.pub + (opts.password ?? 'pw'), st.ch);
@@ -298,4 +298,47 @@ test('D-Link: كلمة غلط ← رسالة واضحة، ٥ محاولات ← 
 test('D-Link: راوتر ثاني يرجّع صفحة HTML ← ما يتعرّف عليه', async () => {
   (globalThis as any).fetch = async () => ({ ok: true, status: 200, url: 'http://192.168.8.1/', headers: { get: () => null }, text: async () => '<!doctype html><html>huawei</html>' });
   assert.equal(await driver().detect('192.168.8.1'), false);
+});
+
+test('D-Link parse: صيغ ثانية للإشارة (بادئة nr/lte · كائنات lte/nr · NR5G-NSA بدون قراءات) — حالة عضو DWR-2000M ٧ نوفمبر', () => {
+  const { signalFrom, rowsFrom } = require('../src/drivers/dlink/parse');
+  // صف واحد فيه 4G و 5G بالبادئة
+  let s = signalFrom({ rf: [{ lteRsrp: '-97', lteSinr: '9', ltePcid: '120', lteEarfcn: '1300', nrRsrp: '-88', nr_sinr: '14', nrPcid: '501', nrArfcn: '636666', plmn: '42003' }] }, { netType: 'NR5G-NSA' });
+  assert.equal(s.rsrp, -97);
+  assert.equal(s.band, 'B3');
+  assert.equal(s.nrRsrp, -88);
+  assert.equal(s.nrBand, 'n78');
+  assert.equal(s.network, '5G NSA');
+  // كائنات متداخلة بدل rf[]
+  s = signalFrom({ basic: { imei: 'x' }, lte: { RSRP: '-101 dBm', SINR: '4', PCI: '77', EARFCN: '6300' }, nr5g: { ss_rsrp: '-90', ss_sinr: '11', pci: '33', arfcn: '636666' } }, { netType: 'NR5G-NSA' });
+  assert.equal(s.rsrp, -101);
+  assert.equal(s.band, 'B20');
+  assert.equal(s.nrRsrp, -90);
+  // rf فاضي/أصفار والراوتر على NR5G-NSA ← ما نخترع أرقام، بس نوع الشبكة صح
+  s = signalFrom({ rf: [{ rsrp: '0', rsrq: '', sinr: '', pcid: '', earfcn: '' }] }, { netType: 'NR5G-NSA' });
+  assert.equal(s.rsrp, undefined);
+  assert.equal(s.network, '5G NSA');
+  assert.equal(s.nrActiveFromStatus, true);
+  assert.equal(rowsFrom({ rf: [] }).length, 0);
+});
+
+test('D-Link: شكل الرد في التشخيص بدون IMEI/IMSI/CCID/IP', () => {
+  const { dlShape } = require('../src/drivers/dlink/index');
+  const t = dlShape({ basic: { imei: '356000000000009', imsi: '420040000', ccid: '8996', softwareVersion: 'V1' }, rf: [{ rsrp: '-95', pcid: '211' }], MobileNetwork: { ipAddress: '10.1.1.1', netType: 'NR5G-NSA' } });
+  assert.equal(/356000000000009|420040000|8996|10\.1\.1\.1/.test(t), false);
+  assert.match(t, /rsrp:-95/);
+  assert.match(t, /netType:NR5G-NSA/);
+});
+
+test('D-Link DWR-2000M بلوحة 5G (boardID بدون _4G) ← 5G: الوضع «5G فقط» يطلع وتثبيت برج 5G مسموح', async () => {
+  const st = router({ board: 'MT7621_5G' });
+  st.band['5GNAS'] = { allBands: '78,41', enabledBand: '' };
+  const d = driver();
+  await d.detect('192.168.0.1');
+  assert.equal((await d.identify()).tech, '5G');
+  await d.login('192.168.0.1', 'admin', 'pw');
+  assert.equal((await d.getNetworkInfo()).supports5g, true);
+  assert.ok((await d.getBandConfig()).modes.some((m: any) => m.value === 'dl:5G'));
+  await d.lockCell({ tech: 'NR', pci: '501', arfcn: '636666', band: 78 });
+  assert.deepEqual(st.cell, { cellLockEnabled: true, netType: '5GNAS', pcid: '501', arfcn: '636666', band: '78', scs: '30' });
 });

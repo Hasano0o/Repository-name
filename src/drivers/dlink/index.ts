@@ -23,6 +23,7 @@ import {
 } from '../types';
 import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { http } from '../http';
+import { diag } from '../../services/diag';
 import { noChange } from '../noChange';
 import { buildSnapshot } from '../../utils/snapshot';
 import { ModelProfile } from '../models';
@@ -51,6 +52,8 @@ export class DlinkDriver implements RouterDriver {
 
   private host = '';
   private model = '';
+  /** من getProductModelInfo — الصفحة تعامل «…_4G» (مثل 96755REF1_4G) كراوتر 4G بس */
+  private boardID = '';
   private loggedIn = false;
   /** cipherKey — المفتاح الأول من الدخول (الصفحة تحفظه في localStorage) */
   private key = '';
@@ -58,7 +61,7 @@ export class DlinkDriver implements RouterDriver {
   waitScale = 1000;
 
   private base() { return 'http://' + this.host.replace(/^https?:\/\//, '').replace(/\/+$/, ''); }
-  private is5g() { return /3000|5g/i.test(this.model); }
+  private is5g() { return !/_4G$/i.test(this.boardID) && /2000|3000|5g/i.test(this.model); }
 
   /** نفس طبقة الطلبات في الصفحة (موديول 72) */
   private async req(method: 'GET' | 'POST', path: string, data?: unknown, opts: { raw?: boolean; timeout?: number } = {}): Promise<any> {
@@ -102,13 +105,18 @@ export class DlinkDriver implements RouterDriver {
       if (!j || typeof j !== 'object' || Array.isArray(j)) return false;
       const m = String(j?.info?.model ?? '').trim();
       if (m) this.model = m;
+      if (j?.info?.boardID) this.boardID = String(j.info.boardID);
       return 'errcode' in j && (!!m || (j.info && typeof j.info === 'object'));
     } catch { return false; }
   }
 
   async identify(): Promise<ModelProfile | null> {
     if (!this.model) {
-      try { this.model = String((await this.req('GET', 'getProductModelInfo', undefined, { raw: true, timeout: 5000 }))?.info?.model ?? '').trim(); } catch {}
+      try {
+        const i = (await this.req('GET', 'getProductModelInfo', undefined, { raw: true, timeout: 5000 }))?.info ?? {};
+        this.model = String(i.model ?? '').trim();
+        if (i.boardID) this.boardID = String(i.boardID);
+      } catch {}
     }
     const m = this.model;
     const label = m ? (/d-?link/i.test(m) ? m : 'D-Link ' + m) : 'D-Link DWR';
@@ -146,10 +154,18 @@ export class DlinkDriver implements RouterDriver {
   private async rf(): Promise<any> {
     const info = await this.get('getMobileNetStatusParams');
     if (!info || typeof info !== 'object' || (!info.rf && !info.basic)) throw new Error('getMobileNetStatusParams: رد غير متوقع');
+    this.shape('rf', info);
     return info;
   }
   private mobile(): Promise<any> {
-    return this.get('InternetStatus').then(i => i?.MobileNetwork ?? {}).catch(() => ({}));
+    return this.get('InternetStatus').then(i => { this.shape('inet', i); return i?.MobileNetwork ?? {}; }).catch(() => ({}));
+  }
+  /** شكل الرد في التشخيص مرة وحدة لكل جلسة — بدون IMEI/IMSI/CCID/IP/MAC (نفهم منه صيغة فيرموير العضو) */
+  private shaped = new Set<string>();
+  private shape(tag: string, v: unknown) {
+    if (this.shaped.has(tag)) return;
+    this.shaped.add(tag);
+    try { dlShape(v).match(/.{1,220}/g)?.slice(0, 6).forEach((l, i) => diag(`[dlink] ${tag}${i ? '+' + i : ''}: ${l}`)); } catch {}
   }
   async getSignal(): Promise<Signal> {
     const [info, mob] = await Promise.all([this.rf(), this.mobile()]);
@@ -167,7 +183,7 @@ export class DlinkDriver implements RouterDriver {
       operator: mob.operators ? String(mob.operators) : undefined,
       connected: connectedFrom(mob, info),
       mode: signalFrom(info, mob).network,
-      supports5g: this.is5g() ? true : /2000/.test(this.model) ? false : undefined,
+      supports5g: this.is5g() || /NR|5G/i.test(String(mob.netType ?? '')) ? true : /_4G$/i.test(this.boardID) ? false : undefined,
     };
   }
   async isConnected(): Promise<boolean> {
@@ -549,3 +565,17 @@ function sameSet(a: string, b: string): boolean {
   const x = bandTokens(a).map(t => t.n).sort((p, q) => p - q), y = bandTokens(b).map(t => t.n).sort((p, q) => p - q);
   return x.length === y.length && x.every((v, i) => v === y[i]);
 }
+
+const SECRET_KEY = /imei|imsi|ccid|iccid|msisdn|mac|ip(v[46])?addr|ipaddress|address|dns|gateway|ssid|password|key|phone|number|serial|sn$/i;
+/** JSON مختصر بدون الأسرار: المفاتيح والقيم الرقمية/القصيرة بس */
+export function dlShape(v: unknown, d = 0): string {
+  if (v === null || v === undefined) return String(v);
+  if (Array.isArray(v)) return '[' + v.slice(0, 6).map(x => dlShape(x, d + 1)).join(',') + (v.length > 6 ? ',…' : '') + ']';
+  if (typeof v === 'object') {
+    if (d > 3) return '{…}';
+    return '{' + Object.entries(v as Record<string, unknown>).map(([k, x]) => `${k}:${SECRET_KEY.test(k) ? '•' : dlShape(x, d + 1)}`).join(',') + '}';
+  }
+  const t = String(v);
+  return t.length > 24 ? t.slice(0, 24) + '…' : t;
+}
+
