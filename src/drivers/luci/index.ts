@@ -10,7 +10,7 @@ import { http } from '../http';
 import { isLanHost } from '../../utils/host';
 import { buildSnapshot } from '../../utils/snapshot';
 import { pro7Signal, pro7Network, Pro7Status } from './pro7';
-import { WisInfo, isWisPage, wisSignal, wisNetwork, wisIs5g, wisNeighbours } from './wis';
+import { WisInfo, WisConfig, isWisPage, wisSignal, wisNetwork, wisIs5g, wisNeighbours, wisLocked, wisBandPath, wisModePath, WIS_LTE, WIS_NR, WIS_MODES } from './wis';
 
 /**
  * راوترات OpenWrt بواجهة LuCI القديمة (Lua) — أول واحد: «5G CPE Pro 7» (موبايلي، ١ نوفمبر ٢٠٢٦، ثيم bigtmt).
@@ -162,19 +162,67 @@ export class LuciDriver implements RouterDriver {
     }
   }
 
-  /** superos: «<root>?status=1» ← JSON info.lte_info (نفس XHR.poll في صفحتهم الرئيسية) */
-  private async wisInfo(): Promise<WisInfo | null> {
+  /** superos: «<root>?status=1» ← JSON {lte_info, lte_config, …} (نفس XHR.poll في صفحتهم الرئيسية) */
+  private async wisStatus(): Promise<{ info: WisInfo | null; cfg: WisConfig | null } | null> {
     try {
       const r = await http(`${this.base()}${this.root()}?status=1`, {}, 12000);
       const t = await r.text();
       if (/name=["']?luci_password/i.test(t)) throw new Error('انتهت الجلسة');
-      const j = JSON.parse(t);
-      const li = j && typeof j === 'object' ? (j as any).lte_info : null;
-      return li && typeof li === 'object' ? li as WisInfo : null;
+      const j: any = JSON.parse(t);
+      if (!j || typeof j !== 'object') return null;
+      const o = (x: unknown) => (x && typeof x === 'object' ? x as Record<string, unknown> : null);
+      return { info: o(j.lte_info), cfg: o(j.lte_config) };
     } catch (e) {
       if (String((e as any)?.message ?? '').includes('انتهت الجلسة')) throw e;
       return null;
     }
+  }
+  private async wisInfo(): Promise<WisInfo | null> { return (await this.wisStatus())?.info ?? null; }
+  private async wisCfg(): Promise<WisConfig> {
+    const c = (await this.wisStatus())?.cfg;
+    if (!c) throw noChange('ما قدرنا نقرأ إعدادات المودم من الراوتر — ما غيّرنا شي.');
+    return c;
+  }
+  /** أمر GET من صفحة admin/lte/network ← ننتظر الحفظ (صفحتهم تعيد التحميل بعد ٣–٥ث) ونتأكد بالقراءة */
+  private async wisSend(path: string, check: (c: WisConfig) => boolean, what: string): Promise<void> {
+    const r = await http(`${this.base()}${path}`, { headers: { Referer: `${this.base()}${this.root()}/admin/lte/network` } }, 20000);
+    const t = await r.text().catch(() => '');
+    if (/name=["']?luci_password/i.test(t)) throw new Error(`انتهت الجلسة وقت حفظ ${what} — ادخل مرة ثانية`);
+    if (r.status >= 400) throw new Error(`الراوتر رفض ${what} (HTTP ${r.status})`);
+    for (const wait of [5000, 5000, 5000]) {
+      await sleep(wait);
+      const c = (await this.wisStatus().catch(() => null))?.cfg;
+      if (c && check(c)) return;
+    }
+    throw new Error(`الراوتر قبل أمر ${what} بس القراءة بعده مختلفة`);
+  }
+  private wisBandCfg(c: WisConfig): BandConfig {
+    return {
+      supported: WIS_LTE, locked: wisLocked(c.net_band, WIS_LTE), nrSupported: WIS_NR, nrLocked: wisLocked(c.net_5g_band, WIS_NR),
+      mode: String(c.net_mode ?? ''), modes: WIS_MODES,
+    };
+  }
+  /** الترددات: [] = كل القائمة (صفحتهم ما فيها «تلقائي» — كل المربعات = Any) · keep = نفس الحالي */
+  private async wisSetBand(bands: number[] | 'keep', nrBands?: number[]): Promise<void> {
+    const c = await this.wisCfg();
+    const cur = this.wisBandCfg(c);
+    const lte = bands === 'keep' ? (cur.locked.length ? cur.locked : WIS_LTE) : (bands.length ? [...new Set(bands)] : WIS_LTE);
+    const nr = nrBands === undefined ? (cur.nrLocked.length ? cur.nrLocked : WIS_NR) : (nrBands.length ? [...new Set(nrBands)] : WIS_NR);
+    const badL = lte.filter(b => !WIS_LTE.includes(b)), badN = nr.filter(b => !WIS_NR.includes(b));
+    if (badL.length || badN.length) throw noChange(`ترددات مو في قائمة راوترك: ${[...badL.map(b => 'B' + b), ...badN.map(b => 'n' + b)].join(' ')} — ما غيّرنا شي.`);
+    const want = { l: wisLocked(lte, WIS_LTE), n: wisLocked(nr, WIS_NR) };
+    if (want.l.join() === cur.locked.join() && want.n.join() === cur.nrLocked.join()) return;
+    const sorted = (x: number[]) => [...x].sort((a, b) => a - b);
+    await this.wisSend(wisBandPath(this.root(), sorted(lte), sorted(nr)), k => {
+      const b = this.wisBandCfg(k);
+      return b.locked.join() === want.l.join() && b.nrLocked.join() === want.n.join();
+    }, 'الترددات');
+  }
+  private async wisSetMode(mode: string): Promise<void> {
+    if (!WIS_MODES.some(m => m.value === mode)) throw noChange('هالوضع مو موجود في قائمة راوترك — ما غيّرنا شي.');
+    const c = await this.wisCfg();
+    if (String(c.net_mode) === mode) return;
+    await this.wisSend(wisModePath(this.root(), c, mode), k => String(k.net_mode) === mode, 'وضع الشبكة');
   }
 
   async getSignal(): Promise<Signal> {
@@ -192,7 +240,7 @@ export class LuciDriver implements RouterDriver {
   async getNetworkInfo(): Promise<NetworkInfo> {
     if (this.wis) {
       const li = await this.wisInfo();
-      if (li) return { mode: wisNetwork(li), connected: !!String(li.dial_ip ?? '').match(/\d+\.\d+/), supports5g: true };
+      if (li) return { operator: String(li.operator ?? '').trim() || undefined, mode: wisNetwork(li), connected: !!String(li.dial_ip ?? '').match(/\d+\.\d+/), supports5g: true };
     }
     const j = await this.status();
     if (j) {
@@ -220,7 +268,7 @@ export class LuciDriver implements RouterDriver {
       const li = await this.wisInfo().catch(() => null);
       const nr = li ? wisIs5g(li) : false;
       for (const c of li ? wisNeighbours(li) : []) {
-        out.push({ kind: 'neighbor', tech: nr ? 'NR' : 'LTE', pci: c.pci, arfcn: c.arfcn });
+        out.push({ kind: 'neighbor', tech: c.nr || (nr && !c.arfcn) ? 'NR' : 'LTE', pci: c.pci, arfcn: c.arfcn, rsrp: c.rsrp, rsrq: c.rsrq });
       }
     }
     return out;
@@ -271,6 +319,7 @@ export class LuciDriver implements RouterDriver {
   }
 
   async getBandConfig(): Promise<BandConfig> {
+    if (this.wis) return this.wisBandCfg(await this.wisCfg());
     const [b, n] = await Promise.all([this.page('band'), this.page('network').catch(() => null)]);
     const l = pro7BandLists(b);
     const nr = [...new Set([...(l.nsa?.opts ?? []), ...(l.sa?.opts ?? [])].map(o => o.band))].sort((x, y) => x - y);
@@ -287,6 +336,7 @@ export class LuciDriver implements RouterDriver {
    * ما نشغّل «Enable» بقائمة فاضية أبداً.
    */
   async setBand(bands: number[] | 'keep', nrBands?: number[]): Promise<void> {
+    if (this.wis) return this.wisSetBand(bands, nrBands);
     const form = await this.page('band');
     const l = pro7BandLists(form);
     const ch: Partial<CbiState> = { flags: {}, multi: {} };
@@ -317,6 +367,7 @@ export class LuciDriver implements RouterDriver {
 
   /** mode = قيمة الخيار في صفحة الراوتر (0 تلقائي … 6) — من getBandConfig().modes */
   async setNetworkMode(mode: string): Promise<void> {
+    if (this.wis) return this.wisSetMode(mode);
     const form = await this.page('network');
     const f = pro7NetField(form);
     if (!f) throw noChange('ما لقينا «Network Mode» في صفحة راوترك — ما غيّرنا شي.');
@@ -325,6 +376,8 @@ export class LuciDriver implements RouterDriver {
   }
 
   async getCellLocks(): Promise<CellLockState[]> {
+    // WIS: تثبيت البرج (lte_dev_celllock) موجود بس ما فتحناه — بعد ما تنجح الترددات والوضع ميداني
+    if (this.wis) return [];
     const form = await this.page('cell');
     const st = cbiState(form);
     const c = pro7CellFields(form);
@@ -339,6 +392,7 @@ export class LuciDriver implements RouterDriver {
   async getCellLock(): Promise<CellLockState | null> { return (await this.getCellLocks())[0] ?? null; }
 
   async lockCell(t: CellLockTarget): Promise<void> {
+    if (this.wis) throw noChange('تثبيت البرج في راوترك ما فتحناه للحين — جرّب تثبيت الترددات. ما غيّرنا شي.');
     const pci = String(t.pci ?? '').trim(), arfcn = String(t.arfcn ?? '').trim();
     if (!/^\d{1,4}$/.test(pci) || Number(pci) > 1007) throw noChange('رقم البرج (PCI) ناقص أو غلط — ما غيّرنا شي.');
     if (!/^\d{1,7}$/.test(arfcn)) throw noChange('الراوتر ما أعطانا رقم قناة هذا البرج — ثبّت التردد بدلاً منه.');
@@ -368,6 +422,7 @@ export class LuciDriver implements RouterDriver {
 
   /** بدون tech = يفك الاثنين. نطفي «Enable» بس ونخلي الأرقام (مثل صفحة الراوتر) */
   async unlockCell(tech?: 'LTE' | 'NR'): Promise<void> {
+    if (this.wis) return;
     const form = await this.page('cell');
     const c = pro7CellFields(form);
     const flags: Record<string, boolean> = {};
@@ -386,6 +441,12 @@ export class LuciDriver implements RouterDriver {
 
   // ═══ لقطة + إرجاع: كل خانات الصفحات الثلاث كما هي ═══
   async readLockState(): Promise<LockSnapshot> {
+    if (this.wis) {
+      const c = await this.wisCfg();
+      const b = this.wisBandCfg(c);
+      const summary = `4G: ${b.locked.map(x => 'B' + x).join('+') || 'تلقائي'} · 5G: ${b.nrLocked.map(x => 'n' + x).join('+') || 'تلقائي'} · ${WIS_MODES.find(m => m.value === b.mode)?.label ?? b.mode}`;
+      return { driver: this.id, at: Date.now(), summary, data: { wis: true, lte: b.locked, nr: b.nrLocked, mode: b.mode } };
+    }
     const [b, n, c] = [await this.page('band'), await this.page('network'), await this.page('cell')];
     const data: Pro7LockData = { band: cbiState(b), network: cbiState(n), cell: cbiState(c) };
     const l = pro7BandLists(b);
@@ -403,6 +464,14 @@ export class LuciDriver implements RouterDriver {
 
   async restoreLockState(snap: LockSnapshot): Promise<void> {
     if (snap.driver !== this.id) throw new Error('اللقطة من نوع راوتر ثاني — ما نرجّعها');
+    const w = snap.data as { wis?: boolean; lte?: number[]; nr?: number[]; mode?: string };
+    if (w?.wis) {
+      const miss: string[] = [];
+      try { await this.wisSetBand(w.lte ?? [], w.nr ?? []); } catch { miss.push('الترددات'); }
+      if (w.mode) { try { await this.wisSetMode(w.mode); } catch { miss.push('وضع الشبكة'); } }
+      if (miss.length) throw restoreMismatch(miss);
+      return;
+    }
     const d = snap.data as Pro7LockData;
     const miss: string[] = [];
     // الترتيب: البرج ← الترددات ← وضع الشبكة (نفس ترتيب الأمان في باقي الدرايفرات)
@@ -414,6 +483,11 @@ export class LuciDriver implements RouterDriver {
 
   /** إنقاذ: يفك البرج والترددات ويرجّع الوضع «Auto» — كل خطوة لحالها */
   async restoreAll(): Promise<void> {
+    if (this.wis) {
+      try { await this.wisSetBand([], []); } catch {}
+      try { await this.wisSetMode('Auto'); } catch {}
+      return;
+    }
     try { await this.unlockCell(); } catch {}
     try { await this.setBand([], []); } catch {}
     try {

@@ -190,7 +190,7 @@ function TechRow({ r, onDetails, hist }: { r: Row; onDetails?: () => void; hist?
           <Waves color={accent} />
         </View>
         <View style={s.rsrpLine}>
-          <Text style={[s.rsrp, { color: LEVEL_COLOR[lv] }]} numberOfLines={1} adjustsFontSizeToFit>{fmt(r.rsrp)}</Text>
+          <Text style={[s.rsrp, { color: LEVEL_COLOR[lv] }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{fmt(r.rsrp)}</Text>
           <Text style={s.unit}>dBm</Text>
         </View>
         {!!hist && hist.rsrp.length > 1 && <Spark data={hist.rsrp} color={LEVEL_COLOR[lv]} w={96} h={14} />}
