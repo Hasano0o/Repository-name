@@ -12,6 +12,7 @@ import { ZteUfiDriver } from './zteufi';
 import { LuciDriver } from './luci';
 import { DlinkDriver } from './dlink';
 import { InseegoDriver } from './inseego';
+import { HuaweiOntDriver } from './hgont';
 import { UnknownDriver } from './unknown';
 import { DeviceDriver } from './device';
 import { DemoDriver } from './demo';
@@ -50,6 +51,8 @@ const factories: (() => RouterDriver)[] = [
   () => new DlinkDriver(),
   // Inseego MiFi 8000 / 8800L (Verizon Jetpack) و M2000 — /srv/status بدون دخول، الدخول sha1. قراءة بس للحين (٧ نوفمبر)
   () => new InseegoDriver(),
+  // هواوي فايبر (ONT: DG8245V · HG8245 · LG8245X6) — /login.cgi بكلمة base64. الدخول + FULL بس للحين (٧ نوفمبر)
+  () => new HuaweiOntDriver(),
   () => new UnknownDriver(),
 ];
 
