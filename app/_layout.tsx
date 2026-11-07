@@ -2,7 +2,7 @@ import '../src/desktop/install'; // نسخة الويندوز: توجيه الط
 import '../src/desktop/scrollbar'; // نسخة الويندوز: شريط تمرير ظاهر تسحبه بالماوس
 import { patchAlert, tr } from '../src/i18n';
 import { useEffect } from 'react';
-import { AppState } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import { pingDaily, markScreen } from '../src/services/stats';
 import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -47,6 +47,7 @@ const SCREENS: [string, string][] = [
   ['aim/[id]', 'توجيه الأنتنا'],
   ['hunt/[id]', 'صيد الإشارة'],
   ['ping/[id]', 'مُحسّن الألعاب'],
+  ['gameboost/[id]', 'تعزيز اللعب'],
   ['lag/[id]', 'كاشف اللاق'],
   ['auto/[id]', 'الوضع الذكي'],
   ['combo/[id]', 'الأساسي والثانوي'],
@@ -109,7 +110,12 @@ export default function RootLayout() {
 
   // «تجربة ما خلصت»: لو انقطعت تجربة (التطبيق طلع / الجوال طلع من شبكة الراوتر) نرجّع إعداد الراوتر اللي كان قبلها
   useEffect(() => {
-    const go = () => { import('../src/services/pendingRecovery').then(m => m.runPendingRecovery()).catch(() => {}); };
+    const go = () => {
+      import('../src/services/pendingRecovery').then(m => m.runPendingRecovery()).catch(() => {})
+        // «وضع المباراة» خلص وقته ← نرجّع النت للأجهزة اللي وقّفناها
+        .then(() => import('../src/services/gameBoost')).then(m => m?.recoverMatches())
+        .then(msg => { if (msg) Alert.alert('✓ رجّعنا النت', msg); }).catch(() => {});
+    };
     const t = setTimeout(go, 6000);
     const sub = AppState.addEventListener('change', st => { if (st === 'active') setTimeout(go, 3000); });
     return () => { clearTimeout(t); sub.remove(); };

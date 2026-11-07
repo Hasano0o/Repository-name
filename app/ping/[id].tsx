@@ -577,6 +577,16 @@ export default function GameScreen() {
         )}
 
         {!loading && info && (
+          <Pressable style={[s.lagLink, { borderColor: C.cyan }]} onPress={() => router.push(`/gameboost/${info.id}` as Href)} disabled={running}>
+            <Text style={[s.lagArrow, { color: C.cyan }]}>‹</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.lagTitle}>🚀 تعزيز اللعب</Text>
+              <Text style={s.lagSub}>هل التحميل يخرّب لعبك؟ · NAT مفتوح؟ · وضع المباراة</Text>
+            </View>
+          </Pressable>
+        )}
+
+        {!loading && info && (
           <Pressable style={s.lagLink} onPress={() => router.push(`/lag/${info.id}` as Href)} disabled={running}>
             <Text style={s.lagArrow}>‹</Text>
             <View style={{ flex: 1 }}>
