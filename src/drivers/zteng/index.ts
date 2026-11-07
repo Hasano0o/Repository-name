@@ -17,10 +17,11 @@ import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import {
   RouterDriver, Capability, Signal, Carrier, SignalSnapshot, NetworkInfo, CellTower, DeviceTemp,
-  Traffic, Usage, BandConfig, ActiveLock, CellLockState, DeviceDetails, WifiRadio,
+  Traffic, Usage, BandConfig, ActiveLock, CellLockState, DeviceDetails, WifiRadio, ConnectedDevice,
 } from '../types';
 import { http } from '../http';
 import { noChange } from '../noChange';
+import { opName } from '../fg360/parse';
 import { buildSnapshot } from '../../utils/snapshot';
 import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
@@ -539,27 +540,86 @@ export class ZteNgDriver implements RouterDriver {
     return out;
   }
 
+  /** قراءات الصفحة تحتاج جلسة (uci / zwrt_router) — ندخل مرة لو عندنا كلمة */
+  private async authRead<T>(f: () => Promise<T>): Promise<T> {
+    try { return await f(); }
+    catch (e: any) {
+      if ((e?.code === 6 || e?.code === -32002) && this.password && this.session === ZERO) { await this.doLogin(); return await f(); }
+      throw e;
+    }
+  }
+  private async uciGet(config: string, section: string): Promise<Record<string, unknown>> {
+    const r: any = await this.authRead(() => this.call('uci', 'get', { config, section }));
+    return (r?.values ?? r ?? {}) as Record<string, unknown>;
+  }
+
+  /**
+   * معلومات الجهاز — نفس getDeviceInfo في صفحة MU5250/MU5252 (service_rpc.js، FULL ٨ نوفمبر):
+   *   uci zwrt_common_info.common_config ← model_name · device_market_name · wa_inner_version · hardware_version
+   *   zwrt_data.get_wwaniface {source_module:"web", cid:1, subid:1|2} ← ipv4_address · ipv4_dns_prefer · ipv4_dns_standby
+   * (كان zwrt_mc.device.manager.get_device_info — ما يرجع شي هنا، والاسم يطلع «ZTE U60 Pro» ثابت)
+   */
   private infoLogged = false;
   async getDeviceDetails(): Promise<DeviceDetails> {
     const d = await this.net().catch(() => ({} as NetInfo));
-    let i: Record<string, unknown> = {};
-    try { i = await this.call('zwrt_mc.device.manager', 'get_device_info', {}); }
-    catch (e: any) {
-      // بدون دخول يرجع Access denied ← كان الموديل يطلع «ZTE U60 Pro» (اسم ثابت) عند صاحب MU5252
-      if ((e?.code === 6 || e?.code === -32002) && this.password && this.session === ZERO) {
-        try { await this.doLogin(); i = await this.call('zwrt_mc.device.manager', 'get_device_info', {}); } catch {}
-      }
-    }
-    if (!this.infoLogged) { this.infoLogged = true; diag(`[zte-ng] get_device_info خانات: ${Object.keys(i).join(',') || '—'}`); }
     const pickS = (o: Record<string, unknown>, ...k: string[]) => { for (const x of k) { const v = str(o[x]); if (v) return v; } return undefined; };
+    let c: Record<string, unknown> = {};
+    try { c = await this.uciGet('zwrt_common_info', 'common_config'); } catch {}
+    let w: Record<string, unknown> = {};
+    for (const subid of [1, 2]) {
+      try {
+        w = await this.authRead(() => this.call('zwrt_data', 'get_wwaniface', { source_module: 'web', cid: 1, subid }));
+        if (str(w.ipv4_address) || str(w.ipv4_dns_prefer)) break;
+      } catch {}
+    }
+    let i: Record<string, unknown> = {};
+    if (!pickS(c, 'model_name', 'device_market_name')) {
+      try { i = await this.call('zwrt_mc.device.manager', 'get_device_info', {}); } catch {}
+    }
+    if (!this.infoLogged) {
+      this.infoLogged = true;
+      diag(`[zte-ng] common_config: ${pickS(c, 'device_market_name') ?? '—'} / ${pickS(c, 'model_name') ?? '—'} · wwaniface: ip=${str(w.ipv4_address) ? '✓' : '—'} dns=${str(w.ipv4_dns_prefer) ? '✓' : '—'} · get_device_info: ${Object.keys(i).join(',') || '—'}`);
+    }
+    const dns = [str(w.ipv4_dns_prefer), str(w.ipv4_dns_standby)].filter(x => x && x !== '0.0.0.0').join(' · ');
+    const wan = str(w.ipv4_address);
     return {
-      // ما نخمّن اسم: صفحة MU5250 و MU5252 و U60 Pro وحدة (config.js DEVICE_MODEL "MU5250" حتى عند MU5252)
-      model: pickS(i, 'model_name', 'device_name', 'hardware_model', 'product_name', 'model', 'device_model') ?? 'ZTE (الجيل الجديد)',
-      imei: pickS(i, 'imei', 'IMEI'),
-      software: pickS(i, 'software_version', 'wa_inner_version', 'sw_version', 'firmware_version'),
-      hardware: pickS(i, 'hardware_version', 'hw_version'),
-      operator: str(d.network_provider_fullname) || undefined,
+      // الاسم التجاري أول (TOPFLOW MU5252) ثم الموديل — ما نخمّن (صفحة MU5250/MU5252/U60 Pro وحدة)
+      model: pickS(c, 'device_market_name', 'model_name') ?? pickS(i, 'model_name', 'device_name', 'product_name') ?? 'ZTE (الجيل الجديد)',
+      software: pickS(c, 'wa_inner_version', 'web_red_version') ?? pickS(i, 'software_version', 'wa_inner_version'),
+      hardware: pickS(c, 'hardware_version'),
+      wanIp: wan && wan !== '0.0.0.0' ? wan : undefined,
+      dns: dns || undefined,
+      operator: opName(d.network_provider_fullname),
     };
+  }
+
+  /**
+   * الأجهزة المتصلة — نفس صفحة station_info (getCurrentlyAttachedDevicesInfo + getAttachedCableDevices):
+   *   zwrt_router.api.router_get_user_list_num ← access_total_num
+   *   router_wireless_access_list {start_id, end_id} (صفحات ٦٤) ← wireless_access_list_info[]
+   *   router_lan_access_list ← lan_access_list_info[]  · كل عنصر: mac_address · ip_address · hostname
+   * قراءة بس — الحظر ما انضاف (ما شفنا أمره بدليل).
+   */
+  async getDevices(): Promise<ConnectedDevice[]> {
+    const out: ConnectedDevice[] = [];
+    const seen = new Set<string>();
+    const add = (list: unknown) => {
+      for (const x of (Array.isArray(list) ? list : []) as any[]) {
+        const mac = str(x?.mac_address).toUpperCase();
+        if (!mac || seen.has(mac)) continue;
+        seen.add(mac);
+        out.push({ mac, ip: str(x?.ip_address) || undefined, name: str(x?.hostname) || undefined });
+      }
+    };
+    const n = await this.authRead(() => this.call('zwrt_router.api', 'router_get_user_list_num', {}));
+    const total = Number(str(n.access_total_num)) || 0;
+    for (let a = 1; a <= Math.max(total, 1) && a <= 256; a += 64) {
+      try { add((await this.call('zwrt_router.api', 'router_wireless_access_list', { start_id: a, end_id: a + 63 })).wireless_access_list_info); } catch {}
+    }
+    try { add((await this.call('zwrt_router.api', 'router_lan_access_list', {})).lan_access_list_info); } catch {}
+    diag(`[zte-ng] الأجهزة: ${out.length} · access_total_num=${total}`);
+    if (!out.length && total > 0) throw new Error(`الراوتر يقول ${total} أجهزة بس ما أعطانا القائمة`);
+    return out;
   }
 
   async getTemps(): Promise<DeviceTemp[]> {

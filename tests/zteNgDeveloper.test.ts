@@ -79,7 +79,13 @@ function router(opts: { devPw?: string; httpsOnly?: boolean; model?: string; gwl
       if (!p.lte_band_mask) return bad();
     }
     if (method === 'nwinfo_set_nrbandlock' && opts.nrNumeric !== undefined && /^\d$/.test(p.nr5g_type) !== opts.nrNumeric) return bad();
-    if (method === 'get_device_info') return ok({ model_name: 'ZTE TOPFLOW MU5252', software_version: 'BD_MU5252V1.0' });
+    if (method === 'get' && p.config === 'zwrt_common_info') return ok({ values: { model_name: 'MU5250', device_market_name: 'ZTE TOPFLOW MU5252', wa_inner_version: 'BD_MU5252V1.0', hardware_version: 'HW1' } });
+    if (method === 'get_wwaniface') return p.subid === 1 ? ok({ ipv4_address: '10.20.30.40', ipv4_dns_prefer: '8.8.8.8', ipv4_dns_standby: '1.1.1.1' }) : ok({});
+    if (method === 'router_get_user_list_num') return ok({ access_total_num: 3, lan_num: 1, wireless_num: 2 });
+    if (method === 'router_wireless_access_list') return ok({ wireless_access_list_info: p.start_id === 1 ? [
+      { mac_address: 'aa:bb:cc:00:00:01', ip_address: '192.168.0.100', hostname: 'iPhone' },
+      { mac_address: 'aa:bb:cc:00:00:02', ip_address: '192.168.0.101', hostname: '' }] : [] });
+    if (method === 'router_lan_access_list') return ok({ lan_access_list_info: [{ mac_address: 'aa:bb:cc:00:00:03', ip_address: '192.168.0.102', hostname: 'PC' }] });
     if (method === 'get' && p.config === 'zwrt_zte_nwinfo') return opts.defaults ? ok({ values: opts.defaults }) : ok({});
     if (method === 'nwinfo_set_lte_ext_band') { lte = p.lte_band_mask; return ok({ result: 'success' }); }
     if (method === 'nwinfo_set_nrbandlock') { nr = p.nr5g_band; return ok({ result: 'success' }); }
@@ -210,11 +216,24 @@ test('MU5252: القناع lte_band_lock يتأخر ← المثبّت من lte_
   assert.equal((await d.readLockState()).data.lte_band_lock, '0x8000001');
 });
 
-test('معلومات الجهاز: get_device_info يحتاج دخول ← ندخل ونقراه (كان «ZTE U60 Pro» ثابت)', async () => {
+test('معلومات الجهاز من صفحتهم: common_config (الاسم والإصدار) + get_wwaniface (الآي بي والـ DNS) بعد الدخول · المشغّل بالاسم', async () => {
   router(MU5252);
   const d = new ZteNgDriver();
   await d.login('192.168.0.27', 'admin', PW);
   const i = await d.getDeviceDetails();
   assert.equal(i.model, 'ZTE TOPFLOW MU5252');
   assert.equal(i.software, 'BD_MU5252V1.0');
+  assert.equal(i.wanIp, '10.20.30.40');
+  assert.equal(i.dns, '8.8.8.8 · 1.1.1.1');
+});
+
+test('الأجهزة المتصلة: واي فاي (router_wireless_access_list) + سلك (router_lan_access_list)', async () => {
+  router(MU5252);
+  const d = new ZteNgDriver();
+  await d.login('192.168.0.28', 'admin', PW);
+  const l = await d.getDevices();
+  assert.deepEqual(l.map((x: any) => x.mac), ['AA:BB:CC:00:00:01', 'AA:BB:CC:00:00:02', 'AA:BB:CC:00:00:03']);
+  assert.equal(l[0].name, 'iPhone');
+  assert.equal(l[1].name, undefined);
+  assert.equal(l[2].ip, '192.168.0.102');
 });
