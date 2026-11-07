@@ -20,6 +20,20 @@ RIYADH = timezone(timedelta(hours=3))
 DEMO = {"راوتر تجريبي", "Demo", "demo"}
 
 
+def brand(name: str) -> str:
+    """اسم الراوتر المحفوظ («ZTE MC801A») واسم الدخول («ZTE») يختلفون — نقارن بالشركة."""
+    n = (name or "").lower()
+    for key, pat in (("openwrt", ("openwrt", "luci", "pro7", "wis ", "aw1000", "mywrt", "bpi", "telstra")),
+                     ("huawei", ("huawei", "هواوي")), ("zte", ("zte", "جيب 4g", "xfnj")),
+                     ("fiberhome", ("fiberhome",)), ("zyxel", ("zyxel",)), ("oppo", ("oppo",)),
+                     ("greenpacket", ("green packet", "greenpacket")), ("nokia", ("nokia",)),
+                     ("dlink", ("d-link", "dlink")), ("inseego", ("inseego", "mifi")),
+                     ("device", ("هذا الجهاز",)), ("unknown", ("غير معروف",))):
+        if any(x in n for x in pat):
+            return key
+    return n.split(" ")[0] if n else "?"
+
+
 def load(p):
     try:
         with open(p, encoding="utf-8") as f:
@@ -49,10 +63,12 @@ def main():
                 for k, f in wins:
                     if f(day):
                         rt[k][x].add(did)
-            for x in r.get("logins") or []:
-                for k, f in wins:
-                    if f(day):
-                        lg[k][x].add(did)
+            lb = {brand(x) for x in r.get("logins") or []}
+            for x in r.get("routers") or []:
+                if brand(x) in lb:
+                    for k, f in wins:
+                        if f(day):
+                            lg[k][x].add(did)
 
     print(f"== الرواترات (عدد الأجهزة) — {today} · {len(days)} يوم بيانات ==")
     print("الراوتر | اليوم | أمس | ٧ أيام | الكل | دخل ✓ (٧ أيام) | أول ظهور")
@@ -68,6 +84,15 @@ def main():
             if n not in DEMO:
                 s |= v
         return len(s)
+    print("\n== حسب الشركة (أجهزة ٧ أيام · دخل ✓) ==")
+    bs, bl = defaultdict(set), defaultdict(set)
+    for n in names:
+        bs[brand(n)] |= rt["7d"][n]
+        bl[brand(n)] |= lg["7d"][n]
+    allb = len(set().union(*bs.values())) if bs else 0
+    for b_, v in sorted(bs.items(), key=lambda kv: -len(kv[1])):
+        pct = f"{100 * len(v) / allb:.0f}%" if allb else "-"
+        print(f"{b_} | {len(v)} | {pct} | دخل ✓ {len(bl[b_])}")
     print(f"\nأجهزة عليها راوتر حقيقي: اليوم {tot('today')} · أمس {tot('yest')} · ٧ أيام {tot('7d')} · الكل {tot('all')}")
 
     print("\n== فشل الإضافة/الدخول: اليوم ← أمس ==")
@@ -86,7 +111,8 @@ def main():
                 d = t[:10]
                 if d in ec:
                     feat = str(e.get("feature") or e.get("kind") or e.get("type") or "?")[:16]
-                    rtr = str(e.get("router") or e.get("model") or e.get("driver") or "?")[:26]
+                    # model = موديل الجوال، مو الراوتر — نعرض الراوتر بس
+                    rtr = str(e.get("router") or "").strip()[:26] or "ما انعرف الراوتر"
                     ec[d][(feat, rtr)] += 1
     except FileNotFoundError:
         print("  (ما فيه errors.jsonl)")
