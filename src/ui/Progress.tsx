@@ -14,8 +14,9 @@ import { View, Text } from '../i18n/rn';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { P } from './Pro';
 import { tBd, tBg, tFg } from './theme';
+import { rtlLine } from './colorAdapt';
 
-import { sheet } from '../i18n';
+import { sheet, tr } from '../i18n';
 interface State {
   title: string;
   steps: string[];
@@ -131,7 +132,7 @@ export function ProgressHost() {
         <View style={st.card}>
           <View style={st.head}>
             <ActivityIndicator color={tFg('#2f6bff')} />
-            <Text style={st.title} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75}>{s.title}</Text>
+            <Text style={st.title} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75}>{rtlLine(tr(s.title))}</Text>
           </View>
 
           <View style={st.steps}>

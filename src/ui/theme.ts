@@ -1,6 +1,7 @@
 import { Appearance } from 'react-native';
 import { File, Paths } from 'expo-file-system';
 import * as Updates from 'expo-updates';
+import { adaptColor } from './colorAdapt';
 
 /* ═══════════════════════════════════════════════════════════════
  * الثيم (فاتح / داكن)
@@ -156,70 +157,14 @@ const DARK: typeof LIGHT = {
 
 export const C = isDark ? DARK : LIGHT;
 
-/* ═══ تكييف الألوان المكتوبة مباشرة في الشاشات ═══
- * في الفاتح ترجع اللون نفسه. في الداكن:
- *  bg/bd: الخلفيات الفاتحة (أبيض وباستيل) تصير داكنة بنفس الدرجة اللونية
- *  fg:    النصوص الغامقة تصير فاتحة — والألوان الزاهية (أزرق، أخضر...) تبقى
- */
-type Rgba = { r: number; g: number; b: number; a: number };
-
-function parse(c: string): Rgba | null {
-  let m = c.trim().match(/^#([0-9a-f]{3,8})$/i);
-  if (m) {
-    let h = m[1];
-    if (h.length === 3 || h.length === 4) h = h.split('').map(x => x + x).join('');
-    if (h.length !== 6 && h.length !== 8) return null;
-    return {
-      r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16),
-      a: h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1,
-    };
-  }
-  m = c.trim().match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/i);
-  if (m) return { r: +m[1], g: +m[2], b: +m[3], a: m[4] !== undefined ? +m[4] : 1 };
-  return null;
-}
-
-function toHsl({ r, g, b }: Rgba): [number, number, number] {
-  const R = r / 255, G = g / 255, B = b / 255;
-  const max = Math.max(R, G, B), min = Math.min(R, G, B);
-  const l = (max + min) / 2;
-  if (max === min) return [0, 0, l];
-  const d = max - min;
-  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-  const h = max === R ? (G - B) / d + (G < B ? 6 : 0) : max === G ? (B - R) / d + 2 : (R - G) / d + 4;
-  return [h * 60, s, l];
-}
-
-function fromHsl(h: number, s: number, l: number, a: number): string {
-  const k = (n: number) => (n + h / 30) % 12;
-  const q = s * Math.min(l, 1 - l);
-  const f = (n: number) => l - q * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
-  const hx = (v: number) => Math.round(v * 255).toString(16).padStart(2, '0');
-  return `#${hx(f(0))}${hx(f(8))}${hx(f(4))}${a < 1 ? hx(a) : ''}`;
-}
-
+/* تكييف الألوان المكتوبة مباشرة في الشاشات — المنطق في ./colorAdapt (يتختبر بدون react-native) */
 const cache = new Map<string, string>();
 function adapt(c: string, role: 'bg' | 'bd' | 'fg'): string {
   if (!isDark) return c;
   const key = role + c;
   const hit = cache.get(key);
   if (hit) return hit;
-  let out = c;
-  const p = parse(c);
-  if (p) {
-    let [h, s, l] = toHsl(p);
-    // الرمادي والأبيض ياخذون الكحلي حق الثيم بدل الرمادي الباهت
-    // كان h=32 (بني/برتقالي) — الحين كحلي مثل الموقع
-    if (s < 0.12) { h = 218; s = 0.4; }
-    if (role === 'fg') {
-      if (l < 0.3 || (l <= 0.42 && s < 0.5)) out = fromHsl(h, Math.min(s, 0.45), Math.min(0.95, 1 - l * 0.45), p.a);
-    } else if (l >= 0.8 && p.a >= 0.5) {
-      // الشفاف الخفيف (زجاج فوق تدرّج ملوّن) نخليه زي ما هو
-      // أبيض ← #111f35 تقريباً (بطاقات الموقع)، والباستيل أفتح شوي بنفس لونه
-      const nl = 0.14 + (1 - l) * 0.4 + (role === 'bd' ? 0.1 : 0);
-      out = fromHsl(h, Math.min(s, 0.42), nl, p.a);
-    }
-  }
+  const out = adaptColor(c, role, true);
   cache.set(key, out);
   return out;
 }

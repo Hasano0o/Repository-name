@@ -64,6 +64,7 @@ const files = [
   'src/services/live.ts',
   'src/services/fullDumpRule.ts',
   'src/utils/host.ts',
+  'src/ui/colorAdapt.ts',
   'src/drivers/types.ts',
   // درايفر هواوي كامل (اختبار إعادة الدخول — react-native/expo-crypto يتبدّلون داخل الاختبار)
   'src/drivers/huawei/index.ts',
