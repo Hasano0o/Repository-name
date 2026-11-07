@@ -63,7 +63,18 @@ export interface BloatDeps {
   onStep?(step: 'idle' | 'down' | 'up', ms: number | null): void;
 }
 
-export interface BloatOpts { idleN?: number; loadMs?: number; rampMs?: number; gapMs?: number }
+export interface BloatOpts {
+  idleN?: number; loadMs?: number; rampMs?: number; gapMs?: number;
+  /** حد أقصى لقياس واحد ولإيقاف التحميل — الآيفون: الطلب الملغى ممكن ما يرجع أبد (r.text / arrayBuffer بعد abort) */
+  pingCapMs?: number; stopCapMs?: number;
+}
+
+/** أول واحد يخلص: الوعد أو المهلة (بـ sleep حق الفحص) — ما نعلق على طلب الجوال نسيه */
+function capped<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let t: ReturnType<typeof setTimeout> | undefined;
+  const timer = new Promise<T>(res => { t = setTimeout(() => res(fallback), ms); });
+  return Promise.race([p.catch(() => fallback), timer]).finally(() => { if (t) clearTimeout(t); });
+}
 
 export class BloatCancelled extends Error {
   constructor() { super('انلغى الفحص'); }
@@ -74,12 +85,16 @@ export async function runBloat(d: BloatDeps, o: BloatOpts = {}): Promise<BloatRe
   const loadMs = o.loadMs ?? 8000;
   const rampMs = o.rampMs ?? 1500;
   const gapMs = o.gapMs ?? 250;
+  const pingCapMs = o.pingCapMs ?? 3000;
+  const stopCapMs = o.stopCapMs ?? 4000;
   const stop = () => { if (d.cancelled?.()) throw new BloatCancelled(); };
+  // ٧ نوفمبر (آيفون): الفحص علق على «نضغط التنزيل ونقيس البنق» — قياس أو إيقاف ما رجع ← نحدّهم
+  const ping = () => capped(d.ping(), pingCapMs, null);
 
   const idleVals: (number | null)[] = [];
   for (let i = 0; i < idleN; i++) {
     stop();
-    const v = await d.ping();
+    const v = await ping();
     idleVals.push(v);
     d.onStep?.('idle', v);
     await d.sleep(gapMs);
@@ -95,14 +110,14 @@ export async function runBloat(d: BloatDeps, o: BloatOpts = {}): Promise<BloatRe
     try {
       while (d.now() - t0 < loadMs) {
         stop();
-        const v = await d.ping();
+        const v = await ping();
         // أول ثانية ونص: الحمل لسا يتصاعد — ما تنحسب
         if (d.now() - t0 >= rampMs) { vals.push(v); d.onStep?.(kind, v); }
         await d.sleep(gapMs);
       }
     } finally {
       // الإلغاء أو أي خطأ ← نوقف التحميل دايماً (ما يكمل ياكل باقة العضو)
-      bytes = await h.stop().catch(() => 0);
+      bytes = await capped(h.stop(), stopCapMs, 0);
     }
     const secs = Math.max(0.5, (d.now() - t0) / 1000);
     const stats = pingStats(vals);

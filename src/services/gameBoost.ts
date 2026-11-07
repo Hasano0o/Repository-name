@@ -48,7 +48,8 @@ function startLoad(kind: 'down' | 'up'): LoadHandle {
     stop: async () => {
       on = false;
       ctrl.abort();
-      await Promise.allSettled(ws);
+      // الآيفون: arrayBuffer/text بعد abort ممكن ما يرجع — ما ننتظر أكثر من ٣ث (البايتات اللي انحسبت تكفي)
+      await Promise.race([Promise.allSettled(ws), sleep(3000)]);
       return bytes;
     },
   };

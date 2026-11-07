@@ -180,3 +180,18 @@ test('matchExpired / matchLeft', () => {
   assert.equal(matchLeft(s, 0), 'ساعة و30 دقيقة');
   assert.equal(matchLeft(s, 70 * 60000), '20 دقيقة');
 });
+
+test('runBloat: قياس أو إيقاف ما يرجع أبد (آيفون) ← ما يعلق ويكمل', async () => {
+  let t = 0;
+  let n = 0;
+  const never = new Promise<never>(() => {});
+  const r = await runBloat({
+    now: () => t,
+    sleep: async (x: number) => { t += x; await new Promise<void>(res => setImmediate(() => res())); },
+    // كل ثالث قياس تحت الحمل يعلق للأبد
+    ping: async () => { t += 20; n++; if (n > 12 && n % 3 === 0) return never; return 40; },
+    startLoad: () => ({ stop: () => never }),
+  }, { gapMs: 200, pingCapMs: 30, stopCapMs: 30 });
+  assert.ok(['A+', 'A', 'B', 'C', 'D', 'F'].includes(r.grade));
+  assert.equal(r.down.mbps, 0);
+});

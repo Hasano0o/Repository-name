@@ -70,7 +70,12 @@ async function hit(url: string, timeoutMs: number, method: 'GET' | 'HEAD'): Prom
     const r = await fetch(target, { method, signal: ctrl.signal, headers: { 'Cache-Control': 'no-cache' } });
     // نحسب الوقت لحد وصول رأس الرد — قراءة الجسم ما تدخل في البنق
     const ms = Date.now() - start;
-    if (method === 'GET') { try { await r.text(); } catch {} }
+    // الجسم بمهلة: الآيفون تحت ضغط التحميل ممكن ما يكمل الجسم ولا يرجع بعد الإلغاء (الفحص علق ٧ نوفمبر)
+    if (method === 'GET') {
+      try {
+        await Promise.race([r.text(), new Promise(res => setTimeout(res, Math.max(300, timeoutMs - ms)))]);
+      } catch {}
+    }
     return { ms };
   } catch (e) {
     return { ms: null, err: reason(e, timeoutMs) };
