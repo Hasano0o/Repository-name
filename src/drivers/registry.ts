@@ -13,6 +13,7 @@ import { LuciDriver } from './luci';
 import { DlinkDriver } from './dlink';
 import { InseegoDriver } from './inseego';
 import { HuaweiOntDriver } from './hgont';
+import { Fg360Driver } from './fg360';
 import { UnknownDriver } from './unknown';
 import { DeviceDriver } from './device';
 import { DemoDriver } from './demo';
@@ -27,6 +28,9 @@ const factories: (() => RouterDriver)[] = [
   () => new DeviceDriver(),
   // «راوتر تجريبي» — detect يرجع true بس للعنوان demo (بدون شبكة)
   () => new DemoDriver(),
+  // لوحة FG360 (AW1000 — 5G CPE، :8088/cgi-bin/api.cgi) — قبل الكل: على المنفذ 80 فيه LuCI تعلق وتضيّع وقت الباقين.
+  // يدق على :8088 بس (مهلة 2.5ث) — راوتر ما فيه هالمنفذ يرفض فوراً
+  () => new Fg360Driver(),
   () => new HuaweiDriver(),
   () => new ZteDriver(),
   // ZTE الجيل الجديد (U60 Pro / MU5250 …) — ubus بدل goform. قراءة بس للحين

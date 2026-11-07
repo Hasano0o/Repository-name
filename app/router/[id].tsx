@@ -672,6 +672,21 @@ export default function RouterDashboard() {
           </View>
         )}
 
+        {info?.driverId === 'unknown' && (
+          <View style={s.demoBar}>
+            <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: 18 }}>🔎</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={s.demoTitle}>وصلنا لراوترك بس ما نعرف نقرأه للحين</Text>
+                <Text style={s.demoSub}>الأرقام تحت مو قراءة حقيقية (صفر = ما نعرف، مو إشارتك). أرسل ملفات راوترك ونضيف دعمه</Text>
+              </View>
+            </View>
+            <Pressable style={s.demoBtn} onPress={() => router.push('/newdevice' as Href)}>
+              <Text style={s.demoBtnTxt}>أرسل ملفات راوتري</Text>
+            </Pressable>
+          </View>
+        )}
+
         {loading && (
           <View style={s.center}>
             <ActivityIndicator size="large" color={C.blue} />

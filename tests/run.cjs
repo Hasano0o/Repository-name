@@ -87,6 +87,8 @@ const files = [
   'src/drivers/inseego/index.ts',
   'src/drivers/hgont/parse.ts',
   'src/drivers/hgont/index.ts',
+  'src/drivers/fg360/parse.ts',
+  'src/drivers/fg360/index.ts',
   'src/utils/arfcn.ts',
   // القفل الآمن (الجلسات والواجهة بدائل داخل الاختبار)
   'src/utils/safeLock.ts',
