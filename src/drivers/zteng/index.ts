@@ -155,7 +155,51 @@ export class ZteNgDriver implements RouterDriver {
     }
     await markBadPassword(this.host, null);
     this.session = s2;
+    this.devOk = false;
     await this.setEnstr();
+  }
+
+  /**
+   * «خيارات المطوّر» — MU5250 / MC8830 (FULL ٦ نوفمبر): تثبيت الترددات (setBandSelect = nwinfo_set_lte_ext_band ·
+   * gSaOrNsaBandSelect = nwinfo_set_nrbandlock) ما له مكان إلا في #developer_options، وrouter.js يحوّلها لـ
+   * #developer_options_login لو web_info.developer_option_loginfo ≠ "1". حساب admin لحاله ← Access denied (-32002).
+   * الدخول (service_rpc.js ua()): zwrt_web.web_developer_option_login {password: sha(sha(كلمة)+zte_web_sault)} بنفس الجلسة ← result "0".
+   * في فيرمويرات كثيرة كلمة المطوّر = كلمة الدخول (G5B1 · MC888 فودافون إسبانيا)، وفي غيرها منفصلة ← نجرّب كلمة admin
+   * **مرة وحدة** ولو انرفضت ما نعيدها لحالنا (ما نخمّن كلمات).
+   */
+  private devOk = false;
+  private devRejected = false;
+  private async devLogin(): Promise<boolean> {
+    if (this.devOk) return true;
+    try {
+      const wi = await this.call('zwrt_web', 'web_info', {});
+      if (str(wi.developer_option_loginfo) === '1') { this.devOk = true; diag('[zte-ng] خيارات المطوّر: مفتوحة أصلاً'); return true; }
+    } catch {}
+    const key = 'dev:' + this.host;
+    const fp = bytesToHex(sha256(utf8ToBytes('bandly-ng-dev:' + this.password)));
+    if (await isBadPassword(key, fp)) {
+      this.devRejected = true;
+      diag('[zte-ng] خيارات المطوّر: كلمة الدخول انرفضت قبل — ما نعيدها');
+      return false;
+    }
+    let r: Record<string, unknown> | null = null;
+    try {
+      const info = await this.call('zwrt_web', 'web_login_info', {}, ZERO);
+      const salt = str(info.zte_web_sault);
+      if (!salt) return false;
+      r = await this.call('zwrt_web', 'web_developer_option_login', { password: sha(sha(this.password) + salt) });
+    } catch (e: any) {
+      diag(`[zte-ng] web_developer_option_login: ${String(e?.message ?? e).slice(0, 80)}`);
+      return false;
+    }
+    const res = r && r.result !== undefined && r.result !== null ? str(r.result) : '';
+    diag(`[zte-ng] web_developer_option_login: result=${res || '—'} · خانات=${r ? Object.keys(r).join(',') : '—'}`);
+    if (res === '0') { this.devOk = true; this.devRejected = false; await markBadPassword(key, null); return true; }
+    // ما فيه result (فيرموير بدون خيارات المطوّر) ← مو رفض كلمة؛ ما نعلّمها
+    if (res === '') return false;
+    this.devRejected = true;
+    await markBadPassword(key, fp);
+    return false;
   }
 
   /**
@@ -188,6 +232,16 @@ export class ZteNgDriver implements RouterDriver {
         try {
           return await this.callRetry(obj, method, params);
         } catch (e2: any) {
+          // الجلسة سليمة (دخلنا للتو) والأمر لسا مرفوض = صلاحية: أوامر «خيارات المطوّر» ← ندخلها ونعيد مرة
+          if ((e2?.code === 6 || e2?.code === -32002) && await this.devLogin()) {
+            try { return await this.callRetry(obj, method, params); } catch (e3: any) { e2 = e3; }
+          }
+          if ((e2?.code === 6 || e2?.code === -32002) && this.devRejected) {
+            const x: any = new Error('هالإعداد في راوترك داخل «خيارات المطوّر»، وكلمتها مو نفس كلمة الدخول — الراوتر رفضها. نفس الشي يصير من صفحة الراوتر نفسها؛ لو تعرف كلمة المطوّر من الشركة كلّمنا في قروب الدعم.');
+            x.code = e2.code;
+            x.devNeeded = true;
+            throw x;
+          }
           if (e2?.code === 6 || e2?.code === -32002) {
             const x: any = new Error('الراوتر رفض الأمر حتى بعد الدخول (Access denied) — اطلع من صفحة الراوتر لو فاتحها من جهاز ثاني، وتأكد إن كلمة المرور حق حساب المدير، وبعدها جرّب مرة ثانية.');
             x.code = e2.code;
@@ -351,7 +405,7 @@ export class ZteNgDriver implements RouterDriver {
     try {
       const i = await this.call('zwrt_web', 'web_info', {}, ZERO).catch(() => ({} as Record<string, unknown>));
       const txt = JSON.stringify(i);
-      if (/MU5250/i.test(txt)) return MODELS.mu5250;
+      if (/MU5250/i.test(txt)) { this.lteExt = true; return MODELS.mu5250; }
       if (/U60/i.test(txt)) return MODELS.u60Pro;
     } catch {}
     return MODELS.zteNg;
@@ -537,7 +591,7 @@ export class ZteNgDriver implements RouterDriver {
         await this.write('zte_nwinfo_api', 'nwinfo_set_gwl_bandlock', { is_gw_band: '0', gw_band_mask: '0', is_lte_band: '1', lte_band_mask: dec });
         return;
       } catch (e: any) {
-        if (e?.code !== -32002 && e?.code !== 3 && e?.code !== -32601) throw e;
+        if (e?.devNeeded || (e?.code !== -32002 && e?.code !== 3 && e?.code !== -32601)) throw e;
         diag(`[zte-ng] gwl_bandlock مرفوض (${e?.code}) ← lte_ext_band`);
       }
     }
