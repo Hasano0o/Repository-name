@@ -24,10 +24,10 @@ const STATUS = { statusData: {
   statusBarConnectionState: 'Connected', statusBarBatteryPercent: 76, statusBarBatteryChargingState: 'Charging', statusBarWiFiClientListSize: 2,
 } };
 
-function router(o: { password?: string; stat?: boolean; title?: string; loginPage?: string; lock?: boolean } = {}) {
-  const st = { sec: '6e1f0c2a9b7d43e8', g: 'efdbef4ddc037c4ae30bca3cd49fec16a5f3a007', logged: false, posts: [] as string[], fails: 0 };
+function router(o: { password?: string; stat?: boolean; title?: string; loginPage?: string; lock?: boolean; dropSubmit?: number; authError?: string } = {}) {
+  const st = { sec: '6e1f0c2a9b7d43e8', g: 'efdbef4ddc037c4ae30bca3cd49fec16a5f3a007', logged: false, posts: [] as string[], fails: 0, inflight: 0, maxInflight: 0, n: 0 };
   const res = (status: number, text: string) => ({ ok: status < 400, status, url: 'http://192.168.1.1/', headers: { get: () => null }, text: async () => text } as any);
-  (globalThis as any).fetch = async (url: string, init?: any) => {
+  const inner = async (url: string, init?: any) => {
     const u = new URL(url);
     const m = (init?.method ?? 'GET').toUpperCase();
     if (m === 'POST') st.posts.push(u.pathname);
@@ -36,7 +36,9 @@ function router(o: { password?: string; stat?: boolean; title?: string; loginPag
       case '/srv/status': return res(200, JSON.stringify(STATUS));
       case '/login/': return res(200, o.loginPage ?? `<html><script>var secToken = "${st.sec}";</script><form><input type="hidden" name="gSecureToken" value="${st.g}" /></form></html>`);
       case '/submitLogin/': {
+        if (o.dropSubmit && o.dropSubmit-- > 0) throw new Error('The request timed out.');
         if (o.lock) return res(429, '');
+        if (o.authError) return res(500, JSON.stringify({ authError: o.authError }));
         const p = new URLSearchParams(init.body);
         if (p.get('gSecureToken') !== st.g || p.get('shaPassword') !== sha1((o.password ?? 'admin123') + st.sec)) {
           st.fails++;
@@ -51,6 +53,11 @@ function router(o: { password?: string; stat?: boolean; title?: string; loginPag
       case '/logout/': st.logged = false; return res(200, '');
       default: return res(404, 'Not Found');
     }
+  };
+  // نعدّ الطلبات المتداخلة (الجهاز الحقيقي يعلق معها)
+  (globalThis as any).fetch = async (url: string, init?: any) => {
+    st.inflight++; st.maxInflight = Math.max(st.maxInflight, st.inflight);
+    try { await new Promise(r => setTimeout(r, 2)); return await inner(url, init); } finally { st.inflight--; }
   };
   return st;
 }
@@ -140,4 +147,29 @@ test('inseego: الدرايفر ما فيه أي أمر كتابة', () => {
   const d = driver();
   for (const k of ['setBand', 'lockCell', 'unlockCell', 'setNetworkMode', 'reboot', 'blockDevice', 'restoreAll']) assert.equal(typeof d[k], 'undefined', k);
   assert.ok(!d.afterLoginPages().some((p: string) => /logout|restart|reboot|reset/i.test(p)));
+});
+
+test('inseego: طلب واحد بالمرة — القراءات المتوازية ما تتداخل عند الجهاز', async () => {
+  const st = router({ stat: true });
+  const d = driver();
+  await d.login('192.168.1.1', 'admin', 'admin123');
+  await Promise.all([d.getSignal(), d.getNetworkInfo(), d.getExtras(), d.getCells(), d.isConnected()]);
+  assert.equal(st.maxInflight, 1);
+});
+
+test('inseego: submitLogin علق مرة ← نعيد برموز جديدة وننجح', async () => {
+  const st = router({ dropSubmit: 1 });
+  await driver().login('192.168.1.1', 'admin', 'admin123');
+  assert.equal(st.logged, true);
+  assert.deepEqual(st.posts, ['/submitLogin/', '/submitLogin/']);
+});
+
+test('inseego: علق مرتين ← رسالة «ما رد» (مو «كلمة غلط»)', async () => {
+  router({ dropSubmit: 2 });
+  await assert.rejects(driver().login('192.168.1.1', 'admin', 'admin123'), /ما رد على الدخول/);
+});
+
+test('inseego: رفض بسبب ثاني (مو كلمة) ← نعرض نص الجهاز', async () => {
+  router({ authError: 'Session expired.<br>Please reload the page.' });
+  await assert.rejects(driver().login('192.168.1.1', 'admin', 'x'), /Session expired\. Please reload/);
 });

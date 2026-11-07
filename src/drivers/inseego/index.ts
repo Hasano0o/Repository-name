@@ -40,9 +40,26 @@ export class InseegoDriver implements RouterDriver {
 
   private base(host = this.host) { return 'http://' + host.replace(/^https?:\/\//, '').replace(/\/+$/, ''); }
 
+  /**
+   * طلب واحد بالمرة: سيرفر صفحة الـ MiFi يعلق مع الطلبات المتوازية (تقرير ٧ نوفمبر: GET / و /srv/status و
+   * submitLogin كلها timeout لما تتداخل، وتمشي لما تجي ورا بعض). كل طلبات الدرايفر تمر من هنا.
+   */
+  private q: Promise<unknown> = Promise.resolve();
+  private one<T>(f: () => Promise<T>): Promise<T> {
+    const r = this.q.then(f, f);
+    this.q = r.catch(() => {});
+    return r;
+  }
+  private req(path: string, init: RequestInit = {}, timeout = 8000) {
+    return this.one(async () => {
+      const r = await http(this.base() + path, init, timeout);
+      return { status: r.status, text: await r.text() };
+    });
+  }
+
   private async json(path: string, timeout = 8000): Promise<any> {
-    const r = await http(this.base() + path, { headers: { Accept: 'application/json, text/javascript, */*' } }, timeout);
-    const t = (await r.text()).trim();
+    const r = await this.req(path, { headers: { Accept: 'application/json, text/javascript, */*' } }, timeout);
+    const t = r.text.trim();
     if (r.status !== 200) throw new Error(`${path}: HTTP ${r.status}`);
     try { return JSON.parse(t); } catch { throw new Error(/<html|<!doctype/i.test(t) ? `${path}: الراوتر رجّع صفحة بدل بيانات` : `${path}: رد غير متوقع`); }
   }
@@ -70,17 +87,16 @@ export class InseegoDriver implements RouterDriver {
     this.host = host;
     try {
       const st = statusFrom(await this.json(`/srv/status?_=${Date.now()}`, 4000));
-      if (!st) return false;
-      await this.readModel();
-      return true;
+      // الموديل من «/» (81KB وبطيئة) — في identify بعدين، مو هنا
+      return !!st;
     } catch { return false; }
   }
 
   private async readModel() {
     if (this.model) return;
     try {
-      const r = await http(this.base() + '/', {}, 6000);
-      const m = modelFromHtml(await r.text());
+      const r = await this.req('/', {}, 15000);
+      const m = modelFromHtml(r.text);
       if (m) this.model = m;
     } catch {}
     if (this.model) this.name = /inseego/i.test(this.model) ? this.model : `Inseego ${this.model}`;
@@ -99,37 +115,55 @@ export class InseegoDriver implements RouterDriver {
     };
   }
 
-  async login(host: string, _username: string, password: string): Promise<void> {
-    if (!isLanHost(host)) throw new Error('العنوان لازم يكون محلي (192.168 / 10 / 172)');
-    this.host = host;
-    this.logged = false;
+  /** /login/ ← الرموز (طازجة لكل محاولة) */
+  private async tokens() {
     let html = '';
     try {
-      const r = await http(this.base() + '/login/', {}, 10000);
-      html = await r.text();
+      html = (await this.req('/login/', {}, 12000)).text;
     } catch (e) {
       throw new Error(`تعذر الاتصال بالراوتر (GET /login/) — ${(e as any)?.message ?? e}`);
     }
     const tok = loginTokens(html);
     if (!tok) {
       diag(`[inseego] /login/: ${html.length}B بدون secToken/gSecureToken`);
-      throw new Error('صفحة الدخول في جهازك مختلفة عن اللي نعرفه — أرسل «راوترك مو مدعوم؟» عشان نضيفها');
+      throw new Error('صفحة الدخول في جهازك مختلفة عن اللي نعرفه — اضغط «أرسل الخطأ للمطوّر» عشان نضيفها');
     }
-    const body = `shaPassword=${encodeURIComponent(inseegoSha(password, tok.secToken))}&gSecureToken=${encodeURIComponent(tok.gSecureToken)}`;
-    const r = await http(this.base() + '/submitLogin/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest', Referer: this.base() + '/login/' },
-      body,
-    }, 12000);
-    const t = await r.text().catch(() => '');
-    diag(`[inseego] submitLogin → ${r.status} · ${t.length}B`);
-    if (r.status === 429) throw new Error('الجهاز وقّف الدخول بعد محاولات كثيرة — انتظر شوي وجرّب');
+    return tok;
+  }
+
+  async login(host: string, _username: string, password: string): Promise<void> {
+    if (!isLanHost(host)) throw new Error('العنوان لازم يكون محلي (192.168 / 10 / 172)');
+    this.host = host;
+    this.logged = false;
+    let r: { status: number; text: string } | null = null;
+    // الجهاز أحياناً يعلق على submitLogin (تقرير ٧ نوفمبر: timeout ٢٠–٣٠ث ثم يرد عادي) — مرة ثانية برموز جديدة.
+    // انقطاع الشبكة مو محاولة غلط عند الجهاز، فما نخاطر بالقفل.
+    for (let a = 0; a < 2 && !r; a++) {
+      const tok = await this.tokens();
+      const body = `shaPassword=${encodeURIComponent(inseegoSha(password, tok.secToken))}&gSecureToken=${encodeURIComponent(tok.gSecureToken)}`;
+      try {
+        r = await this.req('/submitLogin/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest', Referer: this.base() + '/login/' },
+          body,
+        }, 25000);
+      } catch (e) {
+        diag(`[inseego] submitLogin ✗ محاولة ${a + 1}: ${String((e as any)?.message ?? e).slice(0, 80)}`);
+        if (a === 1) throw new Error('الجهاز ما رد على الدخول (POST /submitLogin/) — قرّب من الجهاز وتأكد إن شاشته شغالة، وجرّب مرة ثانية');
+      }
+    }
+    const t = r!.text;
     let authError = '';
     try { authError = String(JSON.parse(t)?.authError ?? ''); } catch {}
-    if (r.status === 500 || authError) {
-      throw new Error('كلمة المرور غلط — هي «Admin Password» على شاشة الجهاز (القائمة ← About / Admin) أو تحت البطارية');
+    // نص الرفض من الجهاز (بدون أي رمز) — يفرّق «كلمة غلط» عن «الرمز انتهى» وغيره
+    const why = authError.replace(/<br\s*\/?>/gi, ' ').replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 140);
+    diag(`[inseego] submitLogin → ${r!.status} · ${t.length}B${why ? ` · authError: «${why}»` : ''}${!why && r!.status !== 200 ? ` · ${t.replace(/\s+/g, ' ').slice(0, 120)}` : ''}`);
+    if (r!.status === 429 || /too many|attempts|locked/i.test(why)) throw new Error('الجهاز وقّف الدخول بعد محاولات كثيرة — انتظر شوي وجرّب');
+    if (r!.status === 500 || authError) {
+      if (why && !/password|incorrect|invalid/i.test(why)) throw new Error(`الجهاز رفض الدخول: ${why}`);
+      throw new Error('كلمة المرور غلط — هي «Admin Password» اللي تطلع على شاشة الجهاز (مو كلمة الواي فاي إذا كانت مختلفة)');
     }
-    if (r.status !== 200 && r.status !== 302 && r.status !== 303) throw new Error(`الدخول فشل (HTTP ${r.status})`);
+    if (r!.status !== 200 && r!.status !== 302 && r!.status !== 303) throw new Error(`الدخول فشل (HTTP ${r!.status})`);
     // رجّع لنا فورم الدخول نفسه = ما دخلنا
     if (/name=["']gSecureToken["']/i.test(t) && /var\s+secToken/.test(t)) throw new Error('كلمة المرور غلط — الجهاز رجّع صفحة الدخول');
     this.logged = true;
@@ -140,7 +174,7 @@ export class InseegoDriver implements RouterDriver {
     // /logout/ ينهي جلسة المتصفح على الجهاز كمان — ما نرسله إلا لو دخلنا
     if (!this.logged || !this.host) return;
     this.logged = false;
-    try { await http(this.base() + '/logout/', {}, 5000); } catch {}
+    try { await this.req('/logout/', {}, 5000); } catch {}
   }
 
   /** صفحات بعد الدخول للجامع (FULL/AUTH) — كلها عرض GET من قائمة الجهاز نفسه. بدون /logout/ ولا /restarting/ */

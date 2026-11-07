@@ -162,7 +162,9 @@ export default function AddRouterScreen() {
           const got = await withTimeout(
             collectRouterFiles(f.host, n => setStep(`نجمع ملفات صفحة الراوتر… ${n} — لا تطلع من الشاشة`),
               // هواوي: «/» ممكن ما يرد (H112-370) — نبدأ من صفحاته مباشرة
-              /huawei|هواوي/i.test(f.model) ? { start: ['/', '/html/home.html', '/html/index.html'] } : undefined),
+              /huawei|هواوي/i.test(f.model) ? { start: ['/', '/html/home.html', '/html/index.html'] }
+                // Inseego: صفحة الدخول فيها كود الدخول الأصلي (الملفات بدونها ما تكفي — ٧ نوفمبر)
+                : /inseego|mifi/i.test(f.model) ? { start: ['/login/', '/srv/status', '/'] } : undefined),
             90_000, { files: [] as DumpFile[], skipped: ['جمع الملفات طوّل أكثر من ٩٠ ث'] });
           p.files = got.files;
           p.skipped = got.skipped;
