@@ -39,7 +39,6 @@ import { TempCard } from '../../src/ui/TempCard';
 import { canRescue, rescueRouter, freeRelease, restoreSavedSettings } from '../../src/utils/safeLock';
 import { getReleaseSnap, clearReleaseSnap } from '../../src/store/lockSnap';
 import type { LockSnapshot } from '../../src/drivers/lockSnapshot';
-import { hostLabel } from '../../src/drivers/device';
 import { rememberOperator, learnOperatorBands } from '../../src/store/operator';
 import { hasInternet } from '../../src/utils/internet';
 import { reportOutage } from '../../src/services/community';
@@ -798,18 +797,17 @@ export default function RouterDashboard() {
 
         {!loading && info && (
           <LinearGradient colors={[tBg('#2f6bff'), tBg('#6a4cff')]} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={s.topBar}>
+            {/* سطر واحد مضغوط (طلب حسن): الراوتر · الشركة · الحالة — العنوان والأيقونة شلناهم (العنوان في الإعدادات والتفاصيل) */}
             <View style={[s.statusPill, { backgroundColor: tBg('#ffffff') }]}>
               <Text style={[s.statusText, { color: noService ? C.red : C.green }]}>
                 {disconnected ? 'منقطع' : noService ? 'بلا شبكة' : 'متصل'}
               </Text>
               <View style={[s.statusDot, { backgroundColor: noService ? C.red : C.green }]} />
             </View>
-            <View style={{ flex: 1 }} />
-            <View style={{ flexShrink: 1 }}>
-              <Text style={s.topName}>{info.name}</Text>
-              <Text style={s.topSub}>{details?.operator ? `${details.operator}  ·  ` : ''}{hostLabel(info.host)}</Text>
+            <View style={s.topLine}>
+              <Text style={s.topName} numberOfLines={1}>{info.name}</Text>
+              {!!details?.operator && <Text style={s.topSub} numberOfLines={1}>{details.operator}</Text>}
             </View>
-            <View style={s.topIcon}><Text style={{ fontSize: 18 }}>📡</Text></View>
           </LinearGradient>
         )}
 
@@ -1167,20 +1165,17 @@ const s = sheet({
   retryBtn: { alignSelf: 'flex-end', backgroundColor: C.red, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8 },
   retryText: { color: tFg('#fff'), fontWeight: '700' },
   topBar: {
-    flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 22, padding: 14,
+    flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, paddingVertical: 8, paddingHorizontal: 10,
     shadowColor: '#2f6bff', shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 5,
   },
-  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1 },
+  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1 },
   statusOn: { backgroundColor: C.greenSoft, borderColor: C.cardBorder },
   statusOff: { backgroundColor: C.redSoft, borderColor: C.cardBorder },
-  statusText: { fontWeight: '800', fontSize: 13 },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
-  topName: { color: tFg('#fff'), fontSize: 17, fontWeight: '800', textAlign: 'right' },
-  topSub: { color: tFg('rgba(255,255,255,0.8)'), fontSize: 12, textAlign: 'right', marginTop: 2 },
-  topIcon: {
-    width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: tBg('rgba(255,255,255,0.2)'), borderWidth: 1, borderColor: tBd('rgba(255,255,255,0.35)'),
-  },
+  statusText: { fontWeight: '800', fontSize: 12 },
+  statusDot: { width: 7, height: 7, borderRadius: 4 },
+  topLine: { flex: 1, flexDirection: 'row-reverse', alignItems: 'baseline', gap: 8, minWidth: 0 },
+  topName: { color: tFg('#fff'), fontSize: 15, fontWeight: '800', textAlign: 'right', flexShrink: 1 },
+  topSub: { color: tFg('rgba(255,255,255,0.85)'), fontSize: 12.5, fontWeight: '600', textAlign: 'right' },
   heroHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   netBadge: { backgroundColor: C.blueSoft, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 11 },
   netBadgeText: { color: C.blue, fontWeight: '800', fontSize: 12 },
