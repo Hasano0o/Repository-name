@@ -17,7 +17,9 @@ import { fhBody, fhDecrypt, fhKey } from '../drivers/fiberhome/crypto';
 // مكتبات كبيرة ما تنعدّل — أسماؤها تكفي. ما نتخطى polyfill/vue-i18n/vue-router/axios/bootstrap بعد:
 // FiberHome يخبّي فيها RequireJS ودوال الاتصال ($post) وأسماء الإعدادات (تقرير ٢٦ أكتوبر) — صغيرة ونحتاجها
 const LUCI_DANGER = /\/cgi-bin\/luci.*\/(logout|reboot|reset|factory|flash\w*|sysupgrade|upgrade|restore|backup|poweroff|shutdown|apply|commit|save|call|exec|remove|delete)\b/i;
-const SKIP = /(copyrightPage|opensource|privatePolicy|\/faq[\w-]*\.html|chunk-vendors|jquery(?!\.tp)|element-plus|elementui|chunk-libs|echarts|tinymce|lottie|jtopo|topo\.min|\/element(\.min)?\.js|font-?awesome|moment|lodash|highcharts|chart\.min|swiper|\.min\.js.*(forge|elliptic))/i;
+// libjquery.js (هواوي وأشباهها — Soyealink…) مو jQuery بس: فيه CryptoJS و SCRAM و RSA حقة الدخول — لازم ينجمع
+// (Soyealink SNT151/SLT869 ٧ نوفمبر: 108006 بكلمة صحيحة، والملف اللي يشرح ليش كان متخطّى)
+const SKIP = /(copyrightPage|opensource|privatePolicy|\/faq[\w-]*\.html|chunk-vendors|(?:^|[^b])jquery(?!\.tp)|element-plus|elementui|chunk-libs|echarts|tinymce|lottie|jtopo|topo\.min|\/element(\.min)?\.js|font-?awesome|moment|lodash|highcharts|chart\.min|swiper|\.min\.js.*(forge|elliptic))/i;
 // Nokia FastMile 3.1 (تقرير ٢٧ أكتوبر): main-es2015.js (Angular) أكبر من ١٫٥ ميقا — انقطع قبل شاشة الدخول والترددات.
 // الملفات الكبيرة تنقسم أجزاء ٣٠٠ك على الإرسال، والسيرفر يجمعها (حده ٢٠ ميقا للتقرير)
 const MAX_FILE = 6_000_000;

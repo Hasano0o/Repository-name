@@ -406,3 +406,18 @@ test('الجامع: صفحات بنفس رأس الرئيسية بس محتوى 
   assert.ok(!files.some(f => f.p === '/nothere/index.html'));
   assert.ok(skipped.some(x => /nothere.*صفحة البداية/.test(x)));
 });
+
+test('هواوي/Soyealink: lib/libjquery.js ينجمع (فيه SCRAM حق الدخول) — وjquery العادي يتخطّى', async () => {
+  (globalThis as any).fetch = async (url: string) => {
+    const p = url.replace(/^http:\/\/[^/]+/, '').split('?')[0];
+    const files: Record<string, string> = {
+      '/': '<script src="../lib/libjquery.js"></script><script src="/js/jquery-1.8.3.min.js"></script>',
+      '/lib/libjquery.js': 'CryptoJS.SCRAM=function(){}', '/js/jquery-1.8.3.min.js': 'jq',
+    };
+    const b = files[p];
+    return { ok: b !== undefined, headers: { get: () => 'text/plain' }, text: async () => b ?? '' } as any;
+  };
+  const { files, skipped } = await collectRouterFiles('192.168.192.1');
+  assert.ok(files.some(f => f.p === '/lib/libjquery.js'), files.map(f => f.p).join(' '));
+  assert.ok(skipped.some(s => /jquery-1\.8\.3/.test(s)));
+});
