@@ -11,6 +11,7 @@ import { NokiaFwaDriver } from './nokia/fwa';
 import { ZteUfiDriver } from './zteufi';
 import { LuciDriver } from './luci';
 import { DlinkDriver } from './dlink';
+import { InseegoDriver } from './inseego';
 import { UnknownDriver } from './unknown';
 import { DeviceDriver } from './device';
 import { DemoDriver } from './demo';
@@ -47,6 +48,8 @@ const factories: (() => RouterDriver)[] = [
   () => new LuciDriver(),
   // D-Link DWR-2000M / DWR-3000M (React «cpe-webui»، JSON على /acfun/، دخول HMAC-MD5) — من ملفات صفحة ٣ أعضاء (٣١ أكتوبر). قراءة بس للحين
   () => new DlinkDriver(),
+  // Inseego MiFi 8000 / 8800L (Verizon Jetpack) و M2000 — /srv/status بدون دخول، الدخول sha1. قراءة بس للحين (٧ نوفمبر)
+  () => new InseegoDriver(),
   () => new UnknownDriver(),
 ];
 

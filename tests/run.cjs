@@ -81,6 +81,8 @@ const files = [
   'src/drivers/dlink/crypto.ts',
   'src/drivers/dlink/parse.ts',
   'src/drivers/dlink/index.ts',
+  'src/drivers/inseego/parse.ts',
+  'src/drivers/inseego/index.ts',
   'src/utils/arfcn.ts',
   // القفل الآمن (الجلسات والواجهة بدائل داخل الاختبار)
   'src/utils/safeLock.ts',
