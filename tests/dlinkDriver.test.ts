@@ -342,3 +342,50 @@ test('D-Link DWR-2000M بلوحة 5G (boardID بدون _4G) ← 5G: الوضع �
   await d.lockCell({ tech: 'NR', pci: '501', arfcn: '636666', band: 78 });
   assert.deepEqual(st.cell, { cellLockEnabled: true, netType: '5GNAS', pcid: '501', arfcn: '636666', band: '78', scs: '30' });
 });
+
+test('D-Link parse: أوامر AT — QENG (NSA/LTE/SA) و CESQ', () => {
+  const { parseQeng, parseCesq } = require('../src/drivers/dlink/parse');
+  const nsa = '+QENG: "servingcell","NOCONN"\r\n+QENG: "LTE","FDD",420,03,A5D9C02,211,1650,3,5,5,25F,-97,-11,-66,12,9,230,-\r\n+QENG: "NR5G-NSA",420,03,501,-88,15,-11,636666,78,12,1\r\n\r\nOK';
+  const r = parseQeng(nsa);
+  assert.equal(r.length, 2);
+  assert.deepEqual([r[0].tech, r[0].band, r[0].pci, r[0].arfcn, r[0].rsrp, r[0].sinr, r[0].bandwidth, r[0].enodebId], ['LTE', 3, '211', '1650', -97, 12, 20, String(Math.floor(0xA5D9C02 / 256))]);
+  assert.deepEqual([r[1].tech, r[1].band, r[1].pci, r[1].rsrp, r[1].sinr, r[1].bandwidth], ['NR', 78, '501', -88, 15, 100]);
+  const sa = parseQeng('+QENG: &quot;servingcell&quot;,&quot;CONNECT&quot;,&quot;NR5G-SA&quot;,&quot;TDD&quot;,420,04,1A2B3C4D5,77,1F4,636666,78,12,-85,-10,18,1,-');
+  assert.deepEqual([sa[0].tech, sa[0].band, sa[0].pci, sa[0].rsrp, sa[0].sinr], ['NR', 78, '77', -85, 18]);
+  assert.equal(parseQeng('ERROR').length, 0);
+  const c = parseCesq('+CESQ: 99,99,255,255,20,44,40,70,60\r\nOK');
+  assert.deepEqual(c.map((x: any) => [x.tech, x.rsrp, x.rsrq, x.sinr]), [['LTE', -97, -10, undefined], ['NR', -87, -23, 7]]);
+});
+
+test('D-Link: rf[] فاضي (حالة العضو) ← الإشارة من AT+QENG، ولو ERROR ← AT+CESQ', async () => {
+  const EMPTY = { basic: { ledLevel: 3 }, rf: [{ netType: '', rsrq: '', rsrp: '', rssi: '-', sinr: '', pcid: '', enodebid: '115097', earfcn: '', frequencyBand: '', bandwidth: '' }] };
+  for (const quectel of [true, false]) {
+    const st = router({ board: 'MT_5G', rf: EMPTY });
+    const ats: string[] = [];
+    const orig = (globalThis as any).fetch;
+    (globalThis as any).fetch = async (url: string, init?: any) => {
+      if (url.includes('/acfun/atCommand')) {
+        const cmd = JSON.parse(init.body).atCommand; ats.push(cmd);
+        const content = cmd.startsWith('AT+QENG') ? (quectel ? '+QENG: "servingcell","NOCONN"\n+QENG: "LTE","FDD",420,03,A5D9C02,211,1650,3,5,5,25F,-97,-11,-66,12,9,230,-\n+QENG: "NR5G-NSA",420,03,501,-88,15,-11,636666,78,12,1\nOK' : 'ERROR')
+          : '+CESQ: 99,99,255,255,20,44,40,70,60\nOK';
+        return { ok: true, status: 200, url, headers: { get: () => null }, text: async () => JSON.stringify({ errcode: 0, info: { content } }) };
+      }
+      return orig(url, init);
+    };
+    const d = driver();
+    await d.detect('192.168.0.1');
+    await d.login('192.168.0.1', 'admin', 'pw');
+    const s = await d.getSignal();
+    if (quectel) {
+      assert.deepEqual([s.band, s.rsrp, s.pci, s.nrBand, s.nrRsrp, s.network], ['B3', -97, '211', 'n78', -88, '5G NSA']);
+      assert.ok(s.enodebId);
+    } else {
+      assert.deepEqual([s.rsrp, s.rsrq, s.nrRsrp, s.nrSinr], [-97, -10, -87, 7]);
+      assert.equal(s.enodebId, '115097', 'رقم الموقع من rf لو AT ما يعطيه');
+      await d.getSignal();
+      assert.equal(ats.filter(a => a.startsWith('AT+QENG')).length, 1, 'QENG فشل مرة ← ما نعيده');
+    }
+    assert.ok(ats.every(a => /^AT\+(QENG="servingcell"|CESQ)$/.test(a)), 'أوامر قراءة بس');
+    void st;
+  }
+});

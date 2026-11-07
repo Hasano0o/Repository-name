@@ -124,8 +124,16 @@ export function netLabel(nt: string): string | undefined {
   return nt;
 }
 
-export function signalFrom(info: any, mobile?: any): Signal {
+/** صفوف الإشارة: rf[] لو فيه قراءات، وإلا اللي طلع من أوامر AT (مع رقم الموقع من rf لو موجود) */
+export function rowsWith(info: any, extra?: DlRow[]): DlRow[] {
   const rows = rowsFrom(info);
+  if (rows.some(r => r.rsrp !== undefined) || !extra?.length) return rows;
+  const enb = rows.find(r => r.enodebId)?.enodebId ?? str((Array.isArray(info?.rf) ? info.rf[0] : info?.rf)?.enodebid);
+  return extra.map((r, i) => (i === 0 && r.tech === 'LTE' && !r.enodebId && enb ? { ...r, enodebId: enb } : r));
+}
+
+export function signalFrom(info: any, mobile?: any, extra?: DlRow[]): Signal {
+  const rows = rowsWith(info, extra);
   const lte = rows.filter(r => r.tech === 'LTE');
   const nr = rows.filter(r => r.tech === 'NR');
   const p = lte[0];
@@ -158,8 +166,8 @@ export function signalFrom(info: any, mobile?: any): Signal {
   return s;
 }
 
-export function carriersFrom(info: any): Carrier[] {
-  const rows = rowsFrom(info);
+export function carriersFrom(info: any, extra?: DlRow[]): Carrier[] {
+  const rows = rowsWith(info, extra);
   const out: Carrier[] = [];
   for (const tech of ['LTE', 'NR'] as const) {
     rows.filter(r => r.tech === tech && r.band).forEach((r, i) => out.push({
@@ -170,8 +178,8 @@ export function carriersFrom(info: any): Carrier[] {
   return out;
 }
 
-export function cellsFrom(info: any): CellTower[] {
-  const rows = rowsFrom(info);
+export function cellsFrom(info: any, extra?: DlRow[]): CellTower[] {
+  const rows = rowsWith(info, extra);
   const seen = { LTE: 0, NR: 0 };
   return rows.map(r => ({
     kind: seen[r.tech]++ === 0 ? 'serving' as const : 'secondary' as const,
@@ -180,11 +188,11 @@ export function cellsFrom(info: any): CellTower[] {
 }
 
 /** الاتصال قائم؟ networkStatus («Connected») أو فيه إشارة */
-export function connectedFrom(mobile: any, info?: any): boolean {
+export function connectedFrom(mobile: any, info?: any, extra?: DlRow[]): boolean {
   const st = String(mobile?.networkStatus ?? '').toLowerCase();
   if (/disconnect|no service|not|fail|limited/.test(st)) return false;
   if (/connect|online|ok|up/.test(st)) return true;
-  return rowsFrom(info).some(r => r.rsrp !== undefined);
+  return rowsWith(info, extra).some(r => r.rsrp !== undefined);
 }
 
 export function devicesFrom(info: any): ConnectedDevice[] {
@@ -282,4 +290,65 @@ export function nrScs(band?: number): number | undefined {
   if ([77, 78, 79].includes(band)) return 30;
   if ([1, 3, 5, 7, 8, 20, 28, 71].includes(band)) return 15;
   return undefined;
+}
+
+/* ═══ أوامر AT (قراءة بس) — لما rf[] يجي فاضي (DWR-2000M بلوحة 5G على NR5G-NSA، ٧ نوفمبر) ═══
+ * الصفحة: POST /acfun/atCommand {atCommand} ← info.content (نص المودم). */
+const LTE_BW: Record<string, number> = { '0': 1.4, '1': 3, '2': 5, '3': 10, '4': 15, '5': 20 };
+const NR_BW: Record<string, number> = { '0': 5, '1': 10, '2': 15, '3': 20, '4': 25, '5': 30, '6': 40, '7': 50, '8': 60, '9': 70, '10': 80, '11': 90, '12': 100, '13': 200, '14': 400 };
+const cleanAt = (t: string) => htmlDecode(String(t ?? '')).replace(/\r/g, '');
+const fields = (line: string) => line.replace(/^\+\w+:\s*/, '').split(',').map(x => x.trim().replace(/^"|"$/g, ''));
+const dbm = (v: string | undefined, lo: number, hi: number) => { const n = num(v); return n !== undefined && n >= lo && n <= hi ? n : undefined; };
+
+/** Quectel AT+QENG="servingcell" — LTE · NR5G-NSA · NR5G-SA (ترتيب الحقول من دليل Quectel RG/RM5xx) */
+export function parseQeng(text: string): DlRow[] {
+  const out: DlRow[] = [];
+  for (const raw of cleanAt(text).split('\n')) {
+    const line = raw.trim();
+    if (!/^\+QENG:/i.test(line)) continue;
+    let f = fields(line);
+    if (/^servingcell$/i.test(f[0])) f = f.slice(2);        // "servingcell",<state>,…
+    const kind = (f[0] ?? '').toUpperCase();
+    if (kind === 'LTE' && f.length >= 17) {
+      // "LTE",<FDD/TDD>,MCC,MNC,cellID(hex),PCID,EARFCN,band,UL_bw,DL_bw,TAC,RSRP,RSRQ,RSSI,SINR,CQI,tx_power…
+      const cid = parseInt(f[4], 16);
+      out.push({
+        tech: 'LTE', band: num(f[7]), arfcn: num(f[6]) !== undefined ? String(num(f[6])) : undefined, pci: num(f[5]) !== undefined ? String(num(f[5])) : undefined,
+        cellId: Number.isFinite(cid) ? String(cid) : undefined, enodebId: Number.isFinite(cid) ? String(Math.floor(cid / 256)) : undefined,
+        bandwidth: LTE_BW[f[9]], rsrp: dbm(f[11], -160, -30), rsrq: dbm(f[12], -40, 0), rssi: dbm(f[13], -130, -10), sinr: dbm(f[14], -30, 50), cqi: num(f[15]),
+        plmn: f[2] && f[3] ? f[2] + f[3] : undefined,
+      });
+    } else if (kind === 'NR5G-NSA' && f.length >= 9) {
+      // "NR5G-NSA",MCC,MNC,PCID,RSRP,SINR,RSRQ,ARFCN,band,NR_DL_bw,scs
+      out.push({
+        tech: 'NR', pci: num(f[3]) !== undefined ? String(num(f[3])) : undefined, rsrp: dbm(f[4], -160, -30), sinr: dbm(f[5], -30, 50), rsrq: dbm(f[6], -45, 0),
+        arfcn: num(f[7]) !== undefined ? String(num(f[7])) : undefined, band: num(f[8]), bandwidth: NR_BW[f[9]],
+      });
+    } else if (kind === 'NR5G-SA' && f.length >= 14) {
+      // "NR5G-SA",<duplex>,MCC,MNC,cellID(hex),PCID,TAC,ARFCN,band,NR_DL_bw,RSRP,RSRQ,SINR,scs…
+      const cid = parseInt(f[4], 16);
+      out.push({
+        tech: 'NR', cellId: Number.isFinite(cid) ? String(cid) : undefined, pci: num(f[5]) !== undefined ? String(num(f[5])) : undefined,
+        arfcn: num(f[7]) !== undefined ? String(num(f[7])) : undefined, band: num(f[8]), bandwidth: NR_BW[f[9]],
+        rsrp: dbm(f[10], -160, -30), rsrq: dbm(f[11], -45, 0), sinr: dbm(f[12], -30, 50), plmn: f[2] && f[3] ? f[2] + f[3] : undefined,
+      });
+    }
+  }
+  return out.filter(r => r.rsrp !== undefined || r.pci !== undefined);
+}
+
+/** 3GPP AT+CESQ: rxlev,ber,rscp,ecno,rsrq,rsrp[,ss_rsrq,ss_rsrp,ss_sinr] — مؤشرات تتحوّل لـ dB حسب TS 27.007 */
+export function parseCesq(text: string): DlRow[] {
+  const line = cleanAt(text).split('\n').map(x => x.trim()).find(x => /^\+CESQ:/i.test(x));
+  if (!line) return [];
+  const f = fields(line).map(x => Number(x));
+  const out: DlRow[] = [];
+  const rsrq = f[4], rsrp = f[5];
+  if (Number.isFinite(rsrp) && rsrp !== 255 && rsrp >= 0 && rsrp <= 97) out.push({ tech: 'LTE', rsrp: rsrp - 141, rsrq: Number.isFinite(rsrq) && rsrq !== 255 && rsrq <= 34 ? rsrq / 2 - 20 : undefined });
+  const ssq = f[6], ssp = f[7], sss = f[8];
+  if (Number.isFinite(ssp) && ssp !== 255 && ssp >= 0 && ssp <= 127) out.push({
+    tech: 'NR', rsrp: ssp - 157, rsrq: Number.isFinite(ssq) && ssq !== 255 && ssq <= 127 ? ssq / 2 - 43 : undefined,
+    sinr: Number.isFinite(sss) && sss !== 255 && sss <= 127 ? sss / 2 - 23 : undefined,
+  });
+  return out;
 }

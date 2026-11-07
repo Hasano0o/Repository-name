@@ -30,7 +30,7 @@ import { ModelProfile } from '../models';
 import { dlLoginHash, dlEncrypt, dlDecrypt } from './crypto';
 import {
   signalFrom, carriersFrom, cellsFrom, connectedFrom, devicesFrom, bandConfigFrom, bandTokens, nrKeys,
-  DL_MODES, modeCode, smsFrom, splitPhone, nrScs,
+  DL_MODES, modeCode, smsFrom, splitPhone, nrScs, rowsFrom, parseQeng, parseCesq, DlRow,
 } from './parse';
 
 const NET_ERR = /تعذر الاتصال|ما رد|timeout|network|abort|انقطع/i;
@@ -165,31 +165,67 @@ export class DlinkDriver implements RouterDriver {
   private shape(tag: string, v: unknown) {
     if (this.shaped.has(tag)) return;
     this.shaped.add(tag);
-    try { dlShape(v).match(/.{1,220}/g)?.slice(0, 6).forEach((l, i) => diag(`[dlink] ${tag}${i ? '+' + i : ''}: ${l}`)); } catch {}
+    try { (typeof v === 'string' ? v || '(فاضي)' : dlShape(v)).match(/.{1,220}/g)?.slice(0, 6).forEach((l, i) => diag(`[dlink] ${tag}${i ? '+' + i : ''}: ${l}`)); } catch {}
   }
+  /* ═══ أوامر AT للقراءة — لما الصفحة ما تعبّي rf[] (NR5G-NSA في DWR-2000M بلوحة 5G) ═══
+   * AT+QENG="servingcell" (Quectel: 4G + 5G كاملة) وإلا AT+CESQ (3GPP: RSRP/RSRQ + SINR حق 5G).
+   * قراءة بس — ما نرسل أي أمر يغيّر شي. الطريقة اللي نجحت تنحفظ للجلسة، والنتيجة ٣ ثواني. */
+  private atMode: 'qeng' | 'cesq' | 'none' | '' = '';
+  private atCache: { at: number; rows: DlRow[] } | null = null;
+  private async at(cmd: string): Promise<string> {
+    const j = await this.req('POST', 'atCommand', { atCommand: cmd }, { timeout: 8000 });
+    return String(j?.info?.content ?? '');
+  }
+  private async atRows(): Promise<DlRow[]> {
+    if (this.atMode === 'none') return [];
+    if (this.atCache && Date.now() - this.atCache.at < 3000) return this.atCache.rows;
+    let rows: DlRow[] = [];
+    const tries: ('qeng' | 'cesq')[] = this.atMode ? [this.atMode] : ['qeng', 'cesq'];
+    for (const m of tries) {
+      try {
+        const t = await this.at(m === 'qeng' ? 'AT+QENG="servingcell"' : 'AT+CESQ');
+        this.shape('at-' + m, t.replace(/\s+/g, ' ').slice(0, 400));
+        rows = m === 'qeng' ? parseQeng(t) : parseCesq(t);
+        if (rows.length) { this.atMode = m; break; }
+      } catch (e) {
+        if (/انتهت الجلسة/.test(String((e as any)?.message))) throw e;
+      }
+    }
+    if (!rows.length && !this.atMode) this.atMode = 'none';
+    this.atCache = { at: Date.now(), rows };
+    return rows;
+  }
+  /** الإشارة كاملة: rf[] + الحالة، ولو rf بدون قراءات ← أوامر AT */
+  private async sig(): Promise<{ info: any; mob: any; extra?: DlRow[] }> {
+    const [info, mob] = await Promise.all([this.rf(), this.mobile()]);
+    const has = rowsFrom(info).some(r => r.rsrp !== undefined);
+    const extra = has ? undefined : await this.atRows().catch(() => [] as DlRow[]);
+    return { info, mob, extra };
+  }
+
   async getSignal(): Promise<Signal> {
-    const [info, mob] = await Promise.all([this.rf(), this.mobile()]);
-    return signalFrom(info, mob);
+    const { info, mob, extra } = await this.sig();
+    return signalFrom(info, mob, extra);
   }
-  async getCarriers(): Promise<Carrier[]> { return carriersFrom(await this.rf()); }
-  async getCells(): Promise<CellTower[]> { return cellsFrom(await this.rf()); }
+  async getCarriers(): Promise<Carrier[]> { const { info, extra } = await this.sig(); return carriersFrom(info, extra); }
+  async getCells(): Promise<CellTower[]> { const { info, extra } = await this.sig(); return cellsFrom(info, extra); }
   async getSnapshot(): Promise<SignalSnapshot> {
-    const [info, mob] = await Promise.all([this.rf(), this.mobile()]);
-    return buildSnapshot(signalFrom(info, mob), carriersFrom(info), cellsFrom(info), { driverId: this.id, driverName: this.name });
+    const { info, mob, extra } = await this.sig();
+    return buildSnapshot(signalFrom(info, mob, extra), carriersFrom(info, extra), cellsFrom(info, extra), { driverId: this.id, driverName: this.name });
   }
   async getNetworkInfo(): Promise<NetworkInfo> {
-    const [info, mob] = await Promise.all([this.rf(), this.mobile()]);
+    const { info, mob, extra } = await this.sig();
     return {
       operator: mob.operators ? String(mob.operators) : undefined,
-      connected: connectedFrom(mob, info),
-      mode: signalFrom(info, mob).network,
+      connected: connectedFrom(mob, info, extra),
+      mode: signalFrom(info, mob, extra).network,
       supports5g: this.is5g() || /NR|5G/i.test(String(mob.netType ?? '')) ? true : /_4G$/i.test(this.boardID) ? false : undefined,
     };
   }
   async isConnected(): Promise<boolean> {
     try {
       const [info, mob] = await Promise.all([this.rf(), this.mobile()]);
-      return connectedFrom(mob, info);
+      return connectedFrom(mob, info) || /connect/i.test(String(mob.networkStatus ?? ''));
     } catch { return false; }
   }
   async getDeviceDetails(): Promise<DeviceDetails> {
