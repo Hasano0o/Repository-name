@@ -1,4 +1,5 @@
 import { RouterDriver } from '../drivers/types';
+import { activeOps } from './activeOps';
 import { driverById } from '../drivers/registry';
 import { SavedRouter, getPassword, getLabel, setPassword } from './routers';
 import { assertLanHost } from '../utils/host';
@@ -140,7 +141,19 @@ export function withRouterLock<T>(
 ): Promise<T> {
   const k = keyOf(r);
   idKey.set(r.id, k);
-  return locks.withLock(k, fn, opts);
+  // «العملية الحالية»: العمليات اللي لها اسم (مو الخطوات الداخلية) ← زر يرجّع لها من أي شاشة + نتيجتها
+  if (opts.op || !opts.label) return locks.withLock(k, fn, opts);
+  return locks.withLock(k, async op => {
+    const end = activeOps.begin(opts.label!);
+    try {
+      const v = await fn(op);
+      end({ ok: true });
+      return v;
+    } catch (e) {
+      end({ ok: false, msg: String((e as any)?.message ?? e) });
+      throw e;
+    }
+  }, opts);
 }
 
 /** أمر كتابة واحد (أو كم أمر مع بعض) بجلسة الراوتر — من خلال الطبقة الموحّدة */

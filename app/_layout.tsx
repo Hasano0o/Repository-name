@@ -30,6 +30,7 @@ import { lanTlsAvailable } from '../modules/bandly-tls/src';
 // راوترات https بشهادة ذاتية: النسخة فيها القبول؟ (بناء نوفمبر ٢٠٢٦) — يحدد رسالة الخطأ (حدّث / فشل التشفير)
 setLanTlsFlag(lanTlsAvailable);
 import { ProgressHost } from '../src/ui/Progress';
+import { OpPill } from '../src/ui/OpPill';
 
 initNotificationHandler();
 patchAlert(); // بالإنجليزي: نوافذ التنبيه تنترجم
@@ -166,6 +167,7 @@ export default function RootLayout() {
         })}
       </Stack>
       <UpdateBanner />
+      <OpPill />
       <ProgressHost />
     </>
   );

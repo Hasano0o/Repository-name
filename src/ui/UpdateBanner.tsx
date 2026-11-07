@@ -7,6 +7,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, isDark, tBg, tFg } from './theme';
 import { FONT } from './fonts';
 import { progress } from './Progress';
+import { activeOps } from '../store/activeOps';
+/** عملية شغالة (نافذة تقدّم أو أي عملية لها اسم — تجربة تركيبات، بحث…) ← ما نقاطعها بالتحديث */
+const opBusy = () => progress.active() || activeOps.isRunning();
 import { sheet } from '../i18n';
 
 /**
@@ -17,7 +20,7 @@ import { sheet } from '../i18n';
 export function UpdateBanner() {
   const { isUpdatePending, isUpdateAvailable, isDownloading, downloadedUpdate, availableUpdate } = Updates.useUpdates();
   const [later, setLater] = useState(false);
-  const [busy, setBusy] = useState(progress.active());
+  const [busy, setBusy] = useState(opBusy());
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
@@ -44,7 +47,7 @@ export function UpdateBanner() {
       if (st !== 'active') return;
       const away = leftAt.current ? Date.now() - leftAt.current : 0;
       // تحديث صامت نازل وجاهز والمستخدم كان برا ٣٠ ث+ ← نطبّقه على طول (ما فيه عملية شغالة)
-      if (pendingRef.current.pending && pendingRef.current.silent && away > 30_000 && !progress.active()) {
+      if (pendingRef.current.pending && pendingRef.current.silent && away > 30_000 && !opBusy()) {
         Updates.reloadAsync().catch(() => {});
         return;
       }
@@ -57,7 +60,7 @@ export function UpdateBanner() {
   // ما نقاطع عملية شغالة على الراوتر (قفل تردد، تجربة دمج…)
   useEffect(() => {
     if (!isUpdatePending) return;
-    const t = setInterval(() => setBusy(progress.active()), 1500);
+    const t = setInterval(() => setBusy(opBusy()), 1500);
     return () => clearInterval(t);
   }, [isUpdatePending]);
 

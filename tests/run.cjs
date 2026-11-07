@@ -24,6 +24,7 @@ const files = [
   'src/drivers/huawei/lockState.ts',
   'src/drivers/zte/lockState.ts',
   'src/store/routerLockCore.ts',
+  'src/store/activeOpsCore.ts',
   'src/assistant/core.ts',
   'src/drivers/models.ts',
   'src/drivers/zyxel/crypto.ts',
