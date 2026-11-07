@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { cleanPassword } from '../src/utils/password';
 import { ROUTER_HOSTS } from '../src/utils/routerHosts';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform, } from 'react-native';
 import { Pressable, ScrollView, Text, TextInput, View } from '../src/i18n/rn';
@@ -402,7 +403,9 @@ export default function AddRouterScreen() {
     }
     let h = cleanHostInput(over?.host ?? host);
     const u = (over?.username ?? username).trim() || 'admin';
-    const password = over?.password ?? passwordState;
+    const rawPass = over?.password ?? passwordState;
+    const password = cleanPassword(rawPass);
+    const junk = rawPass.length - password.length;
     const wifiNow = over?.wifi ?? wifi;
     const nameNow = (name.trim() || over?.name || '').trim();
     if (!isLanHost(h)) {
@@ -416,9 +419,9 @@ export default function AddRouterScreen() {
     setBusy(true);
     // فشل الإضافة يوصل للسيرفر (errors.jsonl · add-login) — بدون كلمة ولا آي بي عام: الموديل والعنوان المحلي والخطأ بس
     const addFail = (what: string, model?: string) => {
-      lastFail.current = { host: h, model: model ?? '؟', what, ctx: `مستخدم ${u === 'admin' ? 'admin' : 'مخصص'} · طول الكلمة ${password.length}` };
+      lastFail.current = { host: h, model: model ?? '؟', what, ctx: `مستخدم ${u === 'admin' ? 'admin' : 'مخصص'} · طول الكلمة ${password.length}${junk ? ` (شلنا ${junk} مسافة/رمز مخفي)` : ''}` };
       pendingDump.current = null;
-      return reportError('add-login', `${model ?? '؟'} · ${h} · مستخدم ${u === 'admin' ? 'admin' : 'مخصص'} · طول الكلمة ${password.length} · ${what.slice(0, 220)}`).catch(() => {});
+      return reportError('add-login', `${model ?? '؟'} · ${h} · مستخدم ${u === 'admin' ? 'admin' : 'مخصص'} · طول الكلمة ${password.length}${junk ? ` (شلنا ${junk} مسافة/رمز مخفي)` : ''} · ${what.slice(0, 220)}`).catch(() => {});
     };
     try {
       setStep('نتعرّف على نوع الراوتر...');
@@ -517,7 +520,9 @@ export default function AddRouterScreen() {
           }
         } else {
           addFail(msg || 'بدون رسالة', prof?.label ?? (driver as any).name);
-          failAlert('فشل الدخول', msg || 'تحقق من اسم المستخدم وكلمة المرور');
+          // الكلمة الغلط غالباً فيها زيادة ما تنشاف (حرف زايد/كلمتين لازقات) — نعطيه عدد الحروف يقارنه بالملصق
+          const lenTip = /غلط|108006|incorrect|password/i.test(msg) ? `\n\nالكلمة اللي كتبتها: ${password.length} حرف — قارنها بالملصق أو باللي تدخل فيه من المتصفح.` : '';
+          failAlert('فشل الدخول', (msg || 'تحقق من اسم المستخدم وكلمة المرور') + lenTip);
           return;
         }
       }
@@ -725,6 +730,9 @@ export default function AddRouterScreen() {
                     autoCapitalize="none"
                     autoCorrect={false}
                     secureTextEntry={!showPass}
+                    // ظاهرة 👁 ← بدون اقتراحات (الكيبورد يضيف مسافة/علامات اتجاه)
+                    keyboardType={showPass && Platform.OS === 'android' ? 'visible-password' : 'default'}
+                    spellCheck={false}
                     autoComplete="password"
                     textContentType="password"
                     returnKeyType="done"

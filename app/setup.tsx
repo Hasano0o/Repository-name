@@ -9,6 +9,7 @@
  * • نفس حماية شاشة الإضافة: عنوان محلي بس، محاولة دخول وحدة، و«المحاولة الأخيرة» لو باقي وحدة.
  * • كلمة المرور تنحفظ مشفّرة على الجهاز (saveRouter) — ما تطلع لأي مكان.
  */
+import { cleanPassword } from '../src/utils/password';
 import { ROUTER_HOSTS } from '../src/utils/routerHosts';
 import { useEffect, useRef, useState, ReactNode } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform, ScrollView } from 'react-native';
@@ -127,12 +128,13 @@ export default function SetupScreen() {
   // ═══ ٤) الدخول والحفظ ═══
   const login = async (lastTry = false) => {
     if (!found || !pw) return;
+    const cp = cleanPassword(pw);
     setStep('login'); setErr('');
     const { host, d } = found;
     const user = userName.trim() || 'admin';
     try {
       setStatus('أسجّل الدخول عنك…');
-      await d.login(host, user, pw, { fresh: true, lastTry });
+      await d.login(host, user, cp, { fresh: true, lastTry });
     } catch (e: any) {
       if (!alive.current) return;
       const msg = String(e?.message ?? e);
@@ -152,7 +154,7 @@ export default function SetupScreen() {
       if (wrongPw) setShowUser(true);
       // تقرير: الموديل ورد الراوتر بس (بدون الكلمة) — عشان نعرف أسباب رفض الدخول الحقيقية
       const dd = d as unknown as { id?: string; name?: string };
-      reportError('setup-login', `${found.model ?? dd.name ?? '؟'} (${dd.id ?? '؟'}) · مستخدم ${user === 'admin' ? 'admin' : 'مخصص'} · طول الكلمة ${pw.length} · ${msg.slice(0, 300)}`);
+      reportError('setup-login', `${found.model ?? dd.name ?? '؟'} (${dd.id ?? '؟'}) · مستخدم ${user === 'admin' ? 'admin' : 'مخصص'} · طول الكلمة ${cp.length}${pw.length !== cp.length ? ` (شلنا ${pw.length - cp.length} مسافة/رمز مخفي)` : ''} · ${msg.slice(0, 300)}`);
       setStep('password');
       return;
     }
@@ -164,8 +166,8 @@ export default function SetupScreen() {
       const norm = (x: string) => x.trim().toLowerCase();
       const dup = all.find(x => x.driverId === payload.driverId && norm(x.host) === norm(host));
       let saved: SavedRouter | null;
-      if (dup) { dropSession(dup.id); saved = (await updateRouter(dup.id, payload, pw)) ?? (await saveRouter(payload, pw)); }
-      else saved = await saveRouter(payload, pw);
+      if (dup) { dropSession(dup.id); saved = (await updateRouter(dup.id, payload, cp)) ?? (await saveRouter(payload, cp)); }
+      else saved = await saveRouter(payload, cp);
       if (!alive.current) return;
       setStep('done');
       setTimeout(() => router.replace({ pathname: '/router/[id]', params: { id: saved!.id, welcome: '1' } }), 700);
@@ -305,7 +307,8 @@ export default function SetupScreen() {
               <TextInput
                 value={pw} onChangeText={t => { setPw(t); setErr(''); }}
                 placeholder="كلمة مرور الراوتر" placeholderTextColor={C.muted}
-                secureTextEntry={!show} autoCapitalize="none" autoCorrect={false}
+                secureTextEntry={!show} autoCapitalize="none" autoCorrect={false} spellCheck={false}
+                keyboardType={show && Platform.OS === 'android' ? 'visible-password' : 'default'}
                 style={s.pw} returnKeyType="go" onSubmitEditing={() => login()} autoFocus
               />
               <Pressable onPress={() => setShow(v => !v)} style={s.eye} accessibilityLabel={show ? 'إخفاء' : 'إظهار'}>
