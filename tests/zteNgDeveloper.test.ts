@@ -33,7 +33,7 @@ const { publicKey } = nc.generateKeyPairSync('rsa', { modulusLength: 1024, publi
 const DEV_ONLY = /nwinfo_set_(lte_ext_band|nrbandlock)$/;
 
 /** devPw: كلمة خيارات المطوّر (الافتراضي = كلمة الدخول) · ACL: الترددات تبي جلسة دخلت خيارات المطوّر، وgwl_bandlock مو موجود */
-function router(opts: { devPw?: string; httpsOnly?: boolean; model?: string; gwlInvalid?: boolean } = {}) {
+function router(opts: { devPw?: string; httpsOnly?: boolean; model?: string; gwlInvalid?: boolean; listFmt?: boolean; nrNumeric?: boolean; defaults?: Record<string, string>; denyAll?: boolean } = {}) {
   const good = new Set<string>();
   const dev = new Set<string>();
   const log: string[] = [];
@@ -70,6 +70,15 @@ function router(opts: { devPw?: string; httpsOnly?: boolean; model?: string; gwl
       if (method === 'nwinfo_set_netselect') { netSelect = p.net_select; return ok({ result: 'success' }); }
     }
     if (DEV_ONLY.test(method) && !dev.has(sess)) return denied();
+    if (opts.denyAll && /_set_/.test(method)) return denied();
+    const bad = () => res([{ jsonrpc: '2.0', id: 1, result: [2] }]);
+    // listFmt (MU5252): lte_band "1,3" بس — القناع يرجع [2] · غيره (G5/MC888): القناع بس
+    if (method === 'nwinfo_set_lte_ext_band') {
+      if (opts.listFmt) { if (!p.lte_band) return bad(); lte = p.lte_band; return ok({ result: 'success' }); }
+      if (!p.lte_band_mask) return bad();
+    }
+    if (method === 'nwinfo_set_nrbandlock' && opts.nrNumeric !== undefined && /^\d$/.test(p.nr5g_type) !== opts.nrNumeric) return bad();
+    if (method === 'get' && p.config === 'zwrt_zte_nwinfo') return opts.defaults ? ok({ values: opts.defaults }) : ok({});
     if (method === 'nwinfo_set_lte_ext_band') { lte = p.lte_band_mask; return ok({ result: 'success' }); }
     if (method === 'nwinfo_set_nrbandlock') { nr = p.nr5g_band; return ok({ result: 'success' }); }
     if (method === 'nwinfo_set_netselect') { netSelect = p.net_select; return ok({ result: 'success' }); }
@@ -138,22 +147,52 @@ test('MU5250: الكتابة على http مرفوضة كلها ← نكمّل ع
   assert.ok(!after.includes('web_login'), after.join(' | '));
 });
 
-test('MU5252 «TOPFLOW»: gwl_bandlock يرد [2] (خانات غلط) ← lte_ext_band وينجح (كان: «ما يقبل هذا التردد — [2]» على كل تردد)', async () => {
-  const r = router({ gwlInvalid: true, model: 'MU5252' });
+const MU5252 = { model: 'ZTE TOPFLOW MU5252', listFmt: true, nrNumeric: true,
+  defaults: { default_lte_ext_band_lock: '1,3,7,8,20,28,38,40,41', default_nr5g_sa_band_lock: '1,28,41,78', default_nr5g_nsa_band_lock: '1,28,41,78' } };
+
+test('MU5252: lte_ext_band بصيغة صفحته { lte_band: "1,3" } (القناع كان يرجع [2] على كل تردد)', async () => {
+  const r = router(MU5252);
   const d = new ZteNgDriver();
   await d.login('192.168.0.21', 'admin', PW);
-  await d.setBand([3], undefined);
-  assert.equal(r.lte(), '0x0000000000000004');
+  await d.setBand([1, 3], undefined);
+  assert.equal(r.lte(), '1,3');
 });
 
-test('MU5252: يتعرّف كموديل لحاله (غير مؤكد ← كرت FULL) ويروح lte_ext_band مباشرة بدون gwl', async () => {
-  const r = router({ gwlInvalid: true, model: 'ZTE TOPFLOW MU5252' });
+test('MU5252: يتعرّف كموديل لحاله (غير مؤكد) · «كل الترددات» = قائمة الراوتر الافتراضية مو قائمتنا', async () => {
+  const r = router(MU5252);
   const d = new ZteNgDriver();
   await d.login('192.168.0.22', 'admin', PW);
   const p = await d.identify();
   assert.equal(p.id, 'mu5252');
   assert.ok(!p.verified);
-  await d.setBand([1, 3], undefined);
+  await d.setBand([], undefined);
   assert.equal(count(r.log, 'nwinfo_set_gwl_bandlock'), 0);
-  assert.equal(r.lte(), '0x0000000000000005');
+  assert.equal(r.lte(), '1,3,7,8,20,28,38,40,41');
+});
+
+test('MU5252: 5G SA بـ nr5g_type "0" (صفحته) — "SA" يرجع [2]', async () => {
+  const r = router(MU5252);
+  const d = new ZteNgDriver();
+  await d.login('192.168.0.23', 'admin', PW);
+  await d.identify();
+  await d.setBand('keep', [78]);
+  assert.equal(r.nr(), '78');
+});
+
+test('MU5250/G5 (القناع): القائمة ترجع [2] ← القناع hex مثل قبل', async () => {
+  const r = router({ gwlInvalid: true });
+  const d = new ZteNgDriver();
+  await d.login('192.168.0.24', 'admin', PW);
+  await d.setBand([3], undefined);
+  assert.equal(r.lte(), '0x0000000000000004');
+});
+
+test('رفض بعد الدخول وخيارات المطوّر ← ما نعيد دورة الدخول مع كل تردد (كان ٨ دخولات في ٢٠ ثانية)', async () => {
+  const r = router({ denyAll: true });
+  const d = new ZteNgDriver();
+  await d.login('192.168.0.25', 'admin', PW);
+  await assert.rejects(d.setBand([3], undefined));
+  const n = count(r.log, 'web_login');
+  for (const b of [1, 8, 20]) await assert.rejects(d.setBand([b], undefined));
+  assert.equal(count(r.log, 'web_login'), n);
 });

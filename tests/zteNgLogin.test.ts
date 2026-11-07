@@ -63,7 +63,8 @@ function router(opts: { flaky?: number; enstr?: boolean; ext?: boolean } = {}) {
     if (opts.enstr && /set_/.test(method) && !keyed.has(sess)) return denied();
     if (opts.ext && method === 'nwinfo_set_gwl_bandlock') return denied();          // مو في ACL «web» (MU5250)
     if (method === 'nwinfo_set_gwl_bandlock') { lteMask = 'dec:' + p.lte_band_mask; return ok({ result: 'success' }); }
-    if (method === 'nwinfo_set_lte_ext_band') { lteMask = 'ext:' + p.lte_band_mask; return ok({ result: 'success' }); }
+    // فيرموير القناع (G5/MC888): صيغة القائمة { lte_band } ترجع [2]
+    if (method === 'nwinfo_set_lte_ext_band') { if (!p.lte_band_mask) return res([{ jsonrpc: '2.0', id: 1, result: [2] }]); lteMask = 'ext:' + p.lte_band_mask; return ok({ result: 'success' }); }
     if (flaky > 0) { flaky--; return denied(); }
     if (method === 'nwinfo_set_netselect') { netSelect = p.net_select; return ok({ result: 'success' }); }
     return ok({});
@@ -144,7 +145,7 @@ test('zte-ng: قبل سحب صفحات بعد الدخول ندخل (كوكي ا
   assert.equal(r.log.filter(x => x.endsWith('web_login')).length, 1);
 });
 
-test('MU5250/MC8830: gwl_bandlock مرفوض ← lte_ext_band بقناع 0x hex (مثل صفحة ZTE)، ومرة ثانية مباشرة', async () => {
+test('فيرموير القناع: gwl_bandlock مرفوض ← lte_ext_band (القائمة [2]) ← قناع 0x hex، ومرة ثانية مباشرة', async () => {
   const r = router({ ext: true });
   const d = new ZteNgDriver();
   await d.login('192.168.0.7', 'admin', PW);

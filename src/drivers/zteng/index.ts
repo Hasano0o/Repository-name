@@ -20,6 +20,7 @@ import {
   Traffic, Usage, BandConfig, ActiveLock, CellLockState, DeviceDetails, WifiRadio,
 } from '../types';
 import { http } from '../http';
+import { noChange } from '../noChange';
 import { buildSnapshot } from '../../utils/snapshot';
 import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
@@ -71,6 +72,14 @@ const lteBandOf = (e?: number) => (e === undefined ? undefined : LTE_EARFCN.find
 const httpsHosts = new Set<string>();
 /** جرّبنا https مرة لهالراوتر (نجح أو لا) — ما نعيده مع كل أمر */
 const httpsTried = new Set<string>();
+/**
+ * راوتر رفض الكتابة حتى بعد دخول جديد + خيارات المطوّر ← ما نعيد الدورة (دخول + مطوّر) مع كل تردد لمدة ٥ دقايق.
+ * MU5252 (٨ نوفمبر): المحسّن سوّى ٨ دخولات كاملة في ٢٠ ثانية — يخاطر بقفل الدخول.
+ */
+const deniedHosts = new Map<string, number>();
+const DENY_MS = 5 * 60_000;
+/** راوترات ردّت gwl_bandlock بالرفض ونجح عندها lte_ext_band — نروح له مباشرة (بدون دورة دخول على gwl كل مرة) */
+const extHosts = new Map<string, 'list' | 'hex'>();
 export function _resetZteNgHttps() { httpsHosts.clear(); httpsTried.clear(); }
 
 export class ZteNgDriver implements RouterDriver {
@@ -234,6 +243,12 @@ export class ZteNgDriver implements RouterDriver {
   /** أمر كتابة: يدخل لو ما دخلنا، ولو الجلسة انتهت (رفض صلاحية) يدخل مرة ثانية ويعيد */
   /** probe: أمر نجرّبه ونرجع لغيره لو رُفض (gwl_bandlock) — ما يستهلك تجربة https */
   private async write(obj: string, method: string, params: Record<string, unknown>, probe = false): Promise<Record<string, unknown>> {
+    const den = deniedHosts.get(this.host);
+    if (den && Date.now() - den < DENY_MS) {
+      const x: any = new Error('الراوتر رفض الأمر حتى بعد الدخول (Access denied) قبل شوي — ما عدنا المحاولة عشان ما ينقفل الدخول. جرّب بعد ٥ دقايق.');
+      x.code = -32002;
+      throw x;
+    }
     if (this.session === ZERO) await this.doLogin();
     try {
       return await this.callRetry(obj, method, params);
@@ -277,9 +292,11 @@ export class ZteNgDriver implements RouterDriver {
             const x: any = new Error('هالإعداد في راوترك داخل «خيارات المطوّر»، وكلمتها مو نفس كلمة الدخول — الراوتر رفضها. نفس الشي يصير من صفحة الراوتر نفسها؛ لو تعرف كلمة المطوّر من الشركة كلّمنا في قروب الدعم.');
             x.code = e2.code;
             x.devNeeded = true;
+            if (!probe) deniedHosts.set(this.host, Date.now());
             throw x;
           }
           if (e2?.code === 6 || e2?.code === -32002) {
+            if (!probe) deniedHosts.set(this.host, Date.now());
             const x: any = new Error('الراوتر رفض الأمر حتى بعد الدخول (Access denied) — اطلع من صفحة الراوتر لو فاتحها من جهاز ثاني، وتأكد إن كلمة المرور حق حساب المدير، وبعدها جرّب مرة ثانية.');
             x.code = e2.code;
             throw x;
@@ -611,7 +628,7 @@ export class ZteNgDriver implements RouterDriver {
     if (nrBands) {
       const nr = nrBands.length ? nrBands : (this.baseNr() ?? NR_BANDS);
       const cur = nrListOf((await this.net()).nr5g_sa_band_lock);
-      if (!sameSet(cur, nr)) await this.write('zte_nwinfo_api', 'nwinfo_set_nrbandlock', { nr5g_type: 'SA', nr5g_band: nr.join(',') });
+      if (!sameSet(cur, nr)) await this.nrLock('SA', nr);
     }
   }
 
@@ -624,6 +641,8 @@ export class ZteNgDriver implements RouterDriver {
   private lteExt = false;
   private async lteLock(bands: number[]): Promise<void> {
     const dec = maskOf(bands);
+    const known = extHosts.get(this.host);
+    if (known) { this.lteExt = true; this.lteFmt = this.lteFmt ?? known; }
     if (!this.lteExt) {
       try {
         await this.write('zte_nwinfo_api', 'nwinfo_set_gwl_bandlock', { is_gw_band: '0', gw_band_mask: '0', is_lte_band: '1', lte_band_mask: dec }, true);
@@ -634,19 +653,91 @@ export class ZteNgDriver implements RouterDriver {
         diag(`[zte-ng] gwl_bandlock مرفوض (${e?.code}) ← lte_ext_band`);
       }
     }
-    const hex = '0x' + BigInt(dec).toString(16).padStart(16, '0');
-    await this.write('zte_nwinfo_api', 'nwinfo_set_lte_ext_band', { is_gw_band: '0', gw_band_mask: '0', is_lte_band: '1', lte_band_mask: hex });
-    this.lteExt = true;
-    diag(`[zte-ng] lte_ext_band ✓ ${hex}`);
+    // صيغتين لنفس الأمر: صفحة MU5250/MU5252 (FULL ٨ نوفمبر — config.js DEVICE_MODEL "MU5250"، developer_options.js):
+    // setBandSelect({ lte_band: "1,3" }) قائمة أرقام بفواصل، والقناع hex يرجع [2] (خانات غلط) — هذا سبب
+    // «[2]» على كل تردد. صفحات G5 / MC888: قناع hex. القائمة أول (دليل من صفحة نفس العائلة)، والقناع على [2] بس.
+    const fmts: Array<'list' | 'hex'> = this.lteFmt ? [this.lteFmt] : ['list', 'hex'];
+    let last: any = null;
+    for (const f of fmts) {
+      try {
+        if (f === 'list') {
+          const def = await this.defaultBands();
+          const want = def?.lte.length ? bands.filter(b => def.lte.includes(b)) : bands;
+          if (!want.length) throw noChange('الترددات المطلوبة مو في قائمة راوترك — ما غيّرنا شي.');
+          await this.write('zte_nwinfo_api', 'nwinfo_set_lte_ext_band', { lte_band: want.join(',') });
+          diag(`[zte-ng] lte_ext_band ✓ قائمة ${want.join(',')}`);
+          // للتشخيص: هل lte_band_lock (القناع اللي نقراه) يتحدّث مع صيغة القائمة؟
+          try { const d = await this.net(); diag(`[zte-ng] بعد الكتابة: lte_band_lock=${str(d.lte_band_lock) || '—'} · lte_band=${str(d.lte_band) || '—'}`); } catch {}
+        } else {
+          const hex = '0x' + BigInt(dec).toString(16).padStart(16, '0');
+          await this.write('zte_nwinfo_api', 'nwinfo_set_lte_ext_band', { is_gw_band: '0', gw_band_mask: '0', is_lte_band: '1', lte_band_mask: hex });
+          diag(`[zte-ng] lte_ext_band ✓ ${hex}`);
+        }
+        this.lteExt = true;
+        this.lteFmt = f;
+        extHosts.set(this.host, f);
+        return;
+      } catch (e: any) {
+        last = e;
+        if (e?.code !== 2) throw e;
+        diag(`[zte-ng] lte_ext_band (${f}) ← [2] خانات غلط`);
+      }
+    }
+    throw last;
+  }
+  private lteFmt: 'list' | 'hex' | null = null;
+
+  /** القوائم الافتراضية من الراوتر نفسه (uci zwrt_zte_nwinfo.default_band_lock — getLockBandInfo في صفحته) */
+  private defaults: { lte: number[]; sa: number[]; nsa: number[] } | null = null;
+  private async defaultBands(): Promise<{ lte: number[]; sa: number[]; nsa: number[] } | null> {
+    if (this.defaults) return this.defaults;
+    try {
+      if (this.session === ZERO && this.password) await this.doLogin();
+      const r: any = await this.call('uci', 'get', { config: 'zwrt_zte_nwinfo', section: 'default_band_lock' });
+      const v = r?.values ?? r ?? {};
+      const l = (x: unknown) => str(x).split(',').map(Number).filter(n => Number.isInteger(n) && n > 0 && n < 300);
+      this.defaults = { lte: l(v.default_lte_ext_band_lock), sa: l(v.default_nr5g_sa_band_lock), nsa: l(v.default_nr5g_nsa_band_lock) };
+      diag(`[zte-ng] الترددات الافتراضية: 4G ${this.defaults.lte.join(',') || '—'} · SA ${this.defaults.sa.join(',') || '—'} · NSA ${this.defaults.nsa.join(',') || '—'}`);
+    } catch { return null; }
+    return this.defaults;
+  }
+
+  /**
+   * تثبيت 5G: U60 Pro يقبل nr5g_type "SA" / "nsa". صفحة MU5252 ترسل "0" (SA) و "1" (NSA) — غيرها يرجع [2].
+   * نبدأ بصيغة العائلة ونجرّب الثانية على [2] بس.
+   */
+  private nrNumeric: boolean | null = null;
+  private async nrLock(type: 'SA' | 'NSA', bands: number[]): Promise<void> {
+    const def = await (this.lteExt ? this.defaultBands() : Promise.resolve(null));
+    const allow = type === 'SA' ? def?.sa : def?.nsa;
+    const want = allow?.length ? bands.filter(b => allow.includes(b)) : bands;
+    if (!want.length) throw noChange('ترددات 5G المطلوبة مو في قائمة راوترك — ما غيّرنا شي.');
+    const numFirst = this.nrNumeric ?? this.lteExt;
+    const order = numFirst ? [true, false] : [false, true];
+    let last: any = null;
+    for (const num of this.nrNumeric === null ? order : [this.nrNumeric]) {
+      const t = num ? (type === 'SA' ? '0' : '1') : (type === 'SA' ? 'SA' : 'nsa');
+      try {
+        await this.write('zte_nwinfo_api', 'nwinfo_set_nrbandlock', { nr5g_type: t, nr5g_band: want.join(',') });
+        this.nrNumeric = num;
+        return;
+      } catch (e: any) {
+        last = e;
+        if (e?.code !== 2) throw e;
+        diag(`[zte-ng] nrbandlock (nr5g_type=${t}) ← [2]`);
+      }
+    }
+    throw last;
   }
 
   /** لأجهزة G5 (MC801A Pro…): 5G بوضع NSA يحتاج nr5g_type=nsa — لو رفض نجرّب SA */
   async setNrBandsTyped(nr: number[], nsa: boolean): Promise<void> {
     const band = nr.join(',');
+    void band;
     if (nsa) {
-      try { await this.write('zte_nwinfo_api', 'nwinfo_set_nrbandlock', { nr5g_type: 'nsa', nr5g_band: band }); return; } catch {}
+      try { await this.nrLock('NSA', nr); return; } catch {}
     }
-    await this.write('zte_nwinfo_api', 'nwinfo_set_nrbandlock', { nr5g_type: 'SA', nr5g_band: band });
+    await this.nrLock('SA', nr);
   }
 
   async getActiveLock(): Promise<ActiveLock | null> {
@@ -696,7 +787,7 @@ export class ZteNgDriver implements RouterDriver {
       await this.lteLock(wl);
     }
     if (wn.length && !sameSet(nrListOf(d.nr5g_sa_band_lock), wn)) {
-      await this.write('zte_nwinfo_api', 'nwinfo_set_nrbandlock', { nr5g_type: 'SA', nr5g_band: wn.join(',') });
+      await this.nrLock('SA', wn);
     }
     if (want.net_select && str(d.net_select) !== want.net_select) {
       await this.write('zte_nwinfo_api', 'nwinfo_set_netselect', { net_select: want.net_select });
@@ -716,7 +807,7 @@ export class ZteNgDriver implements RouterDriver {
     const lte = bandsOfMask(b?.lte_band_lock);
     const nr = nrListOf(b?.nr5g_sa_band_lock);
     try { await this.lteLock(lte.length >= 4 ? lte : LTE_BANDS); } catch {}
-    try { await this.write('zte_nwinfo_api', 'nwinfo_set_nrbandlock', { nr5g_type: 'SA', nr5g_band: (nr.length ? nr : NR_BANDS).join(',') }); } catch {}
+    try { await this.nrLock('SA', nr.length ? nr : NR_BANDS); } catch {}
     try { await this.write('zte_nwinfo_api', 'nwinfo_set_netselect', { net_select: b?.net_select || 'WL_AND_5G' }); } catch {}
     try { await this.unlockCell(); } catch {}
     try { await this.reboot(); } catch {}
