@@ -256,6 +256,7 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
   const misses: string[] = [];
   let total = 0;
   let homeSample = '';
+  let homeLen = 0;
   /** إعداد RequireJS (المسار الأساسي + paths) — لو الصفحة تستخدمه */
   let amd: AmdConfig | null = null;
   /** مجلد <base href> لو الصفحة تحدده */
@@ -274,15 +275,18 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
     if (ES5_TWIN.test(p) && (seen.has(p.replace(/-es5\./i, '-es2015.')) || queue.includes(p.replace(/-es5\./i, '-es2015.')))) { skipped.push(p); continue; }
     let r = await get(base + p);
     // انقطع الطلب (مو مهلة) ← مرة ثانية: الآيفون يعيد استخدام اتصال قفله الراوتر (Inseego MiFi 8000 — FULL ٧ نوفمبر: ١٢ صفحة «ما رد»)
-    if (r.status === 0) { await new Promise(res => setTimeout(res, 400)); r = await get(base + p); }
+    // (/diagnostics/ في MiFi انقطع مرتين ورا بعض ← لين مرتين، بفاصل ثانية)
+    for (let k = 0; k < 2 && r.status === 0; k++) { await new Promise(res => setTimeout(res, 1000)); r = await get(base + p); }
     // LuCI (OpenWrt — 5G CPE Pro 7، ١ نوفمبر) يرد صفحة الدخول نفسها بحالة 403 لما ما فيه جلسة — هي اللي نبيها
     const loginPage = r.status === 403 && /luci_password|name=["']?password|<form/i.test(r.text);
     if ((!r.ok && !loginPage) || !r.text) { misses.push(missLine(p, r)); continue; }
     // راوترات ترجع الصفحة الرئيسية لأي رابط مو موجود — ما نكررها (بس نكتب إنه صار)
-    if (p !== '/' && homeSample && r.text.slice(0, 400) === homeSample) { misses.push(missLine(p, r, true)); continue; }
+    // نفس أول ٤٠٠ حرف **وبنفس الحجم تقريباً** — صفحات Inseego MiFi كلها تبدأ بنفس الرأس (81KB للرئيسية و46–67KB للباقي):
+    // كنا نرمي كل صفحات الإعدادات «رجّع صفحة البداية» (FULL ٧ نوفمبر ٦:٠٦). الراوتر اللي يرجّع الرئيسية فعلاً = نفس الحجم.
+    if (p !== '/' && homeSample && r.text.slice(0, 400) === homeSample && Math.abs(r.text.length - homeLen) <= Math.max(64, homeLen * 0.02)) { misses.push(missLine(p, r, true)); continue; }
     const hwErr = huaweiErrorCode(r.text);
     if (hwErr) { misses.push(`✗ ${p} ← رد هواوي ${hwErr}${hwErr === '100002' ? ' (مو موجود)' : hwErr === '100003' ? ' (يحتاج دخول)' : ''}`); continue; }
-    if (p === '/') homeSample = r.text.slice(0, 400);
+    if (p === '/') { homeSample = r.text.slice(0, 400); homeLen = r.text.length; }
     const t = scrub(r.text.slice(0, MAX_FILE));
     // مسار بدون امتداد (صفحات LuCI: /cgi-bin/luci و /cgi-bin/luci/;stok=X/admin/…) ← نحفظه <المسار>/index.html.
     // قبل: «/cgi-bin/luci/;stok=X» ينحفظ ملف، وبعدين «…/;stok=X/admin/status/nr» يبي نفس الاسم مجلد ← السيرفر

@@ -13,7 +13,7 @@
  * ⚠️ الكتابة (ترددات/برج/وضع) مقفولة: Verizon تقفلها في الفيرموير الأصلي، والموجود عند الأعضاء تعديلات خارجية
  *    («MONDO» على /cgi/mapi.cgi برمز من شاشة الجهاز · «Band Manager» على /cgi/bandset.cgi) — تنفتح ميزة ميزة بعد الدليل.
  */
-import { RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, DeviceDetails, RouterExtras } from '../types';
+import { RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, DeviceDetails, RouterExtras, Usage } from '../types';
 import { sha1 } from '@noble/hashes/legacy';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import { http } from '../http';
@@ -22,7 +22,7 @@ import { isLanHost } from '../../utils/host';
 import { buildSnapshot } from '../../utils/snapshot';
 import type { ModelProfile } from '../models';
 import {
-  InseegoStatus, InseegoSignalStat, statusFrom, signalFrom, networkFrom, healthFrom, loginTokens, modelFromHtml,
+  InseegoStatus, InseegoSignalStat, statusFrom, signalFrom, networkFrom, healthFrom, loginTokens, modelFromHtml, usageFrom,
 } from './parse';
 
 export const inseegoSha = (pw: string, secToken: string) => bytesToHex(sha1(utf8ToBytes(pw + secToken)));
@@ -30,7 +30,7 @@ export const inseegoSha = (pw: string, secToken: string) => bytesToHex(sha1(utf8
 export class InseegoDriver implements RouterDriver {
   readonly id = 'inseego';
   name = 'Inseego MiFi';
-  readonly capabilities: Capability[] = ['signal'];
+  readonly capabilities: Capability[] = ['signal', 'usage'];
 
   private host = '';
   private model = '';
@@ -209,7 +209,7 @@ export class InseegoDriver implements RouterDriver {
   async getDeviceDetails(): Promise<DeviceDetails> {
     await this.readModel();
     const st = await this.status().catch(() => null);
-    return { model: this.name, operator: String(st?.statusBarNetwork ?? '').trim() || undefined, software: 'inseego-pages-2' };
+    return { model: this.name, operator: String(st?.statusBarNetwork ?? '').trim() || undefined, software: 'inseego-pages-3' };
   }
 
   async getSignal(): Promise<Signal> {
@@ -232,11 +232,29 @@ export class InseegoDriver implements RouterDriver {
     return cellsOf(await this.getSignal());
   }
 
+  /** الاستهلاك من عدّادات شريط الحالة (statusBarBytesReceived/Transmitted — من بداية الاتصال الحالي) */
+  async getUsage(): Promise<Usage> {
+    const st = await this.status();
+    const u = usageFrom(st);
+    if (!u) throw new Error('الجهاز ما أعطى عدّاد الاستهلاك');
+    return u;
+  }
+
   async getExtras(): Promise<RouterExtras> {
     const [st, ss] = await Promise.all([this.status().catch(() => null), this.stat()]);
     const h = healthFrom(st, ss);
-    return h ? { health: h } : {};
+    const x: RouterExtras = h ? { health: h } : {};
+    const secs = Number(st?.statusBarConnectionDuration);
+    if (Number.isFinite(secs) && secs > 0) x.uptime = fmtDur(secs);
+    return x;
   }
+}
+
+/** مدة الاتصال الحالي (ثواني) ← «3:12:05» / «2 يوم 4:05:00» */
+function fmtDur(t: number): string {
+  const d = Math.floor(t / 86400), h = Math.floor(t % 86400 / 3600), m = Math.floor(t % 3600 / 60), s = Math.floor(t % 60);
+  const hms = `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return d ? `${d} يوم ${hms}` : hms;
 }
 
 function cellsOf(s: Signal): CellTower[] {

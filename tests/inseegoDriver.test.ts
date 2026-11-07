@@ -19,6 +19,8 @@ Module._load = function (req: string, ...rest: unknown[]) {
 (globalThis as any).__DEV__ = false;
 
 const sha1 = (s: string) => (ncrypto as any).createHash('sha1').update(s, 'utf8').digest('hex');
+// من FULL حقيقي (٧ نوفمبر ٦:٠٦، المدار — ليبيا)
+const REAL = {"loginStatus":1,"statusData":{"statusBarAirplaneMode":"AirplaneModeOff","statusBarBatteryChargingSource":"ChargingSourceNone","statusBarBatteryChargingState":"false","statusBarBatteryDetection":"Present","statusBarBatteryPercent":"96","statusBarBytesReceived":"181331420","statusBarBytesTotal":"203241872","statusBarBytesTransmitted":"21910452","statusBarClientListSize":"2","statusBarConnectionDuration":"3302","statusBarConnectionState":"Connected","statusBarNetwork":"ALMADAR","statusBarNetworkID":"606^\u0002","statusBarSignalBars":"4","statusBarSimStatus":"Ready","statusBarTechnology":"LTE+","statusBarTechnologyText":"","statusBarWiFiClientListSize":"2","statusBarWiFiEnabled":1}};
 const STATUS = { statusData: {
   statusBarSignalBars: 4, statusBarTechnology: '4G LTE', statusBarTechnologyText: '4G LTE', statusBarNetwork: 'Libyana',
   statusBarConnectionState: 'Connected', statusBarBatteryPercent: 76, statusBarBatteryChargingState: 'Charging', statusBarWiFiClientListSize: 2,
@@ -190,4 +192,17 @@ test('inseego: /srv/status انقطع مرة (اتصال قديم) ← نعيد 
   const d = driver();
   await d.login('192.168.1.1', 'admin', 'admin123');
   assert.equal((await d.getNetworkInfo()).operator, 'Libyana');
+});
+
+test('inseego: رد /srv/status الحقيقي (المدار) ← LTE+ والشركة والبطارية والاستهلاك', () => {
+  const { statusFrom, signalFrom, networkFrom, healthFrom, usageFrom } = require('../src/drivers/inseego/parse');
+  const st = statusFrom(REAL);
+  assert.equal(signalFrom(st, null).network, 'LTE+');
+  assert.equal(signalFrom(st, null).rsrp, undefined);
+  const n = networkFrom(st, null, 'MiFi 8000');
+  assert.equal(n.operator, 'ALMADAR');
+  assert.equal(n.connected, true);
+  assert.equal(n.supports5g, false);
+  assert.deepEqual(healthFrom(st, null), { battery: 96, charging: false });
+  assert.deepEqual(usageFrom(st), { downloadBytes: 181331420, uploadBytes: 21910452 });
 });

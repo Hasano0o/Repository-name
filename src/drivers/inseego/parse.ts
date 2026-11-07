@@ -114,6 +114,12 @@ export function healthFrom(st: InseegoStatus | null, ss: InseegoSignalStat | nul
   return { battery: b, charging: ch === undefined ? undefined : ch === true || /^(charging|true|1)$/i.test(String(ch).trim()) };
 }
 
+/** عدّادات البايت (من بداية الاتصال الحالي) */
+export function usageFrom(st: InseegoStatus | null): { downloadBytes: number; uploadBytes: number } | null {
+  const d = num(st?.statusBarBytesReceived), u = num(st?.statusBarBytesTransmitted);
+  return d !== undefined && u !== undefined && d >= 0 && u >= 0 ? { downloadBytes: d, uploadBytes: u } : null;
+}
+
 /** /login/ ← secToken + gSecureToken. null لو الصفحة ما فيها هالخانات (فيرموير ثاني) */
 export function loginTokens(html: string): { secToken: string; gSecureToken: string } | null {
   const sec = html.match(/var\s+secToken\s*=\s*["']([^"']+)["']/)?.[1];

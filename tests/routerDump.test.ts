@@ -393,3 +393,16 @@ test('OpenWrt/LuCI (5G CPE Pro 7): index.html بـ meta refresh ← نلحق cgi
   // ما فيه ملف اسمه نفس بداية ملف ثاني (السيرفر يكتبها ملفات ومجلدات — التصادم كان يضيّع صفحات LuCI)
   for (const a of ps) for (const b of ps) assert.ok(a === b || !b.startsWith(a + '/'), `تصادم ${a} و ${b}`);
 });
+
+test('الجامع: صفحات بنفس رأس الرئيسية بس محتوى ثاني (Inseego MiFi) ما تنرمي «صفحة البداية»', async () => {
+  const head = '<!DOCTYPE HTML><html><head><meta charset="utf-8" /><title>MiFi 8000</title>' + 'x'.repeat(400);
+  mockRouter({
+    '/': head + 'HOME'.repeat(20000),
+    '/diagnostics/': head + 'RSRP -95'.repeat(5000),
+    '/nothere/': head + 'HOME'.repeat(20000),
+  });
+  const { files, skipped } = await collectRouterFiles('192.168.1.1', undefined, { start: ['/', '/diagnostics/', '/nothere/'] });
+  assert.ok(files.some(f => f.p === '/diagnostics/index.html'));
+  assert.ok(!files.some(f => f.p === '/nothere/index.html'));
+  assert.ok(skipped.some(x => /nothere.*صفحة البداية/.test(x)));
+});
