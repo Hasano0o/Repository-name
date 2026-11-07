@@ -76,6 +76,7 @@ const files = [
   'src/utils/nrprobe.ts',
   'src/drivers/luci/index.ts',
   'src/drivers/luci/pro7.ts',
+  'src/drivers/luci/wis.ts',
   'src/drivers/luci/cbi.ts',
   'src/drivers/luci/pro7lock.ts',
   'src/drivers/dlink/crypto.ts',

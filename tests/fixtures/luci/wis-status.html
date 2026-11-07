@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="ar">
+ <head>
+  <meta charset="utf-8">
+  <title></title>
+  <!--[if lt IE 9]><script src="/luci-static/bootstrap/html5.js"></script><![endif]-->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/luci-static/bootstrap/cascade.css">
+  <link rel="stylesheet" media="only screen and (max-device-width: 854px)" href="/luci-static/bootstrap/mobile.css" type="text/css" />
+  
+ 	<link rel="shortcut icon" href="/luci-static/bootstrap/5G-CPE-tab.ico">
+  
+  <script src = "/luci-static/superos/js/jquery-1.9.1.min.js"></script>
+  <script src = "/luci-static/superos/js/plug-in.js"></script>
+  <script src = "/luci-static/superos/js/validate.js"></script>
+  <link rel="stylesheet" href="/luci-static/superos/layui/css/layui.css">
+  <script src = "/luci-static/superos/layui/layui.js"></script>
+  <link rel="stylesheet" href="/luci-static/superos/main/main.css">
+  <script src="/luci-static/resources/xhr.js"></script>
+ </head>
+<body id="new_body" class="lang_arStatus">
+  <div>
+  <header>
+   <div class="fill">
+    <div class="container">
+		<ul class="nav" style = "margin-left: 10px;">
+			
+			<div id = "company_icon_div" class  ="company_icon_div"><img src="/luci-static/superos/img/logo_head_5G-CPE.png"></div>
+			
+         <li class = "Status_li">
+	        <a class = "first_menu_text " href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/status">الحالة</a>
+        </li> 
+
+    
+        <li class="dropdown">
+			
+            <a class="menu first_menu_text" href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/lte"><img src="/luci-static/superos/img/5G.png" alt="" style="width: 30px;height: 30px;margin-top: -5px;"></a>
+			
+	 <ul class="dropdown-menu">
+	  <li style = "font-size: 14px;"><a href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/lte/network">شبكة الاتصال</a></li>
+	  <li style = "font-size: 14px;"><a href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/lte/apn">ايه بي ان</a></li>
+	  <li style = "font-size: 14px;"><a href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/lte/at_command">قيادة التكنولوجيا المساعدة</a></li>
+	</ul>
+        </li>
+	
+        <li class="dropdown">
+			
+            <a class="menu first_menu_text" href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/lte_sms">الرسائل القصيرة</a>
+			
+	 <ul class="dropdown-menu">
+	  <li style = "font-size: 14px;"><a href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/lte_sms/lte_inbox">البريد الوارد</a></li>
+	  <li style = "font-size: 14px;"><a href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/lte_sms/lte_outbox">علبه الصادر</a></li>
+	  <li style = "font-size: 14px;"><a href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/lte_sms/lte_drafts">مسودات</a></li>
+	</ul>
+        </li>
+	
+        <li class="dropdown">
+			
+            <a class="menu first_menu_text" href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/network">شبكة الاتصال</a>
+			
+	 <ul class="dropdown-menu">
+	  <li style = "font-size: 14px;"><a href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/network/network">شبكة الاتصال</a></li>
+	  <li style = "font-size: 14px;"><a href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/network/upnp">UPNP</a></li>
+	  <li style = "font-size: 14px;"><a href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/network/sqm">SQM QoS</a></li>
+	</ul>
+        </li>
+	
+        <li class="dropdown">
+			
+            <a class="menu first_menu_text" href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/firewall">جدار الحماية</a>
+			
+	 <ul class="dropdown-menu">
+	  <li style = "font-size: 14px;"><a href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/firewall/dmz">DMZ</a></li>
+	  <li style = "font-size: 14px;"><a href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/firewall/forwards">Port Forwards</a></li>
+	</ul>
+        </li>
+	
+        <li class="dropdown">
+			
+            <a class="menu first_menu_text" href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/system">نظام</a>
+			
+	 <ul class="dropdown-menu">
+	  <li style = "font-size: 14px;"><a href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/system/system">نظام</a></li>
+	  <li style = "font-size: 14px;"><a href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/system/crontab">المهام المجدولة</a></li>
+	</ul>
+        </li>
+	
+         <li class = "Tools_li">
+	        <a class = "first_menu_text " href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/tools">ادوات</a>
+        </li> 
+
+    
+         <li class = "Logout_li">
+	        <a class = "first_menu_text " href="/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/logout">تسجيل خروج</a>
+        </li> 
+
+    
+
+	
+		<li style = "float: right;height: 40px;line-height:34px;margin: 12px 6px 0 0">
+	
+		</li>
+	
+		<div class = "internet_status_div">
+			<img src="/luci-static/superos/img/Internet.png" alt="">
+			
+			<img id = "internet_connected" src="/luci-static/superos/img/Connected.png" alt="">
+			
+		</div>
+	</ul>
+    </div>
+   </div>
+  </header>
+
+<!---->
+
+<div id="maincontent" class="container">
+
+
+<script>
+
+	function cloud_timeout_update()
+	 {
+		var url_arry=window.location.host.split(":");
+		if(url_arry[0] == ''){
+			XHR.poll(10, '/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/cloud_timeout_update', null,
+				function(x)
+				{
+					//console.log(x.info);
+				}
+			);
+		}
+	 }
+	 cloud_timeout_update();
+
+	 function open_wis_website(){
+		window.open("http://www.wisnetworks.com/")
+	 }
+
+	 function languageArr_send(){
+		var language_arr = {}
+		language_arr.ok = 'OK'
+		language_arr.cancel = 'إلغاء'
+		language_arr.send = 'ارسل'
+		language_arr.enter_phone_number = 'الرجاء إدخال رقم هاتفك!'
+		language_arr.enter_message = 'الرجاء كتابة الرسالة!'
+		language_arr.sending = 'إرسال ......'
+		language_arr.send_failed = 'فشل الإرسال'
+		language_arr.send_success = 'أرسل النجاح'
+		language_arr.enter_message = 'الرجاء كتابة الرسالة!'
+		language_arr.delete_message = 'هل تريد حذف هذه الرسالة؟'
+		language_arr.select_entrys = 'الرجاء تحديد الإدخالات!'
+		language_arr.no_message_on_sim_card = 'لا توجد رسالة على بطاقة SIM.'
+		language_arr.message = 'رسالة'
+		language_arr.Perpage = 'بيرباج'
+		language_arr.Records = 'السجلات'
+		language_arr.Total = 'المجموع'
+		language_arr.Page = 'الصفحة'
+		language_arr.Jump = 'انتقال'
+		language_arr.err_tip =  'Please enter a valid'
+		language_arr.empty_tip = 'cannot be empty'
+		language_arr.ip_err_tip = 'Please enter a valid IP'
+		language_arr.ip_empty_tip = 'IP cannot be empty'
+		language_arr.integer_err_tip = 'Must be a positive integer in the range '
+		language_arr.integer_empty_tip = 'Input can not be empty'
+        language_arr.ssid_err_tip = 'Wireless network name: only letters, numbers, Chinese, _, -, @,&#38;, The character length is 1~32 bits. (One Chinese character equals 3 characters)'
+        language_arr.ssid_empty_tip = 'Wireless network name cannot be empty'
+		language_arr.wifi_password_err_tip = 'Wireless network password: only letters, numbers and _, -,!, @, $,&#38;, *, The character length is 8~32 bits.'
+        language_arr.wifi_password_empty_tip = 'Wireless network Password cannot be empty'
+        language_arr.admin_password_err_tip = 'Administrator password: only letters, numbers and _, -,!, @, $,&#38;, *, The character length is 6 to 64 bits.'
+        language_arr.admin_password_empty_tip = 'Admin Password cannot be empty'
+        language_arr.confirm_password_err_tip = 'Confirm password: only letters, numbers and _, -,!, @, $,&#38;, *, The character length is 6 to 64 bits.'
+        language_arr.confirm_password_empty_tip = 'Confirm password cannot be empty'
+        language_arr.hostname_err_tip = 'Host name: Please enter letters, numbers, _, -, you cannot only enter numbers, and the ending characters cannot exist _, -, and the character length is 1 to 64 bits.'
+        language_arr.hostname_empty_tip = 'Hostname cannot be empty'
+		return language_arr
+	 }
+
+	XHR.poll(3,'/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/network/network/get_net_status', null,function(x,info){
+		if(info.net_status == 1){
+			$("#internet_connected").removeClass("internet_not_connected").attr("src","/luci-static/superos/img/Connected.png")
+		}
+		else{
+			$("#internet_connected").addClass("internet_not_connected").attr("src","/luci-static/superos/img/disabled.png")
+		}
+	});
+</script>
+
+
+
+<style>
+	.sn_tr,.bindcode_tr{
+		position: relative;
+	}
+	.device_sn_ipt,.device_bindcode_ipt{
+		width:5px !important;
+		height:1px !important;
+		padding:0 !important;
+		opacity: 0
+	}
+	.sn_copy_btn,.bindcode_copy_btn{
+		margin-left: 20px;
+		height: 26px;
+		line-height: 24px;
+	}
+	table td{
+		border: none;
+	}
+	.table_div{
+		margin: 15px;
+	}
+	.pic_color_line{
+		position: absolute;
+		left: 50%;
+		top: 0;
+		margin-left: -130px;
+	}
+	.Inbound_line{
+		width: 60px;
+		height: 5px;
+		display: inline-block;
+		background: #9999ff;
+		margin-right: 10px
+	}
+	.Outbound_line{
+		width: 60px;
+		height: 5px;
+		display: inline-block;
+		background: #9c9;
+	}
+	.disabled_img1{
+		position: absolute;
+		left: 7px;
+		top: 0px;
+	}
+	.disabled_img2{
+		position: absolute;
+		left: 86px;
+		top: 0px;
+	}
+	.outer_td{
+		width: 50%;
+		float: left;
+	}
+	.sys_outer_td{
+		width: 50%;
+		float: left;
+		margin: 10px 0;
+		min-height: 1px;
+	}
+	.sys_container{
+		overflow: hidden;
+		margin: 15px;
+	}
+	.sys_row{
+		overflow: hidden;
+	}
+	.td_left{
+		float: left;
+	}
+	.td_right{
+		width: 290px;
+		float: right;
+		text-align: left;
+		position: relative
+	}
+	.mobile_5g_row{
+		overflow: hidden;
+		margin: 20px 0;
+	}
+	.neighboring_table th,.neighboring_table td{
+		border: 1px solid #eee;
+	}
+	.join_in{
+		color: #579740;
+		cursor: pointer;
+	}
+</style>
+<script type="text/javascript" src="/luci-static/resources/cbi.js"></script>
+<script type="text/javascript">//<![CDATA[
+
+	function lte_show_div_update(lte_sysinfo)
+	{
+		signal_img1 = "<img src=/luci-static/superos/img/Signal"
+		signal_img2 = ".png>"
+		signal1_img = "/luci-static/superos/img/Signal_"
+		signal2_img = ".png"
+		rsrp = parseInt(lte_sysinfo.rsrp,10) 
+		$("#singal_val").text(rsrp+'(dbm)');
+		if(rsrp>=-144 && rsrp<-115){
+			$("#_rssi_img").html(signal_img1+1+signal_img2)
+			$("#signal_img").attr("src",signal1_img+1+signal2_img)
+		}
+		else if(rsrp>=-115 && rsrp<-105){
+			$("#_rssi_img").html(signal_img1+2+signal_img2)
+			$("#signal_img").attr("src",signal1_img+2+signal2_img)
+		}
+		else if(rsrp>=-105 && rsrp<-95){
+			$("#_rssi_img").html(signal_img1+3+signal_img2)
+			$("#signal_img").attr("src",signal1_img+3+signal2_img)
+		}
+		else if(rsrp>=-95 && rsrp<-85){
+			$("#_rssi_img").html(signal_img1+4+signal_img2)
+			$("#signal_img").attr("src",signal1_img+4+signal2_img)
+		}
+		else if(rsrp>=-85 && rsrp<-44){
+			$("#_rssi_img").html(signal_img1+5+signal_img2)
+			$("#signal_img").attr("src",signal1_img+5+signal2_img)
+		}
+		else
+		{
+			$("#_rssi_img").html(signal_img1+"_no"+signal_img2)
+			$("#signal_img").attr("src",signal1_img+"no_big"+signal2_img)
+		}
+
+
+		if(lte_sysinfo.imei == undefined)
+			var imei=("N/A")
+		else
+			var imei=(lte_sysinfo.imei)
+		$("#_imei").text(imei);
+
+		if(lte_sysinfo.band == undefined)
+			var band=("N/A")
+		else
+			var band=(lte_sysinfo.band)
+		$("#_band").text(band);
+		if(lte_sysinfo.dial_ip == undefined)
+			var dial_ip=("N/A")
+		else
+			var dial_ip=(lte_sysinfo.dial_ip)
+		$("#_ip").text(dial_ip);
+
+		$("#_mode").html(lte_sysinfo.sys_mode);
+
+		if(lte_sysinfo.arfcn && lte_sysinfo.arfcn != '' && lte_sysinfo.arfcn !="-1")
+			var arfcn=(lte_sysinfo.arfcn)
+		else
+			var arfcn=("N/A")
+		$("#_arfcn").html(arfcn);
+
+		if(lte_sysinfo.cellid == "-1")
+			var cellid=("N/A")
+		else
+			var cellid=(lte_sysinfo.cellid)
+		$("#_cellid").html(cellid);
+
+		if(lte_sysinfo.phys_cellid == "-1")
+			var phys_cellid=("N/A")
+		else
+			var phys_cellid=(lte_sysinfo.phys_cellid)
+		$("#_phys_cellid").html(phys_cellid);
+
+		if(lte_sysinfo.rsrp && lte_sysinfo.rsrp != "255")
+			var rsrp=(lte_sysinfo.rsrp+" dBm")
+		else
+			var rsrp=("N/A")
+		$("#_rsrp").html(rsrp);
+	
+		if(lte_sysinfo.rsrq && lte_sysinfo.rsrq != "255")
+			var rsrq=(lte_sysinfo.rsrq+" dB")
+		else
+			var rsrq=("N/A")
+		$("#_rsrq").html(rsrq);
+
+		if(lte_sysinfo.sinr == "255")
+			var sinr=("N/A")
+		else
+			var sinr=(lte_sysinfo.sinr)
+		$("#_sinr").html(sinr);
+	}
+
+	function update_neighbour_info(lte_sysinfo){
+		var tb = document.getElementById('neighboring_table');
+		if (lte_sysinfo && lte_sysinfo['neighb_num'] && parseInt(lte_sysinfo['neighb_num']) > 0)
+		{
+			/* clear all rows */
+			while( tb.rows.length > 1 )
+				tb.deleteRow(1);
+
+			for( var i = 0; i < parseInt(lte_sysinfo['neighb_num']); i++ )
+			{
+				var neighbour_str;
+
+				var num=i+1;
+				var index="neighbour"+num;
+				neighbour_str = lte_sysinfo[index];
+				if(!neighbour_str){
+					continue;
+				}
+				var neighbour_tab = neighbour_str.split(",");
+
+				var tr = tb.insertRow(-1);
+					tr.className = 'cbi-section-table-row cbi-rowstyle-' + ((i % 2) + 1);
+
+				tr.insertCell(-1).innerHTML = neighbour_tab[0];
+				tr.insertCell(-1).innerHTML = neighbour_tab[1];
+				tr.insertCell(-1).innerHTML = neighbour_tab[2]+" dBm";
+				tr.insertCell(-1).innerHTML = neighbour_tab[3]+" dB";
+				if(neighbour_tab[5] == '-'){
+					tr.insertCell(-1).innerHTML = neighbour_tab[5];
+				}
+				else{
+					tr.insertCell(-1).innerHTML = neighbour_tab[5]+" dBm";
+				}
+				if(neighbour_tab[4] == '-'){
+					tr.insertCell(-1).innerHTML = neighbour_tab[4];
+				}
+				else{
+					tr.insertCell(-1).innerHTML = neighbour_tab[4]+" dBm";
+				}
+				var td = tr.insertCell(-1);
+				var data={};
+				data['arfcn']=neighbour_tab[0];
+				data['pci']=neighbour_tab[1];
+				data['mode']=lte_sysinfo['sys_mode'];
+				td.setAttribute("onclick", "join_in("+JSON.stringify(data)+");");
+				td.className="join_in";
+				td.innerHTML = "Lock";
+			}
+
+			if( tb.rows.length == 1 )
+			{
+				var tr = tb.insertRow(-1);
+					tr.className = 'cbi-section-table-row';
+
+				var td = tr.insertCell(-1);
+					td.colSpan = 4;
+					td.innerHTML = '<em><br />There are no data.</em>';
+			}
+		}
+	}
+	XHR.poll(1,'/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/lte/lte_info_set_timer', null,function(x){});
+
+	function progressbar(v, m)
+	{
+		var vn = parseInt(v) || 0;
+		var mn = parseInt(m) || 100;
+		var pc = Math.floor((100 / mn) * vn);
+
+		return String.format(
+			'<div style="width:200px; position:relative; border:1px solid #999999">' +
+				'<div style="background-color:#CCCCCC; width:%d%%; height:15px">' +
+					'<div style="position:absolute; left:0; top:0; text-align:center; width:100%%; color:#000000">' +
+						'<small>%s / %s (%d%%)</small>' +
+					'</div>' +
+				'</div>' +
+			'</div>', pc, v, m, pc
+		);
+	}
+
+	var wifidevs = null;
+	var arptable = null;
+
+	XHR.poll(3, '/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK', { status: 1 },
+		function(x, info)
+		{
+			var ss = document.getElementById('lan4_s');
+			var ifc = info.lan;
+
+			if (ifc && ifc.ifname && ifc.link != '0')
+			{
+				var s = String.format(
+					'<strong>عنوان: </strong>%s<br />' +
+					'<strong>Netmask: </strong>%s<br />' +
+					'<strong>MAC: </strong>%s<br />',
+						(ifc.ipaddr) ? ifc.ipaddr : '0.0.0.0',
+						(ifc.netmask && ifc.netmask != ifc.ipaddr) ? ifc.netmask : '255.255.255.255',
+						ifc.mac
+				);
+
+				s += String.format(
+					'<strong>متصل </strong><br />'
+				);
+
+				ss.innerHTML = String.format('<small>%s</small>', s);
+			}
+			else
+			{
+				ss.innerHTML = '<em>غير متصل</em>';
+			}
+
+			var ss = document.getElementById('wan4_s');
+			var ifc = info.wan;
+
+			if (ifc && ifc.ifname && ifc.link != '0')
+			{
+				var s = String.format(
+					'<strong>عنوان: </strong>%s<br />' +
+					'<strong>Netmask: </strong>%s<br />',
+						(ifc.ipaddr) ? ifc.ipaddr : '0.0.0.0',
+						(ifc.netmask && ifc.netmask != ifc.ipaddr) ? ifc.netmask : '255.255.255.255'
+				);
+
+				s += String.format(
+					'<strong>متصل</strong><br />',
+				);
+
+				ss.innerHTML = String.format('<small>%s</small>', s);
+			}
+			else
+			{
+				ss.innerHTML = '<em>غير متصل</em>';
+			}
+
+			var e;
+
+			if (e = document.getElementById('localtime')){
+				e.innerHTML = info.localtime;
+			}
+			if (e = document.getElementById('uptime')){
+				e.innerHTML = String.format('%t', info.uptime);
+			}
+			lte_show_div_update(info.lte_info);
+			update_neighbour_info(info.lte_info);
+			if(info.lte_config.slot == 1){
+				$("#sim_img1").attr("src","/luci-static/superos/img/sim_card_no.png")
+				$("#disabled_img1").attr("src","/luci-static/superos/img/disabled.png")
+				
+				if(info.lte_info.sim_state == 0){
+					
+						$("#sim_img1").attr("src","/luci-static/superos/img/sim_card_no.png")
+					
+					$("#disabled_img1").attr("src","/luci-static/superos/img/disabled.png")
+				}
+				else{
+					$("#sim_img1").attr("src","/luci-static/superos/img/sim_card_has_enable.png")
+					$("#disabled_img1").attr("src","")
+				}
+			}
+			
+		}
+	);
+	var bwxhr = new XHR();
+
+	var G;
+	var TIME = 0;
+	var RXB  = 1;
+	var RXP  = 2;
+	var TXB  = 3;
+	var TXP  = 4;
+
+	var width  = 760;
+	var height = 300;
+	var step   = 5;
+
+	var data_wanted = Math.floor(width / step);
+	var data_fill   = 0;
+	var data_stamp  = 0;
+
+	var data_rx = [ ];
+	var data_tx = [ ];
+
+	var line_rx;
+	var line_tx;
+
+	var label_25;
+	var label_50;
+	var label_75;
+
+	var label_rx_cur;
+	var label_rx_avg;
+	var label_rx_peak;
+
+	var label_tx_cur;
+	var label_tx_avg;
+	var label_tx_peak;
+
+	var label_scale;
+
+
+	function bandwidth_label(bytes, br)
+	{
+		var uby = 'kB/s';
+		var kby = (bytes / 1024);
+
+		if (kby >= 1024)
+		{
+			uby = 'MB/s';
+			kby = kby / 1024;
+		}
+
+		var ubi = 'kbit/s';
+		var kbi = (bytes * 8 / 1024);
+
+		if (kbi >= 1024)
+		{
+			ubi = 'ميغابت / ثانية';
+			kbi = kbi / 1024;
+		}
+
+		return String.format("%f %s%s(%f %s)",
+			kbi.toFixed(2), ubi,
+			br ? '<br />' : ' ',
+			kby.toFixed(2), uby
+		);
+	}
+
+	/* wait for SVG */
+	window.setTimeout(
+		function() {
+			var svg = document.getElementById('bwsvg');
+
+			try {
+				G = svg.getSVGDocument
+					? svg.getSVGDocument() : svg.contentDocument;
+			}
+			catch(e) {
+				G = document.embeds['bwsvg'].getSVGDocument();
+			}
+
+			if (!G)
+			{
+				window.setTimeout(arguments.callee, 1000);
+			}
+			else
+			{
+				/* find sizes */
+				width       = svg.offsetWidth  - 2;
+				height      = svg.offsetHeight - 2;
+				data_wanted = Math.ceil(width / step);
+
+				/* prefill datasets */
+				for (var i = 0; i < data_wanted; i++)
+				{
+					data_rx[i] = 0;
+					data_tx[i] = 0;
+				}
+
+				/* find svg elements */
+				line_rx = G.getElementById('rx');
+				line_tx = G.getElementById('tx');
+
+				label_25 = G.getElementById('label_25');
+				label_50 = G.getElementById('label_50');
+				label_75 = G.getElementById('label_75');
+
+				label_rx_cur  = document.getElementById('rx_bw_cur');
+				label_rx_avg  = document.getElementById('rx_bw_avg');
+				label_rx_peak = document.getElementById('rx_bw_peak');
+
+				label_tx_cur  = document.getElementById('tx_bw_cur');
+				label_tx_avg  = document.getElementById('tx_bw_avg');
+				label_tx_peak = document.getElementById('tx_bw_peak');
+
+				label_scale   = document.getElementById('scale');
+
+
+				/* plot horizontal time interval lines */
+				for (var i = width % (step * 60); i < width; i += step * 60)
+				{
+					var line = G.createElementNS('http://www.w3.org/2000/svg', 'line');
+						line.setAttribute('x1', i);
+						line.setAttribute('y1', 0);
+						line.setAttribute('x2', i);
+						line.setAttribute('y2', '100%');
+						line.setAttribute('style', 'stroke:black;stroke-width:0.1');
+
+					var text = G.createElementNS('http://www.w3.org/2000/svg', 'text');
+						text.setAttribute('x', i + 5);
+						text.setAttribute('y', 15);
+						text.setAttribute('style', 'fill:#999999; font-size:9pt');
+						text.appendChild(G.createTextNode(Math.round((width - i) / step / 60) + 'm'));
+
+					label_25.parentNode.appendChild(line);
+					label_25.parentNode.appendChild(text);
+				}
+
+				label_scale.innerHTML = String.format('(إطار %d دقيقة ، فاصل زمني %d ثانية)', data_wanted / 60, 3);
+
+				/* render datasets, start update interval */
+				//XHR.poll(3, '/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/status/realtime/bandwidth_status/rmnet_data0', null,
+				XHR.poll(3, '/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/status/bandwidth_status/rmnet_data0', null,
+					function(x, data)
+					{
+						var data_max   = 0;
+						var data_scale = 0;
+
+						var data_rx_avg = 0;
+						var data_tx_avg = 0;
+
+						var data_rx_peak = 0;
+						var data_tx_peak = 0;
+
+						for (var i = data_stamp ? 0 : 1; i < data.length; i++)
+						{
+							/* skip overlapping entries */
+							if (data[i][TIME] <= data_stamp)
+								continue;
+
+							/* normalize difference against time interval */
+							if (i > 0)
+							{
+								var time_delta = data[i][TIME] - data[i-1][TIME];
+								if (time_delta)
+								{
+									data_rx.push((data[i][RXB] - data[i-1][RXB]) / time_delta);
+									data_tx.push((data[i][TXB] - data[i-1][TXB]) / time_delta);
+								}
+							}
+						}
+
+						if(data.length)
+						{
+							/* cut off outdated entries */
+							data_rx = data_rx.slice(data_rx.length - data_wanted, data_rx.length);
+							data_tx = data_tx.slice(data_tx.length - data_wanted, data_tx.length);
+
+							/* find peak */
+							for (var i = 0; i < data_rx.length; i++)
+							{
+								data_max = Math.max(data_max, data_rx[i]);
+								data_max = Math.max(data_max, data_tx[i]);
+
+								data_rx_peak = Math.max(data_rx_peak, data_rx[i]);
+								data_tx_peak = Math.max(data_tx_peak, data_tx[i]);
+
+								if (i > 0)
+								{
+									data_rx_avg = (data_rx_avg + data_rx[i]) / 2;
+									data_tx_avg = (data_tx_avg + data_tx[i]) / 2;
+								}
+								else
+								{
+									data_rx_avg = data_rx[i];
+									data_tx_avg = data_tx[i];
+								}
+							}
+
+							/* remember current timestamp, calculate horizontal scale */
+							data_stamp = data[data.length-1][TIME];
+							data_scale = height / (data_max * 1.1);
+
+
+							/* plot data */
+							var pt_rx = '0,' + height;
+							var pt_tx = '0,' + height;
+
+							var y_rx = 0;
+							var y_tx = 0;
+
+							for (var i = 0; i < data_rx.length; i++)
+							{
+								var x = i * step;
+
+								y_rx = height - Math.floor(data_rx[i] * data_scale);
+								y_tx = height - Math.floor(data_tx[i] * data_scale);
+
+								pt_rx += ' ' + x + ',' + y_rx;
+								pt_tx += ' ' + x + ',' + y_tx;
+							}
+
+							pt_rx += ' ' + width + ',' + y_rx + ' ' + width + ',' + height;
+							pt_tx += ' ' + width + ',' + y_tx + ' ' + width + ',' + height;
+
+
+							line_rx.setAttribute('points', pt_rx);
+							line_tx.setAttribute('points', pt_tx);
+
+							label_25.firstChild.data = bandwidth_label(1.1 * 0.25 * data_max);
+							label_50.firstChild.data = bandwidth_label(1.1 * 0.50 * data_max);
+							label_75.firstChild.data = bandwidth_label(1.1 * 0.75 * data_max);
+
+							label_rx_cur.innerHTML = bandwidth_label(data_rx[data_rx.length-1], true);
+							label_tx_cur.innerHTML = bandwidth_label(data_tx[data_tx.length-1], true);
+
+							label_rx_avg.innerHTML = bandwidth_label(data_rx_avg, true);
+							label_tx_avg.innerHTML = bandwidth_label(data_tx_avg, true);
+
+							label_rx_peak.innerHTML = bandwidth_label(data_rx_peak, true);
+							label_tx_peak.innerHTML = bandwidth_label(data_tx_peak, true);
+						}
+					}
+				);
+			}
+		}, 1000
+	);
+	function join_in(data){
+		var mode=data['mode'];
+		var arfcn=data['arfcn'];
+		var pci=data['pci'];
+		if(mode == '5G'){
+			mode='5g'
+		}
+		else{
+			mode='4g'
+		}
+		var data = {
+			"arfcn": arfcn,
+			"pci": pci,
+			"mode":mode,
+		};
+
+		location.href = '/cgi-bin/luci/;stok=STOKSTOKSTOKSTOKSTOKSTOKSTOKSTOK/admin/lte/network' + '?arfcn=' + data.arfcn + '&pci=' + data.pci+ '&mode=' + data.mode;
+		console.log("Joining...");
+	}
+//]]></script>
+
+<h2><a id="content" name="content">الحالة</a></h2>
+<style>
+	.fl{
+		float: left;
+	}
+	.sim1_div{
+		margin-right: 30px;
+	}
+	.signal_div{
+		position:relative;
+	}
+	.singal_val{
+		width: 70px;
+		height: 30px;
+		background: #fff;
+		color: #000;
+		border: 1px solid rgba(0,0,0,.2);
+		border-radius: 3px;
+		box-shadow: 0 5px 15px rgb(0 0 0 / 50%);
+		z-index:100;
+		position: absolute;
+		right: -78px;
+		top: 20px;
+		text-align: center;
+		line-height: 30px;
+		display: none;
+	}
+	.signal_div:hover .singal_val{
+		display: block;
+	}
+</style>
+
+<fieldset class="cbi-section">
+	<div class="panel_heading">
+		<h3 class = "panel_title">نظام</h3>
+	</div>
+	<div class="sys_container">
+		
+		<div class="sys_row">
+			<div class="sys_outer_td">
+				<div class="fl">اسم المنتج:</div>
+				<div class="td_right">5G-CPE</div>
+			</div>
+			<div class="sys_outer_td">
+				<div class="td_left">نسخة برنامج ثابت:</div>
+				<div class="td_right">5.0.4.release</div>
+			</div>
+		</div>
+		<div class="sys_row">
+			<div class="sys_outer_td">
+				<div class="fl">Mac:</div>
+				<div class="td_right">dc:36:43:32:c6:88</div>
+			</div>
+			<div class="sys_outer_td">
+				<div class="td_left">التوقيت المحلي:</div>
+				<div class="td_right" id="localtime">Sat Nov  7 14:57:57 2026</div>
+			</div>
+		</div>
+		<div class="sys_row">
+			<div class="sys_outer_td">
+				<div class="fl">مدة التشغيل:</div>
+				<div class="td_right" id="uptime">11h 23m 20s</div>
+			</div>
+			<div class="sys_outer_td">
+				<div class="td_left"></div>
+				<div class="td_right"></div>
+			</div>
+		</div>
+		
+	</div>
+</fieldset>
+
+<br>
+
+<fieldset class="cbi-section">
+	<div class="panel_heading">
+		<h3 class = "panel_title">5G جوال </h3>
+	</div>
+	<div style = "margin: 0 15px;">
+		<div class="mobile_5g_row">
+			<div class="outer_td">
+				<div class="fl" style = "line-height: 45px;">بطاقة Sim:</div>
+				<div class="td_right">
+					<img id="sim_img1" src="/luci-static/superos/img/sim_card_has_enable.png" alt="" srcset="">
+					<img id="disabled_img1" class="disabled_img1" src="" alt="" srcset="">
+					
+				</div>
+			</div>
+			<div class="outer_td">
+				<div class="td_left" style = "line-height: 45px;">الإشارة:</div>
+				<div class="signal_div td_right">
+					<img id="signal_img" class="signal_img" src="/luci-static/superos/img/Signal_5.png" alt="" srcset="">
+					<span id="singal_val" class="singal_val">-59(dbm)</span>
+				</div>
+			</div>
+		</div>
+		<div class="mobile_5g_row">
+			<div class="outer_td">
+				<div class="fl">IMEI:</div>
+				<div class="td_right" id="_imei">000000000000000</div>
+			</div>
+			<div class="outer_td">
+				<div class="td_left">شكل:</div>
+				<div class="td_right" id="_mode">
+					<script>
+						if("4G/5G" == "")
+							document.write("N/A")
+						else
+							document.write("4G/5G")
+					</script>
+				</div>
+			</div>
+		</div>
+		<div class="mobile_5g_row">
+			<div class="outer_td">
+				<div class="fl">نِطاق:</div>
+				<div class="td_right" id="_band">
+					<script>
+						if("LTE BAND 1/NR5G BAND 78" == "")
+							document.write("N/A")
+						else
+							document.write("LTE BAND 1/NR5G BAND 78")
+					</script>
+				</div>
+			</div>
+			<div class="outer_td">
+				<div class="td_left">IP:</div>
+				<div class="td_right" id="_ip">
+					<script>
+						if("10.245.89.29" == "")
+							document.write("N/A")
+						else
+							document.write("10.245.89.29")
+					</script>
+				</div>
+			</div>
+		</div>
+		<div class="mobile_5g_row">
+			<div class="outer_td">
+				<div class="fl">Arfcn:</div>
+				<div class="td_right" id="_arfcn">
+					<script>
+						if("643296" && "643296" != "")
+							document.write("643296")
+						else
+							document.write("N/A")
+					</script>
+				</div>
+			</div>
+			<div class="outer_td">
+				<div class="td_left">PCI:</div>
+				<div class="td_right" id="_phys_cellid">
+					<script>
+						if("56" == "-1" || "56" == "")
+							document.write("N/A")
+						else
+							document.write("56")
+					</script>
+				</div>
+			</div>
+		</div>
+		<div class="mobile_5g_row">
+			<div class="outer_td">
+				<div class="fl">RSRP:</div>
+				<div class="td_right" id="_rsrp">
+					<script>
+						if("-59" && "-59" != "255" && "-59" != "")
+							document.write("-59"+" dBm")
+						else
+							document.write("N/A")
+					</script>
+				</div>
+			</div>
+			<div class="outer_td">
+				<div class="td_left">RSRQ:</div>
+				<div class="td_right" id="_rsrq">
+					<script>
+						if("-10" && "-10" != "255" && "-10"!= "")
+							document.write("-10"+" dB")
+						else
+							document.write("N/A")
+					</script>
+				</div>
+			</div>
+		</div>
+		<div class="mobile_5g_row">
+			<div class="outer_td">
+				<div class="fl">SINR:</div>
+				<div class="td_right" id="_sinr">
+					<script>
+						if("25" == "255" || "25" == "")
+							document.write("N/A")
+						else
+							document.write("25")
+					</script>
+				</div>
+			</div>
+			<div class="outer_td">
+				<div class="td_left">Cell ID:</div>
+				<div class="td_right" id="_cellid">
+					<script>
+						if("56" == "-1" || "56" == "")
+							document.write("N/A")
+						else
+							document.write("56")
+					</script>
+				</div>
+			</div>
+		</div>
+	</div>
+	<hr>
+	<fieldset class="cbi-section">
+		<div class="panel_heading bor_bottom">
+			<h3 class = "panel_title">Neighboring cell information</h3>
+		</div>
+		<table class="cbi-section-table" id="neighboring_table">
+			<tr class="cbi-section-table-titles">
+				<th class="cbi-section-table-cell">ARFCN</th>
+				<th class="cbi-section-table-cell">PCI</th>
+				<th class="cbi-section-table-cell">RSRP</th>
+				<th class="cbi-section-table-cell">RSRQ</th>
+				<th class="cbi-section-table-cell">RSSI</th>
+				<th class="cbi-section-table-cell">SINR</th>
+				<th class="cbi-section-table-cell">Action</th>
+			</tr>
+			<tr class="cbi-section-table-row">
+				<td colspan="4"><em><br />جمع البيانات...</em></td>
+			</tr>
+		</table>
+	</fieldset>
+</fieldset>
+
+<br>
+
+
+<fieldset class="cbi-section">
+	<div class="panel_heading">
+		<h3 class = "panel_title">شبكة الاتصال</h3>
+	</div>
+	<table width="100%" cellspacing="10">
+		<tr><td width="33%" style="vertical-align:top">IPv4 LAN Status</td><td>
+			<table><tr>
+				<td id="lan4_s" style="vertical-align:middle; padding: 3px"><em>جمع البيانات...</em></td>
+			</tr></table>
+		</td></tr>
+		<tr><td width="33%" style="vertical-align:top">Mobile WAN Status</td><td>
+			<table><tr>
+				<td id="wan4_s" style="vertical-align:middle; padding: 3px"><em>جمع البيانات...</em></td>
+			</tr></table>
+		</td></tr>
+	</table>
+</fieldset>
+
+<br>
+
+<fieldset class="cbi-section">
+	<div class="panel_heading">
+		<h3 class = "panel_title">Realtime Traffic</h3>
+	</div>
+	<div class="layui-tab layui-tab-brief table_div" style = "position: relative;">
+		<ul class="layui-tab-title layui-tab-title2">
+			<li class="layui-this">5G</li>
+		</ul>
+		<div class = "pic_color_line">
+			<span>Download</span>
+			<span class = "Inbound_line"></span>
+			<span>تحميل</span>
+			<span class = "Outbound_line"></span>
+		</div>
+<embed id="bwsvg" style="width:100%; height:300px; border:1px solid #000000; background-color:#FFFFFF" src="/luci-static/resources/bandwidth.svg" />
+<div style="text-align:right"><small id="scale">-</small></div>
+<br />
+
+<table style="width:100%; table-layout:fixed" cellspacing="5">
+	<tr>
+		<td style="text-align:right; vertical-align:top;"><strong>Download</strong></td>
+		<td id="rx_bw_cur">0 kbit/s<br />(0 kB/s)</td>
+
+		<td style="text-align:right; vertical-align:top"><strong>متوسط:</strong></td>
+		<td id="rx_bw_avg">0 kbit/s<br />(0 kB/s)</td>
+
+		<td style="text-align:right; vertical-align:top"><strong>قمة:</strong></td>
+		<td id="rx_bw_peak">0 kbit/s<br />(0 kB/s)</td>
+	</tr>
+	<tr>
+		<td style="text-align:right; vertical-align:top;"><strong>تحميل</strong></td>
+		<td id="tx_bw_cur">0 kbit/s<br />(0 kB/s)</td>
+
+		<td style="text-align:right; vertical-align:top"><strong>متوسط:</strong></td>
+		<td id="tx_bw_avg">0 kbit/s<br />(0 kB/s)</td>
+
+		<td style="text-align:right; vertical-align:top"><strong>قمة:</strong></td>
+		<td id="tx_bw_peak">0 kbit/s<br />(0 kB/s)</td>
+	</tr>
+</table>
+	</div>
+</fieldset>
+
+<br>
+
+   <footer>
+    
+   </footer>
+   </div>
+  </div>
+	
+
+	
+ </body>
+</html>
+
+

@@ -10,6 +10,7 @@ import { http } from '../http';
 import { isLanHost } from '../../utils/host';
 import { buildSnapshot } from '../../utils/snapshot';
 import { pro7Signal, pro7Network, Pro7Status } from './pro7';
+import { WisInfo, isWisPage, wisSignal, wisNetwork, wisIs5g, wisNeighbours } from './wis';
 
 /**
  * راوترات OpenWrt بواجهة LuCI القديمة (Lua) — أول واحد: «5G CPE Pro 7» (موبايلي، ١ نوفمبر ٢٠٢٦، ثيم bigtmt).
@@ -32,6 +33,8 @@ export class LuciDriver implements RouterDriver {
   private host = '';
   /** ;stok=… لو الفيرموير يحطه في الروابط بعد الدخول */
   private stok = '';
+  /** ثيم superos (WIS — صحن 5G «Feedhorn»): الإشارة من «<root>?status=1» → lte_info (wis.ts) بدل admin/status/nr */
+  private wis = false;
 
   private base(host = this.host) {
     return 'http://' + host.replace(/^https?:\/\//, '').replace(/\/+$/, '');
@@ -79,6 +82,10 @@ export class LuciDriver implements RouterDriver {
     }
     this.stok = st;
     this.nameFrom(t);
+    if (isWisPage(t)) {
+      this.wis = true;
+      if (/wisnetworks/i.test(t) || this.name === 'OpenWrt (LuCI)') this.name = 'WIS 5G CPE (OpenWrt)';
+    }
   }
 
   async logout(): Promise<void> {
@@ -95,6 +102,10 @@ export class LuciDriver implements RouterDriver {
     const r = this.root();
     return [
       `${r}/`,
+      // superos (WIS): الحالة JSON + صفحات المودم من قائمته (٧ نوفمبر)
+      `${r}?status=1`,
+      ...['lte', 'lte/network', 'lte/apn', 'lte/at_command', 'lte_sms/lte_inbox', 'network/network', 'system/system', 'status']
+        .map(x => `${r}/admin/${x}`),
       ...['status/nr', 'status/wan', 'status/overview', 'status/system', 'status/lan',
         'modem/band', 'modem/cell', 'modem/network', 'modem/connect', 'modem/apn',
         'system/device', 'network/setting', 'sms/inbox'].map(x => `${r}/admin/${x}`),
@@ -116,7 +127,7 @@ export class LuciDriver implements RouterDriver {
    * فلما نضيف صفحات جديدة للجامع نرفع الرقم ويرجع الكرت مرة وحدة. (2 = صفحات المودم بالاسم، 3 = بعد إصلاح تصادم الأسماء — ١ نوفمبر)
    */
   async getDeviceDetails(): Promise<DeviceDetails> {
-    return { model: this.name.replace(/ \(OpenWrt\)$/, ''), software: 'luci-pages-3' };
+    return { model: this.name.replace(/ \(OpenWrt\)$/, ''), software: 'luci-pages-4' };
   }
 
   /**
@@ -151,7 +162,26 @@ export class LuciDriver implements RouterDriver {
     }
   }
 
+  /** superos: «<root>?status=1» ← JSON info.lte_info (نفس XHR.poll في صفحتهم الرئيسية) */
+  private async wisInfo(): Promise<WisInfo | null> {
+    try {
+      const r = await http(`${this.base()}${this.root()}?status=1`, {}, 12000);
+      const t = await r.text();
+      if (/name=["']?luci_password/i.test(t)) throw new Error('انتهت الجلسة');
+      const j = JSON.parse(t);
+      const li = j && typeof j === 'object' ? (j as any).lte_info : null;
+      return li && typeof li === 'object' ? li as WisInfo : null;
+    } catch (e) {
+      if (String((e as any)?.message ?? '').includes('انتهت الجلسة')) throw e;
+      return null;
+    }
+  }
+
   async getSignal(): Promise<Signal> {
+    if (this.wis) {
+      const li = await this.wisInfo();
+      if (li) return wisSignal(li);
+    }
     const j = await this.status();
     if (j) return pro7Signal(j);
     // احتياط: نوع الشبكة بس من أيقونات الهيدر
@@ -160,6 +190,10 @@ export class LuciDriver implements RouterDriver {
   }
 
   async getNetworkInfo(): Promise<NetworkInfo> {
+    if (this.wis) {
+      const li = await this.wisInfo();
+      if (li) return { mode: wisNetwork(li), connected: !!String(li.dial_ip ?? '').match(/\d+\.\d+/), supports5g: true };
+    }
     const j = await this.status();
     if (j) {
       const ds = String(j.data_status ?? '').toUpperCase();
@@ -180,7 +214,16 @@ export class LuciDriver implements RouterDriver {
 
   /** البرج الحالي (4G و 5G) — صفحة Pro7 ما فيها أبراج مجاورة */
   async getCells(): Promise<CellTower[]> {
-    return cellsOf(await this.getSignal());
+    const sig = await this.getSignal();
+    const out = cellsOf(sig);
+    if (this.wis) {
+      const li = await this.wisInfo().catch(() => null);
+      const nr = li ? wisIs5g(li) : false;
+      for (const c of li ? wisNeighbours(li) : []) {
+        out.push({ kind: 'neighbor', tech: nr ? 'NR' : 'LTE', pci: c.pci, arfcn: c.arfcn });
+      }
+    }
+    return out;
   }
 
   // ═══════════ الكتابة: نماذج CBI في admin/modem/{band,network,cell} (pro7lock.ts) ═══════════
