@@ -117,7 +117,9 @@ export function healthFrom(st: InseegoStatus | null, ss: InseegoSignalStat | nul
 /** /login/ ← secToken + gSecureToken. null لو الصفحة ما فيها هالخانات (فيرموير ثاني) */
 export function loginTokens(html: string): { secToken: string; gSecureToken: string } | null {
   const sec = html.match(/var\s+secToken\s*=\s*["']([^"']+)["']/)?.[1];
-  const g = html.match(/name=["']gSecureToken["'][^>]*value=["']([^"']+)["']/i)?.[1]
+  // صفحة MiFi 8000 الأصلية: نفس القيمة في `gSecureToken : "…"` (بيانات $.ajax) وفي <input name="gSecureToken">
+  const g = html.match(/gSecureToken\s*:\s*["']([^"']+)["']/)?.[1]
+    ?? html.match(/name=["']gSecureToken["'][^>]*value=["']([^"']+)["']/i)?.[1]
     ?? html.match(/value=["']([^"']+)["'][^>]*name=["']gSecureToken["']/i)?.[1];
   return sec && g ? { secToken: sec, gSecureToken: g } : null;
 }

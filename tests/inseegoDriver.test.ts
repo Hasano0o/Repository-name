@@ -24,7 +24,7 @@ const STATUS = { statusData: {
   statusBarConnectionState: 'Connected', statusBarBatteryPercent: 76, statusBarBatteryChargingState: 'Charging', statusBarWiFiClientListSize: 2,
 } };
 
-function router(o: { password?: string; stat?: boolean; title?: string; loginPage?: string; lock?: boolean; dropSubmit?: number; authError?: string } = {}) {
+function router(o: { password?: string; stat?: boolean; title?: string; loginPage?: string; lock?: boolean; dropSubmit?: number; authError?: string; dropStatus?: number } = {}) {
   const st = { sec: '6e1f0c2a9b7d43e8', g: 'efdbef4ddc037c4ae30bca3cd49fec16a5f3a007', logged: false, posts: [] as string[], fails: 0, inflight: 0, maxInflight: 0, n: 0 };
   const res = (status: number, text: string) => ({ ok: status < 400, status, url: 'http://192.168.1.1/', headers: { get: () => null }, text: async () => text } as any);
   const inner = async (url: string, init?: any) => {
@@ -33,7 +33,7 @@ function router(o: { password?: string; stat?: boolean; title?: string; loginPag
     if (m === 'POST') st.posts.push(u.pathname);
     switch (u.pathname) {
       case '/': return res(200, `<!DOCTYPE HTML><html><head><title>${o.title ?? 'MiFi 8000'}</title></head><body><script src="/06240220/script/notifications.js"></script></body></html>`);
-      case '/srv/status': return res(200, JSON.stringify(STATUS));
+      case '/srv/status': if (o.dropStatus && o.dropStatus-- > 0) throw new Error('The request timed out.'); return res(200, JSON.stringify(STATUS));
       case '/login/': return res(200, o.loginPage ?? `<html><script>var secToken = "${st.sec}";</script><form><input type="hidden" name="gSecureToken" value="${st.g}" /></form></html>`);
       case '/submitLogin/': {
         if (o.dropSubmit && o.dropSubmit-- > 0) throw new Error('The request timed out.');
@@ -42,7 +42,7 @@ function router(o: { password?: string; stat?: boolean; title?: string; loginPag
         const p = new URLSearchParams(init.body);
         if (p.get('gSecureToken') !== st.g || p.get('shaPassword') !== sha1((o.password ?? 'admin123') + st.sec)) {
           st.fails++;
-          return res(500, JSON.stringify({ authError: 'Incorrect password.<br>Try again.' }));
+          return res(500, JSON.stringify({ authError: 'Incorrect password.<br>Try again.', noOfRemainingLoginAttempts: 5 - st.fails }));
         }
         st.logged = true;
         return res(200, '{}');
@@ -172,4 +172,22 @@ test('inseego: علق مرتين ← رسالة «ما رد» (مو «كلمة �
 test('inseego: رفض بسبب ثاني (مو كلمة) ← نعرض نص الجهاز', async () => {
   router({ authError: 'Session expired.<br>Please reload the page.' });
   await assert.rejects(driver().login('192.168.1.1', 'admin', 'x'), /Session expired\. Please reload/);
+});
+
+test('inseego: صفحة الدخول الأصلية (gSecureToken داخل $.ajax والـ input مخفي القيمة) ← ندخل', async () => {
+  const st = router({ loginPage: '<script>var secToken = "6e1f0c2a9b7d43e8";\n$.ajax({ url : "/submitLogin/", data : { shaPassword: x, gSecureToken : "efdbef4ddc037c4ae30bca3cd49fec16a5f3a007" } });</script>' });
+  await driver().login('192.168.1.1', 'admin', 'admin123');
+  assert.equal(st.logged, true);
+});
+
+test('inseego: كلمة غلط ← نقول كم محاولة باقية', async () => {
+  router({ password: 'right' });
+  await assert.rejects(driver().login('192.168.1.1', 'admin', 'wrong'), /باقي 4 محاولات/);
+});
+
+test('inseego: /srv/status انقطع مرة (اتصال قديم) ← نعيد ونقرأ', async () => {
+  router({ dropStatus: 1 });
+  const d = driver();
+  await d.login('192.168.1.1', 'admin', 'admin123');
+  assert.equal((await d.getNetworkInfo()).operator, 'Libyana');
 });

@@ -272,7 +272,9 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
     // LuCI بعد الدخول: روابط القائمة فيها خروج/إعادة تشغيل/ضبط مصنع… — ما نفتحها (الخروج يقتل الجلسة ونخسر الباقي)
     if (LUCI_DANGER.test(p)) { skipped.push(`${p} (ما نفتحه — أمر)`); continue; }
     if (ES5_TWIN.test(p) && (seen.has(p.replace(/-es5\./i, '-es2015.')) || queue.includes(p.replace(/-es5\./i, '-es2015.')))) { skipped.push(p); continue; }
-    const r = await get(base + p);
+    let r = await get(base + p);
+    // انقطع الطلب (مو مهلة) ← مرة ثانية: الآيفون يعيد استخدام اتصال قفله الراوتر (Inseego MiFi 8000 — FULL ٧ نوفمبر: ١٢ صفحة «ما رد»)
+    if (r.status === 0) { await new Promise(res => setTimeout(res, 400)); r = await get(base + p); }
     // LuCI (OpenWrt — 5G CPE Pro 7، ١ نوفمبر) يرد صفحة الدخول نفسها بحالة 403 لما ما فيه جلسة — هي اللي نبيها
     const loginPage = r.status === 403 && /luci_password|name=["']?password|<form/i.test(r.text);
     if ((!r.ok && !loginPage) || !r.text) { misses.push(missLine(p, r)); continue; }

@@ -52,13 +52,19 @@ export class InseegoDriver implements RouterDriver {
   }
   private req(path: string, init: RequestInit = {}, timeout = 8000) {
     return this.one(async () => {
-      const r = await http(this.base() + path, init, timeout);
-      return { status: r.status, text: await r.text() };
+      const go = async () => { const r = await http(this.base() + path, init, timeout); return { status: r.status, text: await r.text() }; };
+      if ((init.method ?? 'GET').toUpperCase() !== 'GET') return go();
+      // الآيفون يعيد استخدام اتصال قديم والجهاز قفله ← «The request timed out / connection lost» بعد ~٨ث،
+      // والطلب اللي بعده يمشي فوراً (ملف FULL ٧ نوفمبر: /srv/status يفشل ويرد ٢٠٠ ورا بعض). GET بس — مرة وحدة.
+      try { return await go(); } catch (e) {
+        diag(`[inseego] ${path.split('?')[0]} ✗ نعيد مرة: ${String((e as any)?.message ?? e).slice(0, 60)}`);
+        return go();
+      }
     });
   }
 
   private async json(path: string, timeout = 8000): Promise<any> {
-    const r = await this.req(path, { headers: { Accept: 'application/json, text/javascript, */*' } }, timeout);
+    const r = await this.req(path, { method: 'GET', headers: { Accept: 'application/json, text/javascript, */*' } }, timeout);
     const t = r.text.trim();
     if (r.status !== 200) throw new Error(`${path}: HTTP ${r.status}`);
     try { return JSON.parse(t); } catch { throw new Error(/<html|<!doctype/i.test(t) ? `${path}: الراوتر رجّع صفحة بدل بيانات` : `${path}: رد غير متوقع`); }
@@ -153,15 +159,22 @@ export class InseegoDriver implements RouterDriver {
       }
     }
     const t = r!.text;
-    let authError = '';
-    try { authError = String(JSON.parse(t)?.authError ?? ''); } catch {}
+    let authError = '', left: number | undefined;
+    try {
+      const j = JSON.parse(t);
+      authError = String(j?.authError ?? '');
+      const n = Number(j?.noOfRemainingLoginAttempts);
+      if (Number.isFinite(n) && n >= 0) left = n;
+    } catch {}
     // نص الرفض من الجهاز (بدون أي رمز) — يفرّق «كلمة غلط» عن «الرمز انتهى» وغيره
     const why = authError.replace(/<br\s*\/?>/gi, ' ').replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 140);
-    diag(`[inseego] submitLogin → ${r!.status} · ${t.length}B${why ? ` · authError: «${why}»` : ''}${!why && r!.status !== 200 ? ` · ${t.replace(/\s+/g, ' ').slice(0, 120)}` : ''}`);
-    if (r!.status === 429 || /too many|attempts|locked/i.test(why)) throw new Error('الجهاز وقّف الدخول بعد محاولات كثيرة — انتظر شوي وجرّب');
+    diag(`[inseego] submitLogin → ${r!.status} · ${t.length}B${left !== undefined ? ` · باقي ${left} محاولات` : ''}${why ? ` · authError: «${why}»` : ''}${!why && r!.status !== 200 ? ` · ${t.replace(/\s+/g, ' ').slice(0, 120)}` : ''}`);
+    if (r!.status === 429 || left === 0 || /too many|locked/i.test(why)) throw new Error('الجهاز وقّف الدخول بعد محاولات كثيرة — انتظر شوي وجرّب');
+    // صفحة الجهاز: 500 = «We don't recognize that password… admin password, not your Wi-Fi password» + noOfRemainingLoginAttempts
     if (r!.status === 500 || authError) {
-      if (why && !/password|incorrect|invalid/i.test(why)) throw new Error(`الجهاز رفض الدخول: ${why}`);
-      throw new Error('كلمة المرور غلط — هي «Admin Password» اللي تطلع على شاشة الجهاز (مو كلمة الواي فاي إذا كانت مختلفة)');
+      if (why && !/password|incorrect|invalid|recogni/i.test(why)) throw new Error(`الجهاز رفض الدخول: ${why}`);
+      throw new Error('كلمة المرور غلط — اكتب «Admin Password» حقت الجهاز مو كلمة الواي فاي. تلقاها على شاشة الجهاز: Help ← MiFi Admin website'
+        + (left !== undefined ? ` (باقي ${left} محاولات قبل ما يقفل)` : ''));
     }
     if (r!.status !== 200 && r!.status !== 302 && r!.status !== 303) throw new Error(`الدخول فشل (HTTP ${r!.status})`);
     // رجّع لنا فورم الدخول نفسه = ما دخلنا
@@ -179,8 +192,9 @@ export class InseegoDriver implements RouterDriver {
 
   /** صفحات بعد الدخول للجامع (FULL/AUTH) — كلها عرض GET من قائمة الجهاز نفسه. بدون /logout/ ولا /restarting/ */
   afterLoginPages(): string[] {
+    // الأهم أول (أول FULL — ٧ نوفمبر: /diagnostics/ و /mifiinfo/ و /srv/status «ما رد»، والإشارة بالأرقام فيها غالباً)
     return [
-      '/', '/login/', '/srv/status', '/diagnostics/', '/mifiinfo/', '/internet/', '/networks/', '/sim/',
+      '/diagnostics/', '/mifiinfo/', '/srv/status', '/networks/', '/sim/', '/', '/internet/', '/login/',
       '/connecteddevices/', '/datausage/', '/advanced/', '/wifi/', '/wifisettings/', '/lan/', '/manualdns/',
       '/preferences/', '/softwareupdate/', '/sessions/', '/logs/', '/firewall/', '/macfilter/', '/portforwarding/', '/gps/',
       '/bandlock.html', '/celllock.html', '/realcelllock.html', '/band_manager.html',
@@ -195,7 +209,7 @@ export class InseegoDriver implements RouterDriver {
   async getDeviceDetails(): Promise<DeviceDetails> {
     await this.readModel();
     const st = await this.status().catch(() => null);
-    return { model: this.name, operator: String(st?.statusBarNetwork ?? '').trim() || undefined, software: 'inseego-pages-1' };
+    return { model: this.name, operator: String(st?.statusBarNetwork ?? '').trim() || undefined, software: 'inseego-pages-2' };
   }
 
   async getSignal(): Promise<Signal> {
