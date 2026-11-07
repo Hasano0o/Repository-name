@@ -16,7 +16,7 @@
  * ⚠️ شكل القيم الفعلي (نص «-95» أو «-95 dBm»، «n78» أو «78») ما شفناه — الصفحة تعرضها كما هي.
  * عشان كذا كل قراءة هنا متسامحة، والدرايفر يسجّل أول رد خام (بدون الأرقام الخاصة) في التشخيص.
  */
-import type { Signal, CellTower, Carrier, NetworkModeOption } from '../types';
+import type { Signal, CellTower, Carrier, NetworkModeOption, ConnectedDevice } from '../types';
 
 /** رقم من نص زي «-95» / «-95 dBm» / «-95.5» — undefined لو فاضي أو «-» أو «--» */
 export function num(v: unknown, lo = -1e9, hi = 1e9): number | undefined {
@@ -152,7 +152,7 @@ export const nums = (a: unknown): number[] =>
 
 /** نسخة من الرد بدون الأرقام الخاصة (IMEI/ICCID/IMSI…) ولا الـ AT الخام — للتشخيص */
 export function scrub(j: unknown, max = 1800): string {
-  const drop = /imei|imsi|iccid|msisdn|serial|mac|password|session|phone|raw|sms/i;
+  const drop = /imei|imsi|iccid|msisdn|serial|mac|password|session|phone|raw|sms|hostname/i;
   const walk = (v: any, d: number): any => {
     if (d > 4) return '…';
     if (Array.isArray(v)) return v.slice(0, 8).map(x => walk(x, d + 1));
@@ -184,4 +184,29 @@ export function opName(v: unknown): string | undefined {
   const code = s.replace(/\s+/g, '');
   if (/^\d{5,6}$/.test(code)) return PLMN[code] ? `${PLMN[code]} (${code})` : code;
   return s;
+}
+
+/**
+ * الأجهزة المتصلة — من رد status.get نفسه (صفحتهم الرئيسية «在线设备»):
+ *   const clients = c.clients || { total: 0, types: {} } · clients.clients = [{ hostname, ip }]
+ * ما فيه MAC في ردهم ← المفتاح من الآي بي (ولا حظر — ما فيه أمر حظر في صفحتهم).
+ * نتسامح وين ما كانت (أعلى الرد أو داخل cellular) لأن `c` في صفحتهم ما نعرف بالضبط أي مستوى.
+ * null = الرد ما فيه قسم الأجهزة أصلاً (ما نقول «صفر» وحنا ما قرينا).
+ */
+export function fgClients(r: any): { total: number; list: ConnectedDevice[] } | null {
+  const box = [r?.clients, r?.cellular?.clients, r?.status?.clients].find(x => x && typeof x === 'object');
+  if (!box) return null;
+  const arr: any[] = Array.isArray(box) ? box : Array.isArray(box.clients) ? box.clients : [];
+  const seen = new Set<string>();
+  const list: ConnectedDevice[] = [];
+  arr.forEach((x, i) => {
+    const ip = String(x?.ip ?? '').trim() || undefined;
+    const name = String(x?.hostname ?? x?.name ?? '').trim() || undefined;
+    const mac = String(x?.mac ?? '').trim() || `ip:${ip ?? name ?? i}`;
+    if (seen.has(mac)) return;
+    seen.add(mac);
+    list.push({ mac, ip, name });
+  });
+  const total = Number(box.total);
+  return { total: Number.isFinite(total) && total > list.length ? total : list.length, list };
 }

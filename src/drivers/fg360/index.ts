@@ -11,7 +11,7 @@
  */
 import {
   RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, DeviceDetails, RouterExtras,
-  BandConfig, CellLockTarget, CellLockState, ActiveLock, Carrier,
+  BandConfig, CellLockTarget, CellLockState, ActiveLock, Carrier, ConnectedDevice,
 } from '../types';
 import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { noChange } from '../noChange';
@@ -20,7 +20,7 @@ import { diag } from '../../services/diag';
 import { isLanHost } from '../../utils/host';
 import { buildSnapshot } from '../../utils/snapshot';
 import type { ModelProfile } from '../models';
-import { fgSignal, fgCells, fgCarriers, fgNetwork, FG_MODES, nums, scrub, fgHost, opName } from './parse';
+import { fgSignal, fgCells, fgCarriers, fgNetwork, FG_MODES, nums, scrub, fgHost, opName, fgClients } from './parse';
 
 const API = '/cgi-bin/api.cgi';
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -162,6 +162,15 @@ export class Fg360Driver implements RouterDriver {
   }
 
   async getCells(): Promise<CellTower[]> { return fgCells(await this.cell()); }
+
+  /** الأجهزة المتصلة من status.get (صفحتهم الرئيسية) — اسم وآي بي بس، بدون MAC ولا حظر */
+  async getDevices(): Promise<ConnectedDevice[]> {
+    const c = fgClients(await this.api('status.get'));
+    if (!c) throw new Error('الراوتر ما رجّع قائمة الأجهزة');
+    diag(`[fg360] الأجهزة: ${c.list.length} بالقائمة · total=${c.total}`);
+    if (!c.list.length && c.total > 0) throw new Error(`الراوتر يقول ${c.total} أجهزة بس ما أعطانا القائمة`);
+    return c.list;
+  }
   async getCarriers(): Promise<Carrier[]> { return fgCarriers(await this.cell()); }
 
   async getSnapshot(): Promise<SignalSnapshot> {

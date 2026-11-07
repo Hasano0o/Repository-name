@@ -28,7 +28,7 @@ const CELL = {
   neighbors: [{ rat: 'LTE', pci: '144', arfcn: '1650', rsrp: '-101', rsrq: '-14', sinr: '2' }],
 };
 
-function router(o: { password?: string; setup?: boolean; expireOnce?: boolean } = {}) {
+function router(o: { password?: string; setup?: boolean; expireOnce?: boolean; clients?: unknown } = {}) {
   const st = {
     session: '', calls: [] as any[], ports: new Set<string>(), expire: !!o.expireOnce,
     net: { ready: true, rat: '20', preferred1: '6', preferred2: '3', fiveg_mode: 7, supported_lte: [1, 3, 8, 28, 40], lte_bands: [1, 3, 8, 28, 40], supported_nr: [1, 28, 78], nr_bands: [1, 28, 78] },
@@ -51,7 +51,7 @@ function router(o: { password?: string; setup?: boolean; expireOnce?: boolean } 
     if (!b.session || b.session !== st.session) return res(401, { success: false, message: '登录已失效' });
     if (st.expire && b.action === 'status.get') { st.expire = false; st.session = 'dead'; return res(401, { success: false }); }
     switch (b.action) {
-      case 'status.get': return res(200, { success: true, cellular: CELL });
+      case 'status.get': return res(200, { success: true, cellular: CELL, ...(o.clients !== undefined ? { clients: o.clients } : {}) });
       case 'network.get': return res(200, { success: true, network: st.net });
       case 'network.bands.set': st.net = { ...st.net, lte_bands: b.lte, nr_bands: b.nr }; return res(200, { success: true });
       case 'network.mode.set': st.net = { ...st.net, rat: b.rat }; return res(200, { success: true });
@@ -189,4 +189,25 @@ test('المشغّل: رمز PLMN «60601» ← «المدار (60601)» · ال
   assert.equal(opName('STC'), 'STC');
   assert.equal(opName('99999'), '99999');
   assert.equal(opName(''), undefined);
+});
+
+test('الأجهزة: من status.get (clients.clients: hostname + ip) · بدون قسم ← خطأ مو «صفر» · فاضي = صفر حقيقي', async () => {
+  router({ clients: { total: 3, types: {}, clients: [
+    { hostname: 'iPhone-Ali', ip: '192.168.1.120' }, { hostname: '', ip: '192.168.1.121' }, { hostname: 'PS5', ip: '192.168.1.130' },
+  ] } });
+  let d = await drv(); await d.login('192.168.1.1', 'root', 'secret');
+  const list = await d.getDevices!();
+  assert.equal(list.length, 3);
+  assert.deepEqual(list[0], { mac: 'ip:192.168.1.120', ip: '192.168.1.120', name: 'iPhone-Ali' });
+  assert.equal(list[1].name, undefined);
+  assert.equal(new Set(list.map(x => x.mac)).size, 3);
+
+  router(); d = await drv(); await d.login('192.168.1.1', 'root', 'secret');
+  await assert.rejects(d.getDevices!(), /ما رجّع قائمة/);
+
+  router({ clients: { total: 0, types: {} } }); d = await drv(); await d.login('192.168.1.1', 'root', 'secret');
+  assert.deepEqual(await d.getDevices!(), []);
+
+  router({ clients: { total: 4, types: {} } }); d = await drv(); await d.login('192.168.1.1', 'root', 'secret');
+  await assert.rejects(d.getDevices!(), /4 أجهزة/);
 });
