@@ -443,6 +443,7 @@ export class ZteNgDriver implements RouterDriver {
       const i = await this.call('zwrt_web', 'web_info', {}, ZERO).catch(() => ({} as Record<string, unknown>));
       const txt = JSON.stringify(i);
       if (/MU5250/i.test(txt)) { this.lteExt = true; return MODELS.mu5250; }
+      if (/MU5252|TOPFLOW/i.test(txt)) { this.lteExt = true; return MODELS.mu5252; }
       if (/U60/i.test(txt)) return MODELS.u60Pro;
     } catch {}
     return MODELS.zteNg;
@@ -628,7 +629,8 @@ export class ZteNgDriver implements RouterDriver {
         await this.write('zte_nwinfo_api', 'nwinfo_set_gwl_bandlock', { is_gw_band: '0', gw_band_mask: '0', is_lte_band: '1', lte_band_mask: dec }, true);
         return;
       } catch (e: any) {
-        if (e?.devNeeded || (e?.code !== -32002 && e?.code !== 3 && e?.code !== -32601)) throw e;
+        // 2 = خانات غلط (MU5252 ٨ نوفمبر: «[2]» على كل تردد) — الأمر موجود بس هالفيرموير يبي lte_ext_band
+        if (e?.devNeeded || (e?.code !== -32002 && e?.code !== 2 && e?.code !== 3 && e?.code !== -32601)) throw e;
         diag(`[zte-ng] gwl_bandlock مرفوض (${e?.code}) ← lte_ext_band`);
       }
     }

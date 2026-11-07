@@ -75,6 +75,8 @@ export const MODELS = {
   zte: P({ id: 'zte', label: 'ZTE', brand: 'zte', tech: '5G', write: 'goform' }),
   // MU5250 (zwrt): نفس درايفر U60 Pro بس فيرمويره يرفض gwl_bandlock (مو في ACL «web») — لسا ما تأكد ← كرت FULL يطلع
   mu5250: P({ id: 'mu5250', label: 'ZTE MU5250', brand: 'zte', tech: '5G', write: 'ubus', nrLock: true, note: 'تثبيت 5G يسري على وضع SA بس' }),
+  // MU5252 «TOPFLOW» (المدار/ليبيا ٨ نوفمبر): نفس منصة MU5250 — gwl_bandlock يرد [2] (خانات غلط) والكتابة Access denied
+  mu5252: P({ id: 'mu5252', label: 'ZTE MU5252', brand: 'zte', tech: '5G', write: 'ubus', nrLock: true, note: 'تثبيت 5G يسري على وضع SA بس' }),
   u60Pro: P({ id: 'u60-pro', label: 'ZTE U60 Pro', brand: 'zte', tech: '5G', write: 'ubus', nrLock: true, verified: true, note: 'تثبيت 5G يسري على وضع SA بس' }),
   zteNg: P({ id: 'zte-ng', label: 'ZTE (الجيل الجديد)', brand: 'zte', tech: '5G', write: 'ubus' }),
   h158: P({ id: 'h158', label: 'Huawei H158-381', brand: 'huawei', tech: '5G', nrLock: false, note: 'يقبل تثبيت 4G بس — 5G يبقى تلقائي' }),
@@ -86,6 +88,7 @@ export function identifyZte(wa?: string, web?: string, hw?: string): ModelProfil
   const s = `${wa ?? ''} ${hw ?? ''}`;
   if (/MU5001/i.test(s)) return MODELS.mu5001;
   if (/MU5250/i.test(s)) return MODELS.mu5250;
+  if (/MU5252|TOPFLOW/i.test(s)) return MODELS.mu5252;
   if (/U60/i.test(s)) return MODELS.u60Pro;
   // MU3351 = منصة صفحة U30 Pro (config.js: DEVICE "ufi/mu3351") — تقرير ٢٧ أكتوبر
   if (/U30\s*Air/i.test(s)) return MODELS.u30Air;

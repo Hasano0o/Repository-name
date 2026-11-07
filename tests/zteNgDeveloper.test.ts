@@ -33,7 +33,7 @@ const { publicKey } = nc.generateKeyPairSync('rsa', { modulusLength: 1024, publi
 const DEV_ONLY = /nwinfo_set_(lte_ext_band|nrbandlock)$/;
 
 /** devPw: كلمة خيارات المطوّر (الافتراضي = كلمة الدخول) · ACL: الترددات تبي جلسة دخلت خيارات المطوّر، وgwl_bandlock مو موجود */
-function router(opts: { devPw?: string; httpsOnly?: boolean } = {}) {
+function router(opts: { devPw?: string; httpsOnly?: boolean; model?: string; gwlInvalid?: boolean } = {}) {
   const good = new Set<string>();
   const dev = new Set<string>();
   const log: string[] = [];
@@ -54,7 +54,7 @@ function router(opts: { devPw?: string; httpsOnly?: boolean } = {}) {
       return ok({ result: 1, ubus_rpc_session: s });
     }
     if (method === 'nwinfo_get_netinfo') return ok({ network_type: 'LTE', lte_rsrp: '-90', net_select: netSelect, nr5g_sa_band_lock: nr });
-    if (method === 'web_info') return ok({ developer_option_loginfo: dev.has(sess) ? '1' : '0', model: 'MU5250' });
+    if (method === 'web_info') return ok({ developer_option_loginfo: dev.has(sess) ? '1' : '0', model: opts.model ?? 'MU5250' });
     if (!good.has(sess)) return denied();
     if (method === 'web_crt_get') return ok({ result: publicKey });
     if (method === 'web_http_enstr_set') return ok({ result: 'success' });
@@ -62,7 +62,7 @@ function router(opts: { devPw?: string; httpsOnly?: boolean } = {}) {
       if (p.password === sha(sha(devPw) + SALT)) { dev.add(sess); return ok({ result: '0' }); }
       return ok({ result: '1' });
     }
-    if (method === 'nwinfo_set_gwl_bandlock') return denied();
+    if (method === 'nwinfo_set_gwl_bandlock') return opts.gwlInvalid ? res([{ jsonrpc: '2.0', id: 1, result: [2] }]) : denied();
     // httpsOnly: الكتابة على http مرفوضة كلها (مثل MU5250 ٧ نوفمبر: GET / على http = 405)
     if (opts.httpsOnly && /set_/.test(method) && !https) return denied();
     if (opts.httpsOnly && https && /set_/.test(method)) {
@@ -136,4 +136,24 @@ test('MU5250: الكتابة على http مرفوضة كلها ← نكمّل ع
   await d.setNetworkMode('0803');
   const after = r.log.slice(before);
   assert.ok(!after.includes('web_login'), after.join(' | '));
+});
+
+test('MU5252 «TOPFLOW»: gwl_bandlock يرد [2] (خانات غلط) ← lte_ext_band وينجح (كان: «ما يقبل هذا التردد — [2]» على كل تردد)', async () => {
+  const r = router({ gwlInvalid: true, model: 'MU5252' });
+  const d = new ZteNgDriver();
+  await d.login('192.168.0.21', 'admin', PW);
+  await d.setBand([3], undefined);
+  assert.equal(r.lte(), '0x0000000000000004');
+});
+
+test('MU5252: يتعرّف كموديل لحاله (غير مؤكد ← كرت FULL) ويروح lte_ext_band مباشرة بدون gwl', async () => {
+  const r = router({ gwlInvalid: true, model: 'ZTE TOPFLOW MU5252' });
+  const d = new ZteNgDriver();
+  await d.login('192.168.0.22', 'admin', PW);
+  const p = await d.identify();
+  assert.equal(p.id, 'mu5252');
+  assert.ok(!p.verified);
+  await d.setBand([1, 3], undefined);
+  assert.equal(count(r.log, 'nwinfo_set_gwl_bandlock'), 0);
+  assert.equal(r.lte(), '0x0000000000000005');
 });
