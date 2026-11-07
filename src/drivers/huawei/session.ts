@@ -27,3 +27,22 @@ export function isTokenReply(xml: string): boolean {
 export function isHuaweiSessionReply(xml: string): boolean {
   return hasSesTok(xml) || isTokenReply(xml);
 }
+
+/**
+ * شكل ترويسة set-cookie للتشخيص — بدون القيم: اسم الكوكي وطوله والخصائص (Path/SameSite بقيمها، والباقي أسماء بس).
+ * مثال: «SessionID(128) path=/ HttpOnly SameSite=None» — منها نعرف ليش جرة أندرويد ما تمسك الجلسة.
+ */
+export function cookieShape(sc: string): string {
+  return sc.split(/,(?=\s*[A-Za-z0-9_.-]+=)/).slice(0, 4).map(c => {
+    const [first, ...attrs] = c.split(';').map(x => x.trim()).filter(Boolean);
+    const eq = (first ?? '').indexOf('=');
+    const name = eq > 0 ? first.slice(0, eq) : '?';
+    const len = eq > 0 ? first.length - eq - 1 : 0;
+    const at = attrs.map(a => {
+      const i = a.indexOf('=');
+      const k = (i > 0 ? a.slice(0, i) : a).trim();
+      return /^(path|samesite)$/i.test(k) && i > 0 ? `${k}=${a.slice(i + 1).trim().slice(0, 12)}` : k.slice(0, 16);
+    });
+    return [`${name.slice(0, 24)}(${len})`, ...at].join(' ');
+  }).join(' | ').slice(0, 200);
+}

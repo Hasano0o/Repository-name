@@ -10,7 +10,7 @@ import {
   BandConfig, SmsMessage, DeviceDetails, CellTower, CellLockTarget, CellLockState, DataPlan, ActiveLock,
   ApnProfile, DnsConfig, Carrier, SignalSnapshot, TimeRule, BandRoles } from '../types';
 import { http as rawHttp } from '../http';
-import { hasSesTok, tokenFromReply, isHuaweiSessionReply } from './session';
+import { hasSesTok, tokenFromReply, isHuaweiSessionReply, cookieShape } from './session';
 import { Platform } from 'react-native';
 import { trafficBurst } from '../../utils/nrprobe';
 import { getApnProfiles, setApn, selectApn, getDns, setDns } from './apn-dns';
@@ -172,6 +172,12 @@ export class HuaweiError extends Error {
  */
 const gate = new Map<string, Promise<unknown>>();
 const okAt = new Map<string, { key: string; at: number }>();
+/**
+ * راوترات دخلناها بالأندرويد بالكوكي اليدوي (جرة النظام ترفض كل رمز) — النسخ الجديدة للدرايفر تبدأ فيه على طول.
+ * تقارير ٧ نوفمبر (H168-383 / 5G CPE Ultra 6 وغيره، سامسونج/شاومي/هونر/POCO): كل رمز 125003 — من token ومن SesTokInfo،
+ * قبل وبعد Update-Cookie — يعني الكوكي اللي ترسله جرة أندرويد (CookieManager) مو كوكي الجلسة اللي طلع منها الرمز.
+ */
+const manualHosts = new Set<string>();
 const lockUntil = new Map<string, number>();
 const badPw = new Map<string, { key: string; at: number }>();
 const OK_REUSE_MS = 15_000;
@@ -184,7 +190,7 @@ function lockedError(host: string): HuaweiError {
     `الراوتر قافل الدخول مؤقتاً بسبب محاولات سابقة (108007). انتظر ${mins(left)} دقيقة وجرّب مرة وحدة بس — كل محاولة وهو قافل تمدّد القفل. لو صفحة الراوتر أو تطبيق هواوي مفتوح في جهاز ثاني، سكّره.`);
 }
 /** للاختبارات بس */
-export function _resetHuaweiGate() { gate.clear(); okAt.clear(); lockUntil.clear(); badPw.clear(); }
+export function _resetHuaweiGate() { gate.clear(); okAt.clear(); lockUntil.clear(); badPw.clear(); manualHosts.clear(); }
 /**
  * راوتر ثاني على 192.168.8.1 يرجّع صفحته (HTML) لأي رابط بـ 200 — كنا نحسب الدخول «نجح» والقراءات فاضية
  * (ملف FULL ٣١ أكتوبر ١٢:٣٧: كل /api/* ← 1027 بايت index.html، صفحة layui/jQuery مو هواوي)
@@ -326,11 +332,23 @@ export class HuaweiDriver implements RouterDriver {
     }
   }
   private async http1(url: string, init: RequestInit = {}, timeoutMs?: number): Promise<Response> {
-    if (!this.manualCookie) return rawHttp(url, init, timeoutMs);
+    if (!this.manualCookie) { const r0 = await rawHttp(url, init, timeoutMs); this.noteCookie(r0); return r0; }
     const headers = { ...(init.headers as Record<string, string> | undefined), ...(this.cookie ? { Cookie: this.cookie } : {}) };
+    // credentials: 'omit' ← أندرويد يشيل جرة الكوكيز من الطلب (CookieJar.NO_COOKIES) فما تغطي على ترويسة Cookie حقتنا
     const r = await rawHttp(url, { ...init, headers, credentials: 'omit' } as RequestInit, timeoutMs);
+    this.noteCookie(r);
     this.takeCookie(r);
     return r;
+  }
+  /** شكل set-cookie (الأسماء والخصائص، بدون القيمة) مرة لكل دخول — نعرف منه ليش الجرة ما تمسكه */
+  private cookieNoted = false;
+  private noteCookie(r: Response) {
+    if (this.cookieNoted) return;
+    let sc = '';
+    try { sc = r.headers?.get?.('set-cookie') || ''; } catch {}
+    if (!sc) return;
+    this.cookieNoted = true;
+    diag(`[huawei] set-cookie: ${cookieShape(sc)} · ${this.manualCookie ? 'يدوي' : 'جرة النظام'}`);
   }
   /** جلسة جديدة من الراوتر: SesInfo = الكوكي، TokInfo = الرمز */
   private async sesTok(): Promise<string> {
@@ -544,7 +562,8 @@ export class HuaweiDriver implements RouterDriver {
       await prev.catch(() => {});
       // نسخة ثانية دخلت للتو بنفس الكلمة (جرة الكوكيز المشتركة) ← الجلسة جاهزة، ما نعيد
       const ok = okAt.get(host);
-      if (!this.manualCookie && !this.stale && ok?.key === key && Date.now() - ok.at < OK_REUSE_MS) {
+      // الكوكي اليدوي (الآيفون، أو أندرويد بعد ما رفضت جرته) = جلسة لكل نسخة — ما فيه جلسة مشتركة نستخدمها
+      if (!this.manualCookie && !manualHosts.has(host) && !this.stale && ok?.key === key && Date.now() - ok.at < OK_REUSE_MS) {
         diag('[huawei] نسخة ثانية دخلت للتو بنفس الكلمة — نستخدم نفس الجلسة');
         if (this.host !== host) this.origin = '';
         this.host = host;
@@ -570,7 +589,12 @@ export class HuaweiDriver implements RouterDriver {
       if (gate.get(host) === chain) gate.delete(host);
     }
   }
-  private async loginOnce(host: string, username: string, password: string, opts?: { lastTry?: boolean; fresh?: boolean }): Promise<void> {
+  /** switched: بدّلنا طريقة الكوكي مرة (يدوي ↔ جرة النظام) في هالدخول — ما نبدّل مرة ثانية (ما نلف) */
+  private async loginOnce(host: string, username: string, password: string, opts?: { lastTry?: boolean; fresh?: boolean }, switched = false): Promise<void> {
+    if (!switched) {
+      this.cookieNoted = false;
+      if (Platform.OS === 'android' && manualHosts.has(host) && !this.manualCookie) { this.manualCookie = true; this.cookie = ''; }
+    }
     if (this.host !== host) this.origin = '';
     this.host = host;
     this.queue = [];
@@ -618,19 +642,33 @@ export class HuaweiDriver implements RouterDriver {
     // التحدي ينجح حتى باسم غلط (هواوي ما يكشف الأسماء) وبعدها 108006 — تقارير الآيفون ٦ نوفمبر: التحدي سليم والكوكي ثابت
     const twoAccounts = tag(state, 'accounts_number') === '2';
     try {
-      return await this.loginWith(host, type, state, username, password, opts);
+      await this.loginWith(host, type, state, username, password, opts);
+      if (Platform.OS === 'android' && this.manualCookie) manualHosts.add(host);
+      return;
     } catch (e) {
       // الآيفون: كل طلب يرد 125003 (الرمز من SesTokInfo مع SessionID اللي معه) — H112-370 تقرير add-login ٣١ أكتوبر:
       // challenge_login و user/login كلها 125003 ×٨. الكوكي اليدوي ما ينفع مع هالراوتر ← نعيد الدخول مرة بجرة كوكيز النظام
       // (نفس رجوع net-mode تحت). يصير بس بعد ما تفشل كل محاولات الرمز — اللي يدخل من أول ما يتغيّر عليه شي.
       // 125003 مو محاولة كلمة غلط، فما يقرّب الراوتر من قفل الدخول.
-      if (this.manualCookie && isTokenError(e)) {
+      if (!switched && this.manualCookie && isTokenError(e)) {
         diag('[huawei] الكوكي اليدوي: الرمز ينرفض (125003) — نعيد الدخول بجرة كوكيز النظام');
         this.manualCookie = false;
+        manualHosts.delete(host);
         this.cookie = '';
         this.queue = [];
         this.stale = true;
-        return this.loginOnce(host, username, password, opts);
+        return this.loginOnce(host, username, password, opts, true);
+      }
+      // الأندرويد بالعكس: جرة النظام ترفض كل رمز (125003 من أول طلب لين آخر محاولة — تقارير ٧ نوفمبر) ←
+      // نمسك SessionID بأنفسنا من set-cookie / SesInfo ونرسله بترويسة Cookie (نفس طريقة الآيفون الناجحة).
+      // يصير بس بعد ما تفشل كل محاولات الرمز. 125003 مو محاولة كلمة غلط — ما يقرّب من القفل.
+      if (!switched && !this.manualCookie && Platform.OS === 'android' && isTokenError(e)) {
+        diag('[huawei] أندرويد: جرة الكوكيز ترفض كل رمز (125003) — نعيد الدخول بالكوكي اليدوي');
+        this.manualCookie = true;
+        this.cookie = '';
+        this.queue = [];
+        this.stale = true;
+        return this.loginOnce(host, username, password, opts, true);
       }
       if (samePwd && e instanceof HuaweiError && /^10800[126]$/.test(e.code)) {
         e.message = `الراوتر رفض الكلمة (${e.code}). في هذا الجهاز كلمة الدخول هي نفسها كلمة الواي فاي — جرّب كلمة الواي فاي (اللي تتصل فيها بالشبكة)`;
@@ -706,9 +744,10 @@ export class HuaweiDriver implements RouterDriver {
           try { await this.get('net/net-mode'); } catch (e) {
             if (e instanceof HuaweiError && /^(100003|125002|125003)$/.test(e.code)) {
               this.manualCookie = false;
+              manualHosts.delete(host);
               this.stale = false;
               this.queue = [];
-              return this.loginOnce(host, username, password);
+              return this.loginOnce(host, username, password, undefined, true);
             }
           }
         }
@@ -801,7 +840,8 @@ export class HuaweiDriver implements RouterDriver {
    * قراءة بس — وأي خطأ نتجاهله (الراوترات القديمة تتجاهل الترويسة).
    */
   private async updateCookie() {
-    if (this.manualCookie) return;
+    // الآيفون (يدوي): set-cookie ما يوصل للتطبيق. الأندرويد اليدوي يقراه (takeCookie) ← نطلبها عادي
+    if (this.manualCookie && Platform.OS === 'ios') return;
     try {
       const r = await this.http(this.url('monitoring/status'), { headers: this.headers({ 'Update-Cookie': 'UpdateCookie' }) });
       await r.text();
