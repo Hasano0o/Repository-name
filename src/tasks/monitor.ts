@@ -14,6 +14,7 @@ import { runAutomation } from './automation';
 import { getAutoState } from '../store/automation';
 import { runGuard } from './guard5g';
 import { runHealer } from './healer';
+import { checkGameLock } from '../services/gameLockGuard';
 
 export const MONITOR_TASK = 'bandly-monitor-v1';
 
@@ -136,6 +137,9 @@ export async function runMonitorCheck(): Promise<boolean> {
       }
 
       states[r.id] = next;
+
+      // ═══ «ثبّت للعب» — خلص وقته أو النت طاح عليه ← نرجّع إعداد العضو ═══
+      if (!rebooting && (await checkGameLock(r, online, true).catch(() => null))) fired = true;
 
       // ═══ حارس 5G — يرجّع التلقائي لو التركيبة المثبّتة طيّحت النت ═══
       if (!rebooting && (await runGuard(r, sig, online).catch(() => false))) fired = true;

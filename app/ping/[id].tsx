@@ -17,6 +17,7 @@ import {
   gameScore, scoreWord, scoreLight, diagnose, Diagnosis, Light,
 } from '../../src/utils/latency';
 import { saveProfile } from '../../src/store/profiles';
+import { saveGameLock } from '../../src/store/gameLock';
 import { buildWeekly, weeklyLines } from '../../src/utils/weekly';
 import { Consent, TowerRef, TowerInfo, getConsent, setConsent, currentTower, currentNet, fetchTower, reportTest } from '../../src/services/community';
 import { AreaCompare } from '../../src/ui/AreaCompare';
@@ -434,57 +435,82 @@ export default function GameScreen() {
 
   const applyBest = () => {
     if (!info || !cfg || !best || best.kind === 'base') return;
+    // تثبيت تردد واحد = بدون دمج: أقل بنق وقت القياس، بس بعد ساعات (زحمة الليل) ممكن يعلق عليه والنت يوقف.
+    // فالتثبيت للعب مؤقت افتراضياً، وينفك لحاله لو النت طاح (services/gameLockGuard) — عضو MC801A ٨ نوفمبر
+    const single = best.kind === 'band';
     Alert.alert(
       'ثبّت للعب',
-      `بنطبّق «${best.label}» — درجة ${best.score}/100، بنق ${best.res!.median}ms وتذبذب ${best.res!.jitter}ms.\nإذا صارت الإشارة أسوأ نرجّع تلقائياً.`,
+      `بنطبّق «${best.label}» — درجة ${best.score}/100، بنق ${best.res!.median}ms وتذبذب ${best.res!.jitter}ms.` +
+      (single ? '\n\n⚠️ تردد واحد يعني بدون دمج — السرعة أقل، وبعد ساعات ممكن يعلق. ننصح بساعتين للعب وبعدها نرجّع إعدادك لحالنا.' : '') +
+      '\nولو النت طاح عليه نرجّع إعدادك على طول.',
       [
         { text: 'إلغاء', style: 'cancel' },
-        {
-          text: 'ثبّت', onPress: async () => {
-            setBusy(true);
-            try {
-              const label = `${best.label} للألعاب`;
-              const res = await safeApply({
-                r: info,
-                key: best.kind === 'lteOnly' ? 'mode:lteOnly' : `band:${best.tech}:${best.band}`,
-                label,
-                withNr: best.tech === 'NR',
-                apply: applyTarget(best, cfg),
-                revert: d => (best.kind === 'lteOnly' ? d.setNetworkMode!(cfg.mode) : d.setBand!(cfg.locked, cfg.nrLocked)),
-              });
-              await load(info);
-              const m = trialMessage(res, label);
-              let saved = false;
-              if (res.kept && baseRow?.res) {
-                // نقيس بعد التثبيت على نفس المنطقة اللي قسنا عليها قبل — عشان المقارنة تكون عادلة
-                try {
-                  setStatus('نقيس البنق بعد التثبيت...');
-                  await waitOnline(info, 30000);
-                  const after = await measureUrl(regionUrls(scanRegRef.current), 20);
-                  if (after.samples && mounted.current) {
-                    setCompare({ label: best.label, region: scanRegRef.current.name, before: baseRow.res, bScore: baseRow.score ?? gameScore(baseRow.res), after, aScore: gameScore(after) });
-                  }
-                } catch {} finally { setStatus(''); }
-              }
-              if (res.kept) {
-                try {
-                  const now = await withSession(info, async d => (d.getBandConfig ? d.getBandConfig() : null));
-                  if (now) {
-                    await saveProfile({ routerId: info.id, name: 'وضع الألعاب', bands: now.locked, nrBands: now.nrLocked, mode: now.mode, role: 'game' });
-                    saved = true;
-                  }
-                } catch {}
-              }
-              Alert.alert(m.title, m.body + (saved ? '\n\n🎮 انحفظ كـ«وضع الألعاب» — ترجع له بضغطة من صفحة الراوتر.' : ''));
-            } catch (e: any) {
-              Alert.alert('ما تم', e?.message ?? String(e));
-            } finally {
-              setBusy(false);
-            }
-          },
-        },
+        { text: 'ساعتين (ننصح)', onPress: () => applyBestFor(2) },
+        { text: 'دائم', onPress: () => applyBestFor(null) },
       ],
     );
+  };
+
+  const applyBestFor = async (hours: number | null) => {
+    if (!info || !cfg || !best || best.kind === 'base') return;
+    setBusy(true);
+    try {
+      const label = `${best.label} للألعاب`;
+      const res = await safeApply({
+        r: info,
+        key: best.kind === 'lteOnly' ? 'mode:lteOnly' : `band:${best.tech}:${best.band}`,
+        label,
+        withNr: best.tech === 'NR',
+        apply: applyTarget(best, cfg),
+        revert: d => (best.kind === 'lteOnly' ? d.setNetworkMode!(cfg.mode) : d.setBand!(cfg.locked, cfg.nrLocked)),
+      });
+      await load(info);
+      const m = trialMessage(res, label);
+      let saved = false;
+      if (res.kept && baseRow?.res) {
+        // نقيس بعد التثبيت على نفس المنطقة اللي قسنا عليها قبل — عشان المقارنة تكون عادلة
+        try {
+          setStatus('نقيس البنق بعد التثبيت...');
+          await waitOnline(info, 30000);
+          const after = await measureUrl(regionUrls(scanRegRef.current), 20);
+          if (after.samples && mounted.current) {
+            setCompare({ label: best.label, region: scanRegRef.current.name, before: baseRow.res, bScore: baseRow.score ?? gameScore(baseRow.res), after, aScore: gameScore(after) });
+          }
+        } catch {} finally { setStatus(''); }
+      }
+      if (res.kept) {
+        try {
+          const now = await withSession(info, async d => (d.getBandConfig ? d.getBandConfig() : null));
+          if (now) {
+            await saveProfile({ routerId: info.id, name: 'وضع الألعاب', bands: now.locked, nrBands: now.nrLocked, mode: now.mode, role: 'game' });
+            saved = true;
+          }
+          // نحفظ «تثبيت اللعب» عشان نرجّع إعدادك لما يخلص الوقت أو لو النت طاح عليه
+          await saveGameLock({
+            routerId: info.id,
+            at: Date.now(),
+            until: hours === null ? null : Date.now() + hours * 3600_000,
+            label,
+            kind: best.kind === 'lteOnly' ? 'lteOnly' : 'band',
+            applied: now
+              ? { lte: now.locked, nr: now.nrLocked, mode: now.mode }
+              : best.kind === 'lteOnly' ? { lte: cfg.locked, nr: cfg.nrLocked, mode: LTE_ONLY }
+              : best.tech === 'NR' ? { lte: cfg.locked, nr: [best.band!] } : { lte: [best.band!], nr: cfg.nrLocked },
+            prev: { lte: cfg.locked, nr: cfg.nrLocked, mode: cfg.mode },
+          });
+        } catch {}
+      }
+      const timeNote = res.kept
+        ? hours === null
+          ? '\n\n🔁 لو النت طاح عليه نرجّع إعدادك لحالنا.'
+          : `\n\n⏱ بعد ${hours === 2 ? 'ساعتين' : `${hours} ساعات`} نرجّع إعدادك لحالنا (والدمج يرجع)، ولو النت طاح قبلها نرجّعه على طول.`
+        : '';
+      Alert.alert(m.title, m.body + timeNote + (saved ? '\n\n🎮 انحفظ كـ«وضع الألعاب» — ترجع له بضغطة من صفحة الراوتر.' : ''));
+    } catch (e: any) {
+      Alert.alert('ما تم', e?.message ?? String(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const toggle = (k: string) => {

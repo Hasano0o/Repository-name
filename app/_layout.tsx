@@ -117,7 +117,10 @@ export default function RootLayout() {
       import('../src/services/pendingRecovery').then(m => m.runPendingRecovery()).catch(() => {})
         // «وضع المباراة» خلص وقته ← نرجّع النت للأجهزة اللي وقّفناها
         .then(() => import('../src/services/gameBoost')).then(m => m?.recoverMatches())
-        .then(msg => { if (msg) Alert.alert('✓ رجّعنا النت', msg); }).catch(() => {});
+        .then(msg => { if (msg) Alert.alert('✓ رجّعنا النت', msg); })
+        // «ثبّت للعب» خلص وقته أو النت طاح عليه ← نرجّع إعداد العضو
+        .then(() => import('../src/services/gameLockGuard')).then(m => m?.runGameLockRecovery())
+        .then(msg => { if (msg) Alert.alert('🎮 رجّعنا إعدادك', msg); }).catch(() => {});
     };
     const t = setTimeout(go, 6000);
     const sub = AppState.addEventListener('change', st => { if (st === 'active') setTimeout(go, 3000); });
