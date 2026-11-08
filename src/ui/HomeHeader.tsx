@@ -15,7 +15,7 @@ import { BandChips } from './BandChips';
 import { sheet, EN_MODE } from '../i18n';
 export type HeaderTone = Level | 'down';
 
-export interface HeaderChip { text: string; tone?: 'blue' | 'violet' | 'red' | 'green' }
+export interface HeaderChip { text: string; tone?: 'blue' | 'violet' | 'red' | 'green'; /** لون خاص (شارة الشركة) */ bg?: string }
 
 export interface HomeHeaderProps {
   /** ٠–١ */
@@ -102,7 +102,7 @@ export function HomeHeader(p: HomeHeaderProps) {
             {p.chips.map((c, i) => {
               const k = CHIP[c.tone ?? 'blue'];
               return (
-                <View key={i} style={[s.chip, { backgroundColor: k.bg }]}>
+                <View key={i} style={[s.chip, { backgroundColor: c.bg ?? k.bg }, !!c.bg && s.chipBrand]}>
                   <Text style={[s.chipTxt, { color: k.fg }]} numberOfLines={1}>{c.text}</Text>
                 </View>
               );
@@ -142,6 +142,7 @@ const s = sheet({
   chips: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 5, marginTop: 8 },
   chip: { borderRadius: 7, paddingHorizontal: 8, paddingVertical: 2 },
   chipTxt: { fontSize: 11.5, fontWeight: '500' },
+  chipBrand: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.55)' },
   bands: { marginTop: 6, alignSelf: 'stretch', alignItems: 'flex-end' },
   btns: { gap: 8 },
   btn: { width: 54, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 1 },

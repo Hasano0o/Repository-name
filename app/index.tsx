@@ -9,6 +9,8 @@ import { withSession } from '../src/store/sessions';
 import { Carrier, Signal } from '../src/drivers/types';
 import { bandChips } from '../src/utils/bandChips';
 import { BandChips } from '../src/ui/BandChips';
+import { OperatorBadge } from '../src/ui/OperatorBadge';
+import { brandOf, brandColor } from '../src/utils/operatorBrand';
 import { Icon, IconName } from '../src/ui/Icon';
 import { SkeletonRouterCard, EmptyState } from '../src/ui/States';
 import { overallLevel, isNoService, signalScore, scoreLevel, LEVEL_LABEL } from '../src/utils/signal';
@@ -228,7 +230,7 @@ export default function RoutersList() {
       const score = signalScore(sig);
       const nr = sig.nrRsrp !== undefined || !!sig.nrBand;
       const bands = bandChips(best.carriers, sig);
-      if (best.operator) chips.push({ text: best.operator });
+      if (best.operator) chips.push({ text: brandOf(best.operator).label, bg: brandColor(best.operator) });
       chips.push({ text: nr ? '5G' : '4G', tone: 'violet' });
       if (items.length > 1) chips.push({ text: `${live.length} من ${items.length} متصل`, tone: 'green' });
       if (down) chips.push({ text: `${down} بلا شبكة`, tone: 'red' });
@@ -308,9 +310,10 @@ export default function RoutersList() {
                     <Text style={[s.slimLine, { color: tone }]} numberOfLines={1}>{line}</Text>
                   </View>
                   {!st?.error && !noService && chipsOf.length > 0 && <BandChips chips={chipsOf} />}
-                  <Text style={s.metaTxt} numberOfLines={1}>
-                    {[hostLabel(item.host), st?.operator].filter(Boolean).join('  ·  ')}
-                  </Text>
+                  <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6, maxWidth: '100%' }}>
+                    {!!st?.operator && <OperatorBadge name={st.operator} small />}
+                    <Text style={[s.metaTxt, { flexShrink: 1 }]} numberOfLines={1}>{hostLabel(item.host)}</Text>
+                  </View>
                 </View>
                 <View style={{ gap: 6, alignItems: 'center' }}>
                   <Pressable style={s.iconBtnSm} onPress={() => edit(item.id)} hitSlop={6}>

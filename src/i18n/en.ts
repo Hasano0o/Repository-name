@@ -49,6 +49,9 @@ export const EN: Record<string, string> = {
 
   // ═══ المشغّلين والمدن ═══
   'زين': 'Zain',
+  'سلام': 'Salam',
+  'فيرجن': 'Virgin',
+  'ليبارا': 'Lebara',
   'موبايلي': 'Mobily',
   'هواوي': 'Huawei',
   'شاومي': 'Xiaomi',

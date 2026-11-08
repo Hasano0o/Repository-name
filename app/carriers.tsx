@@ -13,6 +13,7 @@ import {
 import { C, tFg } from '../src/ui/theme';
 import { GlassCard } from '../src/ui/GlassCard';
 import { sheet } from '../src/i18n';
+import { brandColor, brandOf } from '../src/utils/operatorBrand';
 
 const CAT: Record<CarrierCat, { icon: string; label: string }> = {
   down: { icon: '⬇️', label: 'أسرع تنزيل' },
@@ -22,7 +23,6 @@ const CAT: Record<CarrierCat, { icon: string; label: string }> = {
   night_ping: { icon: '🌙', label: 'الأفضل بالليل' },
   nr_pct: { icon: '📶', label: 'أكثر 5G' },
 };
-const OP_COLOR: Record<string, string> = { 'STC': '#4f2d7f', 'موبايلي': '#0d7fc6', 'زين': '#1f9e63', 'سلام': '#e0a100' };
 const num = (v: number | null, u = '') => (v === null || v === undefined ? '—' : `${Math.round(v * 10) / 10}${u}`);
 
 export default function Carriers() {
@@ -114,10 +114,10 @@ export default function Carriers() {
       {!loading && board && !editing && (
         <>
           {board.winner ? (
-            <View style={[s.winner, { borderColor: tFg(OP_COLOR[board.winner] ?? C.green) }]}>
+            <View style={[s.winner, { borderColor: tFg(brandColor(board.winner)) }]}>
               <Text style={s.trophy}>🏆</Text>
               <View style={{ flex: 1 }}>
-                <Text style={s.winTitle}>الأفضل في {where}: {board.winner}</Text>
+                <Text style={s.winTitle}>الأفضل في {where}: {brandOf(board.winner).label || board.winner}</Text>
                 <Text style={s.winSub}>فاز بأكثر الفئات من {board.users} عضو قاسوا آخر ٦٠ يوم</Text>
               </View>
             </View>
@@ -150,12 +150,12 @@ export default function Carriers() {
 }
 
 function OpCard({ o, min }: { o: CarrierStat; min: number }) {
-  const col = tFg(OP_COLOR[o.operator] ?? C.blue);
+  const col = tFg(brandColor(o.operator));
   return (
     <View style={[s.op, { borderColor: o.enough ? col + '66' : C.cardBorder }, !o.enough && { opacity: 0.6 }]}>
       <View style={s.opHead}>
         <Text style={s.opUsers}>{o.users} {o.users > 2 ? 'أعضاء' : 'عضو'}</Text>
-        <Text style={[s.opName, { color: col }]}>{o.operator}{o.mine ? ' · شريحتك' : ''}</Text>
+        <Text style={[s.opName, { color: col }]}>{brandOf(o.operator).label || o.operator}{o.mine ? ' · شريحتك' : ''}</Text>
       </View>
       {o.wins.length > 0 && (
         <View style={s.badges}>

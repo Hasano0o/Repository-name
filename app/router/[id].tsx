@@ -36,6 +36,7 @@ import { StoreAd } from '../../src/ui/StoreAd';
 import { TechStrip } from '../../src/ui/TechStrip';
 import { ComboCard } from '../../src/ui/ComboCard';
 import { BandChips } from '../../src/ui/BandChips';
+import { OperatorBadge } from '../../src/ui/OperatorBadge';
 import { bandChips } from '../../src/utils/bandChips';
 import { TempCard } from '../../src/ui/TempCard';
 import { ModemsCard } from '../../src/ui/ModemsCard';
@@ -827,7 +828,7 @@ export default function RouterDashboard() {
             </View>
             <View style={s.topLine}>
               <Text style={s.topName} numberOfLines={1}>{info.name}</Text>
-              {!!details?.operator && <Text style={s.topSub} numberOfLines={1}>{details.operator}</Text>}
+              <OperatorBadge name={details?.operator} onHero small />
             </View>
           </LinearGradient>
         )}
@@ -1199,7 +1200,7 @@ const s = sheet({
   statusOff: { backgroundColor: C.redSoft, borderColor: C.cardBorder },
   statusText: { fontWeight: '800', fontSize: 12 },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
-  topLine: { flex: 1, flexDirection: 'row-reverse', alignItems: 'baseline', gap: 8, minWidth: 0 },
+  topLine: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: 8, minWidth: 0 },
   topName: { color: tFg('#fff'), fontSize: 15, fontWeight: '800', textAlign: 'right', flexShrink: 1 },
   topSub: { color: tFg('rgba(255,255,255,0.85)'), fontSize: 12.5, fontWeight: '600', textAlign: 'right' },
   heroHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
