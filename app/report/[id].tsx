@@ -17,6 +17,7 @@ import { Icon } from '../../src/ui/Icon';
 import { GlassCard } from '../../src/ui/GlassCard';
 
 import { sheet } from '../../src/i18n';
+import { brandOf } from '../../src/utils/operatorBrand';
 export default function ReportScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [input, setInput] = useState<ReportInput | null>(null);
@@ -122,7 +123,7 @@ export default function ReportScreen() {
               <Text style={[s.gradeDot, { color: cardColor }]}>●</Text>
               <Text style={[s.gradeTxt, { color: cardColor }]}>{sum.headline}</Text>
             </View>
-            <Text style={s.shotRouter}>{input.routerName}{input.net?.operator ? ` · ${input.net.operator}` : ''}</Text>
+            <Text style={s.shotRouter}>{input.routerName}{input.net?.operator ? ` · ${brandOf(input.net.operator).label}` : ''}</Text>
 
             <View style={s.shotMetrics}>
               <View style={s.shotMetric}>
