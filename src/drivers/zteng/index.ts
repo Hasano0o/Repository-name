@@ -670,6 +670,29 @@ export class ZteNgDriver implements RouterDriver {
   }
   private modemsLogged = false;
 
+  /**
+   * تشغيل/إطفاء شريحة 4G إضافية — نفس زر صفحتهم (mobile_network.js setV3t1Switch → setV3tSwitch):
+   *   zwrt_mc.device.manager.device_tsp_lpr_flight_mode_set {moduleName:"web", action, parameter:"V3E1"|"V3E2"}
+   *   action = وضع الطيران حق المودم: "off" = الشريحة تشتغل · "on" = تنطفي (الصفحة: action = e.action ? "off" : "on")
+   * نتأكد بالقراءة (V3E*_lpr_flight_status) لين ١٢ ثانية.
+   */
+  async setModemPower(key: string, on: boolean): Promise<void> {
+    const n = key === 'v3t1' ? 1 : key === 'v3t2' ? 2 : 0;
+    if (!n) throw noChange('شريحة مو معروفة');
+    const p = `V3E${n}`;
+    const want = on ? 'off' : 'on';
+    await this.write('zwrt_mc.device.manager', 'device_tsp_lpr_flight_mode_set', { moduleName: 'web', action: want, parameter: p });
+    diag(`[zte-ng] شريحة 4G ${n} ← ${on ? 'تشغيل' : 'إطفاء'} (انقبل)`);
+    for (let i = 0; i < 6; i++) {
+      await new Promise(res => setTimeout(res, i ? 2000 : 800));
+      try {
+        const f = await this.call('zwrt_mc.device.manager', 'get_device_info', { deviceInfoList: [`${p}_lpr_flight_status`] });
+        if (str(f[`${p}_lpr_flight_status`]) === want) { diag(`[zte-ng] شريحة 4G ${n}: تأكدنا ✓`); return; }
+      } catch {}
+    }
+    throw new Error(`الراوتر قبل الأمر بس ما تأكدنا إن شريحة 4G ${n} ${on ? 'اشتغلت' : 'انطفت'} — حدّث الصفحة بعد شوي`);
+  }
+
   async getTemps(): Promise<DeviceTemp[]> {
     try {
       const t = await this.call('zwrt_bsp.thermal', 'get_cpu_temp', {});

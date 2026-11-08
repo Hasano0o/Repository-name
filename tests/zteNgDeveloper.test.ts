@@ -38,6 +38,7 @@ function router(opts: { devPw?: string; httpsOnly?: boolean; model?: string; gwl
   const dev = new Set<string>();
   const log: string[] = [];
   let lte = '', nr = '', netSelect = 'WL_AND_5G';
+  const flight: Record<string, string> = { V3E1: 'off', V3E2: 'off' };
   const devPw = opts.devPw ?? PW;
   const res = (body: unknown) => ({ ok: true, status: 200, headers: { get: () => null }, json: async () => body, text: async () => JSON.stringify(body) } as any);
   (globalThis as any).fetch = async (url: string, init?: any) => {
@@ -87,7 +88,8 @@ function router(opts: { devPw?: string; httpsOnly?: boolean; model?: string; gwl
       msim_2_1_network_type: 'LTE', msim_2_1_wan_active_band: 'LTE BAND 20', msim_2_1_wan_active_channel: '6350', msim_2_1_lte_pci: '180', msim_2_1_cell_id: '128013569', msim_2_1_lte_rsrp: '-82', msim_2_1_lte_rsrq: '-11', msim_2_1_ecio: '6.0', msim_2_1_lte_rssi: '-49',
     }) : ok({});
     if (method === 'get_v3t_sim_info') return ok({ v3t_1_st_slot: '0', v3t_2_st_slot: '1' });
-    if (method === 'get_device_info' && Array.isArray(p.deviceInfoList)) return ok({ V3E1_lpr_flight_status: 'off', V3E2_lpr_flight_status: 'off' });
+    if (method === 'get_device_info' && Array.isArray(p.deviceInfoList)) return ok({ V3E1_lpr_flight_status: flight.V3E1, V3E2_lpr_flight_status: flight.V3E2 });
+    if (method === 'device_tsp_lpr_flight_mode_set') { if (p.moduleName !== 'web' || !/^V3E[12]$/.test(p.parameter) || !/^(on|off)$/.test(p.action)) return res([{ jsonrpc: '2.0', id: 1, result: [2] }]); flight[p.parameter] = p.action; return ok({ result: 'success' }); }
     if (method === 'router_get_user_list_num') return ok({ access_total_num: 3, lan_num: 1, wireless_num: 2 });
     if (method === 'router_wireless_access_list') return ok({ wireless_access_list_info: p.start_id === 1 ? [
       { mac_address: 'aa:bb:cc:00:00:01', ip_address: '192.168.0.100', hostname: 'iPhone' },
@@ -99,7 +101,7 @@ function router(opts: { devPw?: string; httpsOnly?: boolean; model?: string; gwl
     if (method === 'nwinfo_set_netselect') { netSelect = p.net_select; return ok({ result: 'success' }); }
     return ok({});
   };
-  return { log, lte: () => lte, nr: () => nr, mode: () => netSelect };
+  return { log, lte: () => lte, nr: () => nr, mode: () => netSelect, flight: () => flight };
 }
 
 const { ZteNgDriver } = require('../src/drivers/zteng/index');
@@ -274,4 +276,15 @@ test('راوتر بشريحة وحدة: ما فيه msim_ ← [] (البطاقة
   const d = new ZteNgDriver();
   await d.login('192.168.0.31', 'admin', PW);
   assert.deepEqual(await d.getModems(), []);
+});
+
+test('MU5252 تشغيل/إطفاء شريحة 4G: device_tsp_lpr_flight_mode_set (طفّ = action "on" مثل صفحتهم) + تأكد بالقراءة', async () => {
+  const r = router(MU5252);
+  const d = new ZteNgDriver();
+  await d.login('192.168.0.32', 'admin', PW);
+  await d.setModemPower('v3t2', false);
+  assert.ok(r.log.includes('device_tsp_lpr_flight_mode_set'));
+  assert.equal(r.flight().V3E2, 'on');
+  await d.setModemPower('v3t2', true);
+  assert.equal(r.flight().V3E2, 'off');
 });

@@ -33,3 +33,14 @@ test('FULL: البصمة = الموديل + الفيرموير — فيرموي�
   assert.ok(a !== fullDumpFingerprint('mc801a', 'BD_MC801AV1.0.0B06'));
   assert.equal(fullDumpFingerprint('zyxel'), 'zyxel|');
 });
+
+test('الكرت بس للأجهزة الجديدة: ملفاته عندنا (البصمة أو الموديل) ← يختفي · موديل عام بالبصمة بس · السيرفر ما رد ← يختفي', async () => {
+  const { fullDumpKnown } = await import('../src/services/fullDumpRule');
+  const known = { fps: ['zte-ng|BD_MU5252V1.0'], models: ['dlink', 'mc801a', 'zte-ng'] };
+  assert.equal(fullDumpKnown('zte-ng|BD_MU5252V1.0', 'zte-ng', known), true);
+  assert.equal(fullDumpKnown('mc801a|B15', 'mc801a', known), true);
+  assert.equal(fullDumpKnown('dlink|', 'dlink', known), true);
+  assert.equal(fullDumpKnown('zte-ng|OTHER', 'zte-ng', known), false);
+  assert.equal(fullDumpKnown('tplink|', 'tplink', known), false);
+  assert.equal(fullDumpKnown('tplink|', 'tplink', null), true);
+});

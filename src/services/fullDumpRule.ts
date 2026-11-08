@@ -15,3 +15,15 @@ export function fullDumpEligible(driverId: string, prof: ModelProfile | null, hu
 export function fullDumpFingerprint(modelId: string, software?: string): string {
   return `${modelId}|${String(software ?? '').trim()}`;
 }
+
+/** موديلات عامة يتشاركها أكثر من جهاز — ما نخفي الكرت بالموديل لحاله (بالبصمة بس) */
+const GENERIC = new Set(['zte', 'zte-ng', 'huawei', 'unknown']);
+/**
+ * ملفات هالراوتر عندنا من قبل؟ (السيرفر يقرا router.txt من كل zip FULL — /live-api/community/full-known)
+ * known = null (السيرفر ما رد) ← نعتبرها عندنا: ما نزعج العضو بالكرت على الفاضي.
+ */
+export function fullDumpKnown(fp: string, modelKey: string, known: { fps: string[]; models: string[] } | null): boolean {
+  if (!known) return true;
+  if (known.fps.includes(fp)) return true;
+  return !GENERIC.has(modelKey) && known.models.includes(modelKey);
+}

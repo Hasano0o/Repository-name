@@ -301,6 +301,8 @@ export interface RouterDriver {
    * الشريحة الأساسية تبقى في getSignal؛ هنا الباقي. التحكم (ترددات/أبراج) للأساسية بس.
    */
   getModems?(): Promise<ModemSignal[]>;
+  /** تشغيل/إطفاء مودم إضافي (key من getModems) — يتأكد بالقراءة بعده */
+  setModemPower?(key: string, on: boolean): Promise<void>;
   getDevices?(): Promise<ConnectedDevice[]>;
   getBlockedDevices?(): Promise<ConnectedDevice[]>;
   blockDevice?(mac: string, block: boolean, name?: string): Promise<void>;

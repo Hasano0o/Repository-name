@@ -4,7 +4,8 @@
  * التحكم (الترددات/الأبراج/المحسّن) للشريحة الأساسية بس — نقولها بصراحة تحت.
  */
 import { useCallback, useRef, useState } from 'react';
-import { View, Text } from '../i18n/rn';
+import { View, Text, Pressable } from '../i18n/rn';
+import { Alert, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { SavedRouter } from '../store/routers';
 import { withSession } from '../store/sessions';
@@ -19,11 +20,14 @@ const col = (rsrp?: number) => rsrp === undefined ? C.sub : rsrp >= -80 ? '#12b7
 
 export function ModemsCard({ r }: { r: SavedRouter }) {
   const [list, setList] = useState<ModemSignal[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState('');
   const alive = useRef(true);
+  const canPower = useRef(false);
 
   useFocusEffect(useCallback(() => {
     alive.current = true;
-    const load = () => withSession(r, async d => (d.getModems ? d.getModems() : []))
+    const load = () => withSession(r, async d => { canPower.current = !!d.setModemPower; return d.getModems ? d.getModems() : []; })
       .catch(() => [] as ModemSignal[])
       .then(l => { if (alive.current) setList(l); });
     load();
@@ -32,6 +36,32 @@ export function ModemsCard({ r }: { r: SavedRouter }) {
   }, [r]));
 
   if (!list || list.length === 0) return null;
+
+  const toggle = (m: ModemSignal) => {
+    const on = !!m.off;
+    Alert.alert(
+      on ? `تشغيل ${m.label}؟` : `إطفاء ${m.label}؟`,
+      on ? 'الراوتر يرجع يدمجها مع باقي الشرايح.'
+        : 'الراوتر يوقف هالشريحة ويكمّل بالباقي — جرّب السرعة بعدها وقارن. تقدر ترجّعها من نفس الزر.',
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: on ? 'شغّلها' : 'طفّها', style: on ? 'default' : 'destructive',
+          onPress: async () => {
+            setBusy(m.key); setNote('');
+            try {
+              await withSession(r, d => d.setModemPower!(m.key, on), false);
+              setNote(`✓ ${m.label} ${on ? 'اشتغلت' : 'انطفت'}`);
+              const l = await withSession(r, d => d.getModems!()).catch(() => null);
+              if (l && alive.current) setList(l);
+            } catch (e: any) {
+              setNote(String(e?.message ?? e).slice(0, 140));
+            } finally { if (alive.current) setBusy(null); }
+          },
+        },
+      ],
+    );
+  };
 
   return (
     <View style={s.card}>
@@ -51,6 +81,12 @@ export function ModemsCard({ r }: { r: SavedRouter }) {
                 <Text style={s.band}>B{m.band}{bandFreq(m.band) ? ` · ${bandFreq(m.band)}` : ''}{m.earfcn ? ` · ${m.earfcn}` : ''}</Text>
               )}
             </View>
+            {canPower.current && (
+              <Pressable disabled={!!busy} onPress={() => toggle(m)}
+                style={[s.pw, { borderColor: m.off ? '#12b76a88' : C.cardBorder }, !!busy && { opacity: 0.5 }]}>
+                {busy === m.key ? <ActivityIndicator size="small" color={C.blue} /> : <Text style={[s.pwTxt, { color: m.off ? '#12b76a' : C.sub }]}>{m.off ? 'شغّل' : 'طفّ'}</Text>}
+              </Pressable>
+            )}
             {m.rsrp !== undefined && !m.off && (
               <View style={s.vals}>
                 <View style={s.cell}><Text style={[s.val, { color: c }]}>{m.rsrp}</Text><Text style={s.lbl}>RSRP</Text></View>
@@ -62,7 +98,8 @@ export function ModemsCard({ r }: { r: SavedRouter }) {
           </View>
         );
       })}
-      <Text style={s.note}>التحكم (الترددات والأبراج والمحسّن) للشريحة الأساسية بس</Text>
+      {!!note && <Text style={[s.note, { color: note.startsWith('✓') ? '#12b76a' : '#e5484d' }]}>{note}</Text>}
+      <Text style={s.note}>تثبيت الترددات والأبراج والمحسّن للشريحة الأساسية بس — راوترك ما يسمح بتثبيت ترددات الشرايح الثانية</Text>
     </View>
   );
 }
@@ -87,5 +124,7 @@ const s = sheet({
   cell: { flex: 1, alignItems: 'center' },
   val: { color: C.text, fontSize: 14, lineHeight: 18, fontFamily: FONT.numHeavy, includeFontPadding: false },
   lbl: { color: C.sub, fontSize: 9, fontWeight: '700' },
+  pw: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, minWidth: 44, alignItems: 'center' },
+  pwTxt: { fontSize: 11.5, fontWeight: '900' },
   note: { color: C.sub, fontSize: 10, fontWeight: '700', textAlign: 'right' },
 });

@@ -479,3 +479,52 @@ async def carriers(city: str = "", area: str = "", device: str = ""):
         city_res = rank_carriers(*_carrier_rows(c, "area=? OR area LIKE ?", [ct, ct + "/%"]), me)
         area_res = rank_carriers(*_carrier_rows(c, "area=?", [ar]), me) if "/" in ar else None
     return {"city": ct, "area": ar if area_res else "", "city_stats": city_res, "area_stats": area_res}
+
+
+# ═══ ملفات FULL اللي وصلتنا (٨ نوفمبر) ═══
+# كرت «أرسل ملفات راوتري للمطوّر» كان يطلع لكل راوتر غير مؤكد حتى لو ملفاته عندنا من قبل.
+# هنا نقرا router.txt داخل كل zip FULL (dumps + الأرشيف) ونرجّع البصمات والموديلات — التطبيق يخفي الكرت لو موجود.
+_DUMP_DIRS = [Path(__file__).resolve().parent / "data" / "dumps", Path("/root/bandly-archive/dumps")]
+_known_cache: dict = {"key": None, "val": None}
+
+
+def _known_full() -> dict:
+    import zipfile
+    zips = []
+    for d in _DUMP_DIRS:
+        try:
+            zips += [p for p in d.glob("*FULL*.zip")]
+        except Exception:
+            pass
+    key = (len(zips), max((p.stat().st_mtime for p in zips), default=0))
+    if _known_cache["key"] == key and _known_cache["val"] is not None:
+        return _known_cache["val"]
+    fps: set[str] = set()
+    models: set[str] = set()
+    for p in zips:
+        try:
+            with zipfile.ZipFile(p) as z:
+                n = next((x for x in z.namelist() if x.endswith("_bandly/router.txt")), None)
+                if not n:
+                    continue
+                kv = {}
+                for line in z.read(n).decode("utf-8", "ignore").splitlines():
+                    if ":" in line:
+                        k, v = line.split(":", 1)
+                        kv[k.strip()] = v.strip()
+        except Exception:
+            continue
+        if kv.get("fingerprint"):
+            fps.add(kv["fingerprint"])
+        prof = kv.get("profile", "")
+        m = prof if prof and prof != "—" else kv.get("driver", "")
+        if m:
+            models.add(m)
+    val = {"fps": sorted(fps), "models": sorted(models)}
+    _known_cache.update(key=key, val=val)
+    return val
+
+
+@router.get("/full-known")
+def full_known():
+    return _known_full()

@@ -13,7 +13,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { RouterDriver } from '../drivers/types';
 import { MODELS, ModelProfile } from '../drivers/models';
 import { diagText } from './errors';
-import { fullDumpEligible, fullDumpFingerprint } from './fullDumpRule';
+import { fullDumpEligible, fullDumpFingerprint, fullDumpKnown } from './fullDumpRule';
+import { LIVE_BASE } from './live';
 
 /** راوتر واحد (زر صفحة الراوتر) — null = درايفره ما يحتاج شي */
 export async function sendAfterLoginPagesFor(r: SavedRouter, onStep?: (msg: string) => void): Promise<string | null> {
@@ -68,7 +69,27 @@ export async function fullDumpNeeded(r: SavedRouter, d: RouterDriver): Promise<s
   const fp = fullDumpFingerprint(prof?.id ?? r.driverId, soft);
   let sent: string | null = null;
   try { sent = await AsyncStorage.getItem(FULL_KEY(r.id)); } catch {}
-  return sent === fp ? null : fp;
+  if (sent === fp) return null;
+  // ملفاته وصلتنا من عضو ثاني؟ ← ما نطلب مرة ثانية (قرار حسن ٨ نوفمبر: الكرت بس للأجهزة الجديدة)
+  if (fullDumpKnown(fp, prof?.id ?? r.driverId, await fetchFullKnown())) return null;
+  return fp;
+}
+
+let knownCache: { at: number; v: { fps: string[]; models: string[] } | null } | null = null;
+async function fetchFullKnown(): Promise<{ fps: string[]; models: string[] } | null> {
+  if (knownCache && Date.now() - knownCache.at < 10 * 60_000) return knownCache.v;
+  let v: { fps: string[]; models: string[] } | null = null;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 5000);
+  try {
+    const r = await fetch(`${LIVE_BASE}/live-api/community/full-known`, { signal: ctrl.signal });
+    if (r.ok) {
+      const j: any = await r.json();
+      if (Array.isArray(j?.fps) && Array.isArray(j?.models)) v = { fps: j.fps.map(String), models: j.models.map(String) };
+    }
+  } catch {} finally { clearTimeout(t); }
+  knownCache = { at: Date.now(), v };
+  return v;
 }
 
 export async function sendFullRouterFiles(r: SavedRouter, fp: string, onStep?: (msg: string) => void): Promise<string> {
