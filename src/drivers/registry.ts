@@ -14,6 +14,7 @@ import { DlinkDriver } from './dlink';
 import { InseegoDriver } from './inseego';
 import { HuaweiOntDriver } from './hgont';
 import { Fg360Driver } from './fg360';
+import { M2aDriver } from './m2a';
 import { UnknownDriver } from './unknown';
 import { DeviceDriver } from './device';
 import { DemoDriver } from './demo';
@@ -57,6 +58,8 @@ const factories: (() => RouterDriver)[] = [
   () => new InseegoDriver(),
   // هواوي فايبر (ONT: DG8245V · HG8245 · LG8245X6) — /login.cgi بكلمة base64. الدخول + FULL بس للحين (٧ نوفمبر)
   () => new HuaweiOntDriver(),
+  // جيب M2A-77 (٨ نوفمبر): بصمته ipaddr.js بمنفذ الأوامر — قبل Unknown
+  () => new M2aDriver(),
   () => new UnknownDriver(),
 ];
 
