@@ -237,3 +237,17 @@ test('الأجهزة المتصلة: واي فاي (router_wireless_access_list)
   assert.equal(l[1].name, undefined);
   assert.equal(l[2].ip, '192.168.0.102');
 });
+
+test('MU5252 الشريحة الأساسية (5G) مطفية: netinfo بدون خانات الإشارة ← التعرّف ينجح من بصمة الدخول (كان «ما يتعرّف»)', async () => {
+  router(MU5252);
+  const f0 = (globalThis as any).fetch;
+  (globalThis as any).fetch = async (u: string, init?: any) => {
+    if (/nwinfo_get_netinfo/.test(String(init?.body))) return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify([{ jsonrpc: '2.0', id: 1, result: [0, { net_select: 'WL_AND_5G' }] }]), json: async () => [{ jsonrpc: '2.0', id: 1, result: [0, { net_select: 'WL_AND_5G' }] }] };
+    if (/web_language_get/.test(String(init?.body))) throw new Error('nope');
+    return f0(u, init);
+  };
+  try {
+    const d = new ZteNgDriver();
+    assert.equal(await d.detect('192.168.0.29'), true);
+  } finally { (globalThis as any).fetch = f0; }
+});

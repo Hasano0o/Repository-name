@@ -139,10 +139,12 @@ export class ZteNgDriver implements RouterDriver {
     this.host = host;
     try {
       const info = await this.call('zte_nwinfo_api', 'nwinfo_get_netinfo', {}, ZERO);
-      return typeof info === 'object' && ('network_type' in info || 'lte_rsrp' in info || 'nr5g_rsrp' in info);
-    } catch {
-      try { await this.call('zwrt_web', 'web_language_get', {}, ZERO); return true; } catch { return false; }
-    }
+      if (typeof info === 'object' && ('network_type' in info || 'lte_rsrp' in info || 'nr5g_rsrp' in info)) return true;
+    } catch {}
+    // MU5252 بثلاث شرايح (٨ نوفمبر): لو الشريحة الأساسية (5G) مطفية، netinfo يرجع بدون خانات الإشارة —
+    // كان التعرّف يفشل («الراوتر ما يتعرّف»). الراوتر نفسه يرد: بصمة دخول ZTE (zte_web_sault) أو اللغة.
+    try { const li = await this.call('zwrt_web', 'web_login_info', {}, ZERO); if (str(li.zte_web_sault)) return true; } catch {}
+    try { await this.call('zwrt_web', 'web_language_get', {}, ZERO); return true; } catch { return false; }
   }
 
   async login(host: string, _u: string, password: string, opts?: { lastTry?: boolean; fresh?: boolean }): Promise<void> {
