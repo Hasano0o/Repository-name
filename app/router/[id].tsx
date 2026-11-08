@@ -36,6 +36,7 @@ import { StoreAd } from '../../src/ui/StoreAd';
 import { TechStrip } from '../../src/ui/TechStrip';
 import { ComboCard } from '../../src/ui/ComboCard';
 import { TempCard } from '../../src/ui/TempCard';
+import { ModemsCard } from '../../src/ui/ModemsCard';
 import { canRescue, rescueRouter, freeRelease, restoreSavedSettings } from '../../src/utils/safeLock';
 import { getReleaseSnap, clearReleaseSnap } from '../../src/store/lockSnap';
 import type { LockSnapshot } from '../../src/drivers/lockSnapshot';
@@ -960,6 +961,7 @@ export default function RouterDashboard() {
         {!loading && info && (
           <>
             {feat.bands && <ComboCard r={info} />}
+            <ModemsCard r={info} />
             <TempCard r={info} />
             {/* الذكي فوق: المساعد يسوي كل شي عنك — وبعدها الأدوات اليدوية */}
             <GroupTitle title="خلّ Bandly يسويها عنك" color={tFg('#7c5cff')} />

@@ -17,7 +17,7 @@ import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import {
   RouterDriver, Capability, Signal, Carrier, SignalSnapshot, NetworkInfo, CellTower, DeviceTemp,
-  Traffic, Usage, BandConfig, ActiveLock, CellLockState, DeviceDetails, WifiRadio, ConnectedDevice,
+  Traffic, Usage, BandConfig, ActiveLock, CellLockState, DeviceDetails, WifiRadio, ConnectedDevice, ModemSignal,
 } from '../types';
 import { http } from '../http';
 import { noChange } from '../noChange';
@@ -623,6 +623,52 @@ export class ZteNgDriver implements RouterDriver {
     if (!out.length && total > 0) throw new Error(`الراوتر يقول ${total} أجهزة بس ما أعطانا القائمة`);
     return out;
   }
+
+  /**
+   * الشرايح الإضافية — نفس صفحة «معلومات الجهاز» في MU5252 (network_info.js، FULL ٨ نوفمبر):
+   *   zte_nwinfo_api.nwinfo_get_msim_netinfo ← msim_<n>_<slot>_* (n = 1 أو 2 = «SIM (4G1)» / «SIM (4G2)»)
+   *   الخانة (slot) من zwrt_zte_mdm.api.get_v3t_sim_info ← v3t_<n>_st_slot ("0" ← _0، غيره ← _1)
+   *   مطفي؟ get_device_info {deviceInfoList:[V3E1_lpr_flight_status, V3E2_…]} = "on"
+   * SINR في صفحتهم من ecio (signalFormat_sinr(e.ecio)) — ناخذه وإلا lte_snr.
+   * راوتر بشريحة وحدة ← الرد بدون msim_ ← [] (البطاقة ما تطلع).
+   */
+  async getModems(): Promise<ModemSignal[]> {
+    let m: Record<string, unknown>;
+    try { m = await this.authRead(() => this.call('zte_nwinfo_api', 'nwinfo_get_msim_netinfo', {})); }
+    catch { return []; }
+    if (!Object.keys(m).some(k => /^msim_\d_\d_/.test(k))) return [];
+    let slots: Record<string, unknown> = {};
+    try { slots = await this.call('zwrt_zte_mdm.api', 'get_v3t_sim_info', {}); } catch {}
+    let fl: Record<string, unknown> = {};
+    try { fl = await this.call('zwrt_mc.device.manager', 'get_device_info', { deviceInfoList: ['V3E1_lpr_flight_status', 'V3E2_lpr_flight_status'] }); } catch {}
+    const out: ModemSignal[] = [];
+    for (const n of [1, 2]) {
+      const st = str(slots[`v3t_${n}_st_slot`]);
+      const pre = `msim_${n}_${st === '' || st === '0' ? 0 : 1}_`;
+      const g = (k: string) => m[pre + k];
+      const net = str(g('network_type'));
+      const off = str(fl[`V3E${n}_lpr_flight_status`]) === 'on';
+      // راوتر بمودم واحد ممكن يرجّع الخانات فاضية — ما نعرض شريحة ما لها أي أثر
+      if (!net && neg(g('lte_rsrp')) === undefined && !(off && str(fl[`V3E${n}_lpr_flight_status`]))) continue;
+      const noSvc = /no.?service|limited/i.test(net);
+      const rsrp = noSvc ? undefined : neg(g('lte_rsrp'));
+      out.push({
+        key: `v3t${n}`, label: `شريحة 4G ${n}`, off: off || undefined,
+        network: net || undefined,
+        band: rsrp !== undefined ? bandNum(g('wan_active_band')) : undefined,
+        earfcn: rsrp !== undefined ? int(g('wan_active_channel')) : undefined,
+        pci: rsrp !== undefined ? int(g('lte_pci')) : undefined,
+        cellId: rsrp !== undefined ? (str(g('cell_id')) || undefined) : undefined,
+        rsrp,
+        rsrq: rsrp !== undefined ? num(g('lte_rsrq')) : undefined,
+        sinr: rsrp !== undefined ? (num(g('ecio')) ?? num(g('lte_snr'))) : undefined,
+        rssi: rsrp !== undefined ? neg(g('lte_rssi')) : undefined,
+      });
+    }
+    if (!this.modemsLogged) { this.modemsLogged = true; diag(`[zte-ng] شرايح إضافية: ${out.map(x => `${x.label}=${x.off ? 'مطفي' : x.rsrp ?? '—'}${x.band ? ' B' + x.band : ''}`).join(' · ') || '—'}`); }
+    return out;
+  }
+  private modemsLogged = false;
 
   async getTemps(): Promise<DeviceTemp[]> {
     try {

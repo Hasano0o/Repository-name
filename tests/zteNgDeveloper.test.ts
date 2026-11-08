@@ -81,6 +81,13 @@ function router(opts: { devPw?: string; httpsOnly?: boolean; model?: string; gwl
     if (method === 'nwinfo_set_nrbandlock' && opts.nrNumeric !== undefined && /^\d$/.test(p.nr5g_type) !== opts.nrNumeric) return bad();
     if (method === 'get' && p.config === 'zwrt_common_info') return ok({ values: { model_name: 'MU5250', device_market_name: 'ZTE TOPFLOW MU5252', wa_inner_version: 'BD_MU5252V1.0', hardware_version: 'HW1' } });
     if (method === 'get_wwaniface') return p.subid === 1 ? ok({ ipv4_address: '10.20.30.40', ipv4_dns_prefer: '8.8.8.8', ipv4_dns_standby: '1.1.1.1' }) : ok({});
+    if (method === 'nwinfo_get_msim_netinfo') return opts.listFmt ? ok({
+      msim_1_0_network_type: 'LTE', msim_1_0_wan_active_band: 'LTE BAND 3', msim_1_0_wan_active_channel: '1401', msim_1_0_lte_pci: '148', msim_1_0_cell_id: '283930', msim_1_0_lte_rsrp: '-67', msim_1_0_lte_rsrq: '-8', msim_1_0_lte_snr: '9', msim_1_0_ecio: '3.0', msim_1_0_lte_rssi: '-36',
+      msim_1_1_network_type: '', msim_2_0_network_type: 'LTE', msim_2_0_lte_rsrp: '-99',
+      msim_2_1_network_type: 'LTE', msim_2_1_wan_active_band: 'LTE BAND 20', msim_2_1_wan_active_channel: '6350', msim_2_1_lte_pci: '180', msim_2_1_cell_id: '128013569', msim_2_1_lte_rsrp: '-82', msim_2_1_lte_rsrq: '-11', msim_2_1_ecio: '6.0', msim_2_1_lte_rssi: '-49',
+    }) : ok({});
+    if (method === 'get_v3t_sim_info') return ok({ v3t_1_st_slot: '0', v3t_2_st_slot: '1' });
+    if (method === 'get_device_info' && Array.isArray(p.deviceInfoList)) return ok({ V3E1_lpr_flight_status: 'off', V3E2_lpr_flight_status: 'off' });
     if (method === 'router_get_user_list_num') return ok({ access_total_num: 3, lan_num: 1, wireless_num: 2 });
     if (method === 'router_wireless_access_list') return ok({ wireless_access_list_info: p.start_id === 1 ? [
       { mac_address: 'aa:bb:cc:00:00:01', ip_address: '192.168.0.100', hostname: 'iPhone' },
@@ -250,4 +257,21 @@ test('MU5252 الشريحة الأساسية (5G) مطفية: netinfo بدون �
     const d = new ZteNgDriver();
     assert.equal(await d.detect('192.168.0.29'), true);
   } finally { (globalThis as any).fetch = f0; }
+});
+
+test('MU5252 الشرايح الإضافية: nwinfo_get_msim_netinfo بالخانة من get_v3t_sim_info (4G1 = B3 -67 · 4G2 الخانة 1 = B20 -82)، SINR من ecio مثل صفحتهم', async () => {
+  router(MU5252);
+  const d = new ZteNgDriver();
+  await d.login('192.168.0.30', 'admin', PW);
+  const m = await d.getModems();
+  assert.equal(m.length, 2);
+  assert.deepEqual(m[0], { key: 'v3t1', label: 'شريحة 4G 1', off: undefined, network: 'LTE', band: 3, earfcn: 1401, pci: 148, cellId: '283930', rsrp: -67, rsrq: -8, sinr: 3, rssi: -36 });
+  assert.equal(m[1].band, 20); assert.equal(m[1].rsrp, -82); assert.equal(m[1].pci, 180); assert.equal(m[1].sinr, 6);
+});
+
+test('راوتر بشريحة وحدة: ما فيه msim_ ← [] (البطاقة ما تطلع)', async () => {
+  router();
+  const d = new ZteNgDriver();
+  await d.login('192.168.0.31', 'admin', PW);
+  assert.deepEqual(await d.getModems(), []);
 });

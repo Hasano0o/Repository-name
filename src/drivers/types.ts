@@ -87,6 +87,14 @@ export interface TimeRule { id: string; mac: string; on: boolean; days: string; 
 export interface ConnectedDevice { mac: string; ip?: string; name?: string; blocked?: boolean; }
 export interface Usage { downloadBytes: number; uploadBytes: number; }
 export interface NetworkModeOption { value: string; label: string; }
+export interface ModemSignal {
+  key: string; label: string;
+  /** المودم مطفي من الراوتر (وضع الطيران حقه) */
+  off?: boolean;
+  network?: string; band?: number; earfcn?: number; pci?: number; cellId?: string;
+  rsrp?: number; rsrq?: number; sinr?: number; rssi?: number;
+}
+
 export interface DeviceDetails {
   model?: string; imei?: string; software?: string; hardware?: string;
   wanIp?: string; dns?: string; operator?: string; simStatus?: string;
@@ -288,6 +296,11 @@ export interface RouterDriver {
   getTraffic?(): Promise<Traffic>;
   /** حرارة القطع داخل الراوتر (°C) — فاضية لو الراوتر ما يعطيها */
   getTemps?(): Promise<DeviceTemp[]>;
+  /**
+   * المودمات الإضافية (راوتر بأكثر من شريحة، مثل ZTE MU5252: شريحة 5G + شريحتين 4G يدمجهم) — قراءة بس.
+   * الشريحة الأساسية تبقى في getSignal؛ هنا الباقي. التحكم (ترددات/أبراج) للأساسية بس.
+   */
+  getModems?(): Promise<ModemSignal[]>;
   getDevices?(): Promise<ConnectedDevice[]>;
   getBlockedDevices?(): Promise<ConnectedDevice[]>;
   blockDevice?(mac: string, block: boolean, name?: string): Promise<void>;
