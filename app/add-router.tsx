@@ -522,7 +522,12 @@ export default function AddRouterScreen() {
           addFail(msg || 'بدون رسالة', prof?.label ?? (driver as any).name);
           // الكلمة الغلط غالباً فيها زيادة ما تنشاف (حرف زايد/كلمتين لازقات) — نعطيه عدد الحروف يقارنه بالملصق
           const lenTip = /غلط|108006|incorrect|password/i.test(msg) ? `\n\nالكلمة اللي كتبتها: ${password.length} حرف — قارنها بالملصق أو باللي تدخل فيه من المتصفح.` : '';
-          failAlert('فشل الدخول', (msg || 'تحقق من اسم المستخدم وكلمة المرور') + lenTip);
+          // اسم المستخدم مو دايماً admin: Soyealink / Orange (هواوي HiLink) على الملصق «User Name: user» (عضو ٨ نوفمبر —
+          // 108006 بالكلمة الصحيحة لأن الخانة بقت admin). نذكّره بالخانة لو تركها على الافتراضي.
+          const userTip = /غلط|108006|incorrect|password/i.test(msg) && u === 'admin'
+            ? `\n\nاسم المستخدم مكتوب «admin» — تأكد منه بالملصق (عند بعض الراوترات مثل Soyealink يكون «user»). الخانة فوق كلمة المرور.`
+            : '';
+          failAlert('فشل الدخول', (msg || 'تحقق من اسم المستخدم وكلمة المرور') + userTip + lenTip);
           return;
         }
       }
