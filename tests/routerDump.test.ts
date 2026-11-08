@@ -421,3 +421,12 @@ test('هواوي/Soyealink: lib/libjquery.js ينجمع (فيه SCRAM حق ال�
   assert.ok(files.some(f => f.p === '/lib/libjquery.js'), files.map(f => f.p).join(' '));
   assert.ok(skipped.some(s => /jquery-1\.8\.3/.test(s)));
 });
+
+test('findRefs: صفحات hash تنحمّل بـ jQuery (#/bandSelect ← bandSelect.html) — جيب M2A-77', () => {
+  const { findRefs } = require('../src/services/routerDump');
+  const html = `<a href="#/bandSelect" class="x">b</a><a href="#/channelLock">c</a><a href="#/deviceinformation">d</a>
+  <script>$('#main').load(\`\${$(this).attr('href').substring(2)}.html\`)</script>`;
+  const r = findRefs(html);
+  for (const f of ['bandSelect.html', 'channelLock.html', 'deviceinformation.html']) assert.ok(r.includes(f), f);
+  assert.ok(!findRefs('<a href="#/x">x</a>').includes('x.html'), 'بدون .load ما نخمّن');
+});

@@ -98,6 +98,11 @@ export function findRefs(text: string): string[] {
   // Vue/Webpack: <link href=/js/chunk-xxxx.js rel=prefetch> (بدون علامات تنصيص) — فيها صفحات الإعدادات (OPPO T1a، ٢٦ أكتوبر)
   for (const m of text.matchAll(/<link[^>]+href=["']?([^"'\s>]+\.js)(?:[?#][^"'\s>]*)?["']?/gi)) refs.add(m[1]);
   for (const m of text.matchAll(/["'`]([\w./-]{1,120}\.(?:js|html?))(?:[?#][^"'`]*)?["'`]/gi)) refs.add(m[1]);
+  // صفحات بروابط hash تنحمّل بـ jQuery: href="#/bandSelect" + $('#main').load(`${href.substring(2)}.html`)
+  // (جيب M2A-77، ٨ نوفمبر — ~٤٠ صفحة: الترددات وقفل البرج ومعلومات الشبكة ما تبان كروابط عادية)
+  if (/\.load\(/.test(text) && /substring\(2\)[^;]{0,40}\.html/.test(text)) {
+    for (const m of text.matchAll(/href=["']#\/([\w-]{2,40})["']/g)) refs.add(`${m[1]}.html`);
+  }
   // Webpack: {"chunk-xxx":"hash"} + static/js/
   if (/static\/js\//.test(text)) {
     const map = text.match(/\{("chunk-[\w-]+":"[0-9a-f]+",?)+\}/);
