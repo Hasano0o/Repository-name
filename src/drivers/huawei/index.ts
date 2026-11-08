@@ -178,6 +178,17 @@ const okAt = new Map<string, { key: string; at: number }>();
  * قبل وبعد Update-Cookie — يعني الكوكي اللي ترسله جرة أندرويد (CookieManager) مو كوكي الجلسة اللي طلع منها الرمز.
  */
 const manualHosts = new Set<string>();
+/**
+ * الآيفون بالعكس: راوترات الكوكي اليدوي فيها يدخل (authentication_login ينجح) وبعدها كل قراءة 100003 —
+ * تقارير session ٨ نوفمبر ٧:٤٦/٧:٥٦ (iPhone، تحديث 11-08): signal / net-mode / host-list كلها 100003 بعد دخول ناجح،
+ * ونفس الراوتر بجرة النظام (نسخة apk) قرا الإشارة عادي. نرجع لجرة النظام والنسخ الجديدة تبدأ فيها.
+ */
+const jarHosts = new Set<string>();
+/**
+ * راوترات فشل فيها دخول وضع المطوّر (devRelogin): ما نعيده — كل نسخة درايفر كانت تجرّبه (logout + دخول مطوّر)
+ * ويطرد الجلسة من جديد. تقرير ٨ نوفمبر ٧:٤٣ (apk): lock-freq 100003 ← logout ← 125003 لين النهاية.
+ */
+const devDeadHosts = new Set<string>();
 const lockUntil = new Map<string, number>();
 const badPw = new Map<string, { key: string; at: number }>();
 const OK_REUSE_MS = 15_000;
@@ -190,7 +201,7 @@ function lockedError(host: string): HuaweiError {
     `الراوتر قافل الدخول مؤقتاً بسبب محاولات سابقة (108007). انتظر ${mins(left)} دقيقة وجرّب مرة وحدة بس — كل محاولة وهو قافل تمدّد القفل. لو صفحة الراوتر أو تطبيق هواوي مفتوح في جهاز ثاني، سكّره.`);
 }
 /** للاختبارات بس */
-export function _resetHuaweiGate() { gate.clear(); okAt.clear(); lockUntil.clear(); badPw.clear(); manualHosts.clear(); }
+export function _resetHuaweiGate() { gate.clear(); okAt.clear(); lockUntil.clear(); badPw.clear(); manualHosts.clear(); jarHosts.clear(); devDeadHosts.clear(); }
 /**
  * راوتر ثاني على 192.168.8.1 يرجّع صفحته (HTML) لأي رابط بـ 200 — كنا نحسب الدخول «نجح» والقراءات فاضية
  * (ملف FULL ٣١ أكتوبر ١٢:٣٧: كل /api/* ← 1027 بايت index.html، صفحة layui/jQuery مو هواوي)
@@ -258,7 +269,7 @@ export class HuaweiDriver implements RouterDriver {
   }
   /** دخول جلسة المطوّر (نفس الكلمة + loginflag=2) — مرة وحدة بس، ولو فشل نرجع للجلسة العادية */
   private async devRelogin(): Promise<boolean> {
-    if (this.devTried || !this.creds || this.scram === false || !(await this.devLockbandOn())) return false;
+    if (this.devTried || devDeadHosts.has(this.host) || !this.creds || this.scram === false || !(await this.devLockbandOn())) return false;
     this.devTried = true;
     const { u, p } = this.creds;
     this.log('lock-freq 100003 — retrying with developer-mode login (loginflag=2)');
@@ -271,6 +282,10 @@ export class HuaweiDriver implements RouterDriver {
       return true;
     } catch (e) {
       this.log('developer login failed:', (e as any)?.message ?? String(e));
+      diag('[huawei] دخول وضع المطوّر فشل — ما نعيده على هالراوتر، وتثبيت التردد يعتبر غير مدعوم');
+      devDeadHosts.add(this.host);
+      this.lockFreqDead = true;
+      this.lockFreq = false;
       this.queue = [];
       try { await this.loginScram(u, p); } catch {}
       return false;
@@ -606,6 +621,7 @@ export class HuaweiDriver implements RouterDriver {
     if (!switched) {
       this.cookieNoted = false;
       if (Platform.OS === 'android' && manualHosts.has(host) && !this.manualCookie) { this.manualCookie = true; this.cookie = ''; }
+      if (Platform.OS === 'ios' && jarHosts.has(host) && this.manualCookie) { this.manualCookie = false; this.cookie = ''; }
     }
     if (this.host !== host) this.origin = '';
     this.host = host;
@@ -655,6 +671,23 @@ export class HuaweiDriver implements RouterDriver {
     const twoAccounts = tag(state, 'accounts_number') === '2';
     try {
       await this.loginWith(host, type, state, username, password, opts);
+      // الكوكي اليدوي: الدخول نجح بس هل الجلسة اللي معنا هي اللي دخلت؟ (SCRAM ما كان يتأكد — الدخول القديم يتأكد تحت)
+      if (!switched && this.manualCookie) {
+        let dead = '';
+        try { await this.get('net/net-mode', false); } catch (e) {
+          if (e instanceof HuaweiError && /^(100003|125002|125003)$/.test(e.code)) dead = e.code;
+        }
+        if (dead) {
+          diag(`[huawei] الكوكي اليدوي: دخلنا بس القراءة ترد ${dead} — نعيد الدخول بجرة كوكيز النظام`);
+          this.manualCookie = false;
+          manualHosts.delete(host);
+          if (Platform.OS === 'ios') jarHosts.add(host);
+          this.cookie = '';
+          this.queue = [];
+          this.stale = true;
+          return this.loginOnce(host, username, password, opts, true);
+        }
+      }
       if (Platform.OS === 'android' && this.manualCookie) manualHosts.add(host);
       return;
     } catch (e) {
