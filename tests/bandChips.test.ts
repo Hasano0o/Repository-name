@@ -34,3 +34,18 @@ test('نواقل قديمة (الأساسي تغيّر من B3 لـ B1) ← نم
   const r = bandChips([C('LTE', 3, 'PCC'), C('LTE', 40, 'SCC')], { band: 'B1' });
   assert.deepEqual(r, [{ label: 'B1', kind: 'pcc' }]);
 });
+
+test('صورة العضو الثاني: B3 أساسي 15MHz + B3 ثانوي 20MHz + n78 ← B3 تطلع مرتين (أزرق وبرتقالي)', () => {
+  const r = bandChips([
+    { tech: 'LTE', band: 3, role: 'PCC', bandwidth: 15, arfcn: '1300' },
+    { tech: 'LTE', band: 3, role: 'SCC', bandwidth: 20, arfcn: '1849' },
+    { tech: 'NR', band: 78, role: 'SCC', bandwidth: 100 },
+  ], { band: 'B3', nrBand: 'n78' });
+  assert.deepEqual(r, [{ label: 'B3', kind: 'pcc' }, { label: 'B3', kind: 'lte' }, { label: 'n78', kind: 'nr' }]);
+});
+
+test('نفس الناقل مكرر بنفس ARFCN ← مرة وحدة', () => {
+  assert.equal(bandChips([
+    { tech: 'LTE', band: 3, role: 'PCC', arfcn: '1300' }, { tech: 'LTE', band: 3, role: 'SCC', arfcn: '1300' },
+  ], {}).length, 1);
+});

@@ -21,8 +21,8 @@ export function BandChips({ chips, onHero, center, max = 6 }: { chips: BandChip[
   const more = chips.length - shown.length;
   return (
     <View style={[s.row, center && { justifyContent: 'center' }]}>
-      {shown.map(c => (
-        <LinearGradient key={c.label} colors={GRAD[c.kind]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+      {shown.map((c, i) => (
+        <LinearGradient key={i + c.label} colors={GRAD[c.kind]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={[s.chip, onHero && s.onHero]}>
           <Text style={s.txt} numberOfLines={1}>{c.label}</Text>
         </LinearGradient>

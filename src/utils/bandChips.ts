@@ -7,7 +7,7 @@
 export type BandChipKind = 'pcc' | 'lte' | 'nr';
 export interface BandChip { label: string; kind: BandChipKind }
 
-interface CarrierLike { tech: 'LTE' | 'NR'; band: number; role: 'PCC' | 'SCC' }
+interface CarrierLike { tech: 'LTE' | 'NR'; band: number; role: 'PCC' | 'SCC'; arfcn?: string; pci?: string; bandwidth?: number }
 interface SignalLike { band?: string; nrBand?: string }
 
 const lteOf = (band?: string): string[] => {
@@ -24,6 +24,13 @@ const nrOf = (sig?: SignalLike | null): string[] => [
 
 const label = (c: CarrierLike) => (c.tech === 'NR' ? 'n' : 'B') + c.band;
 
+/** ناقلين بنفس الباند = ناقلين فعلاً (دمج داخل نفس الباند، مثل B3 15MHz + B3 20MHz)
+ *  بس لو فيه فرق مؤكد: ARFCN أو PCI أو عرض النطاق. بدون فرق = نفس الناقل مكرر. */
+const differs = (a: CarrierLike, b: CarrierLike) => {
+  const d = <T,>(x?: T, y?: T) => x !== undefined && x !== '' && y !== undefined && y !== '' && String(x) !== String(y);
+  return d(a.arfcn, b.arfcn) || d(a.pci, b.pci) || d(a.bandwidth, b.bandwidth);
+};
+
 export function bandChips(carriers?: CarrierLike[] | null, sig?: SignalLike | null): BandChip[] {
   const out: BandChip[] = [];
   const seen = new Set<string>();
@@ -33,19 +40,27 @@ export function bandChips(carriers?: CarrierLike[] | null, sig?: SignalLike | nu
     seen.add(k);
     out.push({ label: l, kind });
   };
+  const taken: CarrierLike[] = [];
+  const pushCarrier = (c: CarrierLike, kind: BandChipKind) => {
+    const l = label(c);
+    if (taken.some(t => label(t) === l && !differs(t, c))) return;
+    taken.push(c);
+    seen.add(l.toLowerCase());
+    out.push({ label: l, kind });
+  };
   const lte = lteOf(sig?.band);
   let list = (carriers ?? []).filter(c => Number.isFinite(c.band) && c.band > 0);
   // نواقل قديمة (الأساسي تغيّر بعدها) ← نتجاهلها ونمشي على الإشارة لين تنقرى من جديد
   const p0 = list.find(c => c.role === 'PCC');
   if (p0 && p0.tech === 'LTE' && lte[0] && lte[0].toLowerCase() !== label(p0).toLowerCase()) list = [];
   const pcc = list.find(c => c.role === 'PCC');
-  if (pcc) push(label(pcc), 'pcc');
+  if (pcc) pushCarrier(pcc, 'pcc');
   // لو النواقل ما فيها أساسي، أول تردد 4G في الإشارة هو الأساسي
   if (!pcc && lte[0]) push(lte[0], 'pcc');
-  for (const c of list) if (c.role === 'SCC' && c.tech === 'LTE') push(label(c), 'lte');
+  for (const c of list) if (c.role === 'SCC' && c.tech === 'LTE') pushCarrier(c, 'lte');
   for (const l of lte) push(l, 'lte');
-  const nr = [...list.filter(c => c.role === 'SCC' && c.tech === 'NR').map(label), ...nrOf(sig)];
   // 5G لحاله (SA): أول تردد 5G هو الأساسي
-  for (const l of nr) push(l, out.length ? 'nr' : 'pcc');
+  for (const c of list) if (c.role === 'SCC' && c.tech === 'NR') pushCarrier(c, out.length ? 'nr' : 'pcc');
+  for (const l of nrOf(sig)) push(l, out.length ? 'nr' : 'pcc');
   return out;
 }
