@@ -15,7 +15,7 @@ import { BandChips } from './BandChips';
 import { sheet, EN_MODE } from '../i18n';
 export type HeaderTone = Level | 'down';
 
-export interface HeaderChip { text: string; tone?: 'blue' | 'violet' | 'red' | 'green'; /** لون خاص (شارة الشركة) */ bg?: string }
+export interface HeaderChip { text: string; tone?: 'blue' | 'violet' | 'red' | 'green'; /** لون خاص (شارة الشركة / الفعالية) */ bg?: string; fg?: string }
 
 export interface HomeHeaderProps {
   /** ٠–١ */
@@ -103,7 +103,7 @@ export function HomeHeader(p: HomeHeaderProps) {
               const k = CHIP[c.tone ?? 'blue'];
               return (
                 <View key={i} style={[s.chip, { backgroundColor: c.bg ?? k.bg }, !!c.bg && s.chipBrand]}>
-                  <Text style={[s.chipTxt, { color: k.fg }]} numberOfLines={1}>{c.text}</Text>
+                  <Text style={[s.chipTxt, { color: c.fg ?? k.fg }, !!c.fg && { fontWeight: '700' }]} numberOfLines={1}>{c.text}</Text>
                 </View>
               );
             })}

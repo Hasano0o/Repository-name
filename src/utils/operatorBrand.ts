@@ -12,10 +12,22 @@ export const BRAND_COLOR: Record<Brand, string> = {
 };
 export const OTHER_COLOR = '#64748b';
 
-export function brandOf(name?: string | null): { key: Brand | null; label: string } {
+/** الكلمات اللي هي اسم الشركة نفسه أو عامة (مو فعالية) */
+const BRAND_WORDS = /\b(zain|stc|mobily|salam|virgin|lebara|etihad|etisalat|saudi|arabia|ksa|sa|telecom|telecommunications?|mobile|al ?jawal|aljawal|lte|[2-5]g|nr)\b|زين|موبايلي|سلام|فيرجن|ليبارا|الجوال|الاتصالات السعودية|420\s?-?0\d|\d{5,6}/gi;
+
+/**
+ * الفعالية اللي حاطتها الشركة في اسم الشبكة («Zain HAJJ EXPO» ← «HAJJ EXPO»، حسن ٩ نوفمبر: «تعطي طابع حلو»).
+ * بس للشركات المعروفة — غيرها ما نعرف وش الجزء الزايد.
+ */
+function eventOf(raw: string): string {
+  const rest = raw.replace(BRAND_WORDS, ' ').replace(/[-_|·/]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return /[a-z\u0600-\u06ff]{3}/i.test(rest) ? rest.slice(0, 22) : '';
+}
+
+export function brandOf(name?: string | null): { key: Brand | null; label: string; event: string } {
   const raw = String(name ?? '').replace(/\s+/g, ' ').trim();
   const n = raw.toLowerCase();
-  if (!n) return { key: null, label: '' };
+  if (!n) return { key: null, label: '', event: '' };
   let key: Brand | null = null;
   if (/zain|زين|420\s?-?04/.test(n)) key = 'zain';
   else if (/mobily|موبايلي|etihad|etisalat|اتحاد|420\s?-?03/.test(n)) key = 'mobily';
@@ -23,7 +35,7 @@ export function brandOf(name?: string | null): { key: Brand | null; label: strin
   else if (/salam|سلام/.test(n)) key = 'salam';
   else if (/virgin|فيرجن/.test(n)) key = 'virgin';
   else if (/lebara|ليبارا/.test(n)) key = 'lebara';
-  return key ? { key, label: LABEL[key] } : { key: null, label: raw.slice(0, 24) };
+  return key ? { key, label: LABEL[key], event: eventOf(raw) } : { key: null, label: raw.slice(0, 24), event: '' };
 }
 
 export const brandColor = (name?: string | null) => {

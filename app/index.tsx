@@ -230,7 +230,12 @@ export default function RoutersList() {
       const score = signalScore(sig);
       const nr = sig.nrRsrp !== undefined || !!sig.nrBand;
       const bands = bandChips(best.carriers, sig);
-      if (best.operator) chips.push({ text: brandOf(best.operator).label, bg: brandColor(best.operator) });
+      if (best.operator) {
+        const b = brandOf(best.operator);
+        chips.push({ text: b.label, bg: brandColor(best.operator) });
+        // الفعالية (مثل HAJJ EXPO) حبة بيضاء بخط بلون الشركة
+        if (b.event) chips.push({ text: `🎉 ${b.event}`, bg: '#ffffff', fg: brandColor(best.operator) });
+      }
       chips.push({ text: nr ? '5G' : '4G', tone: 'violet' });
       if (items.length > 1) chips.push({ text: `${live.length} من ${items.length} متصل`, tone: 'green' });
       if (down) chips.push({ text: `${down} بلا شبكة`, tone: 'red' });

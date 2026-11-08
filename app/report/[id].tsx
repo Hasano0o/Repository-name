@@ -123,7 +123,7 @@ export default function ReportScreen() {
               <Text style={[s.gradeDot, { color: cardColor }]}>●</Text>
               <Text style={[s.gradeTxt, { color: cardColor }]}>{sum.headline}</Text>
             </View>
-            <Text style={s.shotRouter}>{input.routerName}{input.net?.operator ? ` · ${brandOf(input.net.operator).label}` : ''}</Text>
+            <Text style={s.shotRouter}>{input.routerName}{input.net?.operator ? ` · ${[brandOf(input.net.operator).label, brandOf(input.net.operator).event].filter(Boolean).join(' · ')}` : ''}</Text>
 
             <View style={s.shotMetrics}>
               <View style={s.shotMetric}>
