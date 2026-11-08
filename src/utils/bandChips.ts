@@ -4,7 +4,8 @@
  * المصدر الأول النواقل (getCarriers)، ولو ما فيه نكمّل من سطر الإشارة (band / nrBand).
  * بدون react-native — ينختبر في tests/bandChips.test.ts.
  */
-export type BandChipKind = 'pcc' | 'lte' | 'nr';
+/** idle = مثبّت/كان مدموج بس مو شغال الحين (يشبك وقت التحميل) — مربع باهت بحد متقطع */
+export type BandChipKind = 'pcc' | 'lte' | 'nr' | 'idle';
 export interface BandChip { label: string; kind: BandChipKind }
 
 interface CarrierLike { tech: 'LTE' | 'NR'; band: number; role: 'PCC' | 'SCC'; arfcn?: string; pci?: string; bandwidth?: number }
@@ -62,5 +63,23 @@ export function bandChips(carriers?: CarrierLike[] | null, sig?: SignalLike | nu
   // 5G لحاله (SA): أول تردد 5G هو الأساسي
   for (const c of list) if (c.role === 'SCC' && c.tech === 'NR') pushCarrier(c, out.length ? 'nr' : 'pcc');
   for (const l of nrOf(sig)) push(l, out.length ? 'nr' : 'pcc');
+  return out;
+}
+
+/**
+ * نضيف الترددات المثبّتة (أو آخر دمج) اللي ما شبكت الحين كمربعات «idle» بعد الشغالة —
+ * حسن ٩ نوفمبر: البانر يقول «مثبّت على B1 + B3 + B20» وخانة الترددات فيها B3 بس = يبان تناقض.
+ */
+export function withIdle(chips: BandChip[], extra: (string | undefined | null)[]): BandChip[] {
+  const have = new Set(chips.map(c => c.label.toLowerCase()));
+  const out = [...chips];
+  for (const raw of extra) {
+    const m = String(raw ?? '').trim().match(/^([bn])?(\d+)$/i);
+    if (!m) continue;
+    const l = (m[1] && m[1].toLowerCase() === 'n' ? 'n' : 'B') + m[2];
+    if (have.has(l.toLowerCase())) continue;
+    have.add(l.toLowerCase());
+    out.push({ label: l, kind: 'idle' });
+  }
   return out;
 }

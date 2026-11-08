@@ -9,7 +9,7 @@ import { sheet } from '../i18n';
 import { FONT } from './fonts';
 import type { BandChip, BandChipKind } from '../utils/bandChips';
 
-const GRAD: Record<BandChipKind, [string, string]> = {
+const GRAD: Record<Exclude<BandChipKind, 'idle'>, [string, string]> = {
   pcc: ['#1f5eff', '#3b8bff'],
   lte: ['#ea580c', '#fb923c'],
   nr: ['#7c3aed', '#a78bfa'],
@@ -21,7 +21,11 @@ export function BandChips({ chips, onHero, center, max = 6 }: { chips: BandChip[
   const more = chips.length - shown.length;
   return (
     <View style={[s.row, center && { justifyContent: 'center' }]}>
-      {shown.map((c, i) => (
+      {shown.map((c, i) => c.kind === 'idle' ? (
+        <View key={i + c.label} style={[s.chip, s.idle]}>
+          <Text style={[s.txt, s.idleTxt]} numberOfLines={1}>{c.label}</Text>
+        </View>
+      ) : (
         <LinearGradient key={i + c.label} colors={GRAD[c.kind]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={[s.chip, onHero && s.onHero]}>
           <Text style={s.txt} numberOfLines={1}>{c.label}</Text>
@@ -39,5 +43,7 @@ const s = sheet({
   chip: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1.5, minWidth: 30, alignItems: 'center' },
   onHero: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)' },
   more: { backgroundColor: 'rgba(127,127,127,0.35)' },
+  idle: { borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(127,127,127,0.6)', backgroundColor: 'transparent' },
+  idleTxt: { color: '#8a94a6' },
   txt: { color: '#ffffff', fontSize: 11.5, fontWeight: '800', fontFamily: FONT.bold, lineHeight: 15 },
 });

@@ -49,3 +49,12 @@ test('نفس الناقل مكرر بنفس ARFCN ← مرة وحدة', () => {
     { tech: 'LTE', band: 3, role: 'PCC', arfcn: '1300' }, { tech: 'LTE', band: 3, role: 'SCC', arfcn: '1300' },
   ], {}).length, 1);
 });
+
+test('withIdle: مثبّت على B1+B3+B20 وشغال B3 بس ← B3 ثم B1 و B20 باهتة', async () => {
+  const { withIdle } = await import('../src/utils/bandChips');
+  const live = bandChips(null, { band: 'B3' });
+  assert.deepEqual(withIdle(live, ['B1', 'B3', 'B20', 'n78', 'x', undefined]), [
+    { label: 'B3', kind: 'pcc' }, { label: 'B1', kind: 'idle' }, { label: 'B20', kind: 'idle' }, { label: 'n78', kind: 'idle' },
+  ]);
+  assert.equal(withIdle(live, []).length, 1);
+});

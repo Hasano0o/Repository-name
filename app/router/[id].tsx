@@ -37,7 +37,7 @@ import { TechStrip } from '../../src/ui/TechStrip';
 import { ComboCard } from '../../src/ui/ComboCard';
 import { BandChips } from '../../src/ui/BandChips';
 import { OperatorBadge } from '../../src/ui/OperatorBadge';
-import { bandChips } from '../../src/utils/bandChips';
+import { bandChips, withIdle } from '../../src/utils/bandChips';
 import { TempCard } from '../../src/ui/TempCard';
 import { ModemsCard } from '../../src/ui/ModemsCard';
 import { canRescue, rescueRouter, freeRelease, restoreSavedSettings } from '../../src/utils/safeLock';
@@ -627,16 +627,22 @@ export default function RouterDashboard() {
   const nrList = parseNrBands(signal?.nrBand);
   const allBands = [...new Set([...bands, ...nrList])];
   // نفس مربعات «الأساسي والثانوي» (النواقل لو انقرت، وإلا من الإشارة)
-  const heroChips = signal ? bandChips(carriers, signal) : [];
+  const liveChips = signal ? bandChips(carriers, signal) : [];
   // بعض الأجهزة تدمج نواقل بدون ما تكشف أرقام باندات النواقل الثانوية —
   // نعتمد عدد النواقل (caCount) كبديل عشان مؤشر الدمج يطلع صح
-  const caCount = Math.max(allBands.length, heroChips.length, signal?.caCount ?? 0);
+  const caCount = Math.max(allBands.length, liveChips.length, signal?.caCount ?? 0);
   const caBw = signal?.caBandwidthMhz;
   // الدمج يشتغل وقت التحميل بس: لو شفناه خلال آخر ساعتين على نفس الأساسي، نقول «جاهز» بدل «تردد واحد»
   const caRecent = !!lastCa && Date.now() - lastCa.at < 2 * 3600_000 && (!bands[0] || lastCa.bands.includes(bands[0]));
   const caIdle = caCount <= 1 && caRecent;
   // الدمج الحالي أقل من آخر دمج شفناه (مثلاً 4 قنوات وقت التحميل ← 2 بعده): نوضّح إنه يرجع وقت التحميل
   const caShrunk = caCount > 1 && caRecent && !!lastCa && lastCa.n > caCount;
+  // الشغالة الحين + المثبّتة / آخر دمج اللي ما شبكت (باهتة) — البانر «مثبّت على B1+B3+B20» والخانة كانت B3 بس
+  const heroChips = withIdle(liveChips, [
+    ...(lock?.bands ?? []).map(b => 'B' + b), ...(lock?.nrBands ?? []).map(b => 'n' + b),
+    ...(caRecent && lastCa ? lastCa.bands : []),
+  ]);
+  const idleN = heroChips.length - liveChips.length;
   const primary = hasNr && signal
     ? { rsrp: signal.nrRsrp, sinr: signal.nrSinr }
     : { rsrp: signal?.rsrp, sinr: signal?.sinr };
@@ -888,10 +894,10 @@ export default function RouterDashboard() {
                   <View style={s.heroCell}>
                     <Text style={s.heroCellLbl}>الترددات</Text>
                     {heroChips.length
-                      ? <View style={s.heroChips}><BandChips chips={heroChips} max={4} center /></View>
+                      ? <View style={s.heroChips}><BandChips chips={heroChips} max={5} center /></View>
                       : <Text style={s.heroCellVal} numberOfLines={1}>—</Text>}
                     <Text style={s.heroCellSub} numberOfLines={1} adjustsFontSizeToFit>
-                      {caShrunk && lastCa ? `وقت التحميل: ${lastCa.bands.join('+')}` : bands.length ? `الأساسي ${bands[0]}` : netLabel}
+                      {idleN > 0 ? 'الباهتة تشبك وقت التحميل' : caShrunk && lastCa ? `وقت التحميل: ${lastCa.bands.join('+')}` : bands.length ? `الأساسي ${bands[0]}` : netLabel}
                     </Text>
                   </View>
                 </Pressable>
