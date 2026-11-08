@@ -98,6 +98,7 @@ const files = [
   'src/store/lockSnap.ts',
   'src/store/pendingRestore.ts',
   'src/utils/gameNet.ts',
+  'src/utils/heavyNet.ts',
   ...fs.readdirSync(path.join(root, 'tests')).filter(f => f.endsWith('.test.ts')).map(f => `tests/${f}`),
 ];
 

@@ -992,6 +992,8 @@ export default function RouterDashboard() {
                 onPress={() => router.push(`/details/${info.id}` as Href)} />
               <ToolTile icon="phone" color={tFg('#8b5cf6')} title="الأجهزة" sub="المتصلين"
                 onPress={() => router.push(`/device/${info.id}` as Href)} />
+              <ToolTile icon="chart" color={tFg('#e5484d')} title="وش يثقّل نتك؟" sub="مين يحمّل الحين"
+                onPress={() => router.push(`/heavy/${info.id}` as Href)} />
               <ToolTile icon="pin" color={tFg('#e0a100')} title="أفضل شركة" sub="في منطقتك"
                 onPress={() => router.push('/carriers' as Href)} />
             </TileGrid>
