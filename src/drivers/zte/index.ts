@@ -7,7 +7,7 @@ import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import {
   RouterDriver, Capability, Signal, NetworkInfo, Traffic, ConnectedDevice,
   Usage, DeviceDetails, CellTower, BandConfig, ActiveLock, Carrier,
-  SignalSnapshot, CellLockState, CellLockTarget, WifiRadio, DeviceTemp, SmsMessage,
+  SignalSnapshot, CellLockState, CellLockTarget, WifiRadio, DeviceTemp, SmsMessage, DeviceUsageReport,
 } from '../types';
 import { http } from '../http';
 import { loadFormula, saveFormula, isBadPassword, markBadPassword, loadAdFormula, saveAdFormula } from './formulaStore';
@@ -17,6 +17,7 @@ import {
 } from '../../utils/normalize';
 import { buildSnapshot } from '../../utils/snapshot';
 import { noChange, markNoChange } from '../noChange';
+import { diag } from '../../services/diag';
 import { classifyZteWrite, WRITE_ALLOWED_WHEN_UNVERIFIED } from './writeResult';
 
 import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
@@ -843,6 +844,55 @@ export class ZteDriver implements RouterDriver {
       });
     }
     return out;
+  }
+
+  /**
+   * استهلاك كل جهاز — نفس صفحة ZTE (service.js في G5 / U30 Pro / MF297DH، FULL نوفمبر):
+   *   cmd=userflowEnable,userflowCount ← العدّاد شغّال؟ وكم جهاز
+   *   cmd=userflowInfo_0,…,userflowInfo_<n-1> (multi_data) ← كل واحد "MAC,تنزيل,رفع,المجموع"
+   * الوحدة ما تبيّنت من الصفحة ← الواجهة تعرض الترتيب والنسبة. أول مرة نكتب عيّنة (بدون MAC) للتشخيص.
+   * راوتر ما يعرف userflowEnable (الرد بدونه) ← null.
+   */
+  private usageLogged = false;
+  async getDeviceUsage(): Promise<DeviceUsageReport | null> {
+    await this.ensure();
+    const h = await this.get(['userflowEnable', 'userflowCount']).catch(() => ({} as Record<string, string>));
+    // goform يرجّع "" لأي حقل ما يعرفه ← فاضيين الاثنين = ما فيه عدّاد
+    if (!h.userflowEnable && !h.userflowCount) return null;
+    const enabled = h.userflowEnable === '1';
+    const n = Math.min(64, Math.max(0, parseInt(h.userflowCount ?? '0', 10) || 0));
+    const prof = await this.identify().catch(() => null);
+    const out: DeviceUsageReport = { enabled, list: [], canEnable: !prof?.pinned };
+    if (!n) return out;
+    const r = await this.get(Array.from({ length: n }, (_, i) => `userflowInfo_${i}`));
+    const names = new Map<string, ConnectedDevice>();
+    for (const d of await this.getDevices().catch(() => [] as ConnectedDevice[])) names.set(d.mac.toUpperCase(), d);
+    for (let i = 0; i < n; i++) {
+      const p = String(r[`userflowInfo_${i}`] ?? '').split(',');
+      const mac = (p[0] ?? '').trim().toUpperCase();
+      if (!/^([0-9A-F]{2}[:-]){5}[0-9A-F]{2}$/.test(mac)) continue;
+      const down = Number(p[1]) || 0, up = Number(p[2]) || 0;
+      const total = Number(p[3]) || down + up;
+      const dev = names.get(mac);
+      out.list.push({ mac, name: dev?.name, ip: dev?.ip, down, up, total });
+    }
+    out.list.sort((a, b) => b.total - a.total);
+    if (!this.usageLogged) {
+      this.usageLogged = true;
+      diag(`[zte] استهلاك الأجهزة: العدّاد=${enabled ? 'شغّال' : 'مطفي'} · ${out.list.length} جهاز · عيّنة (تنزيل,رفع,مجموع): ${out.list.slice(0, 3).map(x => `${x.down},${x.up},${x.total}`).join(' | ') || '—'}`);
+    }
+    return out;
+  }
+
+  /** تشغيل العدّاد — USER_FLOW_STATISTIC_SET {user_flow_enable:"1"} (نفس صفحتهم) + تأكد بالقراءة */
+  async enableDeviceUsage(): Promise<void> {
+    await this.ensure();
+    const prof = await this.identify().catch(() => null);
+    if (prof?.pinned) throw noChange('هالراوتر ما نغيّر إعداداته من هنا');
+    await this.act({ goformId: 'USER_FLOW_STATISTIC_SET', user_flow_enable: '1' });
+    await new Promise(res => setTimeout(res, 1200));
+    const h = await this.get(['userflowEnable', 'userflowCount']);
+    if (h.userflowEnable !== '1') throw new Error('الراوتر ما شغّل عدّاد الاستهلاك — جرّب بعد شوي');
   }
 
   async getCells(): Promise<CellTower[]> {

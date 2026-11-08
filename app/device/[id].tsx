@@ -8,6 +8,7 @@ import { DeviceDetails, Usage, DataPlan, ConnectedDevice } from '../../src/drive
 import { GlassCard } from '../../src/ui/GlassCard';
 import { UsageRing } from '../../src/ui/UsageRing';
 import { DeviceRow } from '../../src/ui/DeviceRow';
+import { DeviceUsageCard } from '../../src/ui/DeviceUsageCard';
 import { Icon } from '../../src/ui/Icon';
 import { C } from '../../src/ui/theme';
 import { fmtBytes } from '../../src/utils/format';
@@ -196,6 +197,7 @@ export default function DeviceScreen() {
           </View>
         )}
       </GlassCard>
+      {info && <DeviceUsageCard r={info} />}
     </ScrollView>
   );
 }

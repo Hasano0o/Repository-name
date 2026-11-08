@@ -87,6 +87,9 @@ export interface TimeRule { id: string; mac: string; on: boolean; days: string; 
 export interface ConnectedDevice { mac: string; ip?: string; name?: string; blocked?: boolean; }
 export interface Usage { downloadBytes: number; uploadBytes: number; }
 export interface NetworkModeOption { value: string; label: string; }
+export interface DeviceUsage { mac: string; name?: string; ip?: string; down: number; up: number; total: number }
+export interface DeviceUsageReport { enabled: boolean; list: DeviceUsage[]; canEnable: boolean }
+
 export interface ModemSignal {
   key: string; label: string;
   /** المودم مطفي من الراوتر (وضع الطيران حقه) */
@@ -301,6 +304,13 @@ export interface RouterDriver {
    * الشريحة الأساسية تبقى في getSignal؛ هنا الباقي. التحكم (ترددات/أبراج) للأساسية بس.
    */
   getModems?(): Promise<ModemSignal[]>;
+  /**
+   * استهلاك كل جهاز من عدّاد الراوتر نفسه (ZTE goform: userflowInfo) — null = راوترك ما فيه عدّاد.
+   * الوحدة من الراوتر غير مؤكدة ← الواجهة تعرض الترتيب والنسبة بس.
+   */
+  getDeviceUsage?(): Promise<DeviceUsageReport | null>;
+  /** تشغيل عدّاد الاستهلاك في الراوتر (مطفي افتراضياً عند بعضهم) */
+  enableDeviceUsage?(): Promise<void>;
   /** تشغيل/إطفاء مودم إضافي (key من getModems) — يتأكد بالقراءة بعده */
   setModemPower?(key: string, on: boolean): Promise<void>;
   getDevices?(): Promise<ConnectedDevice[]>;
