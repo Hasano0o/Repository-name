@@ -6,10 +6,12 @@ import { router, useFocusEffect, Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SavedRouter, listRouters, getPassword, deleteRouter } from '../src/store/routers';
 import { withSession } from '../src/store/sessions';
-import { Signal } from '../src/drivers/types';
+import { Carrier, Signal } from '../src/drivers/types';
+import { bandChips } from '../src/utils/bandChips';
+import { BandChips } from '../src/ui/BandChips';
 import { Icon, IconName } from '../src/ui/Icon';
 import { SkeletonRouterCard, EmptyState } from '../src/ui/States';
-import { overallLevel, parseBands, parseNrBands, isNoService, signalScore, scoreLevel, LEVEL_LABEL } from '../src/utils/signal';
+import { overallLevel, isNoService, signalScore, scoreLevel, LEVEL_LABEL } from '../src/utils/signal';
 import {
   P, shadow, PrimaryBtn,
   lvlColor,
@@ -36,6 +38,8 @@ interface Status {
   at?: number;
   error?: string;
   hasPw?: boolean;
+  /** النواقل (الأساسي والثانوي) — تنقرى بعد الإشارة عشان ما تأخر البطاقة */
+  carriers?: Carrier[];
 }
 
 /** الخطأ جا من الراوتر نفسه (رمز رقمي أو رفض كلمة) — يعني الاتصال شغال */
@@ -71,8 +75,14 @@ export default function RoutersList() {
           mode: net?.mode,
           at: Date.now(),
           hasPw,
+          carriers: s[r.id]?.carriers,
         },
       }));
+      // الترددات كاملة مثل «الأساسي والثانوي» (الإشارة لحالها فيها الأساسي و5G بس)
+      if (sig) {
+        const ca = await withSession(r, async d => (d.getCarriers ? d.getCarriers() : null)).catch(() => null);
+        if (alive.current && ca) setStatus(s => (s[r.id] ? { ...s, [r.id]: { ...s[r.id], carriers: ca } } : s));
+      }
     } catch (e: any) {
       if (!alive.current) return;
       setStatus(s => ({
@@ -217,14 +227,13 @@ export default function RoutersList() {
       const sig = best.signal;
       const score = signalScore(sig);
       const nr = sig.nrRsrp !== undefined || !!sig.nrBand;
-      const bands = [...parseBands(sig.band), ...parseNrBands(sig.nrBand)].slice(0, 3);
+      const bands = bandChips(best.carriers, sig);
       if (best.operator) chips.push({ text: best.operator });
       chips.push({ text: nr ? '5G' : '4G', tone: 'violet' });
-      if (bands.length) chips.push({ text: bands.join(' + ') });
       if (items.length > 1) chips.push({ text: `${live.length} من ${items.length} متصل`, tone: 'green' });
       if (down) chips.push({ text: `${down} بلا شبكة`, tone: 'red' });
       const lvl = scoreLevel(score);
-      return { score, tone: lvl as HeaderTone, loading: false, lead: 'اتصالك', word: LEVEL_LABEL[lvl], chips };
+      return { score, tone: lvl as HeaderTone, loading: false, lead: 'اتصالك', word: LEVEL_LABEL[lvl], chips, bands };
     }
     if (down) return { score: 0, tone: 'down' as HeaderTone, loading: false, lead: 'الراوتر', word: 'بلا شبكة', chips: [{ text: 'الأبراج منقطعة', tone: 'red' as const }] };
     if (anyLoading) return { score: 0, tone: 'unknown' as HeaderTone, loading: true, lead: '', word: 'نقرأ الإشارة…', chips };
@@ -258,7 +267,7 @@ export default function RoutersList() {
           const sig = st?.signal;
           const level = overallLevel(sig);
           const color = lvlColor(level);
-          const band = [...parseBands(sig?.band), ...parseNrBands(sig?.nrBand)];
+          const chipsOf = sig ? bandChips(st?.carriers, sig) : [];
           const hasNr = sig?.nrRsrp !== undefined || !!sig?.nrBand;
           const hasPw = st?.hasPw !== false;
           const loading = !!st?.loading;
@@ -272,7 +281,7 @@ export default function RoutersList() {
           // الراوتر رد بس رفض (كلمة غلط/قفل/رمز خطأ) — نعرض سببه الحقيقي بدل «تعذّر الوصول» اللي يوهم إنه مو متصل
           const line = st?.error ? (routerSaid(st.error) ? st.error : 'تعذّر الوصول — تأكد إنك على واي فاي الراوتر')
             : noService ? 'بلا شبكة — اضغط ورجّع الإشارة'
-            : sig ? ['متصل', tech, band.slice(0, 3).join(' + ')].filter(Boolean).join(' · ')
+            : sig ? ['متصل', tech].filter(Boolean).join(' · ')
             : loading ? 'نقرأ الإشارة…' : '—';
           return (
             <Pressable onPress={() => (hasPw && !/\(1080\d\d\)|كلمة/.test(st?.error ?? '') ? open(item.id) : edit(item.id))}
@@ -298,6 +307,7 @@ export default function RoutersList() {
                     <View style={[s.stateDot, { backgroundColor: tone }]} />
                     <Text style={[s.slimLine, { color: tone }]} numberOfLines={1}>{line}</Text>
                   </View>
+                  {!st?.error && !noService && chipsOf.length > 0 && <BandChips chips={chipsOf} />}
                   <Text style={s.metaTxt} numberOfLines={1}>
                     {[hostLabel(item.host), st?.operator].filter(Boolean).join('  ·  ')}
                   </Text>

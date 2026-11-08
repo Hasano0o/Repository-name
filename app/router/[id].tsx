@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router';
 import { SavedRouter, getRouter, deleteRouter } from '../../src/store/routers';
 import { withSession, dropSession, routerWrite } from '../../src/store/sessions';
-import { Signal, Usage, ConnectedDevice, Traffic, RouterDriver, DeviceDetails, DataPlan, ActiveLock } from '../../src/drivers/types';
+import { Carrier, Signal, Usage, ConnectedDevice, Traffic, RouterDriver, DeviceDetails, DataPlan, ActiveLock } from '../../src/drivers/types';
 import {
   Level, LEVEL_COLOR, LEVEL_LABEL, overallLevel, parseBands, parseNrBands, signalScore,
   rsrpLevel, rsrqLevel, sinrLevel, rssiLevel, isNoService } from '../../src/utils/signal';
@@ -35,6 +35,8 @@ import { FONT } from '../../src/ui/fonts';
 import { StoreAd } from '../../src/ui/StoreAd';
 import { TechStrip } from '../../src/ui/TechStrip';
 import { ComboCard } from '../../src/ui/ComboCard';
+import { BandChips } from '../../src/ui/BandChips';
+import { bandChips } from '../../src/utils/bandChips';
 import { TempCard } from '../../src/ui/TempCard';
 import { ModemsCard } from '../../src/ui/ModemsCard';
 import { canRescue, rescueRouter, freeRelease, restoreSavedSettings } from '../../src/utils/safeLock';
@@ -173,6 +175,7 @@ export default function RouterDashboard() {
   const [noNet, setNoNet] = useState(false);
   /** عدد نواقل 5G الشغالة (٢ = دمج 5G مزدوج مثل n78+n78) */
   const [nrCc, setNrCc] = useState(0);
+  const [carriers, setCarriers] = useState<Carrier[] | null>(null);
   const netFails = useRef(0);
   const netDownSince = useRef<number | null>(null);
   /** آخر دمج شفناه — الدمج يشتغل وقت التحميل بس، فنعرضه بدل ما «يختفي» */
@@ -316,7 +319,7 @@ export default function RouterDashboard() {
         const c1 = on5g && d.getCarriers ? await d.getCarriers().catch(() => null) : on5g ? null : [];
         return [s1, t1, c1] as const;
       });
-      if (car) setNrCc(car.filter(c => c.tech === 'NR').length);
+      if (car) { setNrCc(car.filter(c => c.tech === 'NR').length); setCarriers(car); }
       applySignal(sig);
       setTraffic(trf);
       setError('');
@@ -622,9 +625,11 @@ export default function RouterDashboard() {
   const hasNr = !!signal && (signal.nrRsrp !== undefined || !!signal.nrBand);
   const nrList = parseNrBands(signal?.nrBand);
   const allBands = [...new Set([...bands, ...nrList])];
+  // نفس مربعات «الأساسي والثانوي» (النواقل لو انقرت، وإلا من الإشارة)
+  const heroChips = signal ? bandChips(carriers, signal) : [];
   // بعض الأجهزة تدمج نواقل بدون ما تكشف أرقام باندات النواقل الثانوية —
   // نعتمد عدد النواقل (caCount) كبديل عشان مؤشر الدمج يطلع صح
-  const caCount = Math.max(allBands.length, signal?.caCount ?? 0);
+  const caCount = Math.max(allBands.length, heroChips.length, signal?.caCount ?? 0);
   const caBw = signal?.caBandwidthMhz;
   // الدمج يشتغل وقت التحميل بس: لو شفناه خلال آخر ساعتين على نفس الأساسي، نقول «جاهز» بدل «تردد واحد»
   const caRecent = !!lastCa && Date.now() - lastCa.at < 2 * 3600_000 && (!bands[0] || lastCa.bands.includes(bands[0]));
@@ -881,7 +886,9 @@ export default function RouterDashboard() {
                   <View style={s.heroDiv} />
                   <View style={s.heroCell}>
                     <Text style={s.heroCellLbl}>الترددات</Text>
-                    <Text style={s.heroCellVal} numberOfLines={1} adjustsFontSizeToFit>{allBands.length ? allBands.join(' + ') : '—'}</Text>
+                    {heroChips.length
+                      ? <View style={s.heroChips}><BandChips chips={heroChips} max={4} center /></View>
+                      : <Text style={s.heroCellVal} numberOfLines={1}>—</Text>}
                     <Text style={s.heroCellSub} numberOfLines={1} adjustsFontSizeToFit>
                       {caShrunk && lastCa ? `وقت التحميل: ${lastCa.bands.join('+')}` : bands.length ? `الأساسي ${bands[0]}` : netLabel}
                     </Text>
@@ -1425,6 +1432,7 @@ const s = sheet({
   heroDiv: { width: 1, backgroundColor: C.line, marginVertical: 4 },
   heroCellLbl: { color: C.muted, fontSize: 11, fontWeight: '700' },
   heroCellVal: { color: C.text, fontSize: 15, fontWeight: '900' },
+  heroChips: { alignSelf: 'stretch', alignItems: 'center', paddingVertical: 1 },
   heroCellSub: { color: C.sub, fontSize: 10.5, fontWeight: '700' },
   heroSub: { color: C.sub, fontSize: 12.5, fontWeight: '700', textAlign: 'center', marginTop: 1 },
   cta: { height: 54, borderRadius: 16, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 9 },

@@ -9,6 +9,8 @@ import { Icon } from './Icon';
 import { FONT } from './fonts';
 import { Hero, P } from './Pro';
 import type { Level } from '../utils/signal';
+import type { BandChip } from '../utils/bandChips';
+import { BandChips } from './BandChips';
 
 import { sheet, EN_MODE } from '../i18n';
 export type HeaderTone = Level | 'down';
@@ -25,6 +27,8 @@ export interface HomeHeaderProps {
   /** الكلمة الملوّنة: «متوسط» / «بلا شبكة» */
   word: string;
   chips: HeaderChip[];
+  /** مربعات الترددات (الأساسي والثانوي بألوانهم) */
+  bands?: BandChip[];
   onAdd: () => void;
   onExplore: () => void;
 }
@@ -105,6 +109,9 @@ export function HomeHeader(p: HomeHeaderProps) {
             })}
           </View>
         )}
+        {!!p.bands?.length && (
+          <View style={s.bands}><BandChips chips={p.bands} onHero /></View>
+        )}
       </View>
 
       <View style={s.btns}>
@@ -135,6 +142,7 @@ const s = sheet({
   chips: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 5, marginTop: 8 },
   chip: { borderRadius: 7, paddingHorizontal: 8, paddingVertical: 2 },
   chipTxt: { fontSize: 11.5, fontWeight: '500' },
+  bands: { marginTop: 6, alignSelf: 'stretch', alignItems: 'flex-end' },
   btns: { gap: 8 },
   btn: { width: 54, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 1 },
   btnLbl: { fontSize: 10, fontWeight: '800', lineHeight: 13 },
