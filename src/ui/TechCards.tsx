@@ -78,9 +78,9 @@ function Waves({ color }: { color: string }) {
     </Svg>
   );
 }
-function Antenna({ color }: { color: string }) {
+function Antenna({ color, size = 20 }: { color: string; size?: number }) {
   return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Circle cx={12} cy={8} r={1.9} fill={color} />
       <Path d="M8.2 4.6a5 5 0 0 0 0 6.8M15.8 4.6a5 5 0 0 1 0 6.8M5.5 2.5a8.5 8.5 0 0 0 0 11M18.5 2.5a8.5 8.5 0 0 1 0 11" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
       <Path d="M12 10l-4.5 12M12 10l4.5 12M9 18h6" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
@@ -106,7 +106,8 @@ function Sheen() {
 
 /** خط صغير لآخر القراءات — يبيّن هل الإشارة ثابتة ولا تتذبذب */
 function Spark({ data, color, w = 64, h = 14 }: { data: number[]; color: string; w?: number; h?: number }) {
-  if (data.length < 2) return <View style={{ width: w, height: h }} />;
+  // أقل من ٦ قراءات = شرطة صغيرة بطرف المربع (في الآيفون تطلع كأنها «-» أو «.» تحت الرقم) ← نخلي مكانها فاضي
+  if (data.length < 6) return <View style={{ width: w, height: h }} />;
   const lo = Math.min(...data), hi = Math.max(...data);
   const span = Math.max(hi - lo, 3); // تذبذب بسيط ما يطلع كأنه جبال
   const mid = (hi + lo) / 2;
@@ -205,9 +206,9 @@ function TechRow({ r, onDetails, hist }: { r: Row; onDetails?: () => void; hist?
 
       {/* ٣. النقاء والجودة */}
       <View style={s.stats}>
-        <Stat icon={<Bars color={accent} size={20} />} label="النقاء SINR" value={fmt(r.sinr, 1)}
+        <Stat icon={<Bars color={accent} size={15} />} label="النقاء SINR" value={fmt(r.sinr, 1)}
           color={accent} bg={TECH_SOFT[r.tech]} onPress={onDetails} spark={hist?.sinr} />
-        <Stat icon={<Antenna color={LEVEL_COLOR[qlv]} />} label="الجودة RSRQ" value={fmt(r.rsrq, 1)}
+        <Stat icon={<Antenna color={LEVEL_COLOR[qlv]} size={15} />} label="الجودة RSRQ" value={fmt(r.rsrq, 1)}
           color={LEVEL_COLOR[qlv]} bg={LEVEL_SOFT[qlv]} onPress={onDetails} spark={hist?.rsrq} />
       </View>
     </View>
@@ -270,8 +271,9 @@ const s = sheet({
   sep: { width: 1, backgroundColor: C.cardBorder, marginVertical: 6 },
   // ٣. المربعات
   stats: { width: 80, gap: 5 },
-  stat: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', borderRadius: 12, paddingHorizontal: 5, paddingVertical: 4, gap: 3 },
-  statTxt: { alignItems: 'center' },
+  // الآيفون: المحتوى كان أعرض من المربع (٨٠) فالأيقونة تطلع برا حدّه — النص الحين ينكمش (flex + minWidth 0)
+  stat: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', borderRadius: 12, paddingHorizontal: 4, paddingVertical: 4, gap: 2, overflow: 'hidden' },
+  statTxt: { flex: 1, minWidth: 0, alignItems: 'center' },
   statLbl: { color: C.text, fontSize: 8.5, fontWeight: '800' },
   statVal: { fontSize: 17, lineHeight: 21, fontFamily: FONT.numHeavy, includeFontPadding: false },
 });
