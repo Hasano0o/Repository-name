@@ -6,8 +6,25 @@
  */
 const INVISIBLE = /[​-‏‪-‮⁦-⁩﻿­]/g;
 
+/**
+ * حروف «الخطوط المزخرفة» (كيبوردات Fonts / الخط المائل في بعض الجوالات) — شكلها حرف إنجليزي وهي رمز ثاني:
+ * Soyealink (٨ نوفمبر): أول حرف وصل U+1D609 «𝘉» (B مائل رياضي) بدل B — طوله ٢ في الجافاسكربت فالكلمة ١٣ والراوتر يرفض.
+ * نرجّع بس كتل الحروف الرياضية (U+1D400–1D7FF) والعرض الكامل (FF01–FF5E) لأصلها بـ NFKC — باقي الحروف ما نلمسها.
+ */
+const FANCY = /[\u{1D400}-\u{1D7FF}\uFF01-\uFF5E]/gu;
+
+/** الأصل — NFKC، ولو المحرّك ما يدعمه (أو رجّعه كما هو) نحسبه من موقع الحرف في الكتلة */
+function plain(c: string): string {
+  try { const n = c.normalize('NFKC'); if (n !== c) return n; } catch {}
+  const cp = c.codePointAt(0)!;
+  if (cp >= 0xff01 && cp <= 0xff5e) return String.fromCharCode(cp - 0xfee0);
+  if (cp >= 0x1d7ce && cp <= 0x1d7ff) return String((cp - 0x1d7ce) % 10);
+  if (cp >= 0x1d400 && cp < 0x1d6a4) { const i = (cp - 0x1d400) % 52; return String.fromCharCode(i < 26 ? 65 + i : 97 + i - 26); }
+  return c;
+}
+
 export function cleanPassword(raw: string): string {
-  return (raw ?? '').replace(INVISIBLE, '').replace(/^[\s ]+|[\s ]+$/g, '');
+  return (raw ?? '').replace(FANCY, plain).replace(INVISIBLE, '').replace(/^[\s ]+|[\s ]+$/g, '');
 }
 
 /** كم حرف شلنا — للتشخيص بس (بدون الكلمة نفسها) */

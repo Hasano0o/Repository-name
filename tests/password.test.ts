@@ -23,3 +23,11 @@ test('passwordShape: يكشف الحرف الزايد بدون الكلمة (Soy
   assert.equal(passwordShape('B–2704197900'), 'A<U+2013>9999999999');
   assert.equal(passwordShape('B-270419790 0'), 'A-999999999␠9');
 });
+
+test('cleanPassword: حروف الخط المزخرف ترجع لأصلها (Soyealink: «𝘉-2704197900» = B-2704197900)', async () => {
+  const { cleanPassword } = await import('../src/utils/password');
+  assert.equal(cleanPassword('\u{1D609}-2704197900'), 'B-2704197900');
+  assert.equal(cleanPassword('\u{1D5AB}\u{1D5B3}\u{1D5A4}@\u{1D5A4}ndusr'), 'LTE@Endusr');
+  assert.equal(cleanPassword('ＡＢ１２'), 'AB12');
+  assert.equal(cleanPassword('كلمة٢٠'), 'كلمة٢٠', 'العربي والأرقام العربية ما تنلمس');
+});
