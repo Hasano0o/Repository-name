@@ -312,10 +312,14 @@ export class HuaweiDriver implements RouterDriver {
    */
   private manualCookie = Platform.OS === 'ios';
   private cookie = '';
-  private takeCookie(r: Response) {
+  private takeCookie(r: Response, url = '') {
     const sc = r.headers.get('set-cookie') || '';
-    const m = sc.match(/SessionID=([^;,\s]+)/);
-    if (m) this.cookie = `SessionID=${m[1]}`;
+    // بعد التحقق بعض الراوترات ترسل SessionID مرتين بنفس الرأس (القديم ثم الجديد، والآيفون يدمجهم بفاصلة) —
+    // كنا ناخذ الأول (القديم) ← دخلنا وكل قراءة 100003، وإعادة الدخول بطريقة ثانية ← 108003 (الجلسة الأولى ماسكة).
+    // تقارير ٨ نوفمبر (B520 زين، آيفون). الحين ناخذ الأخير.
+    const all = [...sc.matchAll(/SessionID=([^;,\s]+)/g)];
+    if (/authentication_login|user\/login/.test(url) && sc) diag(`[huawei] set-cookie بعد التحقق: ${cookieShape(sc)} · SessionID×${all.length}`);
+    if (all.length) this.cookie = `SessionID=${all[all.length - 1][1]}`;
   }
   /**
    * بعض الموديلات (H122-373 / 5G CPE Pro 2 — ملفات FULL ٣١ أكتوبر) ما تتحمل ٨–١٠ طلبات مع بعض بعد الدخول:
@@ -352,7 +356,7 @@ export class HuaweiDriver implements RouterDriver {
     // credentials: 'omit' ← أندرويد يشيل جرة الكوكيز من الطلب (CookieJar.NO_COOKIES) فما تغطي على ترويسة Cookie حقتنا
     const r = await rawHttp(url, { ...init, headers, credentials: 'omit' } as RequestInit, timeoutMs);
     this.noteCookie(r);
-    this.takeCookie(r);
+    this.takeCookie(r, url);
     return r;
   }
   /** شكل set-cookie (الأسماء والخصائص، بدون القيمة) مرة لكل دخول — نعرف منه ليش الجرة ما تمسكه */
@@ -679,6 +683,8 @@ export class HuaweiDriver implements RouterDriver {
         }
         if (dead) {
           diag(`[huawei] الكوكي اليدوي: دخلنا بس القراءة ترد ${dead} — نعيد الدخول بجرة كوكيز النظام`);
+          // نطلع من الجلسة الأولى قبل (هواوي مدير واحد بالمرة — بدونها الدخول الثاني يرد 108003)
+          try { await this.post('user/logout', '<Logout>1</Logout>', undefined, false); } catch {}
           this.manualCookie = false;
           manualHosts.delete(host);
           if (Platform.OS === 'ios') jarHosts.add(host);
@@ -715,7 +721,10 @@ export class HuaweiDriver implements RouterDriver {
         this.stale = true;
         return this.loginOnce(host, username, password, opts, true);
       }
-      if (samePwd && e instanceof HuaweiError && /^10800[126]$/.test(e.code)) {
+      if (switched && e instanceof HuaweiError && e.code === '108003') {
+        diag('[huawei] بعد تبديل طريقة الكوكي: 108003 — الجلسة الأولى لسا ماسكة الراوتر');
+        e.message = 'الراوتر لسا ماسك دخول التطبيق الأول (108003) — انتظر ٥ دقايق وافتح الصفحة مرة ثانية، وسكّر صفحة الراوتر أو تطبيق HUAWEI AI Life لو مفتوحة بجهاز ثاني';
+      } else if (samePwd && e instanceof HuaweiError && /^10800[126]$/.test(e.code)) {
         e.message = `الراوتر رفض الكلمة (${e.code}). في هذا الجهاز كلمة الدخول هي نفسها كلمة الواي فاي — جرّب كلمة الواي فاي (اللي تتصل فيها بالشبكة)`;
       } else if (twoAccounts && e instanceof HuaweiError && /^10800[126]$/.test(e.code)) {
         diag('[huawei] الراوتر فيه حسابين (accounts_number=2) — اسم المستخدم ممكن مو admin');

@@ -34,7 +34,7 @@ const rnd = () => Math.random().toString(36).slice(2, 14);
  * (الكوكي اليدوي يبقى على القديمة ← كل قراءة 100003) — نفس تقارير الآيفون ٨ نوفمبر.
  * opts.devLock = lock-freq يرد 100003 ووضع المطوّر مفعّل، ودخول المطوّر (loginflag=2) يرفض.
  */
-function router(opts: { jarOnlyAfterAuth?: boolean; devLock?: boolean } = {}) {
+function router(opts: { jarOnlyAfterAuth?: boolean; devLock?: boolean; doubleCookie?: boolean; singleAdmin?: boolean } = {}) {
   type Sess = { tok: string; logged: boolean; scram?: { first: string; server: string } };
   const sessions = new Map<string, Sess>();
   let jar = '';
@@ -92,6 +92,16 @@ function router(opts: { jarOnlyAfterAuth?: boolean; devLock?: boolean } = {}) {
       const sig = hmac(sha256, utf8ToBytes(`${sc.first},${sc.server},${sc.server}`), storedKey);
       const ck = hexToBytes(tg('clientproof')).map((x: number, i: number) => x ^ sig[i]);
       if (bytesToHex(sha256(ck)) !== bytesToHex(storedKey)) return res(err('108006'));
+      // هواوي: مدير واحد بالمرة
+      if (opts.singleAdmin && [...sessions.values()].some(x => x.logged)) return res(err('108003'));
+      if (opts.doubleCookie) {
+        // الجلسة اللي دخلت جديدة، والرأس فيه القديم ثم الجديد (الآيفون يدمجهم بفاصلة)
+        const id2 = newSess();
+        sessions.get(id2)!.logged = true;
+        out['set-cookie'] = `SessionID=${sid}; path=/; HttpOnly, SessionID=${id2}; path=/; HttpOnly`;
+        if (!manual) jar = `SessionID=${id2}`;
+        return res(xml('OK'));
+      }
       if (opts.jarOnlyAfterAuth) {
         const id2 = newSess();
         sessions.get(id2)!.logged = true;
@@ -144,4 +154,12 @@ test('هواوي: دخول وضع المطوّر فشل مرة ← النسخ ا
   await d2.getCellLocks().catch(() => null);
   assert.equal(r.log.filter(x => x === 'POST user/logout').length, first, 'logout انعاد في النسخة الثانية');
   assert.equal((await d2.getSignal()).pci, '134');
+});
+
+test('هواوي آيفون (B520 زين): set-cookie بعد التحقق فيه SessionID مرتين ← ناخذ الأخير ونقرأ (كان: 100003 ثم 108003)', async () => {
+  OS = 'ios';
+  router({ doubleCookie: true, singleAdmin: true });
+  const d = await driver();
+  await d.login('192.168.8.1', 'admin', PW, { fresh: true });
+  assert.equal((await d.getSignal()).pci, '134');
 });
