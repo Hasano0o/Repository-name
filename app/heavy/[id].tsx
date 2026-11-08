@@ -15,6 +15,7 @@ import { withSession } from '../../src/store/sessions';
 import { selectedRegion, regionUrls, pingOnce, GameRegion } from '../../src/utils/latency';
 import { pingStats } from '../../src/utils/gameNet';
 import { heavyVerdict, HeavyLevel } from '../../src/utils/heavyNet';
+import type { DeviceUsageReport } from '../../src/drivers/types';
 import { C, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { FONT } from '../../src/ui/fonts';
@@ -33,6 +34,8 @@ export default function Heavy() {
   const [up, setUp] = useState<number | undefined>();
   const [hasRate, setHasRate] = useState<boolean | null>(null);
   const [devCount, setDevCount] = useState<number | null>(null);
+  // راوتر فيه عدّاد استهلاك لكل جهاز (ZTE goform) ← نعرض مين بالضبط
+  const [usage, setUsage] = useState<DeviceUsageReport | null | undefined>(undefined);
   const [pings, setPings] = useState<(number | null)[]>([]);
   const [base, setBase] = useState<number | undefined>();
   const [hist, setHist] = useState<number[]>([]);
@@ -63,6 +66,8 @@ export default function Heavy() {
       if (n % 15 === 1) {
         withSession(r, async d => (d.getDevices ? (await d.getDevices()).length : null))
           .then(c => { if (alive.current) setDevCount(c); }).catch(() => {});
+        withSession(r, async d => (d.getDeviceUsage ? d.getDeviceUsage() : null))
+          .then(u => { if (alive.current) setUsage(u); }).catch(() => { if (alive.current) setUsage(null); });
       }
       // بنق لسيرفر اللعبة
       const ms = await pingOnce(regionUrls(region)[0], 2500).catch(() => null);
@@ -113,7 +118,7 @@ export default function Heavy() {
         <Text style={s.heroDetail}>{v.detail}</Text>
       </View>
 
-      <GlassCard title="الحين" icon="speed" collapsible={false}>
+      <GlassCard title="الحين" icon="⚡" collapsible={false}>
         <View style={s.row}>
           <Stat label="تنزيل الراوتر" val={hasRate ? fmt(down) : '—'} unit="ميقابت" />
           <Stat label="رفع الراوتر" val={hasRate ? fmt(up) : '—'} unit="ميقابت" />
@@ -133,8 +138,23 @@ export default function Heavy() {
         <Text style={s.note}>خلّ جوالك على هالشاشة وما يحمّل شي — أي سرعة فوق تكون من الأجهزة الثانية.</Text>
       </GlassCard>
 
+      {usage && (
+        <GlassCard title="مين يستهلك أكثر؟" icon="📈" collapsible={false}>
+          {!usage.enabled && <Text style={s.tip}>عدّاد استهلاك الأجهزة مطفي في راوترك — شغّله من «الأجهزة المتصلة» تحت، وبعدها يطلع لك هنا مين يستهلك.</Text>}
+          {usage.enabled && (() => {
+            const sum = usage.list.reduce((a, x) => a + x.total, 0);
+            const top = usage.list.filter(x => x.total > 0).slice(0, 3);
+            if (!top.length) return <Text style={s.tip}>لسا ما فيه استهلاك محسوب — ارجع بعد شوي.</Text>;
+            return top.map((x, i) => (
+              <Text key={x.mac} style={s.tip}>{i + 1}. {x.name || x.ip || x.mac} — {sum ? Math.round((x.total / sum) * 100) : 0}٪{i === 0 ? ' (الأكثر)' : ''}</Text>
+            ));
+          })()}
+          <Text style={s.note}>من عدّاد الراوتر من وقت ما اشتغل — النسبة من المجموع.</Text>
+        </GlassCard>
+      )}
+
       {v.tips.length > 0 && (
-        <GlassCard title="وش تسوي" icon="spark" collapsible={false}>
+        <GlassCard title="وش تسوي" icon="💡" collapsible={false}>
           {v.tips.map((t, i) => <Text key={i} style={s.tip}>• {t}</Text>)}
         </GlassCard>
       )}
@@ -149,7 +169,9 @@ export default function Heavy() {
           </Pressable>
         </View>
       )}
-      <Text style={s.note}>نعرف إن فيه ضغط، بس «أي جهاز بالضبط» يحتاج راوترك يعطي استهلاك كل جهاز — نضيفه للراوترات اللي صفحتها تسمح.</Text>
+      {usage === null && (
+        <Text style={s.note}>نعرف إن فيه ضغط، بس راوترك ما يعطي استهلاك كل جهاز — عشان تعرف مين: افتح «الأجهزة المتصلة» وطفّ الشك واحد واحد (أو «وضع المباراة») وشوف السرعة فوق تنزل.</Text>
+      )}
     </ScrollView>
   );
 }
