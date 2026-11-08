@@ -12,7 +12,7 @@ export const FONT = {
   numSemi: 'Rubik_600SemiBold',
 };
 
-export const familyFor = (weight?: string | number): string => {
+const familyFor = (weight?: string | number): string => {
   const w = typeof weight === 'string' ? parseInt(weight, 10) : weight;
   if (weight === 'bold' || (w && w >= 700)) return FONT.bold;
   if (w && w >= 600) return FONT.semibold;
@@ -22,13 +22,7 @@ export const familyFor = (weight?: string | number): string => {
 
 let applied = false;
 
-/** خطوطنا (الاسم = وجه بوزن محدد) — معها fontWeight لازم يكون normal، وإلا الآيفون يدوّر وزن ثاني في «العائلة» ويرجع لخط النظام */
-export const OUR_FONTS = new Set<string>(Object.values(FONT));
-
-/**
- * ⚠️ ما يشتغل من React Native 0.8x: Text صار دالة عادية بدون render — الخط الحين ينحط في Text حق i18n/rn (fontStyle).
- * باقي هنا للنسخ القديمة بس.
- */
+/** يفرض الخط العربي على كل نص في التطبيق بدون تعديل كل شاشة */
 export function applyGlobalFont() {
   if (applied) return;
   applied = true;
