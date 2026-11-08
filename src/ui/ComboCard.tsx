@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, } from 'react-native';
 import { View, Text, Pressable } from '../i18n/rn';
 import { useFocusEffect, router, Href } from 'expo-router';
@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SavedRouter } from '../store/routers';
 import { withSession } from '../store/sessions';
 import { Carrier } from '../drivers/types';
+import { getWoke, onWoke } from '../services/caWake';
 import { bandLabel, friendlyBand } from '../utils/bands';
 import { Icon } from './Icon';
 import { C, R, tBd, tBg } from './theme';
@@ -43,8 +44,20 @@ export function ComboCard({ r }: { r: SavedRouter }) {
     return () => { alive.current = false; };
   }, [r]));
 
-  const pcc = list?.find(c => c.role === 'PCC');
-  const scc = (list ?? []).filter(c => c.role === 'SCC');
+  // الدمج وقت التحميل (services/caWake — صفحة الراوتر تقراه بتحميل قصير): لو الحين بدون ثانوي ونفس الأساسي ← نعرضه
+  const [woke, setWoke] = useState(() => getWoke(r.id));
+  useEffect(() => {
+    setWoke(getWoke(r.id));
+    return onWoke(x => { if (x === r.id) setWoke(getWoke(x)); });
+  }, [r.id]);
+  const live = list ?? [];
+  const livePcc = live.find(c => c.role === 'PCC');
+  const wPcc = woke?.carriers.find(c => c.role === 'PCC');
+  const fromWoke = !!list && !!woke && !live.some(c => c.role === 'SCC') && woke.carriers.some(c => c.role === 'SCC')
+    && (!livePcc || (!!wPcc && wPcc.tech === livePcc.tech && wPcc.band === livePcc.band));
+  const shown = fromWoke ? woke!.carriers : list;
+  const pcc = shown?.find(c => c.role === 'PCC');
+  const scc = (shown ?? []).filter(c => c.role === 'SCC');
   const total = [pcc, ...scc].reduce((a, c) => a + ((c && mhzOf(c)) || 0), 0);
 
   return (
@@ -59,7 +72,7 @@ export function ComboCard({ r }: { r: SavedRouter }) {
         </LinearGradient>
         <View style={{ flex: 1, alignItems: 'flex-end' }}>
           <Text style={s.title}>الأساسي والثانوي</Text>
-          <Text style={s.sub} numberOfLines={1}>التردد اللي يمسك الاتصال، واللي ينضم معه</Text>
+          <Text style={s.sub} numberOfLines={1}>{fromWoke ? 'الدمج وقت التحميل (قريناه بتحميل قصير)' : 'التردد اللي يمسك الاتصال، واللي ينضم معه'}</Text>
         </View>
         {total > 0 && (
           <View style={s.total}>

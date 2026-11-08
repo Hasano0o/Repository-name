@@ -37,7 +37,8 @@ import { TechStrip } from '../../src/ui/TechStrip';
 import { ComboCard } from '../../src/ui/ComboCard';
 import { BandChips } from '../../src/ui/BandChips';
 import { OperatorBadge } from '../../src/ui/OperatorBadge';
-import { bandChips, withIdle } from '../../src/utils/bandChips';
+import { bandChips } from '../../src/utils/bandChips';
+import { wakeCa, getWoke, onWoke, WokeCa } from '../../src/services/caWake';
 import { TempCard } from '../../src/ui/TempCard';
 import { ModemsCard } from '../../src/ui/ModemsCard';
 import { canRescue, rescueRouter, freeRelease, restoreSavedSettings } from '../../src/utils/safeLock';
@@ -177,6 +178,8 @@ export default function RouterDashboard() {
   /** عدد نواقل 5G الشغالة (٢ = دمج 5G مزدوج مثل n78+n78) */
   const [nrCc, setNrCc] = useState(0);
   const [carriers, setCarriers] = useState<Carrier[] | null>(null);
+  /** النواقل وقت تحميل قصير بالخلفية (services/caWake) — الدمج الحقيقي بدل «يرجع وقت التحميل» */
+  const [wokeRaw, setWokeRaw] = useState<WokeCa | null>(() => (id ? getWoke(String(id)) : null));
   const netFails = useRef(0);
   const netDownSince = useRef<number | null>(null);
   /** آخر دمج شفناه — الدمج يشتغل وقت التحميل بس، فنعرضه بدل ما «يختفي» */
@@ -213,6 +216,13 @@ export default function RouterDashboard() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signal?.band, signal?.nrBand, signal?.caCount, id]);
+
+  // ═══ الدمج وقت التحميل (caWake): نسمع للنتيجة (تجي من هنا أو من «الأساسي والثانوي») ═══
+  useEffect(() => {
+    if (!id) return;
+    setWokeRaw(getWoke(String(id)));
+    return onWoke(x => { if (x === String(id)) setWokeRaw(getWoke(x)); });
+  }, [id]);
 
   // ═══ فحص الإنترنت: الإشارة زينة بس النت واقف؟ (كل ٤٥ ثانية والشاشة مفتوحة) ═══
   const hasSignalNow = !!signal && (signal.rsrp !== undefined || signal.nrRsrp !== undefined);
@@ -628,21 +638,36 @@ export default function RouterDashboard() {
   const allBands = [...new Set([...bands, ...nrList])];
   // نفس مربعات «الأساسي والثانوي» (النواقل لو انقرت، وإلا من الإشارة)
   const liveChips = signal ? bandChips(carriers, signal) : [];
+  // الدمج وقت التحميل (caWake) — نعرضه بألوانه لو الأساسي نفسه والحين ناقل واحد بس
+  const wokeChips = wokeRaw && Date.now() - wokeRaw.at < 10 * 60_000 ? bandChips(wokeRaw.carriers, wokeRaw.signal) : [];
+  const useWoke = wokeChips.length > liveChips.length && (!liveChips[0] || wokeChips[0]?.label === liveChips[0].label);
   // بعض الأجهزة تدمج نواقل بدون ما تكشف أرقام باندات النواقل الثانوية —
   // نعتمد عدد النواقل (caCount) كبديل عشان مؤشر الدمج يطلع صح
-  const caCount = Math.max(allBands.length, liveChips.length, signal?.caCount ?? 0);
+  const caCount = Math.max(allBands.length, liveChips.length, useWoke ? wokeChips.length : 0, signal?.caCount ?? 0);
   const caBw = signal?.caBandwidthMhz;
   // الدمج يشتغل وقت التحميل بس: لو شفناه خلال آخر ساعتين على نفس الأساسي، نقول «جاهز» بدل «تردد واحد»
   const caRecent = !!lastCa && Date.now() - lastCa.at < 2 * 3600_000 && (!bands[0] || lastCa.bands.includes(bands[0]));
   const caIdle = caCount <= 1 && caRecent;
   // الدمج الحالي أقل من آخر دمج شفناه (مثلاً 4 قنوات وقت التحميل ← 2 بعده): نوضّح إنه يرجع وقت التحميل
   const caShrunk = caCount > 1 && caRecent && !!lastCa && lastCa.n > caCount;
-  // الشغالة الحين + المثبّتة / آخر دمج اللي ما شبكت (باهتة) — البانر «مثبّت على B1+B3+B20» والخانة كانت B3 بس
-  const heroChips = withIdle(liveChips, [
-    ...(lock?.bands ?? []).map(b => 'B' + b), ...(lock?.nrBands ?? []).map(b => 'n' + b),
-    ...(caRecent && lastCa ? lastCa.bands : []),
-  ]);
-  const idleN = heroChips.length - liveChips.length;
+  // خانة الترددات بألوان الأساسي والثانوي: الدمج وقت التحميل لو قريناه، وإلا آخر دمج شفناه، وإلا الحالي
+  // (حسن ٩ نوفمبر: البانر «مثبّت على B1+B3+B20» والخانة B3 بس — «لا تخليه باهت»)
+  const lastChips = !useWoke && caIdle && lastCa && liveChips[0]
+    ? bandChips(null, {
+      band: [liveChips[0].label, ...lastCa.bands].filter(x => /^B/i.test(x)).join('+'),
+      nrBand: lastCa.bands.filter(x => /^n/i.test(x)).join('+'),
+    })
+    : [];
+  const heroChips = useWoke ? wokeChips : lastChips.length > liveChips.length ? lastChips : liveChips;
+  const chipsNote = useWoke ? 'الدمج وقت التحميل' : lastChips.length > liveChips.length ? 'آخر دمج (وقت التحميل)' : '';
+  // ناقل واحد والراوتر مثبّت على أكثر (أو دمج قبل) ← نقرأ الدمج بتحميل قصير بالخلفية
+  const wantWake = !!info && !!signal && liveChips.length <= 1 && !useWoke
+    && ((lock?.bands.length ?? 0) + (lock?.nrBands?.length ?? 0) > 1 || caRecent);
+  useEffect(() => {
+    if (!wantWake || !info) return;
+    const t = setTimeout(() => { wakeCa(info).catch(() => {}); }, 2500);
+    return () => clearTimeout(t);
+  }, [wantWake, info]);
   const primary = hasNr && signal
     ? { rsrp: signal.nrRsrp, sinr: signal.nrSinr }
     : { rsrp: signal?.rsrp, sinr: signal?.sinr };
@@ -897,7 +922,7 @@ export default function RouterDashboard() {
                       ? <View style={s.heroChips}><BandChips chips={heroChips} max={5} center /></View>
                       : <Text style={s.heroCellVal} numberOfLines={1}>—</Text>}
                     <Text style={s.heroCellSub} numberOfLines={1} adjustsFontSizeToFit>
-                      {idleN > 0 ? 'الباهتة تشبك وقت التحميل' : caShrunk && lastCa ? `وقت التحميل: ${lastCa.bands.join('+')}` : bands.length ? `الأساسي ${bands[0]}` : netLabel}
+                      {chipsNote ? chipsNote : caShrunk && lastCa ? `وقت التحميل: ${lastCa.bands.join('+')}` : bands.length ? `الأساسي ${bands[0]}` : netLabel}
                     </Text>
                   </View>
                 </Pressable>
