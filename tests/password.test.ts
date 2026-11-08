@@ -15,3 +15,11 @@ test('كلمة المرور: المسافة داخل الكلمة تبقى، و�
   assert.equal(cleanPassword('Admin@123'), 'Admin@123');
   assert.equal(passwordJunk('Admin@123'), 0);
 });
+
+test('passwordShape: يكشف الحرف الزايد بدون الكلمة (Soyealink: ١٢ ← ١٣)', async () => {
+  const { passwordShape } = await import('../src/utils/password');
+  assert.equal(passwordShape('B-2704197900'), 'A-9999999999');
+  assert.equal(passwordShape('LTE@Endusr'), 'AAA@Aaaaaa');
+  assert.equal(passwordShape('B–2704197900'), 'A<U+2013>9999999999');
+  assert.equal(passwordShape('B-270419790 0'), 'A-999999999␠9');
+});

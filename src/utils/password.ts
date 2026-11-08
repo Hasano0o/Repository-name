@@ -14,3 +14,18 @@ export function cleanPassword(raw: string): string {
 export function passwordJunk(raw: string): number {
   return (raw ?? '').length - cleanPassword(raw).length;
 }
+
+/**
+ * شكل الكلمة للتشخيص — بدون الكلمة نفسها: A حرف كبير · a صغير · 9 رقم · ␠ مسافة · الرموز كما هي · غيرها U+XXXX.
+ * Soyealink (٨ نوفمبر): «B-2704197900» (١٢) يوصل ١٣ حتى بعد التنظيف — هذا يكشف وش الحرف الزايد ووينه.
+ */
+export function passwordShape(pw: string): string {
+  return Array.from(pw ?? '').map(c => {
+    if (/[A-Z]/.test(c)) return 'A';
+    if (/[a-z]/.test(c)) return 'a';
+    if (/[0-9]/.test(c)) return '9';
+    if (c === ' ') return '␠';
+    if (/[!-/:-@[-`{-~]/.test(c)) return c;
+    return `<U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}>`;
+  }).join('');
+}

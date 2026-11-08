@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { cleanPassword } from '../src/utils/password';
+import { cleanPassword, passwordShape } from '../src/utils/password';
 import { ROUTER_HOSTS } from '../src/utils/routerHosts';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform, } from 'react-native';
 import { Pressable, ScrollView, Text, TextInput, View } from '../src/i18n/rn';
@@ -419,9 +419,9 @@ export default function AddRouterScreen() {
     setBusy(true);
     // فشل الإضافة يوصل للسيرفر (errors.jsonl · add-login) — بدون كلمة ولا آي بي عام: الموديل والعنوان المحلي والخطأ بس
     const addFail = (what: string, model?: string) => {
-      lastFail.current = { host: h, model: model ?? '؟', what, ctx: `مستخدم ${u === 'admin' ? 'admin' : 'مخصص'} · طول الكلمة ${password.length}${junk ? ` (شلنا ${junk} مسافة/رمز مخفي)` : ''}` };
+      lastFail.current = { host: h, model: model ?? '؟', what, ctx: `مستخدم ${u === 'admin' ? 'admin' : 'مخصص'} · طول الكلمة ${password.length} · شكلها ${passwordShape(password)}${junk ? ` (شلنا ${junk} مسافة/رمز مخفي)` : ''}` };
       pendingDump.current = null;
-      return reportError('add-login', `${model ?? '؟'} · ${h} · مستخدم ${u === 'admin' ? 'admin' : 'مخصص'} · طول الكلمة ${password.length}${junk ? ` (شلنا ${junk} مسافة/رمز مخفي)` : ''} · ${what.slice(0, 220)}`).catch(() => {});
+      return reportError('add-login', `${model ?? '؟'} · ${h} · مستخدم ${u === 'admin' ? 'admin' : 'مخصص'} · طول الكلمة ${password.length} · شكلها ${passwordShape(password)}${junk ? ` (شلنا ${junk} مسافة/رمز مخفي)` : ''} · ${what.slice(0, 220)}`).catch(() => {});
     };
     try {
       setStep('نتعرّف على نوع الراوتر...');
