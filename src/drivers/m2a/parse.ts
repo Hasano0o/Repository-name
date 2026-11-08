@@ -68,3 +68,43 @@ export function enableList(group: any, bands: number[]): number[] {
   const sup: unknown[] = Array.isArray(group?.support) ? group.support : [];
   return sup.map(s => { const n = bandNo(s); return n !== undefined && (bands.length === 0 || bands.includes(n)) ? 1 : 0; });
 }
+
+// ═══ Base64 بـ UTF-8 — نفس base64.js في صفحتهم (نص الرسائل عربي) ═══
+const K = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+export function b64enc(s: string): string {
+  const b = Array.from(unescape(encodeURIComponent(s)), c => c.charCodeAt(0));
+  let o = '';
+  for (let i = 0; i < b.length; i += 3) {
+    const n = (b[i] << 16) | ((b[i + 1] ?? 0) << 8) | (b[i + 2] ?? 0);
+    o += K[(n >> 18) & 63] + K[(n >> 12) & 63] + (i + 1 < b.length ? K[(n >> 6) & 63] : '=') + (i + 2 < b.length ? K[n & 63] : '=');
+  }
+  return o;
+}
+export function b64dec(s: string): string {
+  const clean = String(s ?? '').replace(/[^A-Za-z0-9+/]/g, '');
+  const bytes: number[] = [];
+  for (let i = 0; i < clean.length; i += 4) {
+    const n = (K.indexOf(clean[i]) << 18) | (K.indexOf(clean[i + 1]) << 12) | ((K.indexOf(clean[i + 2] ?? 'A') & 63) << 6) | (K.indexOf(clean[i + 3] ?? 'A') & 63);
+    bytes.push((n >> 16) & 255);
+    if (clean[i + 2] !== undefined) bytes.push((n >> 8) & 255);
+    if (clean[i + 3] !== undefined) bytes.push(n & 255);
+  }
+  try { return decodeURIComponent(escape(String.fromCharCode(...bytes))); } catch { return String.fromCharCode(...bytes); }
+}
+
+/** cmd 210 ← sms_rev [{_id, phonenumber, time, txt(base64), type, read}] · type 1 = واردة · 2 = مرسلة · 5 = فشل الإرسال */
+export function m2aSms(r: any, box: 'inbox' | 'sent') {
+  const list: any[] = Array.isArray(r?.sms_rev) ? r.sms_rev : [];
+  return list
+    .filter(m => box === 'inbox' ? Number(m?.type) === 1 : Number(m?.type) === 2 || Number(m?.type) === 5)
+    .map(m => ({ index: String(m?._id ?? ''), phone: String(m?.phonenumber ?? ''), content: b64dec(m?.txt), date: String(m?.time ?? ''), unread: Number(m?.read) === 0 }))
+    .filter(m => m.index !== '');
+}
+
+/** وضع الشبكة — قائمة select#networkselection في mobileconnection.html (3G وحده معلّق عندهم) */
+export const M2A_MODES = [
+  { value: '0', label: '5G/4G/3G (تلقائي)' },
+  { value: '1', label: '4G/3G' },
+  { value: '4', label: '5G بس' },
+  { value: '5', label: '4G بس' },
+];

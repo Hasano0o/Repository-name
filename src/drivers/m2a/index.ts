@@ -8,20 +8,26 @@
  *   الإشارة: query {cmd:100} (debug.html) · الأجهزة: info {cmd:215} ← conn_dev · الحظر: set {cmd:102|103, info:[{mac}]}
  *   الترددات: info {cmd:181} ← {GSM,UMTS,LTE,CDMA,NR}:{support,enable} · info {cmd:182, …نفس الشكل} (bandSelect.html)
  *   إعادة التشغيل: set {cmd:113, restart: Date.parse(new Date())}
- * قفل البرج (channelLock.html) صفحته بدون كود ← ما انضاف.
+ * ٨ نوفمبر (المساء — الجيب اشتغل عند العضو) كمّلنا من باقي صفحاته:
+ *   وضع الشبكة: 100 ← networkselection · set {cmd:115, networkselection} (0 تلقائي · 1 = 4G/3G · 4 = 5G بس · 5 = 4G بس)
+ *   آي بي جديد: set {cmd:116, simnwoff: 1} ثم {simnwoff: 0} (زر «بيانات الجوال» في صفحتهم)
+ *   قفل البرج (js/lock.js): info {cmd:176} ← {lock, rat, gsm1900, arfcn, cellid, lock_mode}
+ *                           info {cmd:175, lock, rat (7 = 4G · 11 = 5G), gsm1900, arfcn, cellid = PCI, lock_mode (3 = خامل ومتصل · 0 = خامل بس · -1 بدون تغيير)}
+ *   الرسائل (js/sms.js): query {cmd:210} ← sms_rev · set {cmd:212, sms_send:{phonenumber, txt: base64}} · set {cmd:126, _id} مقروءة
+ *   (حذف الرسائل 211 بخانات غامضة عندهم — ما انضاف)
  */
-import { RouterDriver, Capability, Signal, NetworkInfo, DeviceDetails, ConnectedDevice, BandConfig } from '../types';
+import { RouterDriver, Capability, Signal, NetworkInfo, DeviceDetails, ConnectedDevice, BandConfig, CellLockTarget, CellLockState, SmsMessage } from '../types';
 import { http } from '../http';
 import { noChange } from '../noChange';
 import { diag } from '../../services/diag';
 import { isLanHost } from '../../utils/host';
 import type { ModelProfile } from '../models';
-import { m2aSignal, m2aDevices, m2aBands, enableList, val } from './parse';
+import { m2aSignal, m2aDevices, m2aBands, enableList, val, m2aSms, b64enc, M2A_MODES } from './parse';
 
 export class M2aDriver implements RouterDriver {
   readonly id = 'm2a';
   name = 'MiFi M2A';
-  readonly capabilities: Capability[] = ['signal', 'bandLock', 'reboot'];
+  readonly capabilities: Capability[] = ['signal', 'bandLock', 'reboot', 'devices', 'block', 'sms', 'cells'];
   private host = '';
   private api = '';
   private pw = '';
@@ -68,7 +74,7 @@ export class M2aDriver implements RouterDriver {
 
   async identify(): Promise<ModelProfile | null> {
     return { id: 'm2a-77', label: 'MiFi M2A-77', brand: 'mifi', tech: '4G', writeUnverified: true,
-      note: 'جيب M2A-77 — جديد: الإشارة والأجهزة والترددات من صفحته نفسها. جرّب وأرسل ملفات جهازك لو شي ما زبط.' };
+      note: 'جيب M2A-77 — الدخول والإشارة مؤكدة. الترددات وقفل البرج ووضع الشبكة والرسائل من صفحته نفسها — جرّب ميزة ميزة وأرسل تشخيص لو شي ما زبط.' };
   }
 
   private async doLogin() {
@@ -140,8 +146,66 @@ export class M2aDriver implements RouterDriver {
     return {
       supported: lte.supported, locked: lte.enabled.length === lte.supported.length ? [] : lte.enabled,
       nrSupported: nr.supported, nrLocked: nr.enabled.length === nr.supported.length ? [] : nr.enabled,
-      mode: '', modes: [],
+      mode: String((await this.status().catch(() => ({} as any))).networkselection ?? ''), modes: M2A_MODES,
     };
+  }
+
+  // ═══ وضع الشبكة (mobileconnection.js) ═══
+  async setNetworkMode(mode: string): Promise<void> {
+    if (!M2A_MODES.some(m => m.value === mode)) throw noChange('هالوضع مو موجود في جيبك');
+    await this.cmd('set', { cmd: 115, networkselection: Number(mode) });
+    for (let i = 0; i < 5; i++) {
+      await new Promise(res => setTimeout(res, 1500));
+      const r = await this.status().catch(() => null);
+      if (r && String(r.networkselection) === mode) return;
+    }
+    throw new Error('الجيب قبل الأمر بس وضع الشبكة ما تغيّر — جرّب مرة ثانية');
+  }
+
+  /** آي بي جديد — نطفي بيانات الجوال ونرجّعها (116 simnwoff) */
+  async reconnectData(opts?: { holdSecs?: number }): Promise<void> {
+    await this.cmd('set', { cmd: 116, simnwoff: 1 });
+    await new Promise(res => setTimeout(res, Math.max(3, opts?.holdSecs ?? 6) * 1000));
+    await this.cmd('set', { cmd: 116, simnwoff: 0 });
+  }
+
+  // ═══ قفل البرج (lock.js) ═══
+  private async lockInfo(): Promise<any> { return this.cmd('info', { cmd: 176 }); }
+
+  async getCellLock(): Promise<CellLockState | null> {
+    const r = await this.lockInfo();
+    if (Number(r.lock) !== 1) return null;
+    return { pci: String(r.cellid ?? ''), arfcn: String(r.arfcn ?? ''), tech: Number(r.rat) === 11 ? 'NR' : 'LTE' };
+  }
+
+  async lockCell(t: CellLockTarget): Promise<void> {
+    if (!t.arfcn || !/^\d+$/.test(String(t.arfcn)) || !/^\d+$/.test(String(t.pci))) throw noChange('قفل البرج يحتاج التردد (ARFCN) و PCI بالأرقام');
+    const cur = await this.lockInfo().catch(() => ({} as any));
+    await this.cmd('info', { cmd: 175, lock: 1, rat: t.tech === 'NR' ? 11 : 7, gsm1900: Number(cur.gsm1900) === 1 ? 1 : 0,
+      arfcn: Number(t.arfcn), cellid: Number(t.pci), lock_mode: 3 }, 15000);
+    await new Promise(res => setTimeout(res, 1500));
+    const after = await this.lockInfo();
+    if (Number(after.lock) !== 1 || String(after.cellid) !== String(Number(t.pci)) || String(after.arfcn) !== String(Number(t.arfcn))) {
+      throw new Error('الجيب قبل الأمر بس قفل البرج ما تثبّت — جرّب مرة ثانية');
+    }
+  }
+
+  async unlockCell(): Promise<void> {
+    const cur = await this.lockInfo();
+    if (Number(cur.lock) !== 1) return;
+    await this.cmd('info', { cmd: 175, lock: 0, rat: Number(cur.rat) || 7, gsm1900: Number(cur.gsm1900) === 1 ? 1 : 0,
+      arfcn: Number(cur.arfcn) || 0, cellid: Number(cur.cellid) || 0, lock_mode: Number(cur.lock_mode ?? -1) }, 15000);
+    await new Promise(res => setTimeout(res, 1500));
+    if (Number((await this.lockInfo()).lock) === 1) throw new Error('الجيب ما فك قفل البرج — جرّب مرة ثانية');
+  }
+
+  // ═══ الرسائل (sms.js) ═══
+  async listSms(box: 'inbox' | 'sent' = 'inbox'): Promise<SmsMessage[]> { return m2aSms(await this.cmd('query', { cmd: 210 }), box); }
+  async markSmsRead(index: string): Promise<void> { await this.cmd('set', { cmd: 126, _id: Number(index) }); }
+  async sendSms(phone: string, text: string): Promise<void> {
+    const p = String(phone).replace(/[^\d+]/g, '');
+    if (!p || !text) throw noChange('الرقم والنص مطلوبين');
+    await this.cmd('set', { cmd: 212, sms_send: { phonenumber: p, txt: b64enc(text) } }, 20000);
   }
 
   /** نفس setBand في صفحتهم: نرسل الخمس مجموعات كاملة، ونغيّر LTE (و NR لو انطلب) بس — ونتأكد بالقراءة */
