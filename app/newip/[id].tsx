@@ -297,7 +297,9 @@ export default function NewIp() {
   // الطريقة: الفصل عن البرج لو هو اللي ينفع عندك · القطع السريع · وإلا إعادة التشغيل (دقيقتين لكل محاولة — حد أقل)
   const huntWay: 'detach' | 'quick' | 'reboot' | null =
     detachFirst && canDetach ? 'detach' : canQuick && !skipQuick ? 'quick' : canReboot ? 'reboot' : canDetach ? 'detach' : null;
-  const huntMax = huntWay === 'reboot' ? 3 : 8;
+  // إعادة التشغيل: كل محاولة دقيقتين — العضو يختار (٣ / ٥ / ٨)، الافتراضي ٣
+  const [rebootMax, setRebootMax] = useState(3);
+  const huntMax = huntWay === 'reboot' ? rebootMax : 8;
   const measureBase = async () => {
     if (!region) return;
     const r0 = await measureUrl(regionUrls(region), 8);
@@ -344,7 +346,17 @@ export default function NewIp() {
                     await withSession(info, d => d.reattach!(10), false);
                     await sleep(5000);
                   } else {
-                    await withSession(info, d => d.reconnectData!({ holdSecs: 10 }), false);
+                    try {
+                      await withSession(info, d => d.reconnectData!({ holdSecs: 10 }), false);
+                    } catch (e: any) {
+                      // الراوتر ما يسمح بالقطع السريع (ZTE MC801A…) ← نتذكر ونرجع لإعادة التشغيل
+                      if (e?.quickUnsupported) {
+                        AsyncStorage.setItem(`newip.reboot.${info.id}`, '1').catch(() => {});
+                        if (mounted.current) setSkipQuick(true);
+                        throw new Error('راوترك ما يسمح بالقطع السريع — اختر عدد محاولات إعادة التشغيل (فوق) وجرّب مرة ثانية.');
+                      }
+                      throw e;
+                    }
                     await sleep(3000);
                   }
                   const fresh = await settle(huntWay === 'reboot' ? 150000 : 90000);
@@ -462,6 +474,27 @@ export default function NewIp() {
                 </Pressable>
               ))}
             </View>
+            {huntWay === 'reboot' && (
+              <>
+                <Text style={s.ipLbl}>شركتك ما تغيّر الآي بي إلا بإعادة تشغيل — كل محاولة دقيقتين تقريباً. كم محاولة؟</Text>
+                <View style={s.targets}>
+                  {[3, 5, 8].map(n => (
+                    <Pressable key={n} onPress={() => setRebootMax(n)} disabled={busy}
+                      style={[s.tgt, rebootMax === n && { backgroundColor: ACCENT, borderColor: ACCENT }]}>
+                      <Text style={[s.tgtTxt, rebootMax === n && { color: '#fff' }]}>{n} (~{n * 2} د)</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                {canQuick && skipQuick && (
+                  <Pressable hitSlop={6} disabled={busy} onPress={() => {
+                    AsyncStorage.removeItem(`newip.reboot.${info!.id}`).catch(() => {});
+                    setSkipQuick(false);
+                  }}>
+                    <Text style={s.guardOff}>القطع السريع ما نفع قبل — جرّبه مرة ثانية (ثواني بدل دقيقتين، و٨ محاولات)</Text>
+                  </Pressable>
+                )}
+              </>
+            )}
             <Pressable disabled={busy} onPress={() => {
               const v = !withSpeed;
               setWithSpeed(v);
