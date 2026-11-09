@@ -144,6 +144,8 @@ export const EN: Record<string, string> = {
   // ═══ المدينة ═══
   'اكتب اسم مدينتك': 'Type your city',
   'وش مدينتك؟': "What's your city?",
+  'حدد مدينتك': 'Set your city',
+  '· أفضل شركة هنا ‹': '· best carrier here ›',
   'اختياري — يساعدنا نطوّر التطبيق لمنطقتك': 'Optional — helps us improve the app for your area',
   'مدينة ثانية': 'Other city',
 

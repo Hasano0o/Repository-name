@@ -31,6 +31,8 @@ export interface HomeHeaderProps {
   bands?: BandChip[];
   onAdd: () => void;
   onExplore: () => void;
+  /** شارة 📍 المدينة — تضغطها ← «أفضل شركة في منطقتك» (أو اختيار المدينة لو ما حددها) */
+  place?: { text: string; set: boolean; onPress: () => void };
 }
 
 // على لون الترويسة الأصلي (أزرق→بنفسجي، وفي الداكن نحاسي) — كل شي داخلها أبيض شفاف أو ألوان فاتحة
@@ -112,6 +114,14 @@ export function HomeHeader(p: HomeHeaderProps) {
         {!!p.bands?.length && (
           <View style={s.bands}><BandChips chips={p.bands} onHero /></View>
         )}
+        {!!p.place && (
+          <Pressable onPress={p.place.onPress} hitSlop={6} accessibilityRole="button"
+            style={({ pressed }) => [s.place, !p.place!.set && s.placeAsk, pressed && { opacity: 0.8 }]}>
+            <Icon name="pin" size={12} color="#ffffff" stroke={2.4} />
+            <Text style={s.placeTxt} numberOfLines={1}>{p.place.text}</Text>
+            {p.place.set && <Text style={s.placeGo}>· أفضل شركة هنا ‹</Text>}
+          </Pressable>
+        )}
       </View>
 
       <View style={s.btns}>
@@ -144,6 +154,13 @@ const s = sheet({
   chipTxt: { fontSize: 11.5, fontWeight: '500' },
   chipBrand: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.55)' },
   bands: { marginTop: 6, alignSelf: 'stretch', alignItems: 'flex-end' },
+  place: {
+    marginTop: 6, alignSelf: 'flex-end', flexDirection: 'row-reverse', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, maxWidth: '100%',
+  },
+  placeAsk: { borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.6)', backgroundColor: 'transparent' },
+  placeTxt: { color: '#ffffff', fontSize: 11.5, fontWeight: '700', flexShrink: 1 },
+  placeGo: { color: 'rgba(255,255,255,0.75)', fontSize: 10.5, fontWeight: '600' },
   btns: { gap: 8 },
   btn: { width: 54, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 1 },
   btnLbl: { fontSize: 10, fontWeight: '800', lineHeight: 13 },

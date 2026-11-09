@@ -11,23 +11,68 @@ import { sheet } from '../i18n';
  * سطر واحد مضغوط، والاختيار من قائمة منبثقة فيها بحث (بدل ما تعبّي المدن الشاشة).
  * يختفي بعد ما يختار أو يضغط «لاحقاً».
  */
-export function CityAsk() {
-  const [city, setC] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
+/** قائمة المدن المنبثقة (فيها بحث) — من «وش مدينتك؟» وشارة 📍 في الترويسة */
+export function CityPicker({ visible, onClose, onPick }: { visible: boolean; onClose: () => void; onPick: (v: string) => void }) {
   const [q, setQ] = useState('');
-
-  useEffect(() => { getCity().then(setC); }, []);
-
   const list = useMemo(() => {
     const t = q.trim();
     return t ? CITIES.filter(c => c.includes(t)) : CITIES;
   }, [q]);
+  const typed = q.trim();
+  const canTyped = typed.length >= 2 && !CITIES.includes(typed);
+  const pick = (v: string) => { setQ(''); onPick(v); };
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={s.backdrop} onPress={onClose} />
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.sheetWrap}>
+        <View style={s.sheet}>
+          <View style={s.grab} />
+          <Text style={s.sheetTitle}>اختر مدينتك</Text>
+          <View style={s.search}>
+            <Icon name="pin" size={16} color={P.sub} />
+            <TextInput
+              value={q} onChangeText={setQ} placeholder="ابحث أو اكتب اسم مدينتك"
+              placeholderTextColor={P.faint} style={s.input} maxLength={30}
+              textAlign="right" returnKeyType="done"
+              onSubmitEditing={() => canTyped && pick(typed)}
+            />
+          </View>
+          <ScrollView style={{ maxHeight: 360 }} keyboardShouldPersistTaps="handled">
+            {canTyped && (
+              <Pressable onPress={() => pick(typed)} style={({ pressed }) => [s.row, s.rowAdd, pressed && { opacity: 0.7 }]}>
+                <Text style={[s.rowTxt, { color: P.blue }]}>اختر «{typed}»</Text>
+              </Pressable>
+            )}
+            {list.map(c => (
+              <Pressable key={c} onPress={() => pick(c)} style={({ pressed }) => [s.row, pressed && { backgroundColor: P.soft }]}>
+                <Text style={s.rowTxt}>{c}</Text>
+              </Pressable>
+            ))}
+            {!list.length && !canTyped && <Text style={s.empty}>اكتب اسم مدينتك كامل</Text>}
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+/**
+ * city/onPick: لو الرئيسية تمسك المدينة (عشان شارة 📍 في الترويسة تتحدث معه) — وإلا يقرأها لحاله.
+ */
+export function CityAsk(p: { city?: string | null; onPick?: (v: string) => void } = {}) {
+  const [own, setOwn] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const controlled = p.city !== undefined;
+  useEffect(() => { if (!controlled) getCity().then(setOwn); }, [controlled]);
+  const city = controlled ? p.city! : own;
 
   if (city === null || city !== '') return null;
 
-  const pick = (v: string) => { setOpen(false); setC(v); setCity(v); };
-  const typed = q.trim();
-  const canTyped = typed.length >= 2 && !CITIES.includes(typed);
+  const pick = (v: string) => {
+    setOpen(false);
+    if (p.onPick) p.onPick(v);
+    else { setOwn(v); setCity(v); }
+  };
 
   return (
     <View style={s.box}>
@@ -42,38 +87,7 @@ export function CityAsk() {
       <Pressable onPress={() => pick('-')} hitSlop={8}>
         <Text style={s.later}>لاحقاً</Text>
       </Pressable>
-
-      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
-        <Pressable style={s.backdrop} onPress={() => setOpen(false)} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.sheetWrap}>
-          <View style={s.sheet}>
-            <View style={s.grab} />
-            <Text style={s.sheetTitle}>اختر مدينتك</Text>
-            <View style={s.search}>
-              <Icon name="pin" size={16} color={P.sub} />
-              <TextInput
-                value={q} onChangeText={setQ} placeholder="ابحث أو اكتب اسم مدينتك"
-                placeholderTextColor={P.faint} style={s.input} maxLength={30}
-                textAlign="right" returnKeyType="done"
-                onSubmitEditing={() => canTyped && pick(typed)}
-              />
-            </View>
-            <ScrollView style={{ maxHeight: 360 }} keyboardShouldPersistTaps="handled">
-              {canTyped && (
-                <Pressable onPress={() => pick(typed)} style={({ pressed }) => [s.row, s.rowAdd, pressed && { opacity: 0.7 }]}>
-                  <Text style={[s.rowTxt, { color: P.blue }]}>اختر «{typed}»</Text>
-                </Pressable>
-              )}
-              {list.map(c => (
-                <Pressable key={c} onPress={() => pick(c)} style={({ pressed }) => [s.row, pressed && { backgroundColor: P.soft }]}>
-                  <Text style={s.rowTxt}>{c}</Text>
-                </Pressable>
-              ))}
-              {!list.length && !canTyped && <Text style={s.empty}>اكتب اسم مدينتك كامل</Text>}
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      <CityPicker visible={open} onClose={() => setOpen(false)} onPick={pick} />
     </View>
   );
 }

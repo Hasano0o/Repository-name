@@ -21,7 +21,9 @@ import {
 
 import { tBd, tBg, tFg, isDark } from '../src/ui/theme';
 import { desktop } from '../src/desktop/bridge';
-import { CityAsk } from '../src/ui/CityAsk';
+import { CityAsk, CityPicker } from '../src/ui/CityAsk';
+import { getCity, setCity } from '../src/services/stats';
+import { myPlace } from '../src/services/community';
 import { BlockerAsk } from '../src/ui/BlockerAsk';
 import { WhatsNew } from '../src/ui/WhatsNew';
 import { LangAsk, LangLink } from '../src/ui/LangPicker';
@@ -106,11 +108,27 @@ export default function RoutersList() {
     }
   }, [probe]);
 
+  // ═══ المدينة: شارة 📍 في الترويسة ← «أفضل شركة في منطقتك» (أو نختارها لو ما حددها) ═══
+  const [statsCity, setStatsCity] = useState<string | null>(null);
+  const [placeCity, setPlaceCity] = useState('');
+  const [cityOpen, setCityOpen] = useState(false);
+  const loadCity = useCallback(() => {
+    getCity().then(c => alive.current && setStatsCity(c)).catch(() => {});
+    myPlace().then(p => alive.current && setPlaceCity(p.city)).catch(() => {});
+  }, []);
+  const pickCity = useCallback((v: string) => {
+    setCityOpen(false);
+    setStatsCity(v);
+    setCity(v).then(loadCity).catch(() => {});
+    if (v && v !== '-') setPlaceCity(p => p || v);
+  }, [loadCity]);
+
   useFocusEffect(useCallback(() => {
     alive.current = true;
     loadAll();
+    loadCity();
     return () => { alive.current = false; };
-  }, [loadAll]));
+  }, [loadAll, loadCity]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -259,9 +277,13 @@ export default function RoutersList() {
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={{ gap: 12, marginBottom: 4 }}>
-          <HomeHeader {...header} onAdd={add} onExplore={explore} />
+          <HomeHeader {...header} onAdd={add} onExplore={explore}
+            place={placeCity
+              ? { text: placeCity, set: true, onPress: () => router.push('/carriers' as Href) }
+              : statsCity !== null && statsCity !== '' ? { text: 'حدد مدينتك', set: false, onPress: () => setCityOpen(true) } : undefined} />
+          <CityPicker visible={cityOpen} onClose={() => setCityOpen(false)} onPick={pickCity} />
           <LangAsk />
-          <CityAsk />
+          <CityAsk city={statsCity} onPick={pickCity} />
           {items.every(i => i.driverId === 'demo') && <BlockerAsk onAdd={add} onExplore={explore} />}
           </View>
         }
