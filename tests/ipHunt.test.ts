@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { huntTargets, huntStop, huntBest, huntHit, huntFastest, HuntTry } from '../src/utils/ipHunt';
+import { huntTargets, huntStop, huntBest, huntHit, huntFastest, autoTarget, HuntTry } from '../src/utils/ipHunt';
 
 const T = (n: number, median?: number, changed = true, loss = 0): HuntTry => ({ n, ip: `10.0.0.${n}`, median, loss, changed });
 
@@ -34,4 +34,19 @@ test('ما قرينا الآي بي (changed غير معروف) ← مو «نف�
 test('أسرع تنزيل بين المحاولات', () => {
   assert.equal(huntFastest([{ ...T(1, 90), down: 20 }, { ...T(2, 80), down: 45.5 }, T(3, 70)])?.n, 2);
   assert.equal(huntFastest([T(1, 90)]), null);
+});
+
+test('تلقائي: صورة العضو (الحين 156ms) ← يوقف على 135؟ لا (الهدف 125) · على 83 إيه', () => {
+  const g = { auto: true as const, base: 156 };
+  assert.equal(autoTarget(g), 125);
+  assert.equal(huntHit(T(3, 135), g), false);
+  assert.equal(huntStop([T(1, 155), T(2, 177), T(3, 135), T(4, 180), T(5, 164), T(6, 83)], g, 8), 'hit');
+});
+
+test('تلقائي مع السرعة: بنق أحسن بس السرعة نزلت كثير ← نكمّل', () => {
+  const g = { auto: true as const, base: 100, baseDown: 50 };
+  assert.equal(huntHit({ ...T(1, 70), down: 30 }, g), false);
+  assert.equal(huntHit({ ...T(1, 70), down: 47 }, g), true);
+  // بنق قليل أصلاً: الهدف ما يطلع فوق base-5
+  assert.equal(autoTarget({ auto: true, base: 20 }), 15);
 });

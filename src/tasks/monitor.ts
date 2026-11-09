@@ -15,6 +15,7 @@ import { getAutoState } from '../store/automation';
 import { runGuard } from './guard5g';
 import { runHealer } from './healer';
 import { checkGameLock } from '../services/gameLockGuard';
+import { ipHeld } from '../store/ipGuard';
 
 export const MONITOR_TASK = 'bandly-monitor-v1';
 
@@ -139,16 +140,18 @@ export async function runMonitorCheck(): Promise<boolean> {
       states[r.id] = next;
 
       // ═══ «ثبّت للعب» — خلص وقته أو النت طاح عليه ← نرجّع إعداد العضو ═══
-      if (!rebooting && (await checkGameLock(r, online, true).catch(() => null))) fired = true;
+      // «حماية الآي بي» (بعد آي بي ممتاز): ما نسوي شي يقطع الاتصال والنت شغال
+      const held = await ipHeld(r.id, online).catch(() => false);
+      if (!rebooting && !held && (await checkGameLock(r, online, true).catch(() => null))) fired = true;
 
       // ═══ حارس 5G — يرجّع التلقائي لو التركيبة المثبّتة طيّحت النت ═══
-      if (!rebooting && (await runGuard(r, sig, online).catch(() => false))) fired = true;
+      if (!rebooting && !held && (await runGuard(r, sig, online).catch(() => false))) fired = true;
 
       // ═══ الحارس — يصلّح لحاله بالتدريج (بدون خدمة / إشارة ضعيفة / 5G طاح) ═══
-      if (!rebooting && (await runHealer(r, sig, online).catch(() => false))) fired = true;
+      if (!rebooting && !held && (await runHealer(r, sig, online).catch(() => false))) fired = true;
 
       // ═══ الوضع الذكي والصيانة الليلية ═══
-      if (await runAutomation(r, sig).catch(() => false)) fired = true;
+      if (!held && (await runAutomation(r, sig).catch(() => false))) fired = true;
 
       // ═══ الملخص الأسبوعي — مساءً، مرة بالأسبوع، لو فيه بيانات ═══
       const hr = new Date().getHours();

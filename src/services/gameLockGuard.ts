@@ -9,6 +9,7 @@ import { getGameLock, clearGameLock } from '../store/gameLock';
 import { gameLockVerdict } from '../utils/gameLockCore';
 import { notify } from '../utils/notify';
 import { diag } from './diag';
+import { ipHeld } from '../store/ipGuard';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -28,6 +29,8 @@ export async function checkGameLock(r: SavedRouter, online?: boolean, background
   const cfg = await withSession(r, d => (d.getBandConfig ? d.getBandConfig() : Promise.resolve(null)), false).catch(() => null);
   if (!cfg) return null; // ما وصلنا للراوتر — المرة الجاية
   let on = online ?? (await isOnline(r));
+  // «حماية الآي بي» والنت شغال ← الإرجاع (يغيّر الترددات = ممكن آي بي جديد) ينتظر
+  if (await ipHeld(r.id, on).catch(() => false)) return null;
   let v = gameLockVerdict(g, Date.now(), cfg, on);
   if (v === 'down') {
     // انقطاع لحظي؟ نصبر ٢٠ ثانية ونشيك مرة ثانية

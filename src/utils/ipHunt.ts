@@ -15,11 +15,23 @@ export function huntTargets(base?: number): number[] {
   return [...new Set([rel, ...fixed])].filter(t => t < base).sort((a, b) => a - b).slice(0, 4);
 }
 
-export const huntHit = (t: HuntTry, target: number) =>
-  t.median !== undefined && t.median <= target && t.loss < 20;
+/**
+ * «تلقائي» (حسن ٩ نوفمبر): بدل رقم يختاره العضو — نوقف أول ما يطلع آي بي أحسن من الحين بوضوح:
+ * البنق أقل ٢٠٪ (و٥ms على الأقل)، والسرعة (لو نقيسها) ما نزلت أكثر من ١٠٪. ما نتجاوز الزين ونضيّعه.
+ */
+export interface AutoGoal { auto: true; base: number; baseDown?: number }
+export type HuntGoal = number | AutoGoal;
+export const autoTarget = (g: AutoGoal) => Math.min(Math.round(g.base * 0.8), g.base - 5);
+
+export function huntHit(t: HuntTry, goal: HuntGoal): boolean {
+  if (t.median === undefined || t.loss >= 20) return false;
+  if (typeof goal === 'number') return t.median <= goal;
+  if (t.median > autoTarget(goal)) return false;
+  return goal.baseDown === undefined || t.down === undefined || t.down >= goal.baseDown * 0.9;
+}
 
 /** نوقف؟ وصلنا · خلصت المحاولات · الشركة ترجّع نفس الآي بي مرتين ورا بعض (القطع السريع ما يغيّر) */
-export function huntStop(tries: HuntTry[], target: number, max: number): 'hit' | 'max' | 'stuck' | null {
+export function huntStop(tries: HuntTry[], target: HuntGoal, max: number): 'hit' | 'max' | 'stuck' | null {
   const last = tries[tries.length - 1];
   if (last && huntHit(last, target)) return 'hit';
   if (tries.length >= 2 && tries[tries.length - 1].changed === false && tries[tries.length - 2].changed === false) return 'stuck';

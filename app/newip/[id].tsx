@@ -19,7 +19,8 @@ import { withSession, withSessionPatient } from '../../src/store/sessions';
 import { waitOnline, freeRelease } from '../../src/utils/safeLock';
 import { C, R, S, tBg, tBd, tFg } from '../../src/ui/theme';
 import { measureUrl, regionUrls, selectedRegion, GameRegion } from '../../src/utils/latency';
-import { HuntTry, huntTargets, huntStop, huntBest, huntHit, huntFastest } from '../../src/utils/ipHunt';
+import { HuntTry, HuntGoal, huntTargets, huntStop, huntBest, huntHit, huntFastest, autoTarget } from '../../src/utils/ipHunt';
+import { IpGuard, getIpGuard, setIpGuard, clearIpGuard, IP_GUARD_HOURS } from '../../src/store/ipGuard';
 import { quickDown } from '../../src/utils/speedLive';
 
 import { sheet } from '../../src/i18n';
@@ -163,6 +164,8 @@ export default function NewIp() {
           // كل خطوات تغيير الآي بي (قطع/فصل/إعادة تشغيل/فك) عملية وحدة على الراوتر
           await runRouterOp(info, 'آي بي جديد', async op => {
           setBusy(true); setError(''); setAfter(null); setStep('');
+          // آي بي جديد يدوي ← الحماية حق الآي بي القديم ما لها معنى
+          clearIpGuard(info.id).catch(() => {}); setGuard(null);
           try {
             const old = before ?? await readIps(info);
             if (mounted.current) setBefore(old);
@@ -278,7 +281,11 @@ export default function NewIp() {
   // ═══ «دوّر لي على آي بي ممتاز» — يكرر آي بي جديد + قياس بنق لين يوصل الهدف (utils/ipHunt) ═══
   const [region, setRegion] = useState<GameRegion | null>(null);
   const [base, setBase] = useState<number | undefined>();
-  const [target, setTarget] = useState<number | null>(null);
+  /** 'auto' = نوقف أول ما يطلع آي بي أحسن من الحين بوضوح (الافتراضي) */
+  const [target, setTarget] = useState<number | 'auto'>('auto');
+  const [goalUsed, setGoalUsed] = useState<HuntGoal | null>(null);
+  const [guard, setGuard] = useState<IpGuard | null>(null);
+  useEffect(() => { if (id) getIpGuard(String(id)).then(g => mounted.current && setGuard(g)).catch(() => {}); }, [id]);
   const [tries, setTries] = useState<HuntTry[]>([]);
   const [huntEnd, setHuntEnd] = useState<'hit' | 'max' | 'stuck' | 'cancel' | null>(null);
   const [hunting, setHunting] = useState(false);
@@ -294,15 +301,18 @@ export default function NewIp() {
   const measureBase = async () => {
     if (!region) return;
     const r0 = await measureUrl(regionUrls(region), 8);
-    if (mounted.current && r0.samples) { setBase(r0.median); setTarget(t => t ?? huntTargets(r0.median)[0] ?? 60); }
+    if (mounted.current && r0.samples) setBase(r0.median);
   };
   useEffect(() => { if (region && !loading && supported) measureBase().catch(() => {}); }, [region, loading, supported]);
 
   const hunt = () => {
-    if (!info || !region || !huntWay || target === null) return;
-    const goal = target;
+    if (!info || !region || !huntWay) return;
+    const auto = target === 'auto';
+    if (auto && base === undefined) { Alert.alert('آي بي ممتاز', 'ما قدرنا نقيس بنقك الحالي — تأكد إن جوالك على واي فاي الراوتر، أو اختر رقم.'); return; }
     Alert.alert('آي بي ممتاز',
-      `نغيّر الآي بي ونقيس البنق لـ ${region.name} لين يصير ${goal}ms أو أقل — حد أقصى ${huntMax} محاولات.` +
+      (auto
+        ? `نغيّر الآي بي ونقيس البنق لـ ${region.name}، ونوقف أول ما يطلع آي بي أحسن من الحين بوضوح (${autoTarget({ auto: true, base: base! })}ms أو أقل${withSpeed ? ' والسرعة ما نزلت' : ''}) — حد أقصى ${huntMax} محاولات.`
+        : `نغيّر الآي بي ونقيس البنق لـ ${region.name} لين يصير ${target}ms أو أقل — حد أقصى ${huntMax} محاولات.`) +
       (huntWay === 'reboot' ? '\n\n⚠️ شركتك ما تغيّر الآي بي إلا بإعادة تشغيل — كل محاولة دقيقتين تقريباً والنت ينقطع.' : '\n\nالنت ينقطع ثواني مع كل محاولة.') +
       (withSpeed ? `\n\n📶 ونقيس سرعة التنزيل مع كل محاولة (حتى ٢٥ ميقا لكل وحدة — يعني حتى ${huntMax * 25} ميقا من باقتك).` : '') +
       '\n\nما نقدر نرجع لآي بي قديم — لو ما وصلنا الهدف تبقى على آخر واحد.',
@@ -312,6 +322,13 @@ export default function NewIp() {
           text: 'دوّر', onPress: async () => {
             stopHunt.current = false;
             setTries([]); setHuntEnd(null); setError(''); setAfter(null);
+            let goal: HuntGoal = auto ? { auto: true, base: base! } : (target as number);
+            if (auto && withSpeed) {
+              setStatus('نقيس سرعتك الحالية عشان نقارن...');
+              const d0 = await quickDown(4000, 25_000_000).catch(() => null);
+              if (d0?.mbps) goal = { auto: true, base: base!, baseDown: d0.mbps };
+            }
+            setGoalUsed(goal);
             await runRouterOp(info, 'آي بي ممتاز', async () => {
               setHunting(true); setBusy(true);
               const list: HuntTry[] = [];
@@ -350,7 +367,16 @@ export default function NewIp() {
                   if (mounted.current) { setTries([...list]); setAfter(fresh); }
                   diag(`[iphunt] ${n}/${huntMax} ${huntWay} · ${t.changed === undefined ? 'آي بي ما انقرى' : t.changed ? 'آي بي جديد' : 'نفس الآي بي'} · ${t.median ?? '—'}ms فقد ${t.loss}%${down !== undefined ? ` · ${down}Mbps` : ''}`);
                   const end = huntStop(list, goal, huntMax);
-                  if (end) { setHuntEnd(end); break; }
+                  if (end) {
+                    setHuntEnd(end);
+                    // لقينا آي بي ممتاز ← نحميه ٣ ساعات (ما نسوي شي تلقائي يقطع الاتصال)
+                    if (end === 'hit') {
+                      const g: IpGuard = { until: Date.now() + IP_GUARD_HOURS * 3600_000, ip: t.ip, ms: t.median };
+                      await setIpGuard(info.id, g);
+                      if (mounted.current) setGuard(g);
+                    }
+                    break;
+                  }
                 }
               } catch (e: any) {
                 if (mounted.current) setError(e?.message ?? String(e));
@@ -425,6 +451,10 @@ export default function NewIp() {
             </Text>
             <Text style={s.ipLbl}>البنق اللي تبيه (أو أقل):</Text>
             <View style={s.targets}>
+              <Pressable onPress={() => setTarget('auto')} disabled={busy}
+                style={[s.tgt, target === 'auto' && { backgroundColor: ACCENT, borderColor: ACCENT }]}>
+                <Text style={[s.tgtTxt, target === 'auto' && { color: '#fff' }]}>✨ تلقائي</Text>
+              </Pressable>
               {huntTargets(base).map(t => (
                 <Pressable key={t} onPress={() => setTarget(t)} disabled={busy}
                   style={[s.tgt, target === t && { backgroundColor: ACCENT, borderColor: ACCENT }]}>
@@ -447,7 +477,7 @@ export default function NewIp() {
                 <Text style={s.btn2Text}>⏹ وقّف</Text>
               </Pressable>
             ) : (
-              <Pressable style={[s.btn, (busy || target === null) && { opacity: 0.6 }]} onPress={hunt} disabled={busy || target === null}>
+              <Pressable style={[s.btn, busy && { opacity: 0.6 }]} onPress={hunt} disabled={busy}>
                 <Text style={s.btnText}>🎯 دوّر (حد أقصى {huntMax} محاولات)</Text>
               </Pressable>
             )}
@@ -455,7 +485,7 @@ export default function NewIp() {
               <View style={s.ipBox}>
                 {tries.map(t => (
                   <View key={t.n} style={s.tryRow}>
-                    <Text style={[s.tryMs, { color: target !== null && huntHit(t, target) ? tFg('#0f7a52') : t.median !== undefined && base !== undefined && t.median < base ? ACCENT : C.text }]}>
+                    <Text style={[s.tryMs, { color: goalUsed !== null && huntHit(t, goalUsed) ? tFg('#0f7a52') : t.median !== undefined && base !== undefined && t.median < base ? ACCENT : C.text }]}>
                       {t.median !== undefined ? `${t.median}ms` : '—'}{t.loss >= 20 ? ` · فقد ${t.loss}%` : ''}
                       {t.down !== undefined ? <Text style={[s.tryDown, fastest?.n === t.n && { color: tFg('#0f7a52') }]}>{`  ·  ${t.down} Mbps`}</Text> : null}
                     </Text>
@@ -467,7 +497,7 @@ export default function NewIp() {
             {huntEnd === 'hit' && <Text style={[s.verdict, { color: tFg('#0f7a52') }]}>✓ لقينا آي بي ممتاز: {tries[tries.length - 1]?.median}ms — العب عليه</Text>}
             {huntEnd === 'max' && (
               <Text style={s.note}>
-                ما وصلنا {target}ms بعد {tries.length} محاولات{best ? ` — أفضل رقم طلع ${best.median}ms (محاولة ${best.n})` : ''}. البنق يعتمد على البرج والشركة أكثر من الآي بي — جرّب بعد شوي، أو ارفع الهدف.
+                ما وصلنا {goalUsed && typeof goalUsed !== 'number' ? `آي بي أحسن من اللي كان (${autoTarget(goalUsed)}ms)` : `${goalUsed}ms`} بعد {tries.length} محاولات{best ? ` — أفضل رقم طلع ${best.median}ms (محاولة ${best.n})` : ''}. البنق يعتمد على البرج والشركة أكثر من الآي بي — جرّب بعد شوي، أو ارفع الهدف.
               </Text>
             )}
             {huntEnd === 'stuck' && (
@@ -476,6 +506,17 @@ export default function NewIp() {
               </Text>
             )}
             {huntEnd === 'cancel' && <Text style={s.note}>وقفنا — أنت الحين على آخر آي بي.</Text>}
+            {!!guard && !hunting && (
+              <View style={s.guardBox}>
+                <Text style={s.guardTxt}>
+                  🛡️ آي بيك محمي لين {new Date(guard.until).toLocaleTimeString('ar-SA', { hour: 'numeric', minute: '2-digit' })}
+                  {guard.ms !== undefined ? ` (${guard.ms}ms)` : ''} — التطبيق ما يسوي شي تلقائي يقطع الاتصال (الحارس، الإصلاح، الصيانة). لو النت طاح ترجع تشتغل عادي.
+                </Text>
+                <Pressable hitSlop={8} onPress={() => { clearIpGuard(info!.id).catch(() => {}); setGuard(null); }}>
+                  <Text style={s.guardOff}>شيل الحماية</Text>
+                </Pressable>
+              </View>
+            )}
             {!!fastest && !hunting && (
               <Text style={s.note}>📶 أسرع تنزيل: {fastest.down} Mbps (محاولة {fastest.n}{fastest.median !== undefined ? ` · بنق ${fastest.median}ms` : ''}){fastest.n === tries[tries.length - 1]?.n ? ' — وهو اللي أنت عليه الحين' : ''}</Text>
             )}
@@ -553,6 +594,9 @@ const s = sheet({
   tryIp: { color: C.sub, fontSize: 12.5, fontWeight: '700', flexShrink: 1, fontVariant: ['tabular-nums'] },
   tryMs: { fontSize: 14, fontWeight: '800', fontVariant: ['tabular-nums'] },
   tryDown: { color: C.sub, fontSize: 12.5, fontWeight: '700' },
+  guardBox: { backgroundColor: tBg('#ecf8f3'), borderColor: tBd('#9bd8bf'), borderWidth: 1.5, borderRadius: 12, padding: 10, gap: 6 },
+  guardTxt: { color: tFg('#0f7a52'), fontSize: 12.5, fontWeight: '700', textAlign: 'right', lineHeight: 19 },
+  guardOff: { color: C.muted, fontSize: 12, fontWeight: '800', textAlign: 'left' },
   speedRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   check: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: tBd('#9fc6d1'), alignItems: 'center', justifyContent: 'center' },
   checkMark: { color: '#fff', fontSize: 12, fontWeight: '900', lineHeight: 14 },
