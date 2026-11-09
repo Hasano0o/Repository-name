@@ -103,6 +103,7 @@ const files = [
   'src/utils/gameLockCore.ts',
   'src/utils/operatorBrand.ts',
   'src/utils/comboPlan.ts',
+  'src/utils/ipHunt.ts',
   'src/drivers/m2a/parse.ts',
   'src/drivers/m2a/index.ts',
   ...fs.readdirSync(path.join(root, 'tests')).filter(f => f.endsWith('.test.ts')).map(f => `tests/${f}`),

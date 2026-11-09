@@ -18,6 +18,8 @@ import { diag } from '../../src/services/diag';
 import { withSession, withSessionPatient } from '../../src/store/sessions';
 import { waitOnline, freeRelease } from '../../src/utils/safeLock';
 import { C, R, S, tBg, tBd, tFg } from '../../src/ui/theme';
+import { measureUrl, regionUrls, selectedRegion, GameRegion } from '../../src/utils/latency';
+import { HuntTry, huntTargets, huntStop, huntBest, huntHit } from '../../src/utils/ipHunt';
 
 import { sheet } from '../../src/i18n';
 
@@ -272,6 +274,85 @@ export default function NewIp() {
     ]);
   };
 
+  // ═══ «دوّر لي على آي بي ممتاز» — يكرر آي بي جديد + قياس بنق لين يوصل الهدف (utils/ipHunt) ═══
+  const [region, setRegion] = useState<GameRegion | null>(null);
+  const [base, setBase] = useState<number | undefined>();
+  const [target, setTarget] = useState<number | null>(null);
+  const [tries, setTries] = useState<HuntTry[]>([]);
+  const [huntEnd, setHuntEnd] = useState<'hit' | 'max' | 'stuck' | 'cancel' | null>(null);
+  const [hunting, setHunting] = useState(false);
+  const stopHunt = useRef(false);
+  useEffect(() => { selectedRegion().then(r => mounted.current && setRegion(r)).catch(() => {}); }, []);
+  // الطريقة: الفصل عن البرج لو هو اللي ينفع عندك · القطع السريع · وإلا إعادة التشغيل (دقيقتين لكل محاولة — حد أقل)
+  const huntWay: 'detach' | 'quick' | 'reboot' | null =
+    detachFirst && canDetach ? 'detach' : canQuick && !skipQuick ? 'quick' : canReboot ? 'reboot' : canDetach ? 'detach' : null;
+  const huntMax = huntWay === 'reboot' ? 3 : 8;
+  const measureBase = async () => {
+    if (!region) return;
+    const r0 = await measureUrl(regionUrls(region), 8);
+    if (mounted.current && r0.samples) { setBase(r0.median); setTarget(t => t ?? huntTargets(r0.median)[0] ?? 60); }
+  };
+  useEffect(() => { if (region && !loading && supported) measureBase().catch(() => {}); }, [region, loading, supported]);
+
+  const hunt = () => {
+    if (!info || !region || !huntWay || target === null) return;
+    const goal = target;
+    Alert.alert('آي بي ممتاز',
+      `نغيّر الآي بي ونقيس البنق لـ ${region.name} لين يصير ${goal}ms أو أقل — حد أقصى ${huntMax} محاولات.` +
+      (huntWay === 'reboot' ? '\n\n⚠️ شركتك ما تغيّر الآي بي إلا بإعادة تشغيل — كل محاولة دقيقتين تقريباً والنت ينقطع.' : '\n\nالنت ينقطع ثواني مع كل محاولة.') +
+      '\n\nما نقدر نرجع لآي بي قديم — لو ما وصلنا الهدف تبقى على آخر واحد.',
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'دوّر', onPress: async () => {
+            stopHunt.current = false;
+            setTries([]); setHuntEnd(null); setError(''); setAfter(null);
+            await runRouterOp(info, 'آي بي ممتاز', async () => {
+              setHunting(true); setBusy(true);
+              const list: HuntTry[] = [];
+              let prev = (before ?? await readIps(info)).pub;
+              try {
+                for (let n = 1; n <= huntMax; n++) {
+                  if (stopHunt.current || !mounted.current) { setHuntEnd('cancel'); break; }
+                  setStatus(`محاولة ${n}/${huntMax} — نغيّر الآي بي...`);
+                  if (huntWay === 'reboot') {
+                    await withSession(info, d => d.reboot!(), false);
+                    await sleep(30000);
+                  } else if (huntWay === 'detach') {
+                    await withSession(info, d => d.reattach!(10), false);
+                    await sleep(5000);
+                  } else {
+                    await withSession(info, d => d.reconnectData!({ holdSecs: 10 }), false);
+                    await sleep(3000);
+                  }
+                  const fresh = await settle(huntWay === 'reboot' ? 150000 : 90000);
+                  setStatus(`محاولة ${n}/${huntMax} — نقيس البنق لـ ${region.name}...`);
+                  await sleep(1500);
+                  const m = await measureUrl(regionUrls(region), 10);
+                  const t: HuntTry = {
+                    n, ip: fresh.pub, median: m.samples ? m.median : undefined,
+                    loss: m.samples ? Math.round(m.lossPct) : 100, changed: !!fresh.pub && fresh.pub !== prev,
+                  };
+                  prev = fresh.pub ?? prev;
+                  list.push(t);
+                  if (mounted.current) { setTries([...list]); setAfter(fresh); }
+                  diag(`[iphunt] ${n}/${huntMax} ${huntWay} · ${t.changed ? 'آي بي جديد' : 'نفس الآي بي'} · ${t.median ?? '—'}ms فقد ${t.loss}%`);
+                  const end = huntStop(list, goal, huntMax);
+                  if (end) { setHuntEnd(end); break; }
+                }
+              } catch (e: any) {
+                if (mounted.current) setError(e?.message ?? String(e));
+                reportError('newip', e, info);
+              } finally {
+                if (mounted.current) { setHunting(false); setBusy(false); setStatus(''); }
+              }
+            });
+          },
+        },
+      ]);
+  };
+  const best = huntBest(tries);
+
   const pubChanged = !!before?.pub && !!after?.pub && before.pub !== after.pub;
   const wanChanged = !!before?.wan && !!after?.wan && before.wan !== after.wan;
 
@@ -322,7 +403,59 @@ export default function NewIp() {
           {!!error && <Text style={s.err}>{error}</Text>}
         </View>
 
-        {after && (
+        {!loading && supported && !!huntWay && !!region && (
+          <View style={s.card}>
+            <Text style={s.title}>🎯 دوّر لي على آي بي ممتاز</Text>
+            <Text style={s.body}>
+              نغيّر الآي بي ونقيس البنق لسيرفر لعبتك ({region.name}) لين يطلع الرقم اللي تبيه — بدل ما تجرّب بنفسك مرة ورا مرة.
+              {base !== undefined ? ` البنق الحين ${base}ms.` : ''}
+            </Text>
+            <Text style={s.ipLbl}>البنق اللي تبيه (أو أقل):</Text>
+            <View style={s.targets}>
+              {huntTargets(base).map(t => (
+                <Pressable key={t} onPress={() => setTarget(t)} disabled={busy}
+                  style={[s.tgt, target === t && { backgroundColor: ACCENT, borderColor: ACCENT }]}>
+                  <Text style={[s.tgtTxt, target === t && { color: '#fff' }]}>{t}ms</Text>
+                </Pressable>
+              ))}
+            </View>
+            {hunting ? (
+              <Pressable style={s.btn2} onPress={() => { stopHunt.current = true; setStatus('نوقف بعد هالمحاولة...'); }}>
+                <Text style={s.btn2Text}>⏹ وقّف</Text>
+              </Pressable>
+            ) : (
+              <Pressable style={[s.btn, (busy || target === null) && { opacity: 0.6 }]} onPress={hunt} disabled={busy || target === null}>
+                <Text style={s.btnText}>🎯 دوّر (حد أقصى {huntMax} محاولات)</Text>
+              </Pressable>
+            )}
+            {tries.length > 0 && (
+              <View style={s.ipBox}>
+                {tries.map(t => (
+                  <View key={t.n} style={s.tryRow}>
+                    <Text style={[s.tryMs, { color: target !== null && huntHit(t, target) ? tFg('#0f7a52') : t.median !== undefined && base !== undefined && t.median < base ? ACCENT : C.text }]}>
+                      {t.median !== undefined ? `${t.median}ms` : '—'}{t.loss >= 20 ? ` · فقد ${t.loss}%` : ''}
+                    </Text>
+                    <Text style={s.tryIp} numberOfLines={1}>{t.n}. {t.ip ?? '—'}{t.changed ? '' : ' (نفسه)'}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            {huntEnd === 'hit' && <Text style={[s.verdict, { color: tFg('#0f7a52') }]}>✓ لقينا آي بي ممتاز: {tries[tries.length - 1]?.median}ms — العب عليه</Text>}
+            {huntEnd === 'max' && (
+              <Text style={s.note}>
+                ما وصلنا {target}ms بعد {tries.length} محاولات{best ? ` — أفضل رقم طلع ${best.median}ms (محاولة ${best.n})` : ''}. البنق يعتمد على البرج والشركة أكثر من الآي بي — جرّب بعد شوي، أو ارفع الهدف.
+              </Text>
+            )}
+            {huntEnd === 'stuck' && (
+              <Text style={s.note}>
+                الشركة ترجّع نفس الآي بي مع القطع السريع — {canReboot ? 'استخدم «أعد تشغيل الراوتر» تحت، أو جرّب بعد ٥–١٠ دقايق.' : 'جرّب بعد ٥–١٠ دقايق.'}
+              </Text>
+            )}
+            {huntEnd === 'cancel' && <Text style={s.note}>وقفنا — أنت الحين على آخر آي بي.</Text>}
+          </View>
+        )}
+
+        {after && !tries.length && (
           <View style={[s.card, { borderColor: pubChanged || wanChanged ? tBd('#7fd4b8') : tBd('#f5cf8a') }]}>
             {pubChanged ? (
               <>
@@ -386,4 +519,10 @@ const s = sheet({
   verdict: { fontWeight: '800', fontSize: 15, textAlign: 'right', lineHeight: 23 },
   note: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 19 },
   foot: { color: C.muted, fontSize: 11.5, textAlign: 'center', lineHeight: 18, paddingHorizontal: 8 },
+  targets: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
+  tgt: { borderWidth: 1.5, borderColor: tBd('#cfe3ea'), borderRadius: 10, paddingHorizontal: 14, paddingVertical: 7 },
+  tgtTxt: { color: C.text, fontWeight: '800', fontSize: 13.5 },
+  tryRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  tryIp: { color: C.sub, fontSize: 12.5, fontWeight: '700', flexShrink: 1, fontVariant: ['tabular-nums'] },
+  tryMs: { fontSize: 14, fontWeight: '800', fontVariant: ['tabular-nums'] },
 });
