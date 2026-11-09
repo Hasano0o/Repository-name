@@ -4,7 +4,8 @@
  * التطبيق يكرر: آي بي جديد ← نقيس البنق ← وصلنا الهدف؟ نوقف : مرة ثانية (حد أقصى).
  * ما نقدر نرجع لآي بي قديم — لو خلصت المحاولات نقول وش كان أفضل رقم.
  */
-export interface HuntTry { n: number; ip?: string; median?: number; loss: number; changed: boolean }
+/** changed: undefined = ما قرينا الآي بي (مو «نفسه») · down = سرعة التنزيل Mbps لو العضو طلبها */
+export interface HuntTry { n: number; ip?: string; median?: number; loss: number; changed?: boolean; down?: number }
 
 /** أهداف البنق المعروضة — «أقل من الحين» (٨٠٪ من الحالي) + أرقام ثابتة */
 export function huntTargets(base?: number): number[] {
@@ -21,7 +22,7 @@ export const huntHit = (t: HuntTry, target: number) =>
 export function huntStop(tries: HuntTry[], target: number, max: number): 'hit' | 'max' | 'stuck' | null {
   const last = tries[tries.length - 1];
   if (last && huntHit(last, target)) return 'hit';
-  if (tries.length >= 2 && !tries[tries.length - 1].changed && !tries[tries.length - 2].changed) return 'stuck';
+  if (tries.length >= 2 && tries[tries.length - 1].changed === false && tries[tries.length - 2].changed === false) return 'stuck';
   if (tries.length >= max) return 'max';
   return null;
 }
@@ -29,5 +30,12 @@ export function huntStop(tries: HuntTry[], target: number, max: number): 'hit' |
 export function huntBest(tries: HuntTry[]): HuntTry | null {
   let b: HuntTry | null = null;
   for (const t of tries) if (t.median !== undefined && t.loss < 50 && (!b || t.median < b.median!)) b = t;
+  return b;
+}
+
+/** أسرع تنزيل بين المحاولات (عضو: «أضف أفضل سرعة تنزيل مع البنق») */
+export function huntFastest(tries: HuntTry[]): HuntTry | null {
+  let b: HuntTry | null = null;
+  for (const t of tries) if (t.down !== undefined && t.down > 0 && (!b || t.down > b.down!)) b = t;
   return b;
 }

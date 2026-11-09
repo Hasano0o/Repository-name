@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { huntTargets, huntStop, huntBest, huntHit, HuntTry } from '../src/utils/ipHunt';
+import { huntTargets, huntStop, huntBest, huntHit, huntFastest, HuntTry } from '../src/utils/ipHunt';
 
 const T = (n: number, median?: number, changed = true, loss = 0): HuntTry => ({ n, ip: `10.0.0.${n}`, median, loss, changed });
 
@@ -24,4 +24,14 @@ test('الشركة ترجّع نفس الآي بي مرتين ← stuck · خل�
 test('أفضل محاولة', () => {
   assert.equal(huntBest([T(1, 90), T(2, 65), T(3, 80)])?.n, 2);
   assert.equal(huntBest([T(1, undefined)]), null);
+});
+
+test('ما قرينا الآي بي (changed غير معروف) ← مو «نفسه» وما يوقف stuck', () => {
+  const u: HuntTry = { n: 3, loss: 0, median: 135 };
+  assert.equal(huntStop([T(1, 150, false), u], 60, 8), null);
+});
+
+test('أسرع تنزيل بين المحاولات', () => {
+  assert.equal(huntFastest([{ ...T(1, 90), down: 20 }, { ...T(2, 80), down: 45.5 }, T(3, 70)])?.n, 2);
+  assert.equal(huntFastest([T(1, 90)]), null);
 });

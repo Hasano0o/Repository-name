@@ -19,7 +19,8 @@ import { withSession, withSessionPatient } from '../../src/store/sessions';
 import { waitOnline, freeRelease } from '../../src/utils/safeLock';
 import { C, R, S, tBg, tBd, tFg } from '../../src/ui/theme';
 import { measureUrl, regionUrls, selectedRegion, GameRegion } from '../../src/utils/latency';
-import { HuntTry, huntTargets, huntStop, huntBest, huntHit } from '../../src/utils/ipHunt';
+import { HuntTry, huntTargets, huntStop, huntBest, huntHit, huntFastest } from '../../src/utils/ipHunt';
+import { quickDown } from '../../src/utils/speedLive';
 
 import { sheet } from '../../src/i18n';
 
@@ -281,6 +282,9 @@ export default function NewIp() {
   const [tries, setTries] = useState<HuntTry[]>([]);
   const [huntEnd, setHuntEnd] = useState<'hit' | 'max' | 'stuck' | 'cancel' | null>(null);
   const [hunting, setHunting] = useState(false);
+  /** نقيس سرعة التنزيل مع كل محاولة (اختياري — ~٢٥ ميقا لكل محاولة) */
+  const [withSpeed, setWithSpeed] = useState(false);
+  useEffect(() => { AsyncStorage.getItem('bandly.iphunt.speed').then(v => mounted.current && setWithSpeed(v === '1')).catch(() => {}); }, []);
   const stopHunt = useRef(false);
   useEffect(() => { selectedRegion().then(r => mounted.current && setRegion(r)).catch(() => {}); }, []);
   // الطريقة: الفصل عن البرج لو هو اللي ينفع عندك · القطع السريع · وإلا إعادة التشغيل (دقيقتين لكل محاولة — حد أقل)
@@ -300,6 +304,7 @@ export default function NewIp() {
     Alert.alert('آي بي ممتاز',
       `نغيّر الآي بي ونقيس البنق لـ ${region.name} لين يصير ${goal}ms أو أقل — حد أقصى ${huntMax} محاولات.` +
       (huntWay === 'reboot' ? '\n\n⚠️ شركتك ما تغيّر الآي بي إلا بإعادة تشغيل — كل محاولة دقيقتين تقريباً والنت ينقطع.' : '\n\nالنت ينقطع ثواني مع كل محاولة.') +
+      (withSpeed ? `\n\n📶 ونقيس سرعة التنزيل مع كل محاولة (حتى ٢٥ ميقا لكل وحدة — يعني حتى ${huntMax * 25} ميقا من باقتك).` : '') +
       '\n\nما نقدر نرجع لآي بي قديم — لو ما وصلنا الهدف تبقى على آخر واحد.',
       [
         { text: 'إلغاء', style: 'cancel' },
@@ -329,14 +334,21 @@ export default function NewIp() {
                   setStatus(`محاولة ${n}/${huntMax} — نقيس البنق لـ ${region.name}...`);
                   await sleep(1500);
                   const m = await measureUrl(regionUrls(region), 10);
+                  let down: number | undefined;
+                  if (withSpeed && !stopHunt.current) {
+                    setStatus(`محاولة ${n}/${huntMax} — نقيس سرعة التنزيل...`);
+                    down = (await quickDown(4000, 25_000_000, () => stopHunt.current).catch(() => null))?.mbps;
+                  }
                   const t: HuntTry = {
-                    n, ip: fresh.pub, median: m.samples ? m.median : undefined,
-                    loss: m.samples ? Math.round(m.lossPct) : 100, changed: !!fresh.pub && fresh.pub !== prev,
+                    n, ip: fresh.pub, median: m.samples ? m.median : undefined, down,
+                    loss: m.samples ? Math.round(m.lossPct) : 100,
+                    // ما قرينا الآي بي ← غير معروف (مو «نفسه»)
+                    changed: fresh.pub && prev ? fresh.pub !== prev : undefined,
                   };
                   prev = fresh.pub ?? prev;
                   list.push(t);
                   if (mounted.current) { setTries([...list]); setAfter(fresh); }
-                  diag(`[iphunt] ${n}/${huntMax} ${huntWay} · ${t.changed ? 'آي بي جديد' : 'نفس الآي بي'} · ${t.median ?? '—'}ms فقد ${t.loss}%`);
+                  diag(`[iphunt] ${n}/${huntMax} ${huntWay} · ${t.changed === undefined ? 'آي بي ما انقرى' : t.changed ? 'آي بي جديد' : 'نفس الآي بي'} · ${t.median ?? '—'}ms فقد ${t.loss}%${down !== undefined ? ` · ${down}Mbps` : ''}`);
                   const end = huntStop(list, goal, huntMax);
                   if (end) { setHuntEnd(end); break; }
                 }
@@ -352,6 +364,7 @@ export default function NewIp() {
       ]);
   };
   const best = huntBest(tries);
+  const fastest = huntFastest(tries);
 
   const pubChanged = !!before?.pub && !!after?.pub && before.pub !== after.pub;
   const wanChanged = !!before?.wan && !!after?.wan && before.wan !== after.wan;
@@ -419,6 +432,16 @@ export default function NewIp() {
                 </Pressable>
               ))}
             </View>
+            <Pressable disabled={busy} onPress={() => {
+              const v = !withSpeed;
+              setWithSpeed(v);
+              AsyncStorage.setItem('bandly.iphunt.speed', v ? '1' : '0').catch(() => {});
+            }} style={s.speedRow}>
+              <View style={[s.check, withSpeed && { backgroundColor: ACCENT, borderColor: ACCENT }]}>
+                {withSpeed && <Text style={s.checkMark}>✓</Text>}
+              </View>
+              <Text style={s.speedTxt}>📶 قِس سرعة التنزيل كمان (حتى ٢٥ ميقا لكل محاولة)</Text>
+            </Pressable>
             {hunting ? (
               <Pressable style={s.btn2} onPress={() => { stopHunt.current = true; setStatus('نوقف بعد هالمحاولة...'); }}>
                 <Text style={s.btn2Text}>⏹ وقّف</Text>
@@ -434,8 +457,9 @@ export default function NewIp() {
                   <View key={t.n} style={s.tryRow}>
                     <Text style={[s.tryMs, { color: target !== null && huntHit(t, target) ? tFg('#0f7a52') : t.median !== undefined && base !== undefined && t.median < base ? ACCENT : C.text }]}>
                       {t.median !== undefined ? `${t.median}ms` : '—'}{t.loss >= 20 ? ` · فقد ${t.loss}%` : ''}
+                      {t.down !== undefined ? <Text style={[s.tryDown, fastest?.n === t.n && { color: tFg('#0f7a52') }]}>{`  ·  ${t.down} Mbps`}</Text> : null}
                     </Text>
-                    <Text style={s.tryIp} numberOfLines={1}>{t.n}. {t.ip ?? '—'}{t.changed ? '' : ' (نفسه)'}</Text>
+                    <Text style={s.tryIp} numberOfLines={1}>{t.n}. {t.ip ?? 'ما قرينا الآي بي'}{t.changed === false ? ' (نفسه)' : ''}</Text>
                   </View>
                 ))}
               </View>
@@ -452,6 +476,9 @@ export default function NewIp() {
               </Text>
             )}
             {huntEnd === 'cancel' && <Text style={s.note}>وقفنا — أنت الحين على آخر آي بي.</Text>}
+            {!!fastest && !hunting && (
+              <Text style={s.note}>📶 أسرع تنزيل: {fastest.down} Mbps (محاولة {fastest.n}{fastest.median !== undefined ? ` · بنق ${fastest.median}ms` : ''}){fastest.n === tries[tries.length - 1]?.n ? ' — وهو اللي أنت عليه الحين' : ''}</Text>
+            )}
           </View>
         )}
 
@@ -525,4 +552,9 @@ const s = sheet({
   tryRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   tryIp: { color: C.sub, fontSize: 12.5, fontWeight: '700', flexShrink: 1, fontVariant: ['tabular-nums'] },
   tryMs: { fontSize: 14, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  tryDown: { color: C.sub, fontSize: 12.5, fontWeight: '700' },
+  speedRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
+  check: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: tBd('#9fc6d1'), alignItems: 'center', justifyContent: 'center' },
+  checkMark: { color: '#fff', fontSize: 12, fontWeight: '900', lineHeight: 14 },
+  speedTxt: { color: C.text, fontSize: 12.5, fontWeight: '700', flexShrink: 1, textAlign: 'right' },
 });

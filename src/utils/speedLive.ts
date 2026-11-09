@@ -83,6 +83,12 @@ function makePayload(n: number) {
   return chunk.repeat(Math.ceil(n / chunk.length)).slice(0, n);
 }
 
+/** تنزيل قصير بس (آي بي ممتاز — مقارنة المحاولات): ٤ ثواني، حد ٢٥ ميقا */
+export async function quickDown(ms = 4000, maxBytes = 25_000_000, cancel: () => boolean = () => false): Promise<{ mbps: number; mb: number }> {
+  const d = await run('down', ms, maxBytes, () => {}, cancel);
+  return { mbps: Math.round(d.mbps * 10) / 10, mb: Math.round(d.bytes / 1e5) / 10 };
+}
+
 export async function speedTest(onPhase: (p: SpeedPhase, liveMbps?: number) => void, cancel: () => boolean = () => false): Promise<LiveSpeed> {
   onPhase('ping');
   const ping = await pingMs();
