@@ -86,6 +86,47 @@ class Classify(unittest.TestCase):
         self.assertEqual(v["status"], "none")
 
 
+class Writes(unittest.TestCase):
+    """أوامر التغيير تنفتح بس لو أمرها في كود صفحة الراوتر نفسه"""
+
+    def test_zte_page_with_commands(self):
+        files = {"js/service.js": 'goformId:"BAND_SELECT",x;goformId:"SET_BEARER_PREFERENCE";goformId:"REBOOT_DEVICE";goformId:"SEND_SMS"'}
+        w = ap.evidence_writes("zte", files)
+        self.assertEqual(w, sorted(["setBand", "setNetworkMode", "reboot", "sendSms"] + ap.RESTORE))
+
+    def test_u30_lesson_no_band_select_no_setband(self):
+        """صفحة U30: الترددات بـ LTE_BAND_LOCK — BAND_SELECT مو موجود ← setBand ما ينفتح (ولا الإرجاع لو ما فيه وضع شبكة)"""
+        w = ap.evidence_writes("zte", {"js/service.js": 'goformId:"LTE_BAND_LOCK";goformId:"NR_BAND_LOCK";goformId:"REBOOT_DEVICE"'})
+        self.assertEqual(w, ["reboot"])
+
+    def test_all_tokens_required_and_whole_word(self):
+        # آي بي جديد يحتاج الأمرين
+        self.assertNotIn("reconnectData", ap.evidence_writes("zte", {"a.js": '"DISCONNECT_NETWORK"'}))
+        self.assertIn("reconnectData", ap.evidence_writes("zte", {"a.js": '"DISCONNECT_NETWORK","CONNECT_NETWORK"'}))
+        # جزء من اسم أطول ما ينحسب
+        self.assertEqual(ap.evidence_writes("zte", {"a.js": '"MY_BAND_SELECT_OLD" "REBOOT_DEVICE_X"'}), [])
+        self.assertEqual(ap.evidence_writes("huawei-lte", {"a.js": 'getAjaxData("api/net/net-mode-list")'}), [])
+        self.assertIn("setBand", ap.evidence_writes("huawei-lte", {"a.js": 'saveAjaxData("api/net/net-mode",x)'}))
+
+    def test_library_and_live_files_are_not_evidence(self):
+        self.assertEqual(ap.evidence_writes("zte", {"js/jquery.min.js": '"BAND_SELECT"', "_bandly/live.txt": "BAND_SELECT REBOOT_DEVICE"}), [])
+
+    def test_unknown_family_and_cell_lock_never(self):
+        self.assertEqual(ap.evidence_writes("luci", {"a.js": "anything"}), [])
+        old = ap.WRITES["zte"].copy()
+        try:
+            ap.WRITES["zte"]["lockCell"] = ["LTE_LOCK_CELL_SET"]
+            self.assertNotIn("lockCell", ap.evidence_writes("zte", {"a.js": '"LTE_LOCK_CELL_SET"'}))
+        finally:
+            ap.WRITES["zte"] = old
+        self.assertNotIn("lockCell", ap.live_writes({"writes": ["lockCell", "reboot"]}))
+        for fam in ap.WRITES.values():
+            self.assertFalse(set(fam) & ap.NEVER)
+
+    def test_every_family_in_writes_is_a_known_driver(self):
+        self.assertTrue(set(ap.WRITES) <= set(ap.LABEL))
+
+
 class Keys(unittest.TestCase):
     def test_fp_key_stable_and_order_free(self):
         a = ap.fp_key({"server": "GoAhead", "scripts": ["js/a.js", "js/b.js"], "loginFields": ["pw(password)"]})
@@ -127,9 +168,12 @@ class WithData(unittest.TestCase):
         ap.DUMP_DIRS = [self.dumps]
         ap.AP = root / "autoprog"
         ap.OPEN, ap.ESC, ap.CASES, ap.PROFILES, ap.OFF = ap.AP / "open", ap.AP / "escalate", ap.AP / "cases.jsonl", ap.AP / "profiles.json", ap.AP / "off"
+        self._old2 = (ap.WRITES_OFF, ap.DISCOVERED)
+        ap.WRITES_OFF, ap.DISCOVERED = ap.AP / "writes_off", ap.AP / "discovered.jsonl"
 
     def tearDown(self):
         ap.DUMP_DIRS, ap.AP, ap.OPEN, ap.ESC, ap.CASES, ap.PROFILES, ap.OFF = self._old
+        ap.WRITES_OFF, ap.DISCOVERED = self._old2
         self.tmp.cleanup()
 
 
@@ -228,6 +272,52 @@ class Api(WithData):
         self.assertEqual(self.post("lookup", {"fp": FP}).json()["status"], "known")
         self.assertFalse(ap.ESC.exists() and list(ap.ESC.glob("*.md")))
         self.assertIn("1 تبرمج لحاله · 0 يحتاجك", "\n".join(ap.digest_lines(0)))
+
+    def test_writes_follow_page_evidence_and_remote_control(self):
+        page = {"js/service.js": ZTE_FILES["js/service.js"] + ' goformId:"BAND_SELECT" goformId:"REBOOT_DEVICE"'}
+        make_zip(self.dumps, "router-MF297-1110-1004.zip", "ZTE MF297", "192.168.0.1", page)
+        r = self.post("verdict", {"model": "ZTE MF297", "host": "192.168.0.1", "fp": FP}).json()
+        self.assertEqual(r["writes"], sorted(["setBand", "reboot"] + ap.RESTORE))
+        key = r["key"]
+        self.assertEqual(key, ap.fp_key(FP))
+        # قبل ما تنحفظ البصمة: التطبيق يبقى على اللي عنده
+        self.assertEqual(self.post("caps", {"key": key}).json(), {"known": False, "writes": None})
+        self.post("result", {"id": r["id"], "ok": True, "stage": "signal"})
+        self.assertEqual(self.post("caps", {"key": key}).json(), {"known": True, "writes": r["writes"]})
+        # العضو الجاي (بدون ملفات) ياخذ نفس الأوامر
+        self.assertEqual(self.post("lookup", {"fp": FP}).json()["writes"], r["writes"])
+        # قفل أمر واحد على البصمة
+        self.assertTrue(ap.set_block(key, "setBand", True))
+        self.assertNotIn("setBand", self.post("caps", {"key": key}).json()["writes"])
+        self.assertIn("reboot", self.post("lookup", {"fp": FP}).json()["writes"])
+        self.assertTrue(ap.set_block(key, "setBand", False))
+        self.assertIn("setBand", self.post("caps", {"key": key}).json()["writes"])
+        self.assertFalse(ap.set_block("nope", "setBand", True))
+        # إيقاف أوامر التغيير للكل: المضافين يرجعون قراءة بس، والمطابقة تكمّل
+        ap.WRITES_OFF.write_text("")
+        self.assertEqual(self.post("caps", {"key": key}).json()["writes"], [])
+        self.assertEqual(self.post("caps", {"key": "abc"}).json(), {"known": False, "writes": []})
+        k = self.post("lookup", {"fp": FP}).json()
+        self.assertEqual((k["status"], k["writes"]), ("known", []))
+
+    def test_second_dump_narrows_writes_never_widens(self):
+        full = {"js/service.js": ZTE_FILES["js/service.js"] + ' "BAND_SELECT" "REBOOT_DEVICE"'}
+        less = {"js/service.js": ZTE_FILES["js/service.js"] + ' "REBOOT_DEVICE" "SEND_SMS"'}
+        make_zip(self.dumps, "router-MF297-1110-1004.zip", "ZTE MF297", "192.168.0.1", full)
+        a = self.post("verdict", {"model": "ZTE MF297", "host": "192.168.0.1", "fp": FP}).json()
+        self.post("result", {"id": a["id"], "ok": True, "stage": "signal"})
+        make_zip(self.dumps, "router-MF297B-1110-1005.zip", "ZTE MF297B", "192.168.0.1", less)
+        b = self.post("verdict", {"model": "ZTE MF297B", "host": "192.168.0.1", "fp": FP}).json()
+        self.post("result", {"id": b["id"], "ok": True, "stage": "signal"})
+        self.assertEqual(self.post("caps", {"key": a["key"]}).json()["writes"], ["reboot"])
+
+    def test_discovered_is_logged_without_values(self):
+        r = self.post("discovered", {"key": "abc123", "driver": "zte", "model": "ZTE MF297",
+                                     "reads": {"getDevices": True, "getCells": False, "x": "secret-value"}, "writes": ["reboot"]})
+        self.assertEqual(r.json(), {"ok": True})
+        rec = json.loads(ap.DISCOVERED.read_text("utf-8").strip())
+        self.assertEqual((rec["ok"], rec["fail"], rec["writes"]), (["getDevices"], ["getCells"], ["reboot"]))
+        self.assertNotIn("secret-value", ap.DISCOVERED.read_text("utf-8"))
 
     def test_no_match_escalates(self):
         make_zip(self.dumps, "router-MR600-1110-1004.zip", "TP-Link MR600", "192.168.1.1", {"x.js": "rsrp /cgi/login password"})

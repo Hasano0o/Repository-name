@@ -9,8 +9,24 @@ export interface SavedRouter {
   driverId: string;
   driverName: string;
   createdAt: number;
-  /** انضاف بـ«برمج لي جهازي» (درايفر مقترح من الرسيفر) — قراءة بس لين نتأكد من الكتابة على موديله */
+  /** انضاف بـ«برمج لي جهازي» (درايفر مقترح من الرسيفر) — الدرايفر يتغلّف (drivers/readOnly.ts) */
   readOnly?: boolean;
+  /**
+   * وش انفتح لراوتر «برمج لي جهازي»: writes = أوامر التغيير اللي أمرها في كود صفحته (من الرسيفر)،
+   * hide = قراءات فشلت في اكتشاف الميزات، key = بصمته عند الرسيفر، checkedAt = آخر مرة سألناه وش مفتوح.
+   */
+  auto?: { key?: string; writes?: string[]; hide?: string[]; reads?: Record<string, boolean>; discoveredAt?: number; checkedAt?: number };
+}
+
+/** تحديث خانات راوتر «برمج لي جهازي» بس (بدون كلمة المرور ولا الباقي) */
+export async function patchAuto(id: string, patch: NonNullable<SavedRouter['auto']>): Promise<SavedRouter | null> {
+  const all = await listRouters();
+  const idx = all.findIndex(r => r.id === id);
+  if (idx === -1 || !all[idx].readOnly) return null;
+  const next = [...all];
+  next[idx] = { ...all[idx], auto: { ...all[idx].auto, ...patch } };
+  await AsyncStorage.setItem(KEY, JSON.stringify(next));
+  return next[idx];
 }
 
 const KEY = 'routers:v1';

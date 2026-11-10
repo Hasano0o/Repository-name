@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fpPayload, parseVerdict, runTrial, signalFields } from '../src/utils/autoprogCore';
-import { isReadMethod, isReadOnlyDriver, readOnlyDriver, READ_ONLY_MSG } from '../src/drivers/readOnly';
+import {
+  cleanWrites, discoverReads, discoverySummary, fpPayload, hiddenReads, parseVerdict, runTrial, signalFields, writeLabels,
+} from '../src/utils/autoprogCore';
+import { autoCapabilities, isReadMethod, isReadOnlyDriver, readOnlyDriver, READ_ONLY_MSG, WRITE_BLOCKED_MSG } from '../src/drivers/readOnly';
 import { isNoChange } from '../src/drivers/noChange';
 import type { RouterDriver, Signal } from '../src/drivers/types';
 
@@ -115,7 +117,10 @@ test('درايفر بدون getSignal ← ناخذ من getSnapshot', async () =
 test('حكم الرسيفر: لازم رقم حالة ودرايفر موجود في هالنسخة', () => {
   const have = ['zte', 'huawei-lte'];
   assert.deepEqual(parseVerdict({ status: 'match', id: 'a1b2c3d4e5f6a7b8', driver: 'zte', label: 'ZTE' }, have),
-    { status: 'match', id: 'a1b2c3d4e5f6a7b8', driver: 'zte', label: 'ZTE' });
+    { status: 'match', id: 'a1b2c3d4e5f6a7b8', driver: 'zte', label: 'ZTE', key: '', writes: [] });
+  const full = parseVerdict({ status: 'match', id: 'a1b2c3d4e5f6a7b8', driver: 'zte', key: 'f61df7ee70d907d15519', writes: ['setBand', 'reboot', 'setBand'] }, have);
+  assert.equal(full.key, 'f61df7ee70d907d15519');
+  assert.deepEqual(full.writes, ['setBand', 'reboot']);
   assert.equal(parseVerdict({ status: 'known', id: 'a1b2c3d4e5f6a7b8', driver: 'huawei-lte' }, have).status, 'known');
   // درايفر مو عندنا (نسخة قديمة) / درايفر الاحتياطي / رد ناقص / سيرفر قديم ← none
   assert.equal(parseVerdict({ status: 'match', id: 'a1b2c3d4e5f6a7b8', driver: 'tplink' }, have).status, 'none');
@@ -189,4 +194,110 @@ test('التجربة على درايفر مغلّف «قراءة بس» تشتغ
   const r = await runTrial(readOnlyDriver(d), '192.168.0.1', 'admin', 'pw', 0);
   assert.equal(r.ok, true);
   assert.deepEqual(calls, ['login', 'getSignal', 'logout']);
+});
+
+// ═══ أوامر التغيير المفتوحة من الرسيفر ═══
+
+test('رد الرسيفر: أسماء دوال بس — أي شي ثاني ينرمى', () => {
+  assert.deepEqual(cleanWrites(['setBand', 'reboot', 5, null, 'rm -rf /', '__proto__', 'a', 'x'.repeat(40)]), ['setBand', 'reboot']);
+  assert.deepEqual(cleanWrites('setBand'), []);
+  assert.deepEqual(cleanWrites(undefined), []);
+  assert.equal(parseVerdict({ status: 'match', id: 'a1b2c3d4e5f6a7b8', driver: 'zte', key: '../etc' }, ['zte']).key, '');
+});
+
+test('التغيير المفتوح يوصل الدرايفر، وغيره يوقف قبله بـ noChange', async () => {
+  const { d, calls } = fake();
+  const ro = readOnlyDriver(d, { writes: ['setBand', 'reboot', 'restoreLockState'] });
+  await ro.setBand!([3], [78]);
+  await ro.reboot!();
+  await ro.restoreLockState!({} as any);
+  assert.deepEqual(calls, ['setBand', 'reboot', 'restoreLockState']);
+  for (const m of ['setNetworkMode', 'sendSms', 'blockDevice', 'setWifiChannel', 'restoreAll', 'post']) {
+    let err: unknown;
+    try { await (ro as any)[m](); } catch (e) { err = e; }
+    assert.ok(isNoChange(err), `${m} لازم يوقف`);
+    assert.equal((err as Error).message, WRITE_BLOCKED_MSG);
+  }
+  assert.deepEqual(calls, ['setBand', 'reboot', 'restoreLockState'], 'المحجوب ما وصل الدرايفر');
+});
+
+test('تثبيت البرج ما ينفتح أبداً — حتى لو الرسيفر أرسله', async () => {
+  const { d, calls } = fake();
+  (d as any).lockChannel = async () => { calls.push('lockChannel'); };
+  const ro = readOnlyDriver(d, { writes: ['lockCell', 'lockChannel', 'setBand'] });
+  for (const m of ['lockCell', 'lockChannel']) {
+    let err: unknown;
+    try { await (ro as any)[m]({ tech: 'LTE', pci: '1' }); } catch (e) { err = e; }
+    assert.ok(isNoChange(err), m);
+  }
+  assert.deepEqual(calls, []);
+  assert.deepEqual((ro as any).autoWrites, ['setBand']);
+});
+
+test('القدرات تتبع اللي انفتح واللي انخفى', () => {
+  const base = ['signal', 'bandLock', 'reboot', 'devices', 'sms', 'cells', 'block', 'usage', 'traffic'] as any;
+  assert.deepEqual(autoCapabilities(base, {}), ['signal', 'devices', 'cells', 'usage', 'traffic']);
+  assert.deepEqual(autoCapabilities(base, { writes: ['setBand', 'reboot', 'sendSms', 'blockDevice'] }), base);
+  assert.deepEqual(autoCapabilities(base, { writes: ['sendSms', 'lockCell'], hide: ['listSms', 'getDevices', 'getCells'] }), ['signal', 'usage', 'traffic']);
+  const { d } = fake();
+  assert.deepEqual(readOnlyDriver(d, { writes: ['setBand'], hide: ['getDevices'] }).capabilities, ['signal', 'bandLock', 'cells']);
+});
+
+test('قراءة فشلت في الاكتشاف تنخفي — والإشارة ما تنخفي مهما صار', async () => {
+  const { d, calls } = fake();
+  const ro = readOnlyDriver(d, { hide: ['getDevices', 'getSignal', 'login', 'setBand', 'readLockState'] });
+  assert.equal(ro.getDevices, undefined);
+  assert.equal(typeof ro.getSignal, 'function');
+  assert.equal(typeof ro.login, 'function');
+  assert.equal(typeof ro.readLockState, 'function');
+  await ro.getTraffic!();
+  assert.deepEqual(calls, ['post', 'getTraffic']);
+});
+
+// ═══ اكتشاف الميزات ═══
+
+test('الاكتشاف: يجرّب القراءات الموجودة بس، ويسجّل اللي رد واللي لا — بدون أي أمر تغيير', async () => {
+  const { d, calls } = fake();
+  (d as any).getCells = async () => { calls.push('getCells'); throw new Error('404'); };
+  (d as any).getBandConfig = async () => { calls.push('getBandConfig'); return { supported: [1, 3] }; };
+  const steps: string[] = [];
+  const r = await discoverReads(d, (n, t) => steps.push(`${n}/${t}`), 200, 0);
+  assert.equal(r.aborted, false);
+  assert.deepEqual(r.reads, { getBandConfig: true, getCells: false, getDevices: true, getTraffic: true });
+  assert.ok(!calls.some(c => /^(set|lock|reboot|send|block|restore|reconnect|enable)/.test(c)), calls.join());
+  assert.equal(steps[steps.length - 1], '4/4');
+  assert.deepEqual(hiddenReads(r.reads), ['getCells']);
+  assert.deepEqual(discoverySummary(r.reads), { found: ['الترددات', 'الأجهزة المتصلة', 'السرعة الحية'], missing: ['الأبراج'] });
+});
+
+test('الاكتشاف: قراءة تعلّق ← مهلة وتنحسب «لا»، والباقي يكمّل', async () => {
+  const { d } = fake();
+  (d as any).getDevices = () => new Promise(() => {});
+  const r = await discoverReads(d, undefined, 30, 0);
+  assert.equal(r.reads.getDevices, false);
+  assert.equal(r.reads.getTraffic, true);
+  assert.equal(r.aborted, false);
+});
+
+test('الاكتشاف: الراوتر طلّعنا (كل شي يفشل والإشارة كمان) ← نوقف وما نبني على النتيجة', async () => {
+  const dead = () => { throw new Error('انتهت الجلسة'); };
+  const { d } = fake({ sig: dead as any });
+  for (const m of ['getNetworkInfo', 'getDeviceDetails', 'getBandConfig', 'getCells', 'getCarriers', 'getDevices', 'getTraffic']) (d as any)[m] = async () => dead();
+  const r = await discoverReads(d, undefined, 200, 0);
+  assert.equal(r.aborted, true);
+  assert.equal(Object.keys(r.reads).length, 4, 'وقف عند رابع فشل');
+});
+
+test('الاكتشاف: ٤ ميزات مو موجودة ورا بعض بس الإشارة شغالة ← نكمّل (مو انقطاع)', async () => {
+  const { d } = fake();
+  for (const m of ['getNetworkInfo', 'getDeviceDetails', 'getBandConfig', 'getCells', 'getCarriers']) (d as any)[m] = async () => { throw new Error('404'); };
+  const r = await discoverReads(d, undefined, 200, 0);
+  assert.equal(r.aborted, false);
+  assert.equal(r.reads.getCarriers, false);
+  assert.equal(r.reads.getDevices, true);
+});
+
+test('أسماء أوامر التغيير للعضو', () => {
+  assert.deepEqual(writeLabels(['setBand', 'reconnectData', 'reattach', 'restoreAll', 'reboot']), ['تثبيت الترددات', 'إعادة التشغيل', 'آي بي جديد']);
+  assert.deepEqual(writeLabels(undefined), []);
 });

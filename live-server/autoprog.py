@@ -10,9 +10,12 @@
 
 القواعد:
   • الرسيفر ما يوصل راوتر العضو ولا عنده كلمة المرور — التأكيد دايماً من التطبيق.
-  • التلقائي قراءة بس. الكتابة (ترددات/برج/وضع) تنفتح يدوياً لكل موديل بعد تجربة ميدانية.
+  • القراءات كلها تنفتح، والتطبيق يكتشف وش يشتغل منها على الراوتر نفسه (اكتشاف الميزات).
+  • أوامر التغيير (ترددات/وضع الشبكة/إعادة تشغيل…) تنفتح تلقائي **بس لو أمرها موجود في كود صفحة الراوتر نفسه**
+    (جدول WRITES) — نفس قاعدتنا اليدوية «لا كتابة بدون دليل». تثبيت البرج ما ينفتح تلقائي أبداً.
   • ما يلمس app_dump ولا ملفات zip — يقرأ بس.
-  • إيقاف فوري:  touch data/autoprog/off      (يرجع: rm data/autoprog/off)
+  • إيقاف فوري للكل:        touch data/autoprog/off          (يرجع: rm data/autoprog/off)
+  • إيقاف أوامر التغيير بس:  touch data/autoprog/writes_off   (الراوترات المضافة ترجع قراءة بس خلال يوم)
 
 الربط في app.py (سطرين):
     from autoprog import router as autoprog_router  # noqa: E402
@@ -22,6 +25,8 @@
   python3 autoprog.py --scan           ← يفحص كل ملفات «جهاز جديد» الموجودة: كم واحد يطابق عائلة معروفة
   python3 autoprog.py --zip FILE.zip   ← تفاصيل ملف واحد (النقاط والأدلة)
   python3 autoprog.py --stats          ← وش صار: تبرمج تلقائي / تحوّل للمبرمج / البصمات المحفوظة
+  python3 autoprog.py --block KEY METHOD    ← يقفل أمر تغيير على بصمة (مثل setBand) — يوصل الأعضاء خلال يوم
+  python3 autoprog.py --unblock KEY METHOD
 """
 import hashlib
 import json
@@ -41,6 +46,8 @@ ESC = AP / "escalate"
 CASES = AP / "cases.jsonl"
 PROFILES = AP / "profiles.json"
 OFF = AP / "off"
+WRITES_OFF = AP / "writes_off"
+DISCOVERED = AP / "discovered.jsonl"
 
 DAY = 86400
 MAX_SCAN = 3_000_000
@@ -163,6 +170,62 @@ FEATURES = [
     ("واي فاي", r"\bssid|wifi_?(?:main|setting|basic)|wlan"),
 ]
 _FEAT = [(n, re.compile(rx)) for n, rx in FEATURES]
+
+
+# ─── أوامر التغيير: تنفتح بس لو الأمر اللي يرسله درايفرنا موجود في كود صفحة الراوتر نفسه ───
+# {الدرايفر: {دالة الدرايفر: [أسماء الأوامر اللي ترسلها — كلها لازم تكون في الصفحة]}}
+# الأسماء من كود الدرايفرات (src/drivers/*) — مثال الدرس: U30 Pro صفحته ما فيها BAND_SELECT ← setBand ما ينفتح له.
+# عائلة أو دالة مو هنا = تبقى مقفولة (نضيفها هنا بعد ما نتأكد من اسم أمرها — بدون تحديث للتطبيق).
+WRITES = {
+    "zte": {
+        "setBand": ["BAND_SELECT"], "setNetworkMode": ["SET_BEARER_PREFERENCE"], "reboot": ["REBOOT_DEVICE"],
+        "reconnectData": ["DISCONNECT_NETWORK", "CONNECT_NETWORK"], "reattach": ["WAN_OPERATE_MODE_SET"], "wakeRadio": ["WAN_OPERATE_MODE_SET"],
+        "sendSms": ["SEND_SMS"], "deleteSms": ["DELETE_SMS"], "markSmsRead": ["SET_MSG_READ"],
+    },
+    "zte-ufi": {
+        "setBand": ["SET_BAND_LOCK"], "reboot": ["REBOOT_DEVICE"],
+        "reconnectData": ["DISCONNECT_NETWORK", "CONNECT_NETWORK"], "blockDevice": ["WIFI_MAC_FILTER"],
+    },
+    "zte-ng": {"setBand": ["nwinfo_set_gwl_bandlock"], "setNetworkMode": ["nwinfo_set_netselect"], "reboot": ["device_reboot"]},
+    "huawei-lte": {
+        "setBand": ["api/net/net-mode"], "setNetworkMode": ["api/net/net-mode"],
+        "reboot": ["api/device/control"], "reconnectData": ["api/dialup/mobile-dataswitch"],
+    },
+    "zyxel": {"setBand": ["cellwan_band"], "setNetworkMode": ["cellwan_band"]},
+    "nokia": {"reboot": ["reboot_web_app.cgi"]},
+    "nokia-fwa": {"setBand": ["SetSupportedCellularBands"], "setNetworkMode": ["SetCellularAccessConfig"], "reboot": ["reboot_web_app.cgi"]},
+    "fg360": {"setBand": ["network.bands.set"], "setNetworkMode": ["network.mode.set"], "reboot": ["system.reboot"]},
+    "dlink": {"setBand": ["bandLockSetup"], "setNetworkMode": ["mobileNetworkBasicSetting"]},
+}
+# الإرجاع لازم يشتغل مع أي تغيير ترددات/وضع — لو انحجب يبقى الراوتر على إعداد غلط
+RESTORE = ["restoreLockState", "restoreAll", "unlockCell"]
+# ما تنفتح تلقائي أبداً — حتى لو أحد حطها في الجدول بالغلط (والتطبيق يحجبها كمان)
+NEVER = {"lockCell", "lockChannel"}
+
+
+def evidence_writes(driver: str, files: dict) -> list:
+    """دوال التغيير اللي أمرها موجود في كود صفحة هالراوتر (كلمة كاملة، مو جزء من اسم أطول)"""
+    table = WRITES.get(driver) or {}
+    if not table:
+        return []
+    page = "\n".join(t for p, t in files.items() if not p.startswith("_bandly/") and p != "README.txt" and not LIBLIKE.search(p))
+    out = []
+    for method, tokens in table.items():
+        if method in NEVER:
+            continue
+        if all(re.search(r"(?<![A-Za-z0-9_])" + re.escape(t) + r"(?![A-Za-z0-9_-])", page) for t in tokens):
+            out.append(method)
+    if "setBand" in out or "setNetworkMode" in out:
+        out += RESTORE
+    return sorted(out)
+
+
+def live_writes(p: dict | None) -> list:
+    """اللي مفتوح الحين لبصمة: دليل الصفحة ناقص اللي قفلناه — وفاضي لو أوامر التغيير موقوفة"""
+    if WRITES_OFF.exists() or OFF.exists() or not p:
+        return []
+    blocked = set(p.get("blocked") or []) | NEVER
+    return [m for m in (p.get("writes") or []) if m not in blocked]
 
 
 # ─── القراءة والمطابقة (بدون شبكة ولا FastAPI — عليها اختبارات) ───
@@ -331,7 +394,7 @@ def digest_lines(since: float) -> list[str]:
             continue
         m = (r.get("model") or "؟")[:40]
         if r.get("ev") == "result" and r.get("ok"):
-            auto[m] = LABEL.get(r.get("driver"), r.get("driver") or "؟")
+            auto[m] = LABEL.get(r.get("driver"), r.get("driver") or "؟") + (" + تغيير" if r.get("writes") else " (قراءة بس)")
         elif (r.get("ev") == "verdict" and r.get("status") == "none") or (r.get("ev") == "result" and not r.get("ok") and not r.get("neutral")):
             esc[m] = r.get("why") or r.get("err") or "ما طابق"
     for m in auto:
@@ -339,7 +402,7 @@ def digest_lines(since: float) -> list[str]:
     if not auto and not esc:
         return []
     out = [f"\n🤖 برمج لي جهازي: {len(auto)} تبرمج لحاله · {len(esc)} يحتاجك"]
-    out += [f"✓ {m} ← {fam} (قراءة بس)" for m, fam in list(auto.items())[:8]]
+    out += [f"✓ {m} ← {fam}" for m, fam in list(auto.items())[:8]]
     out += [f"✗ {m} — {str(w)[:60]}" for m, w in list(esc.items())[:8]]
     if esc:
         out.append("التقارير: data/autoprog/escalate/")
@@ -390,7 +453,8 @@ if APIRouter:
             return {"status": "none"}
         cid = _open_case({"key": key, "driver": p["driver"], "model": _s(b.get("model"), 60), "via": "lookup"})
         _log({"ev": "lookup", "id": cid, "key": key, "driver": p["driver"], "model": _s(b.get("model"), 60)})
-        return {"status": "known", "id": cid, "driver": p["driver"], "label": LABEL.get(p["driver"], p["driver"])}
+        return {"status": "known", "id": cid, "driver": p["driver"], "label": LABEL.get(p["driver"], p["driver"]),
+                "key": key, "writes": live_writes(p)}
 
     @router.post("/live-api/app/autoprog/verdict")
     async def ap_verdict(req: Request):
@@ -406,7 +470,12 @@ if APIRouter:
             return {"status": "none"}
         try:
             from starlette.concurrency import run_in_threadpool
-            v = await run_in_threadpool(lambda: classify(read_zip(z)))
+            def work():
+                files = read_zip(z)
+                c = classify(files)
+                c["writes"] = evidence_writes(c["driver"], files) if c["status"] == "match" else []
+                return c
+            v = await run_in_threadpool(work)
         except Exception as e:
             print(f"[autoprog] classify failed {z.name}: {str(e)[:120]}", flush=True)
             return {"status": "none"}
@@ -421,9 +490,11 @@ if APIRouter:
             esc = escalate(model, why, v, f"الملف: {z.name}")
             _log({"ev": "verdict", "status": "none", "model": model, "zip": z.name, "why": why, "driver": v["driver"], "score": v["score"], "esc": esc.name})
             return {"status": "none"}
-        cid = _open_case({"key": key, "driver": v["driver"], "model": model, "zip": z.name, "via": "verdict", "v": v})
-        _log({"ev": "verdict", "status": "match", "id": cid, "model": model, "zip": z.name, "driver": v["driver"], "score": v["score"], "second": v["second"], "key": key})
-        return {"status": "match", "id": cid, "driver": v["driver"], "label": v["label"]}
+        cid = _open_case({"key": key, "driver": v["driver"], "model": model, "zip": z.name, "via": "verdict", "v": v, "writes": v["writes"]})
+        _log({"ev": "verdict", "status": "match", "id": cid, "model": model, "zip": z.name, "driver": v["driver"], "score": v["score"],
+              "second": v["second"], "key": key, "writes": v["writes"]})
+        open_now = live_writes({"writes": v["writes"], "blocked": (_load(PROFILES, {}).get(key) or {}).get("blocked")})
+        return {"status": "match", "id": cid, "driver": v["driver"], "label": v["label"], "key": key, "writes": open_now}
 
     @router.post("/live-api/app/autoprog/result")
     async def ap_result(req: Request):
@@ -449,11 +520,17 @@ if APIRouter:
                 p["last"] = int(time.time())
                 if model and model not in p["models"]:
                     p["models"] = (p["models"] + [model])[-10:]
+                # دليل أوامر التغيير من ملفات هالعضو: أول نجاح يثبّته، وكل ملف جديد بنفس البصمة يضيّقه (التقاطع) — ما يوسّعه
+                if ok and case.get("via") == "verdict":
+                    w = [m for m in (case.get("writes") or []) if m not in NEVER]
+                    p["writes"] = sorted(set(p["writes"]) & set(w)) if "writes" in p else sorted(w)
                 profs[key] = p
                 AP.mkdir(parents=True, exist_ok=True)
                 PROFILES.write_text(json.dumps(profs, ensure_ascii=False, indent=1), "utf-8")
         ev = {"ev": "result", "id": cid, "ok": ok, "stage": stage, "err": err, "got": got, "model": model, "driver": drv,
               "key": key, "via": case.get("via"), "ver": _s(b.get("ver"), 20), "os": _s(b.get("os"), 10)}
+        prof_now = _load(PROFILES, {}).get(key) if key else None
+        ev["writes"] = len(live_writes(prof_now if prof_now else {"writes": case.get("writes")}))
         if neutral:
             ev["neutral"] = True
         elif not ok:
@@ -466,6 +543,47 @@ if APIRouter:
         except Exception:
             pass
         return {"ok": True}
+
+
+if APIRouter:
+    @router.post("/live-api/app/autoprog/caps")
+    async def ap_caps(req: Request):
+        """التطبيق يسأل مرة باليوم: وش أوامر التغيير المفتوحة لهالبصمة الحين؟ (قفلنا شي؟ وقّفنا الكل؟)"""
+        _rate(req, 120)
+        b = await _body(req)
+        key = re.sub(r"[^a-f0-9]", "", str(b.get("key") or ""))[:20]
+        p = _load(PROFILES, {}).get(key) if key else None
+        if not p:
+            # بصمة ما نعرفها (راوتر انضاف قبل ما تنحفظ) ← التطبيق يبقى على اللي عنده، إلا لو الكل موقوف
+            return {"known": False, "writes": [] if (WRITES_OFF.exists() or OFF.exists()) else None}
+        return {"known": True, "writes": live_writes(p)}
+
+    @router.post("/live-api/app/autoprog/discovered")
+    async def ap_discovered(req: Request):
+        """نتيجة اكتشاف الميزات على راوتر العضو: أسماء القراءات ونجحت/لا — بدون أي قيم"""
+        _rate(req, 60)
+        b = await _body(req)
+        reads = b.get("reads") if isinstance(b.get("reads"), dict) else {}
+        rec = {"t": int(time.time()), "key": re.sub(r"[^a-f0-9]", "", str(b.get("key") or ""))[:20], "driver": _s(b.get("driver"), 20),
+               "model": _s(b.get("model"), 60), "ok": sorted(_s(k, 30) for k, v in list(reads.items())[:60] if v is True),
+               "fail": sorted(_s(k, 30) for k, v in list(reads.items())[:60] if v is False),
+               "writes": [_s(x, 30) for x in (b.get("writes") or [])[:30]], "ver": _s(b.get("ver"), 20), "os": _s(b.get("os"), 10)}
+        AP.mkdir(parents=True, exist_ok=True)
+        with DISCOVERED.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        return {"ok": True}
+
+
+def set_block(key: str, method: str, on: bool) -> bool:
+    profs = _load(PROFILES, {})
+    p = profs.get(key)
+    if not p:
+        return False
+    cur = set(p.get("blocked") or [])
+    (cur.add if on else cur.discard)(method)
+    p["blocked"] = sorted(cur)
+    PROFILES.write_text(json.dumps(profs, ensure_ascii=False, indent=1), "utf-8")
+    return True
 
 
 # ─── التشغيل اليدوي ───
@@ -482,6 +600,7 @@ def _scan():
             try:
                 files = read_zip(z)
                 v = classify(files)
+                v["writes"] = evidence_writes(v["driver"], files) if v["status"] == "match" else []
             except Exception as e:
                 print(f"✗ {z.name}: {e}", file=sys.stderr)
                 continue
@@ -498,7 +617,8 @@ def _scan():
     for m, v in sorted(rows, key=lambda r: (r[1]["status"] != "match", -r[1]["score"])):
         sec = f" · الثاني {v['second'][0]} {v['second'][1]}" if v["second"] else ""
         if v["status"] == "match":
-            print(f"✓ {m:<34} ← {v['label']} ({v['score']}){sec}")
+            w = [x for x in v["writes"] if x not in RESTORE]
+            print(f"✓ {m:<34} ← {v['label']} ({v['score']}){sec} · تغيير: {'، '.join(w) or 'ولا أمر (قراءة بس)'}")
         elif v["scores"]:
             print(f"? {m:<34} ← مو واضح: {v['label']} ({v['score']}){sec}")
         else:
@@ -506,8 +626,11 @@ def _scan():
 
 
 def _one(path: str):
-    v = classify(read_zip(Path(path)))
+    files = read_zip(Path(path))
+    v = classify(files)
     print(f"النتيجة: {v['status']} · {v['label'] or '—'} ({v['score']})")
+    if v["status"] == "match":
+        print("أوامر التغيير اللي في صفحته:", "، ".join(evidence_writes(v["driver"], files)) or "ولا أمر")
     for d, s, w in v["scores"]:
         print(f"  {LABEL.get(d, d)} [{d}] = {s}\n     " + "\n     ".join(w))
     print("ميزات الصفحة:", "، ".join(v["features"]) or "—")
@@ -521,7 +644,10 @@ def _stats():
     for k, p in profs.items():
         print(f"  {k} ← {LABEL.get(p.get('driver'), p.get('driver'))} · نجح {p.get('ok', 0)} · فشل {p.get('fail', 0)} · "
               f"{'✓ مفعّلة' if profile_ok(p) else '✗ موقوفة'} · {'، '.join(p.get('models') or [])[:60]}")
-    print(f"الإيقاف: {'موقوف (data/autoprog/off)' if OFF.exists() else 'شغّال'}")
+        print(f"      تغيير مفتوح: {'، '.join(m for m in live_writes(p) if m not in RESTORE) or '—'}"
+              + (f" · مقفول يدوي: {'، '.join(p['blocked'])}" if p.get("blocked") else ""))
+    print(f"الإيقاف: {'موقوف (data/autoprog/off)' if OFF.exists() else 'شغّال'} · "
+          f"أوامر التغيير: {'موقوفة (writes_off)' if WRITES_OFF.exists() else 'شغّالة'}")
 
 
 if __name__ == "__main__":
@@ -532,5 +658,10 @@ if __name__ == "__main__":
         _one(a[a.index("--zip") + 1])
     elif "--stats" in a:
         _stats()
+    elif ("--block" in a or "--unblock" in a) and len(a) >= 3:
+        on = "--block" in a
+        i = a.index("--block" if on else "--unblock")
+        done = set_block(a[i + 1], a[i + 2], on)
+        print(f"✓ {'انقفل' if on else 'انفتح'} {a[i + 2]} على {a[i + 1]}" if done else "✗ ما لقيت هالبصمة (شوف --stats)")
     else:
         print(__doc__)

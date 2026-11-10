@@ -2,7 +2,7 @@ import { RouterDriver } from '../drivers/types';
 import { activeOps } from './activeOps';
 import { driverById } from '../drivers/registry';
 import { readOnlyDriver } from '../drivers/readOnly';
-import { SavedRouter, getPassword, getLabel, setPassword } from './routers';
+import { SavedRouter, getPassword, getLabel, setPassword, getRouter } from './routers';
 import { assertLanHost } from '../utils/host';
 import { getBaseline, saveBaseline } from './baseline';
 import { http } from '../drivers/http';
@@ -44,8 +44,11 @@ async function doConnect(r: SavedRouter, force = false): Promise<RouterDriver> {
   const cur = sessions.get(k);
   if (cur && !force && Date.now() - cur.authAt < MAX_AGE) return cur.d;
   const made = cur ? null : driverById(r.driverId);
-  // راوتر «برمج لي جهازي»: الدرايفر يتغلّف — أي أمر تغيير يوقف قبل ما يوصله (drivers/readOnly.ts)
-  const d = cur?.d ?? (made && r.readOnly ? readOnlyDriver(made) : made);
+  // راوتر «برمج لي جهازي»: الدرايفر يتغلّف — يمر بس التغيير اللي انفتح له (auto.writes)، وغيره يوقف قبل ما يوصله (drivers/readOnly.ts)
+  // الجلسة تمسك الغلاف: أي تغيير في auto (اكتشاف / رد الرسيفر) لازم بعده dropSession عشان ينبني من جديد
+  // الشاشات تمسك نسخة قديمة من الراوتر — اللي مفتوح له ناخذه من المحفوظ الحين (قفل من الرسيفر لازم يسري)
+  const auto = made && r.readOnly ? ((await getRouter(r.id).catch(() => null)) ?? r).auto : undefined;
+  const d = cur?.d ?? (made && r.readOnly ? readOnlyDriver(made, { writes: auto?.writes, hide: auto?.hide }) : made);
   if (!d) throw new Error('نوع الراوتر غير مدعوم');
   // ═══ حماية: نتحقق أن العنوان لا يزال محلياً قبل إرسال كلمة المرور.
   // يمنع هجوم تعديل AsyncStorage لإرسال كلمة المرور لخادم خارجي.
@@ -82,6 +85,8 @@ async function doConnect(r: SavedRouter, force = false): Promise<RouterDriver> {
     import('../services/stats').then(m => m.markLogin(d.name || r.driverId)).catch(() => {});
   }
   if (!cur) await attachBaseline(r, d);
+  // راوتر «برمج لي جهازي»: مرة باليوم نسأل الرسيفر وش أوامر التغيير المفتوحة لبصمته (لو قفلنا شي يسري هنا)
+  if (r.readOnly) import('../services/autoprog').then(m => m.refreshCaps(r.id)).catch(() => {});
   return d;
 }
 

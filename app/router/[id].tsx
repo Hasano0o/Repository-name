@@ -8,6 +8,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router';
 import { SavedRouter, getRouter, deleteRouter } from '../../src/store/routers';
 import { withSession, dropSession, routerWrite } from '../../src/store/sessions';
+import { discoverFeatures } from '../../src/services/autoprog';
+import { discoverySummary, writeLabels } from '../../src/utils/autoprogCore';
 import { Carrier, Signal, Usage, ConnectedDevice, Traffic, RouterDriver, DeviceDetails, DataPlan, ActiveLock } from '../../src/drivers/types';
 import {
   Level, LEVEL_COLOR, LEVEL_LABEL, overallLevel, parseBands, parseNrBands, signalScore,
@@ -149,6 +151,9 @@ export default function RouterDashboard() {
   const [authBusy, setAuthBusy] = useState(false);
   /** راوتر غير مؤكد ما أرسل ملفاته (بصمة الموديل/الفيرموير) — كرت «أرسل ملفات راوترك» مرة وحدة */
   const [fullFp, setFullFp] = useState<string | null>(null);
+  // «برمج لي جهازي»: إعادة اكتشاف الميزات
+  const [featBusy, setFeatBusy] = useState('');
+  const [featNote, setFeatNote] = useState('');
   const fullChecked = useRef(false);
   const [feat, setFeat] = useState<Features>(NO_FEATURES);
   const [signal, setSignal] = useState<Signal | null>(null);
@@ -1039,13 +1044,36 @@ export default function RouterDashboard() {
           </>
         )}
 
-        {!loading && info?.readOnly && (
-          // انضاف بـ«برمج لي جهازي» (درايفر مقترح من الرسيفر) — نوضّح ليش التغيير موقوف
-          <View style={[s.moreCard, { gap: 6, borderColor: tBd('#2a9fd855') }]}>
-            <Text style={[s.moreBtnTitle, { textAlign: 'right' }]}>تبرمج تلقائي — قراءة بس</Text>
-            <Text style={[s.moreBtnSub, { textAlign: 'right' }]}>راوترك انضاف بـ«برمج لي جهازي»: الإشارة والقراءات شغّالة. التغيير (الترددات، البرج، وضع الشبكة) ينفتح بعد ما نتأكد منه على موديلك — ونعلن في القروب.</Text>
-          </View>
-        )}
+        {!loading && info?.readOnly && (() => {
+          // انضاف بـ«برمج لي جهازي» (درايفر عائلة من الرسيفر): نوضّح وش انفتح له، ونخليه يعيد اكتشاف الميزات
+          const w = writeLabels(info.auto?.writes);
+          const sum = discoverySummary(info.auto?.reads ?? {});
+          return (
+            <View style={[s.moreCard, { gap: 6, borderColor: tBd('#2a9fd855') }]}>
+              <Text style={[s.moreBtnTitle, { textAlign: 'right' }]}>تبرمج تلقائي{w.length ? '' : ' — قراءة بس'}</Text>
+              <Text style={[s.moreBtnSub, { textAlign: 'right' }]}>
+                {w.length
+                  ? `انفتح لك من صفحة راوترك: ${w.join(' · ')}. الباقي ينفتح بعد ما نتأكد منه على موديلك. تثبيت البرج مقفول.`
+                  : 'الإشارة والقراءات شغّالة. التغيير (الترددات، وضع الشبكة…) ينفتح بعد ما نتأكد منه على موديلك — ونعلن في القروب.'}
+                {sum.missing.length ? `\nمو موجودة في راوترك: ${sum.missing.join(' · ')}.` : ''}
+              </Text>
+              {!!featNote && <Text style={[s.moreBtnSub, { textAlign: 'right', color: featNote.startsWith('✓') ? tFg('#12b76a') : tFg('#b45309') }]}>{featNote}</Text>}
+              <Pressable disabled={!!featBusy} style={[s.moreTile, { flexDirection: 'row', justifyContent: 'center', gap: 8, paddingVertical: 11, backgroundColor: tBg('#2a9fd814'), borderColor: tBd('#2a9fd855') }, !!featBusy && { opacity: 0.6 }]}
+                onPress={async () => {
+                  setFeatBusy('أكتشف…'); setFeatNote('');
+                  try {
+                    const rep = await discoverFeatures(info, (d, t) => setFeatBusy(`أكتشف… ${d}/${t}`));
+                    setInfo(rep.router);
+                    setFeatNote(rep.aborted ? 'الاتصال بالراوتر انقطع وقت الاكتشاف — جرّب مرة ثانية.' : `✓ لقينا: الإشارة${rep.found.length ? ' · ' + rep.found.join(' · ') : ''}`);
+                  } catch (e: any) { setFeatNote(`ما كمل الاكتشاف: ${String(e?.message ?? e).slice(0, 80)}`); }
+                  finally { setFeatBusy(''); }
+                }}>
+                {featBusy ? <ActivityIndicator size="small" color={tFg('#0e7d93')} /> : <Icon name="refresh" size={16} color={tFg('#0e7d93')} />}
+                <Text style={[s.moreLbl, { color: tFg('#0e7d93') }]}>{featBusy || (info.auto?.discoveredAt ? 'أعد اكتشاف الميزات' : 'اكتشف ميزات راوترك')}</Text>
+              </Pressable>
+            </View>
+          );
+        })()}
 
         {!loading && info && (authPages || !!fullFp || authNote.startsWith('✓')) && (
           // راوتر غير مؤكد (أو صفحاته تحتاج دخول): ملفات صفحته للمطوّر — مرة وحدة، بموافقة المستخدم

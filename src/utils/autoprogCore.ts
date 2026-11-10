@@ -13,6 +13,10 @@ export interface Verdict {
   id?: string;
   driver?: string;
   label?: string;
+  /** بصمة الصفحة عند الرسيفر — نسأله فيها لاحقاً وش مفتوح (caps) */
+  key?: string;
+  /** دوال التغيير اللي أمرها موجود في كود صفحة الراوتر — فاضية = قراءة بس */
+  writes?: string[];
 }
 export const NO_VERDICT: Verdict = { status: 'none' };
 
@@ -23,7 +27,16 @@ export function parseVerdict(j: unknown, have: string[]): Verdict {
   if (o.status !== 'match' && o.status !== 'known') return NO_VERDICT;
   const id = String(o.id ?? ''), driver = String(o.driver ?? '');
   if (!/^[a-f0-9]{8,32}$/.test(id) || !have.includes(driver)) return NO_VERDICT;
-  return { status: o.status, id, driver, label: String(o.label ?? driver).slice(0, 40) };
+  return {
+    status: o.status, id, driver, label: String(o.label ?? driver).slice(0, 40),
+    key: /^[a-f0-9]{8,40}$/.test(String(o.key ?? '')) ? String(o.key) : '',
+    writes: cleanWrites(o.writes),
+  };
+}
+
+/** أسماء دوال بس (حروف) — أي شي ثاني من السيرفر ينرمى */
+export function cleanWrites(w: unknown): string[] {
+  return Array.isArray(w) ? [...new Set(w.filter(x => typeof x === 'string' && /^[a-zA-Z]{3,30}$/.test(x)) as string[])].slice(0, 40) : [];
 }
 
 /** اللي نرسله من البصمة: سيرفر الراوتر وأسماء ملفات الصفحة وخانات الدخول (أسماء بس) */
@@ -101,4 +114,81 @@ export async function runTrial(d: RouterDriver, host: string, username: string, 
   } finally {
     try { await d.logout(); } catch { /* الخروج اختياري */ }
   }
+}
+
+// ═══ اكتشاف الميزات: وش يقرأ هالدرايفر فعلاً من راوتر العضو ═══
+
+/** القراءات اللي نجرّبها (كلها قراءة — ولا وحدة تغيّر شي). الاسم للعضو، أو '' = نجرّبها بدون ما نعرضها */
+export const DISCOVER_READS: [string, string][] = [
+  ['getNetworkInfo', 'معلومات الشبكة'], ['getDeviceDetails', 'تفاصيل الجهاز'], ['getBandConfig', 'الترددات'],
+  ['getCells', 'الأبراج'], ['getCarriers', 'الدمج'], ['getDevices', 'الأجهزة المتصلة'], ['getTraffic', 'السرعة الحية'],
+  ['getUsage', 'الاستهلاك'], ['getTemps', 'الحرارة'], ['listSms', 'الرسائل'], ['getWifiRadios', 'قناة الواي فاي'],
+  ['getExtras', 'مركز التحكم'], ['getDns', 'DNS'], ['getApnProfiles', 'APN'], ['getDataPlan', 'الباقة'],
+  ['getBlockedDevices', ''], ['getNetStandard', ''], ['getCellLock', ''], ['getActiveLock', ''], ['getModems', ''], ['getDeviceUsage', ''],
+];
+/** أوامر التغيير بأسماء يفهمها العضو (للعرض بس) */
+export const WRITE_LABELS: [string, string][] = [
+  ['setBand', 'تثبيت الترددات'], ['setNetworkMode', 'وضع الشبكة'], ['reboot', 'إعادة التشغيل'], ['reconnectData', 'آي بي جديد'],
+  ['reattach', 'آي بي جديد'], ['sendSms', 'إرسال الرسائل'], ['blockDevice', 'حظر الأجهزة'],
+];
+export function writeLabels(writes: string[] | undefined): string[] {
+  const w = new Set(writes ?? []);
+  return [...new Set(WRITE_LABELS.filter(([m]) => w.has(m)).map(([, l]) => l))];
+}
+
+export interface Discovery {
+  /** الدالة ← اشتغلت؟ (الدوال اللي مو في الدرايفر أصلاً ما تنكتب) */
+  reads: Record<string, boolean>;
+  /** انقطعنا في النص (الراوتر طلّعنا / الشبكة طاحت) — النتيجة ما ينبنى عليها */
+  aborted: boolean;
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((res, rej) => {
+    const t = setTimeout(() => rej(new Error('انتهت المهلة')), ms);
+    p.then(v => { clearTimeout(t); res(v); }, e => { clearTimeout(t); rej(e); });
+  });
+}
+
+/**
+ * يجرّب كل قراءة مرة وحدة على راوتر العضو. قراءة ردّت بدون خطأ = موجودة.
+ * ٤ فشل ورا بعض ← نتأكد بالإشارة: لو هي كمان طاحت فالمشكلة في الاتصال مو في الميزات ← نوقف وما نحفظ شي.
+ */
+export async function discoverReads(
+  d: RouterDriver, onStep?: (done: number, total: number) => void, timeoutMs = 9000, gapMs = 250,
+): Promise<Discovery> {
+  const reads: Record<string, boolean> = {};
+  const list = DISCOVER_READS.filter(([m]) => typeof (d as any)[m] === 'function');
+  let streak = 0;
+  for (let i = 0; i < list.length; i++) {
+    const m = list[i][0];
+    onStep?.(i, list.length);
+    try {
+      await withTimeout(Promise.resolve((d as any)[m]()), timeoutMs);
+      reads[m] = true; streak = 0;
+    } catch {
+      reads[m] = false; streak++;
+      if (streak >= 4) {
+        try { if (!signalFields(await withTimeout(readSignal(d), timeoutMs)).length) throw new Error('no signal'); streak = 0; }
+        catch { return { reads, aborted: true }; }
+      }
+    }
+    if (gapMs) await new Promise(res => setTimeout(res, gapMs));
+  }
+  onStep?.(list.length, list.length);
+  return { reads, aborted: false };
+}
+
+/** القراءات اللي تنخفي بعد الاكتشاف */
+export function hiddenReads(reads: Record<string, boolean>): string[] {
+  return Object.keys(reads).filter(m => reads[m] === false);
+}
+/** للعرض: وش لقينا ووش ما لقينا (الأسماء المعروضة بس) */
+export function discoverySummary(reads: Record<string, boolean>): { found: string[]; missing: string[] } {
+  const found: string[] = [], missing: string[] = [];
+  for (const [m, label] of DISCOVER_READS) {
+    if (!label || !(m in reads)) continue;
+    (reads[m] ? found : missing).push(label);
+  }
+  return { found, missing };
 }

@@ -20,8 +20,8 @@ import { detectDriver } from '../src/drivers/registry';
 import { LabelScannerHost, ensureScanner } from '../src/ui/scanner';
 import { ocrAvailable } from '../modules/bandly-cell/src';
 import { sendSupportReport } from '../src/services/errors';
-import { askVerdict, lookupProfile, reportTrial, saveAutoRouter, tryCandidate } from '../src/services/autoprog';
-import { NO_VERDICT, TrialResult, Verdict } from '../src/utils/autoprogCore';
+import { askVerdict, discoverFeatures, lookupProfile, reportTrial, saveAutoRouter, tryCandidate } from '../src/services/autoprog';
+import { NO_VERDICT, TrialResult, Verdict, writeLabels } from '../src/utils/autoprogCore';
 import { Icon } from '../src/ui/Icon';
 import { C, R, S, tBg, tBd, tFg } from '../src/ui/theme';
 import { sheet } from '../src/i18n';
@@ -79,6 +79,9 @@ export default function NewDeviceScreen() {
   const [tMsg, setTMsg] = useState('');
   const tries = useRef(0);
   const lastTrial = useRef<TrialResult | null>(null);
+  /** بعد ما انضاف: نتيجة اكتشاف الميزات (وش لقينا في راوتره ووش انفتح من أوامر التغيير) */
+  const [feat, setFeat] = useState<{ id: string; found: string[]; missing: string[]; writes: string[]; note: string } | null>(null);
+  const [tStep, setTStep] = useState('');
 
   const canSend = !!model.trim() && agree && !busy;
 
@@ -101,7 +104,17 @@ export default function NewDeviceScreen() {
       if (res.ok) {
         const saved = await saveAutoRouter(c.v, model.trim(), c.host, user, tPass);
         reportTrial(c.v, res).catch(() => {});
-        router.replace(`/router/${saved.id}` as Href);
+        // ═══ اكتشاف الميزات: نجرّب كل قراءة على راوتره (قراءة بس) — اللي يرد ينفتح، واللي ما يرد ينخفي ═══
+        setTStep('أكتشف ميزات راوترك…');
+        let found: string[] = [], missing: string[] = [], note = '';
+        try {
+          const rep = await discoverFeatures(saved, (d, t) => setTStep(`أكتشف ميزات راوترك… ${d}/${t}`));
+          found = rep.found; missing = rep.missing;
+          if (rep.aborted) note = 'الاتصال بالراوتر انقطع وقت الاكتشاف — أعده من صفحة الراوتر.';
+        } catch (e) { note = `ما كمل الاكتشاف (${String((e as any)?.message ?? e).slice(0, 80)}) — أعده من صفحة الراوتر.`; }
+        setTStep('');
+        setCand(null);
+        setFeat({ id: saved.id, found, missing, writes: writeLabels(c.v.writes), note });
         return;
       }
       if (res.stage === 'password' && tries.current < 2) {
@@ -226,6 +239,32 @@ ${r.failed.slice(0, 20).map(f => `  ✗ ${f}`).join('\n')}`, { driverName: model
     ]);
   };
 
+  if (feat) {
+    return (
+      <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 40 }]}>
+        <View style={s.hero}>
+          <View style={s.doneIcon}><Icon name="check" size={34} color={tFg('#12b76a')} stroke={3} /></View>
+          <Text style={s.title}>تبرمج راوترك ✓</Text>
+          <Text style={s.sub}>هذي الميزات اللي لقيناها في راوترك وانضافت لك:</Text>
+        </View>
+        <View style={s.card}>
+          <Text style={s.lbl}>القراءات</Text>
+          <Text style={s.featLine}>✓ الإشارة{feat.found.length ? ' · ' + feat.found.join(' · ') : ''}</Text>
+          {!!feat.missing.length && <Text style={[s.rowSub, { color: C.muted }]}>مو موجودة في راوترك: {feat.missing.join(' · ')}</Text>}
+          <Text style={s.lbl}>التغيير</Text>
+          {feat.writes.length
+            ? <Text style={s.featLine}>✓ {feat.writes.join(' · ')}</Text>
+            : <Text style={s.rowSub}>ما لقينا في صفحة راوترك أوامر تغيير نعرفها — قراءة بس للحين، والمبرمج يضيفها لموديلك.</Text>}
+          <Text style={s.rowSub}>نفتح بس الأوامر الموجودة في صفحة راوترك نفسها، وقبل أي تغيير التطبيق يحفظ إعدادك ويرجّعه لو النت طاح. تثبيت البرج ما ينفتح تلقائي.</Text>
+          {!!feat.note && <Text style={[s.rowSub, { color: tFg('#b45309') }]}>{feat.note}</Text>}
+        </View>
+        <Pressable style={[s.btn, { backgroundColor: '#12b76a' }]} onPress={() => router.replace(`/router/${feat.id}` as Href)} accessibilityRole="button">
+          <Icon name="check" size={17} color={C.onAccent} /><Text style={s.btnTxt}>افتح راوترك</Text>
+        </Pressable>
+      </ScrollView>
+    );
+  }
+
   if (cand) {
     return (
       <KeyboardAvoidingView style={{ flex: 1, backgroundColor: C.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
@@ -243,12 +282,12 @@ ${r.failed.slice(0, 20).map(f => `  ✗ ${f}`).join('\n')}`, { driverName: model
             <Text style={s.lbl}>كلمة مرور صفحة الراوتر</Text>
             <TextInput style={[s.input, { textAlign: 'left' }]} value={tPass} onChangeText={setTPass} secureTextEntry autoCapitalize="none" autoCorrect={false}
               placeholder="مكتوبة على الملصق تحت الراوتر" placeholderTextColor={C.muted} maxLength={64} />
-            <Text style={s.rowSub}>الكلمة تبقى في جوالك — ما تنرسل لنا. لو اشتغل، راوترك ينضاف «قراءة بس»، والتغيير ينفتح بعد ما نتأكد منه على موديلك.</Text>
+            <Text style={s.rowSub}>الكلمة تبقى في جوالك — ما تنرسل لنا. لو اشتغل، نكتشف ميزات راوترك (قراءات بس — ما نغيّر شي) ونضيفها لك، ونفتح أوامر التغيير الموجودة في صفحة راوترك نفسها.</Text>
             {!!tMsg && <Text style={[s.rowSub, { color: tFg('#e5484d') }]}>{tMsg}</Text>}
           </View>
           <Pressable style={[s.btn, { backgroundColor: '#12b76a' }, (!tPass || tBusy) && { opacity: 0.45 }]} disabled={!tPass || tBusy} onPress={runCand} accessibilityRole="button">
             {tBusy ? <ActivityIndicator color={C.onAccent} /> : <Icon name="check" size={17} color={C.onAccent} />}
-            <Text style={s.btnTxt}>{tBusy ? 'أجرّب على راوترك…' : 'جرّب الحين'}</Text>
+            <Text style={s.btnTxt}>{tBusy ? (tStep || 'أجرّب على راوترك…') : 'جرّب الحين'}</Text>
           </Pressable>
           <Pressable disabled={tBusy} onPress={() => toDeveloper(cand)} style={s.link}>
             <Text style={[s.linkTxt, { color: C.muted }]}>{cand.requested ? 'تخطَّ — طلبي عند المبرمج' : 'تخطَّ وأرسل الطلب للمبرمج'}</Text>
@@ -384,6 +423,7 @@ const s = sheet({
   scanTxt: { color: tFg('#c2410c'), fontWeight: '800', fontSize: 13.5 },
   labelBox: { backgroundColor: C.rowBg, borderRadius: 12, padding: 10, gap: 2 },
   labelLine: { color: C.text, fontSize: 13, fontWeight: '700', textAlign: 'left' },
+  featLine: { color: C.text, fontSize: 14, fontWeight: '700', textAlign: 'right', lineHeight: 23 },
   doneIcon: { width: 72, height: 72, borderRadius: 36, backgroundColor: tBg('#12b76a1a'), alignItems: 'center', justifyContent: 'center' },
   title: { color: C.text, fontSize: 21, fontWeight: '900', textAlign: 'center' },
   sub: { color: C.sub, fontSize: 13.5, textAlign: 'center', lineHeight: 21 },

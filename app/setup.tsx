@@ -115,6 +115,12 @@ export default function SetupScreen() {
     const fast = probes.every(p => !p.ok && !p.timedOut && p.ms < 1200);
     const m: Miss = alive2.length ? { why: 'unknown', hosts: alive2 } : { why: Platform.OS === 'ios' && fast ? 'perm' : 'none', hosts: [] };
     setMiss(m);
+    // راوتر يرد وما تعرّفنا عليه ← نسأل العضو على طول: نبرمجه له؟ (مرة لكل بحث — «جرّب الحين» يسأل من جديد)
+    if (m.why === 'unknown' && alive.current) {
+      Alert.alert('راوترك مو معروف عندنا — نبرمجه لك؟',
+        `لقينا راوتر على ${m.hosts.join(' و ')} وBandly ما تعرّف عليه.\n\n«برمج لي جهازي» يسحب ملفات صفحته (بدون كلمات مرور ولا بياناتك) ويطابقها مع الأجهزة اللي ندعمها — لو طابق يشتغل معك الحين ونكتشف ميزاته.`,
+        [{ text: 'مو الحين', style: 'cancel' }, { text: 'برمج لي جهازي', onPress: () => router.replace('/newdevice' as Href) }]);
+    }
     setErr(unsupported && !alive2.length ? 'لقيت راوتر، بس نوعه للحين مو مدعوم بالكامل — جرّب «راوتري مو مدعوم؟» تحت ونضيفه.' : '');
     setStep('notfound');
     // تقرير مرة وحدة: وش ردّ ووش ما ردّ (عناوين وأوقات بس — بدون أي بيانات شخصية)
@@ -273,7 +279,7 @@ export default function SetupScreen() {
                 '١) افتح «الإعدادات» في جوالك ← «واي فاي».\n٢) اختر اسم شبكة راوترك — مكتوب على الملصق تحت الراوتر (جنب SSID أو WLAN).\n٣) اكتب كلمة سر الواي فاي اللي على الملصق.\n٤) ارجع لـ Bandly — أكمّل لحالي.')} />
             <Big icon="refresh" color="#2f6bff" title="جرّب الحين" onPress={search} />
             <Big icon="settings" color="#7c5cff" title="أدخل البيانات بنفسي" sub="لو عنوان راوترك غير المعتاد" onPress={() => router.replace('/add-router' as Href)} />
-            <Big icon="compass" color="#64748b" title="راوتري مو مدعوم؟" sub="استكشاف جهاز" onPress={() => router.replace('/newdevice' as Href)} />
+            <Big icon="compass" color={miss.why === 'unknown' ? '#ea580c' : '#64748b'} title="برمج لي جهازي" sub="راوترك مو مدعوم؟ نطابقه ونكتشف ميزاته" onPress={() => router.replace('/newdevice' as Href)} />
             <Pressable onPress={demo} style={s.link}><Text style={s.linkTxt}>جرّب بدون راوتر · Demo</Text></Pressable>
           </>
         )}

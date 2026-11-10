@@ -547,6 +547,7 @@ export default function AddRouterScreen() {
         driverId: keepRo ? prevRo!.driverId : dId,
         driverName: keepRo ? prevRo!.driverName : dName,
         readOnly: keepRo ? true : undefined,
+        auto: keepRo ? prevRo!.auto : undefined,
       };
 
       setStep('نحفظ...');
