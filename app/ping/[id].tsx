@@ -29,7 +29,7 @@ import { RegionGrid, flagOf } from '../../src/ui/RegionGrid';
 import { GamePrepCard } from '../../src/ui/GamePrepCard';
 import { ModeChips } from '../../src/ui/ModeChips';
 
-import { sheet } from '../../src/i18n';
+import { sheet, LOCALE } from '../../src/i18n';
 type Tech = 'LTE' | 'NR';
 type Kind = 'base' | 'band' | 'lteOnly';
 interface Target { key: string; kind: Kind; tech?: Tech; band?: number; label: string; sub?: string }
@@ -763,7 +763,7 @@ export default function GameScreen() {
               <>
                 {(community?.outages ?? []).filter(o => o.to > Date.now() - 20 * 60000).map(o => (
                   <View key={o.from} style={s.outage}>
-                    <Text style={s.outageText}>⚠️ {o.users} {o.users > 2 ? 'مستخدمين' : 'مستخدم'} على نفس برجك انقطع عندهم النت من الساعة {new Date(o.from).toLocaleTimeString('ar-SA', { hour: 'numeric', minute: '2-digit' })} — غالباً المشكلة من البرج مو من عندك</Text>
+                    <Text style={s.outageText}>⚠️ {o.users} {o.users > 2 ? 'مستخدمين' : 'مستخدم'} على نفس برجك انقطع عندهم النت من الساعة {new Date(o.from).toLocaleTimeString(LOCALE, { hour: 'numeric', minute: '2-digit' })} — غالباً المشكلة من البرج مو من عندك</Text>
                   </View>
                 ))}
                 {(community?.outages ?? []).filter(o => o.to <= Date.now() - 20 * 60000).length > 0 && (
@@ -846,7 +846,7 @@ export default function GameScreen() {
               </View>
             )}
             {!regionNow && !!regionAt && (
-              <Text style={s.hint}>آخر قياس: {new Date(regionAt).toLocaleString('ar-SA', { weekday: 'long', hour: 'numeric', minute: '2-digit' })}</Text>
+              <Text style={s.hint}>آخر قياس: {new Date(regionAt).toLocaleString(LOCALE, { weekday: 'long', hour: 'numeric', minute: '2-digit' })}</Text>
             )}
             <Pressable style={[s.btnGhost, { borderColor: C.blue }, (busy || running) && s.dim]} onPress={compareRegions} disabled={busy || running}>
               <Text style={[s.btnGhostText, { color: C.blue }]}>{regionNow ? 'نقيس...' : sortedRegions.length ? 'قِس مرة ثانية' : 'قِس كل المناطق (30 ثانية تقريباً)'}</Text>

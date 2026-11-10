@@ -25,7 +25,7 @@ import {
 
 import { tBd, tBg, tFg } from '../src/ui/theme';
 import { desktop } from '../src/desktop/bridge';
-import { sheet } from '../src/i18n';
+import { sheet, LOCALE } from '../src/i18n';
 const K_KEY = 'bandly_tech_key';
 const K_NAME = 'bandly_tech_name';
 
@@ -235,7 +235,7 @@ function TechScreen() {
                 <View style={{ flex: 1, alignItems: 'flex-end' }}>
                   <Text style={s.pastTitle} numberOfLines={1}>{x.label || 'راوتر'}{x.stars ? `  ${'★'.repeat(x.stars)}` : ''}</Text>
                   <Text style={s.pastSub}>
-                    {new Date(x.at * 1000).toLocaleDateString('ar-SA', { day: 'numeric', month: 'short' })} · {Math.max(1, Math.round(x.dur / 60))} د
+                    {new Date(x.at * 1000).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' })} · {Math.max(1, Math.round(x.dur / 60))} د
                     {x.speed?.before && x.speed?.after ? ` · ${'\u2066'}${fmtMbps(x.speed.before.down)}→${fmtMbps(x.speed.after.down)} Mbps${'\u2069'}` : ''}
                   </Text>
                 </View>

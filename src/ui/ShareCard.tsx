@@ -13,7 +13,7 @@ import { P } from './Pro';
 import { SpeedPair } from '../services/live';
 
 import { tBd, tBg, tFg } from './theme';
-import { sheet } from '../i18n';
+import { sheet, LOCALE } from '../i18n';
 export interface ShareData {
   router: string;
   before?: number; after?: number; best?: number;   // RSRP
@@ -48,7 +48,7 @@ export function ShareCardView({ d }: { d: ShareData }) {
   const gain = d.before != null && d.after != null ? Math.round(d.after - d.before) : undefined;
   const sp = d.speed ?? {};
   const spGain = sp.before && sp.after && sp.before.down > 0 ? Math.round(((sp.after.down - sp.before.down) / sp.before.down) * 100) : undefined;
-  const date = new Date().toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' });
+  const date = new Date().toLocaleDateString(LOCALE, { year: 'numeric', month: 'long', day: 'numeric' });
   return (
     <View style={c.card}>
       <LinearGradient colors={[tBg('#2f6bff'), tBg('#6a45ec')]} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={c.head}>

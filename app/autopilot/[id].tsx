@@ -17,7 +17,7 @@ import { setConsent } from '../../src/services/community';
 import { LEVEL_COLOR, rsrpLevel, sinrLevel } from '../../src/utils/signal';
 import { Icon, IconName } from '../../src/ui/Icon';
 import { C, R, S, tBg, tBd, tFg } from '../../src/ui/theme';
-import { sheet } from '../../src/i18n';
+import { sheet, LOCALE } from '../../src/i18n';
 import { getHealer, setHealerOn, HealerState } from '../../src/store/healer';
 import { startMonitor } from '../../src/tasks/monitor';
 
@@ -206,7 +206,7 @@ export default function AutopilotScreen() {
           {showLog && [...(healer.log ?? [])].reverse().slice(0, 10).map((l, i) => (
             <View key={l.at + '-' + i} style={s.logRow}>
               <Text style={[s.logTxt, l.ok === true && { color: tFg('#12b76a') }, l.ok === false && { color: C.red }]}>{l.text}</Text>
-              <Text style={s.logAt}>{new Date(l.at).toLocaleString('ar-SA', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</Text>
+              <Text style={s.logAt}>{new Date(l.at).toLocaleString(LOCALE, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</Text>
             </View>
           ))}
         </View>

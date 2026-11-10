@@ -16,7 +16,7 @@ import { C, tBg } from '../../src/ui/theme';
 import { Icon } from '../../src/ui/Icon';
 import { GlassCard } from '../../src/ui/GlassCard';
 
-import { sheet } from '../../src/i18n';
+import { sheet, LOCALE } from '../../src/i18n';
 import { brandOf } from '../../src/utils/operatorBrand';
 export default function ReportScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -102,7 +102,7 @@ export default function ReportScreen() {
   const level = overallLevel(sig);
   const cardColor = LEVEL_COLOR[level];
   const shareBands = [...new Set([...parseBands(sig?.band), ...parseNrBands(sig?.nrBand)])].slice(0, 4);
-  const today = new Date().toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' });
+  const today = new Date().toLocaleDateString(LOCALE, { year: 'numeric', month: 'long', day: 'numeric' });
 
   return (
     <ScrollView style={s.wrap} contentContainerStyle={s.content}>

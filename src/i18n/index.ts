@@ -36,6 +36,8 @@ function readLang(): Lang | null {
 export const LANG_PICKED: Lang | null = readLang();
 export const LANG: Lang = LANG_PICKED ?? 'ar';
 export const EN_MODE = LANG === 'en';
+/** لغة التواريخ والأوقات (toLocaleString): بالإنجليزي ميلادي بأرقام لاتينية */
+export const LOCALE = EN_MODE ? 'en-US' : 'ar-SA';
 
 /** لغة الجوال عربية؟ (نستخدمها نسأل غير العرب مرة وحدة) */
 export function deviceIsArabic(): boolean {

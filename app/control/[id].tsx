@@ -17,7 +17,7 @@ import { Icon, IconName } from '../../src/ui/Icon';
 import { P, shadow } from '../../src/ui/Pro';
 import { C, tBg, tBd, tFg } from '../../src/ui/theme';
 
-import { sheet } from '../../src/i18n';
+import { sheet, tr } from '../../src/i18n';
 type Key = 'nat' | 'upnp' | 'dmz' | 'led' | 'reboot' | 'guest' | 'b2.4' | 'b5' | 'rule' | 'url' | 'recover' | 'sleep' | 'wifi' | 'reset';
 
 const hhmm = (mins: number) => `${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')}`;
@@ -55,7 +55,7 @@ function daysText(d: string) {
 function time12(t: string) {
   const [h, m] = t.split(':').map(Number);
   const pm = h >= 12, hh = h % 12 || 12;
-  return `${hh}${m ? ':' + String(m).padStart(2, '0') : ''} ${pm ? 'م' : 'ص'}`;
+  return `${hh}${m ? ':' + String(m).padStart(2, '0') : ''} ${tr(pm ? 'م' : 'ص')}`;
 }
 const shiftTime = (t: string, mins: number) => {
   const [h, m] = t.split(':').map(Number);

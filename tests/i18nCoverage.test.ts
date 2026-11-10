@@ -18,6 +18,9 @@ const DONE = [
   'src/ui/HomeFooter.tsx', 'src/ui/HomeHeader.tsx', 'src/ui/BlockerAsk.tsx', 'src/ui/CityAsk.tsx', 'src/ui/States.tsx',
   'src/ui/WelcomeTour.tsx', 'src/ui/InviteCard.tsx', 'src/ui/ModeChips.tsx', 'src/ui/Congestion.tsx', 'src/ui/RegionGrid.tsx',
   'src/ui/TimeChart.tsx', 'src/ui/AimMeter.tsx', 'src/ui/ComboCard.tsx', 'src/ui/OpPill.tsx',
+  // الدفعة ٢
+  'app/control/[id].tsx', 'app/newip/[id].tsx', 'app/bands/[id].tsx', 'app/towers/[id].tsx',
+  'app/aim/[id].tsx', 'app/gameboost/[id].tsx', 'app/speed/[id].tsx',
 ];
 
 // ═══ القاموس نفسه ═══
@@ -57,6 +60,17 @@ test('نص عادي ونمط بمتغير', () => {
 test('نمط عام («{0} ثانية») ما يخطف جملة لها نمطها الخاص', () => {
   // قبل: التقسيم على « · » كان ياخذ «…مرة ثانية» بنمط «{0} ثانية» ويطلّع «…مرة sec»
   assert.equal(T.full('انقطع ثم فشل مرة ثانية · 404 ⟶ 500'), 'Dropped then failed again · 404 ⟶ 500');
+});
+
+test('نمط عام ما يطلّع نص نصه عربي: جملة طويلة أو جزء ثابت قصير ← تبقى عربي كاملة', () => {
+  const G = makeTranslator({}, { '{0} ثانية': '{0} sec', '{0}م': '{0} PM', 'تبي تحذف "{0}"؟': 'Delete "{0}"?' });
+  assert.equal(G.core('انقطع ثم رد وفشل مرة ثانية'), null);
+  assert.equal(G.core('السلام عليكم'), null);
+  assert.equal(G.full('10م'), '10 PM');
+  // اسم قصير جوا نمط واضح ← ينقبل
+  assert.equal(G.full('تبي تحذف "راوتر البيت"؟'), 'Delete "راوتر البيت"?');
+  // جملة طويلة جوا نفس النمط ← لا
+  assert.equal(G.core('تبي تحذف "هذا نص طويل مو اسم أبداً"؟'), null);
 });
 
 test('«أ · ب»: كل جزء لحاله لو كلها معروفة، والجزء اللاتيني يبقى', () => {

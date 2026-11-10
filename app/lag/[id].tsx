@@ -18,7 +18,7 @@ import { C, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { RegionGrid } from '../../src/ui/RegionGrid';
 
-import { sheet } from '../../src/i18n';
+import { sheet, LOCALE } from '../../src/i18n';
 const KEEP_TAG = 'bandly-lag';
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const scoreCol = (sc: number) => (sc >= 70 ? C.green : sc >= 45 ? '#e0a100' : C.red);
@@ -237,7 +237,7 @@ export default function LagScreen() {
               <Pressable key={h.startedAt} style={s.row} onPress={() => setReport(h)}>
                 <View style={s.rowHead}>
                   <Text style={[s.rowScore, { color: scoreCol(h.score) }]}>{h.score}<Text style={s.of}>/100</Text></Text>
-                  <Text style={s.rowName}>{new Date(h.startedAt).toLocaleDateString('ar-SA', { weekday: 'long', day: 'numeric', month: 'numeric' })} · {fmtClock(h.startedAt).slice(0, -3)}</Text>
+                  <Text style={s.rowName}>{new Date(h.startedAt).toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'numeric' })} · {fmtClock(h.startedAt).slice(0, -3)}</Text>
                 </View>
                 <Text style={s.rowVals}>
                   {fmtDur(h.endedAt - h.startedAt)} · {h.incidents.length} حادثة لاق

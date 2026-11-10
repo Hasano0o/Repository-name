@@ -48,12 +48,18 @@ export function makeTranslator(EN: Record<string, string>, EN_PATTERNS: Record<s
       if (p.lit && !k.includes(p.lit)) continue;
       const m = p.re.exec(k);
       if (!m) continue;
+      let nameLike = true;
       const res = p.out.replace(/\{(\d)\}/g, (_, i) => {
         const g = m.groups?.['g' + i] ?? '';
-        return AR.test(g) ? full(g) : g;
+        if (!AR.test(g)) return g;
+        const t = full(g);
+        // متغير بقى عربي: نقبله بس لو شكله اسم (راوتر/شبكة/مدينة — ٣ كلمات بالكثير)، مو جملة ابتلعها نمط عام
+        if (AR.test(t) && norm(g).split(' ').length > 3) nameLike = false;
+        return t;
       });
       if (!AR.test(res)) return res;
-      if (partial === null) partial = res;
+      // «{0}م» أو «{0} ثانية»: جزء ثابت قصير يطابق أي شي — ما نطلّع منه نص نصه عربي
+      if (partial === null && nameLike && p.lit.trim().length >= 4) partial = res;
     }
     return partial;
   }

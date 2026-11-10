@@ -12,7 +12,7 @@ import { getMonitorSettings } from '../../src/store/monitor';
 import { C, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 
-import { sheet } from '../../src/i18n';
+import { sheet, LOCALE } from '../../src/i18n';
 const NIGHTLY: { id: NightlyMode; title: string; sub: string }[] = [
   { id: 'off', title: 'متوقفة', sub: 'ما نعيد تشغيل الراوتر أبداً' },
   { id: 'smart', title: 'بس إذا يحتاج', sub: 'لو صار بطيء، أو شغال أكثر من يومين، أو الإشارة ضعفت' },
@@ -139,7 +139,7 @@ export default function AutoScreen() {
             })
           )}
           {!!state.lastSwitchAt && (
-            <Text style={s.hint}>آخر تبديل تلقائي: {new Date(state.lastSwitchAt).toLocaleDateString('ar-SA', { weekday: 'long' })} {clock(state.lastSwitchAt)}</Text>
+            <Text style={s.hint}>آخر تبديل تلقائي: {new Date(state.lastSwitchAt).toLocaleDateString(LOCALE, { weekday: 'long' })} {clock(state.lastSwitchAt)}</Text>
           )}
         </GlassCard>
 
@@ -159,7 +159,7 @@ export default function AutoScreen() {
           <Text style={s.hint}>ما نعيد التشغيل لو أحد يحمّل وقتها. ولازم جوالك يكون على واي فاي البيت بالليل.</Text>
           {!!state.report && (
             <View style={s.report}>
-              <Text style={s.reportTitle}>آخر صيانة: {new Date(state.report.at).toLocaleDateString('ar-SA', { weekday: 'long' })} {clock(state.report.at)}</Text>
+              <Text style={s.reportTitle}>آخر صيانة: {new Date(state.report.at).toLocaleDateString(LOCALE, { weekday: 'long' })} {clock(state.report.at)}</Text>
               <Text style={s.reportSub}>
                 {state.report.reason}
                 {state.report.beforePing !== undefined && state.report.afterPing !== undefined

@@ -23,7 +23,7 @@ import { HuntTry, HuntGoal, huntTargets, huntStop, huntBest, huntHit, huntFastes
 import { IpGuard, getIpGuard, setIpGuard, clearIpGuard, IP_GUARD_HOURS } from '../../src/store/ipGuard';
 import { quickDown } from '../../src/utils/speedLive';
 
-import { sheet } from '../../src/i18n';
+import { sheet, LOCALE } from '../../src/i18n';
 
 /** وضع التجربة: ضغطة ٣ ثواني على العنوان — يفعّل الفصل عن البرج على ZTE لهالجهاز بس */
 const LAB_KEY = 'bandly.lab.detach';
@@ -542,7 +542,7 @@ export default function NewIp() {
             {!!guard && !hunting && (
               <View style={s.guardBox}>
                 <Text style={s.guardTxt}>
-                  🛡️ آي بيك محمي لين {new Date(guard.until).toLocaleTimeString('ar-SA', { hour: 'numeric', minute: '2-digit' })}
+                  🛡️ آي بيك محمي لين {new Date(guard.until).toLocaleTimeString(LOCALE, { hour: 'numeric', minute: '2-digit' })}
                   {guard.ms !== undefined ? ` (${guard.ms}ms)` : ''} — التطبيق ما يسوي شي تلقائي يقطع الاتصال (الحارس، الإصلاح، الصيانة). لو النت طاح ترجع تشتغل عادي.
                 </Text>
                 <Pressable hitSlop={8} onPress={() => { clearIpGuard(info!.id).catch(() => {}); setGuard(null); }}>
