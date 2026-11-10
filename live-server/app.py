@@ -301,6 +301,8 @@ from community import router as community_router  # noqa: E402
 app.include_router(community_router)
 from stats import router as stats_router, daily_loop as stats_daily  # noqa: E402
 app.include_router(stats_router)
+from autoprog import router as autoprog_router  # noqa: E402 — «برمج لي جهازي»: مطابقة ملفات راوتر غير معروف مع عائلاتنا
+app.include_router(autoprog_router)
 
 
 @app.on_event("startup")

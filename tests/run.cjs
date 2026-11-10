@@ -106,6 +106,9 @@ const files = [
   'src/utils/ipHunt.ts',
   'src/drivers/m2a/parse.ts',
   'src/drivers/m2a/index.ts',
+  // «برمج لي جهازي»: الحكم على التجربة + غلاف قراءة بس
+  'src/utils/autoprogCore.ts',
+  'src/drivers/readOnly.ts',
   ...fs.readdirSync(path.join(root, 'tests')).filter(f => f.endsWith('.test.ts')).map(f => `tests/${f}`),
 ];
 

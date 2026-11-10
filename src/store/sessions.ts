@@ -1,6 +1,7 @@
 import { RouterDriver } from '../drivers/types';
 import { activeOps } from './activeOps';
 import { driverById } from '../drivers/registry';
+import { readOnlyDriver } from '../drivers/readOnly';
 import { SavedRouter, getPassword, getLabel, setPassword } from './routers';
 import { assertLanHost } from '../utils/host';
 import { getBaseline, saveBaseline } from './baseline';
@@ -23,7 +24,8 @@ const connecting = new Map<string, Promise<RouterDriver>>();
  * (الراوتر يقبل جلسة وحدة) — فيطلع «الراوتر يطلّع التطبيق كل ما يدخل» بدون أي جهاز ثاني.
  */
 const keyOf = (r: SavedRouter) =>
-  `${r.driverId}@${r.host.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '')}`;
+  // «قراءة بس» بمفتاح لحاله: جلسته ما تنخلط أبداً مع جلسة درايفر يكتب
+  `${r.driverId}${r.readOnly ? '#ro' : ''}@${r.host.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '')}`;
 const idKey = new Map<string, string>();
 
 /** اتصال واحد لكل راوتر في نفس الوقت — الشاشات والمهام الخلفية تنتظر نفس تسجيل الدخول بدل ما كل وحدة تسجّل لحالها */
@@ -41,7 +43,9 @@ async function doConnect(r: SavedRouter, force = false): Promise<RouterDriver> {
   const k = keyOf(r);
   const cur = sessions.get(k);
   if (cur && !force && Date.now() - cur.authAt < MAX_AGE) return cur.d;
-  const d = cur?.d ?? driverById(r.driverId);
+  const made = cur ? null : driverById(r.driverId);
+  // راوتر «برمج لي جهازي»: الدرايفر يتغلّف — أي أمر تغيير يوقف قبل ما يوصله (drivers/readOnly.ts)
+  const d = cur?.d ?? (made && r.readOnly ? readOnlyDriver(made) : made);
   if (!d) throw new Error('نوع الراوتر غير مدعوم');
   // ═══ حماية: نتحقق أن العنوان لا يزال محلياً قبل إرسال كلمة المرور.
   // يمنع هجوم تعديل AsyncStorage لإرسال كلمة المرور لخادم خارجي.

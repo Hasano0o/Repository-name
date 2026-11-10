@@ -9,6 +9,8 @@ export interface SavedRouter {
   driverId: string;
   driverName: string;
   createdAt: number;
+  /** انضاف بـ«برمج لي جهازي» (درايفر مقترح من الرسيفر) — قراءة بس لين نتأكد من الكتابة على موديله */
+  readOnly?: boolean;
 }
 
 const KEY = 'routers:v1';

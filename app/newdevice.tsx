@@ -3,10 +3,13 @@
  * • الموديل + الشركة + المدينة + يوزر تليجرام (اختياري) — بموافقة صريحة. ما نطلب رقم جوال (ما نحتاج إفصاح جديد في أبل).
  * • فحص تلقائي للراوتر (اختياري) ينرفق مع الطلب — نفس «استكشاف جهاز» بدون كلمات مرور ولا MAC.
  * • ما فيه أيقونة جديدة: يفتح من «جهاز جديد · غير مدعوم؟» و«راوتري مو موجود» و«راوتري مو مدعوم؟».
+ * • «برمج لي جهازي» (١٠ نوفمبر): الرسيفر يطابق ملفات الصفحة مع عائلاتنا (live-server/autoprog.py). لو طابق،
+ *   نجرّب الدرايفر المقترح على الراوتر نفسه (دخول + إشارة) وينضاف **قراءة بس** بدون انتظار تحديث.
+ *   ما طابق أو ما اشتغل ← نفس الطريق القديم: الطلب والملفات عند المبرمج.
  */
 import { collectRouterFiles, sendRouterFiles } from '../src/services/routerDump';
 import { ROUTER_HOSTS } from '../src/utils/routerHosts';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, Switch } from 'react-native';
 import { View, Text, TextInput, Pressable } from '../src/i18n/rn';
 import { router, Href } from 'expo-router';
@@ -17,6 +20,8 @@ import { detectDriver } from '../src/drivers/registry';
 import { LabelScannerHost, ensureScanner } from '../src/ui/scanner';
 import { ocrAvailable } from '../modules/bandly-cell/src';
 import { sendSupportReport } from '../src/services/errors';
+import { askVerdict, lookupProfile, reportTrial, saveAutoRouter, tryCandidate } from '../src/services/autoprog';
+import { NO_VERDICT, TrialResult, Verdict } from '../src/utils/autoprogCore';
 import { Icon } from '../src/ui/Icon';
 import { C, R, S, tBg, tBd, tFg } from '../src/ui/theme';
 import { sheet } from '../src/i18n';
@@ -65,10 +70,53 @@ export default function NewDeviceScreen() {
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState('');
   const [sent, setSent] = useState(false);
+  // ═══ «برمج لي جهازي»: برمجة مقترحة من الرسيفر نجرّبها على الراوتر ═══
+  /** requested = الطلب والملفات وصلت المبرمج قبل (جاية من مطابقة الملفات) · false = من البصمة، ما انرسل شي لسا */
+  const [cand, setCand] = useState<{ v: Verdict; host: string; requested: boolean } | null>(null);
+  const [tUser, setTUser] = useState('admin');
+  const [tPass, setTPass] = useState('');
+  const [tBusy, setTBusy] = useState(false);
+  const [tMsg, setTMsg] = useState('');
+  const tries = useRef(0);
+  const lastTrial = useRef<TrialResult | null>(null);
 
   const canSend = !!model.trim() && agree && !busy;
 
-  const send = async () => {
+  /** ما اشتغلت البرمجة المقترحة (أو العضو ما يبي يجرّب) ← النتيجة للرسيفر، والجهاز يروح للمبرمج بالطريق العادي */
+  const toDeveloper = async (c: { v: Verdict; host: string; requested: boolean }) => {
+    await reportTrial(c.v, lastTrial.current ?? { ok: false, stage: 'skipped', err: 'العضو ما جرّب', got: [] }).catch(() => {});
+    setCand(null);
+    if (c.requested) setSent(true);
+    else await send(true);
+  };
+
+  const runCand = async () => {
+    const c = cand;
+    if (!c || tBusy || !tPass) return;
+    setTBusy(true); setTMsg('');
+    try {
+      const user = tUser.trim() || 'admin';
+      const res = await tryCandidate(c.v, c.host, user, tPass);
+      lastTrial.current = res; tries.current++;
+      if (res.ok) {
+        const saved = await saveAutoRouter(c.v, model.trim(), c.host, user, tPass);
+        reportTrial(c.v, res).catch(() => {});
+        router.replace(`/router/${saved.id}` as Href);
+        return;
+      }
+      if (res.stage === 'password' && tries.current < 2) {
+        setTMsg(`ما دخلنا: ${res.err}\nتأكد من اسم المستخدم وكلمة مرور صفحة الراوتر (على الملصق تحته) وجرّب مرة ثانية.`);
+        return;
+      }
+      // مو بسبب الكلمة، أو محاولتين ← نوقف (ما نقفل دخول الراوتر على العضو) ونحوّله للمبرمج
+      Alert.alert('حوّلنا جهازك للمبرمج', `${res.stage === 'signal' ? 'دخلنا راوترك بس ما قرينا الإشارة' : 'ما قدرنا ندخل راوترك بالبرمجة الجاهزة'}: ${res.err}\n\nما تغيّر شي في راوترك. تفاصيله توصل المبرمج ويضيفه بالدور.`);
+      await toDeveloper(c);
+    } catch (e) {
+      setTMsg(String((e as any)?.message ?? e).slice(0, 140));
+    } finally { setTBusy(false); }
+  };
+
+  const send = async (skipAuto = false) => {
     if (!canSend) return;
     let probe = '';
     let found: string | undefined;
@@ -114,6 +162,12 @@ export default function NewDeviceScreen() {
       found ? `عنوان الراوتر: ${found}` : 'ما لقينا راوتر على الواي فاي',
       ...(fp ? fingerprintText(fp) : []),
     ];
+    // ═══ «برمج لي جهازي»: صفحة راوترك تبرمجت عند عضو قبل؟ ← نجرّب مباشرة، بدون رفع ملفات ولا انتظار ═══
+    if (!skipAuto && found && fp) {
+      setBusy('أشوف لو راوترك تبرمج قبل…');
+      const k = await lookupProfile(fp, model.trim()).catch(() => NO_VERDICT);
+      if (k.status === 'known') { setBusy(''); setCand({ v: k, host: found, requested: false }); return; }
+    }
     setBusy('أرسل الطلب…');
     const contact = `💬 تليجرام: ${tg.trim() ? '@' + tg.trim().replace(/^@/, '') : 'بيتواصل بنفسه على @hasa_n20'}`;
     const text = [
@@ -134,6 +188,7 @@ export default function NewDeviceScreen() {
     // ملفات صفحة الراوتر كاملة (HTML + JS) — نعرف منها الدخول والروابط من أول طلب
     // قبل: أي خطأ هنا ينبلع بصمت (تقرير ٢٦ أكتوبر: U30 Pro — الطلب وصل والـ zip ما وصل وما أحد درى)
     let dumpNote = '';
+    let auto: Verdict = NO_VERDICT;
     if (ok && scan && found) {
       try {
         setBusy('أجمع ملفات صفحة الراوتر — لا تطلع من الشاشة…');
@@ -148,6 +203,11 @@ export default function NewDeviceScreen() {
 • جمعنا ${files.length} ملف
 ${r.failed.slice(0, 20).map(f => `  ✗ ${f}`).join('\n')}`, { driverName: model.trim() }).catch(() => false);
           }
+          // الملفات وصلت ← الرسيفر يطابقها مع العائلات اللي ندعمها (ثواني)
+          if (r.ok && !skipAuto) {
+            setBusy('أطابق ملفات راوترك مع الأجهزة اللي ندعمها…');
+            auto = await askVerdict(model.trim(), found, fp).catch(() => NO_VERDICT);
+          }
         } else {
           dumpNote = 'ما قدرنا نجمع ملفات الصفحة';
           await sendSupportReport('newdevice-dump', `📦 ${dumpNote} — الموديل: ${model.trim()} · ${found}`, { driverName: model.trim() }).catch(() => false);
@@ -158,12 +218,45 @@ ${r.failed.slice(0, 20).map(f => `  ✗ ${f}`).join('\n')}`, { driverName: model
       }
     }
     setBusy('');
-    if (ok) setSent(true);
+    if (ok && found && auto.status === 'match') setCand({ v: auto, host: found, requested: true });
+    else if (ok) setSent(true);
     else Alert.alert('ما وصل', 'تأكد إن النت شغّال وجرّب مرة ثانية — أو كلّمنا على تليجرام مباشرة.', [
       { text: 'رجوع', style: 'cancel' },
       { text: 'افتح تليجرام', onPress: () => Linking.openURL(TELEGRAM).catch(() => {}) },
     ]);
   };
+
+  if (cand) {
+    return (
+      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: C.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+        <ScrollView contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 40 }]} keyboardShouldPersistTaps="handled">
+          <View style={s.hero}>
+            <View style={[s.heroIcon, { backgroundColor: tBg('#12b76a1a') }]}><Icon name="check" size={30} color={tFg('#12b76a')} stroke={3} /></View>
+            <Text style={s.title}>لقينا لراوترك برمجة جاهزة</Text>
+            <Text style={s.sub}>{cand.v.status === 'known'
+              ? `صفحة راوترك نفس صفحة راوتر اشتغل عند عضو قبلك (عائلة ${cand.v.label}).`
+              : `ملفات صفحة راوترك تطابق عائلة ${cand.v.label}.`}{'\n'}نجرّبها الحين على راوترك: دخول وقراءة الإشارة بس — ما نغيّر أي إعداد.</Text>
+          </View>
+          <View style={s.card}>
+            <Text style={s.lbl}>اسم المستخدم</Text>
+            <TextInput style={[s.input, { textAlign: 'left' }]} value={tUser} onChangeText={setTUser} autoCapitalize="none" autoCorrect={false} maxLength={40} />
+            <Text style={s.lbl}>كلمة مرور صفحة الراوتر</Text>
+            <TextInput style={[s.input, { textAlign: 'left' }]} value={tPass} onChangeText={setTPass} secureTextEntry autoCapitalize="none" autoCorrect={false}
+              placeholder="مكتوبة على الملصق تحت الراوتر" placeholderTextColor={C.muted} maxLength={64} />
+            <Text style={s.rowSub}>الكلمة تبقى في جوالك — ما تنرسل لنا. لو اشتغل، راوترك ينضاف «قراءة بس»، والتغيير ينفتح بعد ما نتأكد منه على موديلك.</Text>
+            {!!tMsg && <Text style={[s.rowSub, { color: tFg('#e5484d') }]}>{tMsg}</Text>}
+          </View>
+          <Pressable style={[s.btn, { backgroundColor: '#12b76a' }, (!tPass || tBusy) && { opacity: 0.45 }]} disabled={!tPass || tBusy} onPress={runCand} accessibilityRole="button">
+            {tBusy ? <ActivityIndicator color={C.onAccent} /> : <Icon name="check" size={17} color={C.onAccent} />}
+            <Text style={s.btnTxt}>{tBusy ? 'أجرّب على راوترك…' : 'جرّب الحين'}</Text>
+          </Pressable>
+          <Pressable disabled={tBusy} onPress={() => toDeveloper(cand)} style={s.link}>
+            <Text style={[s.linkTxt, { color: C.muted }]}>{cand.requested ? 'تخطَّ — طلبي عند المبرمج' : 'تخطَّ وأرسل الطلب للمبرمج'}</Text>
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
 
   if (sent) {
     return (
@@ -184,8 +277,8 @@ ${r.failed.slice(0, 20).map(f => `  ✗ ${f}`).join('\n')}`, { driverName: model
       <ScrollView contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 40 }]} keyboardShouldPersistTaps="handled">
         <View style={s.hero}>
           <View style={s.heroIcon}><Icon name="compass" size={30} color={tFg('#ea580c')} /></View>
-          <Text style={s.title}>راوترك مو مدعوم؟ نضيفه لك</Text>
-          <Text style={s.sub}>عبّي هالبيانات ونضيف جهازك للتطبيق — بالأولوية حسب عدد اللي طلبوا نفس الجهاز</Text>
+          <Text style={s.title}>برمج لي جهازي</Text>
+          <Text style={s.sub}>راوترك مو مدعوم؟ نسحب ملفات صفحته ونطابقها مع الأجهزة اللي ندعمها — لو طابق يشتغل معك الحين، وإلا يوصل المبرمج ويضيفه بالدور</Text>
         </View>
 
         <View style={s.card}>
@@ -266,9 +359,9 @@ ${r.failed.slice(0, 20).map(f => `  ✗ ${f}`).join('\n')}`, { driverName: model
           </View>
         </View>
 
-        <Pressable style={[s.btn, !canSend && { opacity: 0.45 }]} disabled={!canSend} onPress={send} accessibilityRole="button">
+        <Pressable style={[s.btn, !canSend && { opacity: 0.45 }]} disabled={!canSend} onPress={() => send()} accessibilityRole="button">
           {busy ? <ActivityIndicator color={C.onAccent} /> : <Icon name="send" size={17} color={C.onAccent} />}
-          <Text style={s.btnTxt}>{busy || 'أرسل الطلب'}</Text>
+          <Text style={s.btnTxt}>{busy || 'برمج لي جهازي'}</Text>
         </Pressable>
 
         <Pressable onPress={() => Linking.openURL(TELEGRAM).catch(() => {})} style={s.link}>

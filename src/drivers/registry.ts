@@ -75,6 +75,11 @@ export async function detectDriver(host: string): Promise<RouterDriver | null> {
   return null;
 }
 
+/** الدرايفرات الحقيقية في هالنسخة (بدون «هذا الجهاز» والتجريبي والاحتياطي) — «برمج لي جهازي» يرسلها للرسيفر */
+export function driverIds(): string[] {
+  return factories.map(make => make().id).filter(id => id !== 'unknown' && id !== 'device' && id !== 'demo');
+}
+
 export function driverById(id: string): RouterDriver | null {
   for (const make of factories) {
     const d = make();

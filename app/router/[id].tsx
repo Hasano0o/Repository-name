@@ -1039,6 +1039,14 @@ export default function RouterDashboard() {
           </>
         )}
 
+        {!loading && info?.readOnly && (
+          // انضاف بـ«برمج لي جهازي» (درايفر مقترح من الرسيفر) — نوضّح ليش التغيير موقوف
+          <View style={[s.moreCard, { gap: 6, borderColor: tBd('#2a9fd855') }]}>
+            <Text style={[s.moreBtnTitle, { textAlign: 'right' }]}>تبرمج تلقائي — قراءة بس</Text>
+            <Text style={[s.moreBtnSub, { textAlign: 'right' }]}>راوترك انضاف بـ«برمج لي جهازي»: الإشارة والقراءات شغّالة. التغيير (الترددات، البرج، وضع الشبكة) ينفتح بعد ما نتأكد منه على موديلك — ونعلن في القروب.</Text>
+          </View>
+        )}
+
         {!loading && info && (authPages || !!fullFp || authNote.startsWith('✓')) && (
           // راوتر غير مؤكد (أو صفحاته تحتاج دخول): ملفات صفحته للمطوّر — مرة وحدة، بموافقة المستخدم
           <View style={[s.moreCard, { gap: 8, borderColor: tBd('#f59e0b55') }]}>

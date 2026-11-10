@@ -147,6 +147,12 @@ def main():
             lines.append(f"{i}. {m} — {n}")
     if errs:
         lines.append(f"\n⚠️ أخطاء إضافة راوتر (٣٠ يوم): {errs} — في data/reports/bandly-add-login-*")
+    # «برمج لي جهازي»: وش تبرمج لحاله ووش يحتاج المبرمج (autoprog.py — لو الملف مو موجود نكمّل بدونه)
+    try:
+        from autoprog import digest_lines
+        lines += digest_lines(since)
+    except Exception as e:
+        print(f"autoprog: {e}", file=sys.stderr)
     lines.append("\nالملفات في /root/bandly-live/data/dumps/")
     text = "\n".join(lines)
 

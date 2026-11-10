@@ -536,12 +536,17 @@ export default function AddRouterScreen() {
       const dId = dAny.id ?? 'unknown';
       const dName = prof?.label ?? dAny.name ?? dId;
 
+      // تعديل راوتر «برمج لي جهازي»: التطبيق ما يتعرّف عليه بنفسه (كذا انضاف) — نحفظ درايفره المقترح وقراءة بس.
+      // أي تعرّف حقيقي (مو الاحتياطي) = الراوتر صار مدعوم عادي ← تنشال «قراءة بس».
+      const prevRo = editId ? await getRouter(editId).catch(() => null) : null;
+      const keepRo = !!prevRo?.readOnly && dId === 'unknown';
       const payload = {
         name: nameNow || dName || 'راوتر',
         host: h,
         username: u,
-        driverId: dId,
-        driverName: dName,
+        driverId: keepRo ? prevRo!.driverId : dId,
+        driverName: keepRo ? prevRo!.driverName : dName,
+        readOnly: keepRo ? true : undefined,
       };
 
       setStep('نحفظ...');
