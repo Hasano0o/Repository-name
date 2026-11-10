@@ -3,9 +3,9 @@
  * • الموديل + الشركة + المدينة + يوزر تليجرام (اختياري) — بموافقة صريحة. ما نطلب رقم جوال (ما نحتاج إفصاح جديد في أبل).
  * • فحص تلقائي للراوتر (اختياري) ينرفق مع الطلب — نفس «استكشاف جهاز» بدون كلمات مرور ولا MAC.
  * • ما فيه أيقونة جديدة: يفتح من «جهاز جديد · غير مدعوم؟» و«راوتري مو موجود» و«راوتري مو مدعوم؟».
- * • «برمج لي جهازي» (١٠ نوفمبر): الرسيفر يطابق ملفات الصفحة مع عائلاتنا (live-server/autoprog.py). لو طابق،
- *   نجرّب الدرايفر المقترح على الراوتر نفسه (دخول + إشارة) وينضاف **قراءة بس** بدون انتظار تحديث.
- *   ما طابق أو ما اشتغل ← نفس الطريق القديم: الطلب والملفات عند المبرمج.
+ * • «برمج لي جهازي» (١٠ نوفمبر) — **موقوفة** (AUTOPROG_ON = false في services/autoprog.ts): الرسيفر يطابق ملفات الصفحة مع
+ *   عائلاتنا (live-server/autoprog.py) ولو طابق نجرّب الدرايفر المقترح على الراوتر. فحص ١٨٥ ملف حقيقي طلّع صفر مرشح
+ *   (التطبيق أصلاً يجرّب كل الدرايفرات)، فالشاشة رجعت لنصوصها وطريقها القديم: الطلب والملفات عند المبرمج.
  */
 import { collectRouterFiles, sendRouterFiles } from '../src/services/routerDump';
 import { ROUTER_HOSTS } from '../src/utils/routerHosts';
@@ -20,7 +20,7 @@ import { detectDriver } from '../src/drivers/registry';
 import { LabelScannerHost, ensureScanner } from '../src/ui/scanner';
 import { ocrAvailable } from '../modules/bandly-cell/src';
 import { sendSupportReport } from '../src/services/errors';
-import { askVerdict, discoverFeatures, lookupProfile, reportTrial, saveAutoRouter, tryCandidate } from '../src/services/autoprog';
+import { AUTOPROG_ON, askVerdict, discoverFeatures, lookupProfile, reportTrial, saveAutoRouter, tryCandidate } from '../src/services/autoprog';
 import { NO_VERDICT, TrialResult, Verdict, writeLabels } from '../src/utils/autoprogCore';
 import { Icon } from '../src/ui/Icon';
 import { C, R, S, tBg, tBd, tFg } from '../src/ui/theme';
@@ -176,7 +176,7 @@ export default function NewDeviceScreen() {
       ...(fp ? fingerprintText(fp) : []),
     ];
     // ═══ «برمج لي جهازي»: صفحة راوترك تبرمجت عند عضو قبل؟ ← نجرّب مباشرة، بدون رفع ملفات ولا انتظار ═══
-    if (!skipAuto && found && fp) {
+    if (AUTOPROG_ON && !skipAuto && found && fp) {
       setBusy('أشوف لو راوترك تبرمج قبل…');
       const k = await lookupProfile(fp, model.trim()).catch(() => NO_VERDICT);
       if (k.status === 'known') { setBusy(''); setCand({ v: k, host: found, requested: false }); return; }
@@ -217,7 +217,7 @@ export default function NewDeviceScreen() {
 ${r.failed.slice(0, 20).map(f => `  ✗ ${f}`).join('\n')}`, { driverName: model.trim() }).catch(() => false);
           }
           // الملفات وصلت ← الرسيفر يطابقها مع العائلات اللي ندعمها (ثواني)
-          if (r.ok && !skipAuto) {
+          if (AUTOPROG_ON && r.ok && !skipAuto) {
             setBusy('أطابق ملفات راوترك مع الأجهزة اللي ندعمها…');
             auto = await askVerdict(model.trim(), found, fp).catch(() => NO_VERDICT);
           }
@@ -316,8 +316,8 @@ ${r.failed.slice(0, 20).map(f => `  ✗ ${f}`).join('\n')}`, { driverName: model
       <ScrollView contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 40 }]} keyboardShouldPersistTaps="handled">
         <View style={s.hero}>
           <View style={s.heroIcon}><Icon name="compass" size={30} color={tFg('#ea580c')} /></View>
-          <Text style={s.title}>برمج لي جهازي</Text>
-          <Text style={s.sub}>راوترك مو مدعوم؟ نسحب ملفات صفحته ونطابقها مع الأجهزة اللي ندعمها — لو طابق يشتغل معك الحين، وإلا يوصل المبرمج ويضيفه بالدور</Text>
+          <Text style={s.title}>راوترك مو مدعوم؟ نضيفه لك</Text>
+          <Text style={s.sub}>عبّي هالبيانات ونضيف جهازك للتطبيق — بالأولوية حسب عدد اللي طلبوا نفس الجهاز</Text>
         </View>
 
         <View style={s.card}>
@@ -400,7 +400,7 @@ ${r.failed.slice(0, 20).map(f => `  ✗ ${f}`).join('\n')}`, { driverName: model
 
         <Pressable style={[s.btn, !canSend && { opacity: 0.45 }]} disabled={!canSend} onPress={() => send()} accessibilityRole="button">
           {busy ? <ActivityIndicator color={C.onAccent} /> : <Icon name="send" size={17} color={C.onAccent} />}
-          <Text style={s.btnTxt}>{busy || 'برمج لي جهازي'}</Text>
+          <Text style={s.btnTxt}>{busy || 'أرسل الطلب'}</Text>
         </Pressable>
 
         <Pressable onPress={() => Linking.openURL(TELEGRAM).catch(() => {})} style={s.link}>

@@ -20,6 +20,13 @@ import {
 } from '../utils/autoprogCore';
 import type { Fingerprint } from '../utils/probe';
 
+/**
+ * موقوفة (١٠ نوفمبر): فحص ١٨٥ ملف «جهاز جديد» حقيقي طلّع **صفر** راوتر يستفيد — التطبيق أصلاً يجرّب كل الدرايفرات (detect)،
+ * فراوتر من عائلة نعرفها يتعرّف عليه بدون الرسيفر. الكود والاختبارات باقية؛ تتشغل (true) لو ظهرت حالات حقيقية
+ * (فيرموير جديد لعائلة معروفة يفشّل التعرّف) — ومعها ربط autoprog.py في app.py الحي.
+ */
+export const AUTOPROG_ON = false;
+
 async function post(path: string, body: object, ms = 20000): Promise<unknown> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
