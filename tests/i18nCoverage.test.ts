@@ -21,6 +21,8 @@ const DONE = [
   // الدفعة ٢
   'app/control/[id].tsx', 'app/newip/[id].tsx', 'app/bands/[id].tsx', 'app/towers/[id].tsx',
   'app/aim/[id].tsx', 'app/gameboost/[id].tsx', 'app/speed/[id].tsx',
+  // الدفعة ٣
+  'app/ping/[id].tsx', 'app/hunt/[id].tsx', 'app/combo/[id].tsx', 'app/tech.tsx', 'app/wifich/[id].tsx',
 ];
 
 // ═══ القاموس نفسه ═══
