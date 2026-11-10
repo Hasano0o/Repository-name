@@ -10,6 +10,7 @@ import { Alert, Platform, StyleSheet } from 'react-native';
 import { File, Paths } from 'expo-file-system';
 import * as Updates from 'expo-updates';
 import { EN, EN_PATTERNS } from './en';
+import { AR, norm, makeTranslator } from './lookup';
 import { C, isDark } from '../ui/theme';
 
 export type Lang = 'ar' | 'en';
@@ -63,84 +64,19 @@ export async function setLang(l: Lang, reload = true): Promise<void> {
 }
 
 // ═══ الترجمة ═══
-const AR = /[؀-ۿ]/;
-const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
-const toLatinDigits = (s: string) =>
-  s.replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/٫/g, '.').replace(/٪/g, '%').replace(/،/g, ',').replace(/؟/g, '?').replace(/؛/g, ';');
-
-const DICT = new Map<string, string>();
-for (const k of Object.keys(EN)) DICT.set(norm(k), EN[k]);
-
-interface Pat { re: RegExp; out: string }
-let PATS: Pat[] | null = null;
-function pats(): Pat[] {
-  if (PATS) return PATS;
-  const list = Object.keys(EN_PATTERNS).sort((a, b) => b.length - a.length);
-  PATS = list.map(k => {
-    const src = norm(k)
-      .replace(/[.*+?^$()|[\]\\]/g, '\\$&')
-      .replace(/\{(\d)\}/g, '\u0000$1\u0001')
-      .replace(/[{}]/g, '\\$&')
-      .replace(/\u0000(\d)\u0001/g, '(?<g$1>.+?)');
-    return { re: new RegExp('^' + src + '$'), out: EN_PATTERNS[k] };
-  });
-  return PATS;
-}
-
+// المنطق كله في lookup.ts (صافي، عليه اختبارات، والفاحص يستخدمه). هنا: اللغة + الذاكرة المؤقتة.
+const T = makeTranslator(EN, EN_PATTERNS);
 const CACHE = new Map<string, string>();
-
-function lookup(s: string): string | null {
-  const k = norm(s);
-  if (!k) return s;
-  const hit = DICT.get(k);
-  if (hit !== undefined) return hit;
-  for (const p of pats()) {
-    const m = p.re.exec(k);
-    if (m) {
-      return p.out.replace(/\{(\d)\}/g, (_, i) => {
-        const g = m.groups?.['g' + i] ?? '';
-        return AR.test(g) ? tr(g) : g;
-      });
-    }
-  }
-  return null;
-}
 
 /** يترجم نص عربي للإنجليزي (لو اللغة إنجليزي). نص ما له ترجمة يرجع مثل ما هو. */
 export function tr(s: string): string {
   if (!EN_MODE || typeof s !== 'string' || !AR.test(s)) return s;
   const c = CACHE.get(s);
   if (c !== undefined) return c;
-  const lead = s.match(/^\s*/)?.[0] ?? '';
-  const trail = s.match(/\s*$/)?.[0] ?? '';
-  let out: string | null = null;
-  // «STC · وضع تجريبي»: أجزاء مفصولة بنقطة — نترجم كل جزء لو كلها معروفة
-  if (s.includes(' · ')) {
-    const parts = s.split(' · ').map(p => (AR.test(p) ? lookup(p) : p));
-    if (parts.every(p => p !== null)) out = parts.join(' · ');
-  }
-  if (out === null) out = lookup(s);
-  if (out === null && s.includes('\n')) {
-    // نص طويل بأكثر من سطر: نترجم كل سطر لحاله
-    out = s.split('\n').map(line => (AR.test(line) ? lookup(line) ?? line : line)).join('\n');
-  }
-  if (out === null) {
-    // جمل مفصولة بـ « — » أو « · »: نترجم كل جزء
-    for (const sep of [' — ', ' · ', ' • ']) {
-      if (s.includes(sep)) {
-        const parts = s.split(sep).map(p => (AR.test(p) ? lookup(p) : p));
-        if (parts.some(p => p !== null)) {
-          out = parts.map((p, i) => p ?? s.split(sep)[i]).join(sep);
-          break;
-        }
-      }
-    }
-  }
-  if (out === null) {
-    if (__DEV__ && (globalThis as any).__I18N_MISS) (globalThis as any).__I18N_MISS.add(norm(s));
-    out = s;
-  } else out = lead + out.trim() + trail;
-  out = toLatinDigits(out);
+  if (__DEV__ && (globalThis as any).__I18N_MISS && T.core(s) === null) (globalThis as any).__I18N_MISS.add(norm(s));
+  const out = T.full(s);
+  // النصوص المتغيّرة (أرقام تتحدث كل ثانية) ما تخلّي الذاكرة تكبر بلا حد
+  if (CACHE.size > 4000) CACHE.clear();
   CACHE.set(s, out);
   return out;
 }

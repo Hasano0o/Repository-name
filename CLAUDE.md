@@ -25,6 +25,11 @@ Bandly: تطبيق Expo (SDK 57، expo-router، TypeScript strict) يدير را
   - **التحكم من الرسيفر** (يسري على المضافين خلال يوم — `caps`): `touch data/autoprog/writes_off` (الكل يرجع قراءة بس) · `python3 autoprog.py --block KEY setBand` (أمر واحد على بصمة) · `touch data/autoprog/off` (يوقف الميزة كلها).
   - درايفر جديد = أضف بصمته في `FAMILIES` (+ أوامره في `WRITES`) + اختبار في `live-server/test_autoprog.py`.
   - اختبارات السيرفر: `python3 live-server/test_autoprog.py` · فحص الملفات الموجودة: `python3 autoprog.py --scan` · الحالة: `--stats`.
+- **الترجمة للإنجليزي** (نكمّلها على دفعات من ١٠ نوفمبر): النصوص العربية تبقى في الكود، والقاموس `src/i18n/en.ts` يعطي مقابلها (`EN` نص بنصه · `EN_PATTERNS` للي فيها متغيرات `{0}`). المحرك الصافي في `src/i18n/lookup.ts`.
+  - **الناقص:** `node tests/i18nScan.cjs` (ملخص لكل ملف) · `node tests/i18nScan.cjs app/setup.tsx` (النصوص الناقصة في ملف). الفاحص يقرأ الكود بمحلل TypeScript ويحكم بالمحرك الحقيقي.
+  - **الشاشات المكتملة** في قائمة `DONE` داخل `tests/i18nCoverage.test.ts` — أي نص عربي جديد فيها بدون ترجمة يفشّل الاختبارات. **شاشة خلصت ترجمتها ← أضفها للقائمة. نص جديد في شاشة مكتملة ← أضف ترجمته معه.**
+  - نص يتركّب من أجزاء (`…${شرط ? ' · كذا' : ''}`): الفاحص يشوف النمط بالمتغير بس — أضف كمان الصيغة بدون المتغير لو ممكن يكون فاضي.
+  - مصطلحاتنا: البرج Tower · التردد Band · الدمج CA · الشركة Carrier · الملصق Label · تثبيت Lock · وضع الفني Tech mode · رجّع الإشارة Restore signal.
 - الاختبارات: `node tests/run.cjs` (لازم كلها تنجح قبل الدمج).
 - الشاشات: `app/<name>/[id].tsx` — وعناوينها في مصفوفة `SCREENS` داخل `app/_layout.tsx` (أي شاشة جديدة تنضاف هناك).
 - البنق: `src/utils/latency.ts` — يقيس لدولة سيرفر اللعبة المختارة (المفتاح `bandly.gameRegion`). **منطقة AWS البحرين (me-south-1) متوقفة** — لا ترجعها.
