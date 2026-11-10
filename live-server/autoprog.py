@@ -22,7 +22,8 @@
     app.include_router(autoprog_router)
 
 التشغيل اليدوي:
-  python3 autoprog.py --scan           ← يفحص كل ملفات «جهاز جديد» الموجودة: كم واحد يطابق عائلة معروفة
+  python3 autoprog.py --scan           ← يفحص كل ملفات «جهاز جديد» الموجودة: كم واحد يطابق عائلة معروفة، وكم منها التطبيق ما يتعرّف عليه
+  python3 autoprog.py --scan --full    ← نفسه مع الأدلة واسم الملف وعنوان الصفحة لكل واحد
   python3 autoprog.py --zip FILE.zip   ← تفاصيل ملف واحد (النقاط والأدلة)
   python3 autoprog.py --stats          ← وش صار: تبرمج تلقائي / تحوّل للمبرمج / البصمات المحفوظة
   python3 autoprog.py --block KEY METHOD    ← يقفل أمر تغيير على بصمة (مثل setBand) — يوصل الأعضاء خلال يوم
@@ -64,6 +65,8 @@ FAMILIES = [
         (3, r"api/user/(?:login|state-login|challenge_login|authentication_login)", "دخول هواوي"),
         (3, r"api/device/(?:signal|information|basic_information)", "قراءة الجهاز/الإشارة"),
         (2, r"__RequestVerificationToken", "رأس التحقق"),
+        # فحص ملفات السيرفر (١٠ نوفمبر): ٥ ملفات M2A-77 طلعت «هواوي ١٣» — واجهته منسوخة من هواوي بس أوامره على منفذ postaddr
+        (-10, r"var\s+postaddr\s*=", "صفحة M2A (أوامرها على منفذ ثاني — مو هواوي)"),
     ], [
         (6, r"هواوي (?:SesTokInfo|token):[^\n]*→ 200[^\n]*<(?:SesInfo|TokInfo|token)>", "الراوتر رد برمز هواوي"),
     ]),
@@ -156,6 +159,26 @@ _FAM = [(d, n, mn, [(w, re.compile(rx), why) for w, rx, why in page], [(w, re.co
         for d, n, mn, page, live in FAMILIES]
 LABEL = {d: n for d, n, *_ in FAMILIES}
 MARGIN = 3  # الأول لازم يسبق الثاني بكذا — وإلا «مو واضح» ويتحول للمبرمج
+
+# التطبيق يتعرّف على الراوتر بنفسه؟ = نفس شرط detect() في الدرايفر، مقروء من الفحص الحي (_bandly/live.txt).
+# (الدرايفر ← (سطر الفحص موجود؟، السطر يقول إن detect ينجح))
+# راوتر التطبيق يعرفه أصلاً ما يوصل «برمج لي جهازي» — ملفه القديم وصل قبل ما ينضاف درايفره أو العضو أرسل على كل حال.
+NATIVE = {
+    "zte": (r"ZTE إصدارات:", r"ZTE إصدارات:[^\n]*\"wa_inner_version\":\"[^\"«]"),
+    "zte-ufi": (r"ZTE إصدارات:", r"ZTE إصدارات:(?=[^\n]*\"wa_inner_version\":\"\")(?=[^\n]*\"cr_version\":\"[^\"«])"),
+    "huawei-lte": (r"هواوي (?:SesTokInfo|token):", r"هواوي (?:SesTokInfo|token):[^\n]*→ 200[^\n]*<(?:SesInfo|TokInfo|token)>"),
+    "fiberhome": (r"FHNCAPIS is_encrypt", r"FHNCAPIS is_encrypt → ok"),
+}
+
+
+def native_hint(driver: str, files: dict) -> str:
+    """'yes' التطبيق يتعرّف عليه بنفسه · 'no' الفحص الحي يقول ما يتعرّف (مرشح حقيقي للبرمجة) · '?' ما عندنا فحص حي له"""
+    rule = NATIVE.get(driver)
+    live = "\n".join(t for p, t in files.items() if p.startswith("_bandly/"))
+    if not rule or not re.search(rule[0], live):
+        return "?"
+    return "yes" if re.search(rule[1], live) else "no"
+
 
 # ميزات الصفحة (للتقرير اللي يوصل المبرمج) — نفس أسماء router_library
 FEATURES = [
@@ -588,7 +611,15 @@ def set_block(key: str, method: str, on: bool) -> bool:
 
 # ─── التشغيل اليدوي ───
 
-def _scan():
+def _title(files: dict) -> str:
+    for name in ("index.html", "cgi-bin/luci/index.html"):
+        m = re.search(r"<title>([^<]{1,60})", files.get(name, ""), re.I)
+        if m:
+            return m.group(1).strip()
+    return ""
+
+
+def _scan(full: bool = False):
     seen, rows = set(), []
     for d in DUMP_DIRS:
         if not d.exists():
@@ -601,28 +632,41 @@ def _scan():
                 files = read_zip(z)
                 v = classify(files)
                 v["writes"] = evidence_writes(v["driver"], files) if v["status"] == "match" else []
+                v["native"] = native_hint(v["driver"], files) if v["driver"] else "?"
+                v["zip"], v["title"], v["n"] = z.name, _title(files), len(files)
+                v["live"] = any(p.startswith("_bandly/") for p in files)
             except Exception as e:
                 print(f"✗ {z.name}: {e}", file=sys.stderr)
                 continue
             m = re.search(r"^الموديل:\s*(.*)$", files.get("README.txt", ""), re.M)
             rows.append(((m.group(1).strip() if m else z.stem)[:34], v))
     hit = [r for r in rows if r[1]["status"] == "match"]
-    print(f"ملفات «جهاز جديد»: {len(rows)} · تطابق عائلة معروفة: {len(hit)} · للمبرمج: {len(rows) - len(hit)}\n")
-    by: dict[str, int] = {}
+    nat = {k: [r for r in hit if r[1]["native"] == k] for k in ("yes", "no", "?")}
+    print(f"ملفات «جهاز جديد»: {len(rows)} · تطابق عائلة معروفة: {len(hit)} · للمبرمج: {len(rows) - len(hit)}")
+    print(f"من المطابق: التطبيق يتعرّف عليه بنفسه {len(nat['yes'])} · **مرشح للبرمجة التلقائية (التطبيق ما يتعرّف) {len(nat['no'])}** · ما عندنا فحص حي له {len(nat['?'])}\n")
+    by: dict[str, list] = {}
     for _m, v in hit:
-        by[v["label"]] = by.get(v["label"], 0) + 1
-    for k, n in sorted(by.items(), key=lambda x: -x[1]):
-        print(f"  {n:>3} × {k}")
+        by.setdefault(v["label"], [0, 0, 0])[("yes", "no", "?").index(v["native"])] += 1
+    for k, n in sorted(by.items(), key=lambda x: -sum(x[1])):
+        print(f"  {sum(n):>3} × {k:<22} يعرفه {n[0]} · مرشح {n[1]} · ؟ {n[2]}")
+    mark = {"yes": "يعرفه التطبيق", "no": "مرشح", "?": "؟"}
     print("\n── التفاصيل ──")
-    for m, v in sorted(rows, key=lambda r: (r[1]["status"] != "match", -r[1]["score"])):
+    order = {"no": 0, "?": 1, "yes": 2}
+    for m, v in sorted(rows, key=lambda r: (r[1]["status"] != "match", order.get(r[1].get("native"), 3), -r[1]["score"])):
         sec = f" · الثاني {v['second'][0]} {v['second'][1]}" if v["second"] else ""
         if v["status"] == "match":
             w = [x for x in v["writes"] if x not in RESTORE]
-            print(f"✓ {m:<34} ← {v['label']} ({v['score']}){sec} · تغيير: {'، '.join(w) or 'ولا أمر (قراءة بس)'}")
+            print(f"✓ {m:<34} ← {v['label']} ({v['score']}) [{mark[v['native']]}]{sec} · تغيير: {'، '.join(w) or 'ولا أمر (قراءة بس)'}")
         elif v["scores"]:
             print(f"? {m:<34} ← مو واضح: {v['label']} ({v['score']}){sec}")
         else:
             print(f"✗ {m:<34} ← ولا عائلة · ميزات صفحته: {'، '.join(v['features']) or '—'}")
+        if full:
+            print(f"      {v['zip']} · {v['n']} ملف · فحص حي: {'فيه' if v['live'] else 'ما فيه'} · العنوان: {v['title'] or '—'}")
+            for d, sc, why in v["scores"]:
+                print(f"      {d} = {sc}: " + " · ".join(why))
+            if v["status"] != "match":
+                print(f"      ميزات صفحته: {'، '.join(v['features']) or '—'}")
 
 
 def _one(path: str):
@@ -653,7 +697,7 @@ def _stats():
 if __name__ == "__main__":
     a = sys.argv[1:]
     if "--scan" in a:
-        _scan()
+        _scan("--full" in a)
     elif "--zip" in a and len(a) > a.index("--zip") + 1:
         _one(a[a.index("--zip") + 1])
     elif "--stats" in a:

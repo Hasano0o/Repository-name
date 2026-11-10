@@ -56,6 +56,26 @@ class Classify(unittest.TestCase):
         self.assertEqual((a["status"], a["driver"]), ("match", "nokia"))
         self.assertEqual((b["status"], b["driver"]), ("match", "nokia-fwa"))
 
+    def test_m2a_page_with_copied_huawei_code_is_not_huawei(self):
+        """فحص السيرفر ١٠ نوفمبر: M2A-77 طلع «هواوي ١٣ · الثاني m2a ٨» — واجهته منسوخة من هواوي وأوامره على منفذ ثاني"""
+        v = ap.classify({
+            "js/main.js": 'getAjaxData("api/webserver/SesTokInfo");"api/user/login";"api/device/signal";h["__RequestVerificationToken"]',
+            "ipaddr.js": 'var postaddr = "192.168.100.1:8080";',
+            "index.html": '<script src="ipaddr.js"></script>',
+        })
+        self.assertEqual((v["status"], v["driver"]), ("match", "m2a"))
+
+    def test_native_hint_mirrors_app_detection(self):
+        zte = 'ZTE إصدارات: GET /goform/x → 200 · application/json · 90B · 30ms · {"wa_inner_version":"%s","cr_version":"CR_1"}'
+        self.assertEqual(ap.native_hint("zte", {"_bandly/live.txt": zte % "BD_MF297"}), "yes")
+        self.assertEqual(ap.native_hint("zte", {"_bandly/live.txt": zte % ""}), "no")
+        self.assertEqual(ap.native_hint("zte", {"_bandly/live.txt": "ZTE إصدارات: GET /goform/x → فشل (ما رد خلال 5ث) · 5000ms"}), "no")
+        self.assertEqual(ap.native_hint("zte", {"js/a.js": "goform_get_cmd_process"}), "?")
+        hw = "هواوي SesTokInfo: GET /api/webserver/SesTokInfo → %s"
+        self.assertEqual(ap.native_hint("huawei-lte", {"_bandly/live.txt": hw % "200 · text/html · 150B · 12ms · <response><SesInfo>«محذوف»</SesInfo></response>"}), "yes")
+        self.assertEqual(ap.native_hint("huawei-lte", {"_bandly/live.txt": hw % "404 · text/html · 90B · 8ms · Not Found"}), "no")
+        self.assertEqual(ap.native_hint("dlink", {"_bandly/live.txt": "أي شي"}), "?")
+
     def test_real_fixtures(self):
         """ملفات صفحات حقيقية من الأعضاء (tests/fixtures)"""
         d = ap.classify({"index.html": fx("dlink-dwr2000m", "index.html")})
