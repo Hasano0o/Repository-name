@@ -59,6 +59,7 @@ const files = [
   'src/services/diag.ts',
   'src/utils/snapshot.ts',
   'src/utils/usageDays.ts',
+  'src/utils/nsaPick.ts',
   'src/utils/normalize.ts',
   'src/drivers/noChange.ts',
   'src/services/routerDump.ts',
