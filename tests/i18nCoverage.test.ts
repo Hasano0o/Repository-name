@@ -29,6 +29,7 @@ const DONE = [
   // الاستهلاك اليومي (١٣ نوفمبر)
   'src/ui/UsageDaysCard.tsx',
   'src/ui/UsageTableCard.tsx',
+  'src/ui/RushCard.tsx',
 ];
 
 // ═══ القاموس نفسه ═══

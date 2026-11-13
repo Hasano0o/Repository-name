@@ -2003,6 +2003,7 @@ export const EN: Record<string, string> = {
   // ═══ الاستهلاك اليومي (UsageDaysCard) ═══
   'استهلاكك اليومي': 'Daily usage',
   'تفاصيل الاستهلاك': 'Usage details',
+  'أوقات الزحمة': 'Rush hours',
   'هالاتصال': 'This session',
   'هالشهر': 'This month',
   'مدة الاتصال': 'Connected for',
@@ -2015,6 +2016,11 @@ export const EN: Record<string, string> = {
 };
 
 export const EN_PATTERNS: Record<string, string> = {
+  // ═══ أوقات الزحمة (RushCard) ═══
+  'الزحمة عندك من {0} إلى {1} — البنق يرتفع {2}٪': 'Your rush hours: {0} to {1} — ping goes up {2}%',
+  'أهدى وقت: من {0} إلى {1} (بنق {2}ms بدل {3}ms)': 'Quietest: {0} to {1} ({2}ms instead of {3}ms)',
+  'نجمع قياسات عشان نعرف أوقات الزحمة عندك: {0} من 20 قياس · {1} من 8 ساعات مختلفة. شغّل «المراقبة بالخلفية» ونقيس لحالنا كل نص ساعة تقريباً — بعد يومين تطلع لك النتيجة.': 'Collecting measurements to find your rush hours: {0} of 20 samples · {1} of 8 different hours. Turn on background monitoring and we measure about every half hour — results in about two days.',
+  'لسيرفرات {0} — آخر 14 يوم · الأحمر الزحمة · الأخضر الأهدى': 'For {0} servers — last 14 days · red = rush · green = quietest',
   'الواي فاي ينطفي لحاله بعد {0} دقيقة لو ما فيه أجهزة متصلة — يوفّر البطارية بس ممكن يفصل أجهزة البيت.': 'Wi-Fi turns off after {0} min with no devices — saves battery but may disconnect home devices.',
   'تبي تحذف "{0}" من التطبيق؟\n\nكلمة المرور المُحفوظة راح تنحذف أيضاً.': 'Delete "{0}" from the app?\n\nThe saved password will be deleted too.',
   'تبي تحذف "{0}" من التطبيق؟ بتنحذف كلمة المرور المحفوظة معه.': 'Delete "{0}" from the app? Its saved password will be deleted too.',

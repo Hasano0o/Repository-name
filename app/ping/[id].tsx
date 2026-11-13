@@ -22,6 +22,7 @@ import { buildWeekly, weeklyLines } from '../../src/utils/weekly';
 import { Consent, TowerRef, TowerInfo, getConsent, setConsent, currentTower, currentNet, fetchTower, reportTest } from '../../src/services/community';
 import { AreaCompare } from '../../src/ui/AreaCompare';
 import { addGameLog, listGameLog, periodStats, PeriodStat } from '../../src/store/gameLog';
+import { RushCard } from '../../src/ui/RushCard';
 import { bandLabel, freqLabel } from '../../src/utils/bands';
 import { C, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
@@ -859,6 +860,8 @@ export default function GameScreen() {
             {weekly.map(l => <Text key={l} style={s.weekLine}>• {l}</Text>)}
           </GlassCard>
         )}
+
+        {!loading && panel === 'time' && !!info && <RushCard routerId={info.id} region={region} regionName={reg.name} />}
 
         {!loading && panel === 'time' && (
           <GlassCard title="أفضل وقت للعب" icon="🕒" tint={C.violetSoft} collapsible={false}>

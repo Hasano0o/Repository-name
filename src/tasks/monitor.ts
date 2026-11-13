@@ -9,6 +9,8 @@ import { overallLevel, LEVEL_LABEL, parseNrBands, Level } from '../utils/signal'
 import { notify } from '../utils/notify';
 import { Signal, NetworkInfo, Usage, DataPlan } from '../drivers/types';
 import { recordUsage } from '../store/usageLog';
+import { addGameLog, listGameLog } from '../store/gameLog';
+import { measureUrl, regionUrls, selectedRegion, gameScore } from '../utils/latency';
 import { reportOutage } from '../services/community';
 import { buildWeekly, weeklyLines, weeklyDue, markWeeklySent } from '../utils/weekly';
 import { runAutomation } from './automation';
@@ -41,6 +43,7 @@ export async function runMonitorCheck(): Promise<boolean> {
 
   const AUTH_FAIL_PATTERN = /(كلمة المرور|جلسة عالقة|جلسة أخرى|محاولات كثيرة|تعذّر تسجيل الدخول|108006|108007|108001|108002)/;
   const AUTH_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 ساعات
+  let bgPinged = false;
   for (const r of routers) {
     // ═══ تخطى الراوتر لو فشل الدخول آخر 6 ساعات — يمنع قفل الحساب ═══
     const prev0 = states[r.id] ?? {};
@@ -69,6 +72,22 @@ export async function runMonitorCheck(): Promise<boolean> {
       const next: RouterMonState = { ...prev, at: Date.now() };
       const online = net?.connected ?? true;
       next.online = online;
+
+      // ═══ أوقات الزحمة: قياس بنق خفيف (٦ طلبات) لسيرفر اللعبة المختار — مرة كل ٢٥ دقيقة على الأكثر ═══
+      // وصلنا الراوتر = الجوال على شبكته، فالقياس يمر من نفس الراوتر (مو من شبكة الجوال)
+      if (online && !bgPinged) {
+        bgPinged = true;
+        try {
+          const last = (await listGameLog(r.id)).filter(e => e.src === 'bg').pop();
+          if (!last || Date.now() - last.at > 25 * 60_000) {
+            const reg = await selectedRegion();
+            const res = await measureUrl(regionUrls(reg), 6, 2500);
+            if (res.samples >= 3) {
+              await addGameLog(r.id, { at: Date.now(), region: reg.id, score: gameScore(res), median: res.median, jitter: res.jitter, lossPct: res.lossPct, src: 'bg' });
+            }
+          }
+        } catch {}
+      }
 
       // ═══ المجتمع: نحفظ البرج، ولما يرجع النت نبلّغ عن فترة الانقطاع ═══
       const tw = sig?.enodebId || sig?.cellId;

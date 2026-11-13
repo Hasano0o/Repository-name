@@ -22,7 +22,8 @@ const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b,
 
 export async function buildWeekly(routerId: string): Promise<Weekly> {
   const now = Date.now();
-  const log = (await listGameLog(routerId)).filter(e => e.score > 0);
+  // قياسات الخلفية (أوقات الزحمة) مو «فحوصات» سواها المستخدم — ما تنعد في ملخص الأسبوع
+  const log = (await listGameLog(routerId)).filter(e => e.score > 0 && e.src !== 'bg');
   const week = log.filter(e => e.at >= now - WEEK);
   const prev = log.filter(e => e.at < now - WEEK && e.at >= now - 2 * WEEK);
   const periods = periodStats(week).filter(p => p.count >= 2 && p.avgScore !== undefined).sort((a, b) => b.avgScore! - a.avgScore!);

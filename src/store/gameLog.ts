@@ -10,6 +10,8 @@ export interface GameLogEntry {
   lossPct: number;
   /** وش كان الإعداد وقت القياس (مثل B3 أو «الوضع الحالي») */
   setup?: string;
+  /** 'bg' = قياس خفيف من المراقبة بالخلفية (لأوقات الزحمة) — مو فحص سواه المستخدم */
+  src?: 'bg';
 }
 
 const KEY = (routerId: string) => `bandly.gamelog.${routerId}`;
