@@ -153,6 +153,16 @@ export class ZyxelDriver implements RouterDriver {
     this.sessionkey = key;
   }
 
+  /**
+   * الراوتر يبدّل مفتاح الجلسة مع الردود (NR5103EV2 — app.js: بعد فك أي رد cgi-bin
+   * «if(v.sessionkey) localStorage.setItem("zySessionKey", v.sessionkey)»). كنا نتجاهله ← أول PUT بعد الدخول 200
+   * واللي بعده 403 بالمفتاح القديم (تقرير nrdual ١٢ نوفمبر: PUT 200 ← PUT 403 ← دخول force ← PUT 200).
+   */
+  private rotate(j: any, used: string): void {
+    const k = str(j?.sessionkey);
+    if (k && this.sessionkey === used) this.sessionkey = k;
+  }
+
   async logout(): Promise<void> {
     if (!this.sessionkey) return;
     try { await http(`${this.base()}/cgi-bin/UserLogout?sessionkey=${this.sessionkey}`, { headers: this.hdr() }, 5000); } catch {}
@@ -170,6 +180,7 @@ export class ZyxelDriver implements RouterDriver {
       if (again) { if (this.sessionkey === used) this.sessionkey = ''; return this.dal(oid, false); }   // مفتاح AES ما يطابق الجلسة
       throw new Error('رد غير مفهوم من الراوتر');
     }
+    this.rotate(j, used);
     if (j?.result !== 'ZCFG_SUCCESS' || !Array.isArray(j.Object)) return null;
     return j.Object[0] ?? null;
   }
@@ -294,10 +305,11 @@ export class ZyxelDriver implements RouterDriver {
       }, 15000);
       let j: any = null;
       try { j = this.decrypt(await r.json(), aesKey); } catch {}
+      this.rotate(j, used);
       return { status: r.status, j, used };
     };
     let { status, j, used } = await send();
-    if (status === 401) { if (this.sessionkey === used) this.sessionkey = ''; await this.ensure(); ({ status, j } = await send()); }
+    if (status === 401 || status === 403) { if (this.sessionkey === used) this.sessionkey = ''; await this.ensure(); ({ status, j } = await send()); }
     if (j?.result !== 'ZCFG_SUCCESS') throw new Error(`الراوتر رفض الإعداد (${String(j?.result ?? j?.ReplyMsg ?? status).slice(0, 60)})`);
   }
 
@@ -305,6 +317,11 @@ export class ZyxelDriver implements RouterDriver {
     const o = await this.dal('cellwan_band');
     if (!o) throw new Error('راوترك ما يعطي إعدادات الترددات');
     return o;
+  }
+  /** الترددات المفضلة — «Auto» (اختيار تلقائي في صفحة الراوتر) = كل المدعوم */
+  private static pref(o: Record<string, any>) {
+    const raw = str(o.INTF_Preferred_Bands).trim();
+    return ZyxelDriver.split(!raw || /^auto$/i.test(raw) ? o.INTF_Supported_Bands : raw);
   }
   private static split(v: unknown) {
     const lte: number[] = [], nr: number[] = [];
@@ -324,7 +341,7 @@ export class ZyxelDriver implements RouterDriver {
   async getBandConfig(): Promise<BandConfig> {
     const o = await this.bandObj();
     const sup = ZyxelDriver.split(o.INTF_Supported_Bands);
-    const pref = ZyxelDriver.split(o.INTF_Preferred_Bands);
+    const pref = ZyxelDriver.pref(o);
     const all = (a: number[], b: number[]) => b.every(x => a.includes(x));
     const techs = str(o.INTF_Supported_Access_Technologies).split(',').map(x => x.trim()).filter(Boolean);
     const LABEL: Record<string, string> = { Auto: 'تلقائي', 'NR5G-NSA': '4G + 5G', LTE: '4G فقط', 'NR5G-SA': '5G فقط (SA)' };
@@ -343,7 +360,7 @@ export class ZyxelDriver implements RouterDriver {
   async setBand(bands: number[] | 'keep', nrBands?: number[]): Promise<void> {
     const o = await this.bandObj();
     const sup = ZyxelDriver.split(o.INTF_Supported_Bands);
-    const cur = ZyxelDriver.split(o.INTF_Preferred_Bands);
+    const cur = ZyxelDriver.pref(o);
     const lte = bands === 'keep' ? cur.lte : (bands.length ? bands.filter(b => sup.lte.includes(b)) : sup.lte);
     const nr = nrBands === undefined ? cur.nr : (nrBands.length ? nrBands.filter(b => sup.nr.includes(b)) : sup.nr);
     if (!lte.length && !nr.length) throw noChange('ما فيه تردد يدعمه راوترك في الاختيار — ما غيّرنا شي.');
@@ -351,7 +368,7 @@ export class ZyxelDriver implements RouterDriver {
     if (want === ZyxelDriver.join(cur.lte, cur.nr)) return;
     await this.dalPut('cellwan_band', { INTF_Preferred_Bands: want });
     await new Promise(r => setTimeout(r, 1500));
-    const after = ZyxelDriver.split((await this.bandObj()).INTF_Preferred_Bands);
+    const after = ZyxelDriver.pref(await this.bandObj());
     if (ZyxelDriver.join(after.lte, after.nr) !== want) throw new Error('الراوتر قبل الطلب بس الترددات ما تغيّرت');
   }
 
@@ -369,7 +386,7 @@ export class ZyxelDriver implements RouterDriver {
   async readLockState(): Promise<LockSnapshot> {
     const o = await this.bandObj();
     const bands = str(o.INTF_Preferred_Bands), tech = str(o.INTF_Preferred_Access_Technology);
-    const p = ZyxelDriver.split(bands), sp = ZyxelDriver.split(o.INTF_Supported_Bands);
+    const p = ZyxelDriver.pref(o), sp = ZyxelDriver.split(o.INTF_Supported_Bands);
     const lAll = sp.lte.every(x => p.lte.includes(x)), nAll = sp.nr.every(x => p.nr.includes(x));
     const summary = `4G: ${lAll ? 'تلقائي' : p.lte.map(b => 'B' + b).join('+')} · 5G: ${nAll ? 'تلقائي' : p.nr.map(b => 'n' + b).join('+')} · ${tech || '—'}`;
     return { driver: this.id, at: Date.now(), summary, data: { bands, tech } };
@@ -379,14 +396,14 @@ export class ZyxelDriver implements RouterDriver {
     const want = snap.data as { bands: string; tech: string };
     const o = await this.bandObj();
     const patch: Record<string, unknown> = {};
-    const norm = (v: unknown) => { const x = ZyxelDriver.split(v); return ZyxelDriver.join(x.lte, x.nr); };
-    if (want.bands && norm(o.INTF_Preferred_Bands) !== norm(want.bands)) patch.INTF_Preferred_Bands = want.bands;
+    const norm = (v: unknown, b: Record<string, any>) => { const x = ZyxelDriver.pref({ ...b, INTF_Preferred_Bands: v }); return ZyxelDriver.join(x.lte, x.nr); };
+    if (want.bands && norm(o.INTF_Preferred_Bands, o) !== norm(want.bands, o)) patch.INTF_Preferred_Bands = want.bands;
     if (want.tech && str(o.INTF_Preferred_Access_Technology) !== want.tech) patch.INTF_Preferred_Access_Technology = want.tech;
     if (Object.keys(patch).length) await this.dalPut('cellwan_band', patch);
     await new Promise(r => setTimeout(r, 1500));
     const a = await this.bandObj();
     const miss: string[] = [];
-    if (want.bands && norm(a.INTF_Preferred_Bands) !== norm(want.bands)) miss.push('الترددات');
+    if (want.bands && norm(a.INTF_Preferred_Bands, a) !== norm(want.bands, a)) miss.push('الترددات');
     if (want.tech && str(a.INTF_Preferred_Access_Technology) !== want.tech) miss.push('وضع الشبكة');
     if (miss.length) throw restoreMismatch(miss);
   }
@@ -442,10 +459,11 @@ export class ZyxelDriver implements RouterDriver {
       }, 15000);
       let j: any = null;
       try { j = this.decrypt(await r.json(), aesKey); } catch {}
+      this.rotate(j, used);
       return { status: r.status, j, used };
     };
     let { status, j, used } = await send();
-    if (status === 401) { if (this.sessionkey === used) this.sessionkey = ''; await this.ensure(); ({ status, j } = await send()); }
+    if (status === 401 || status === 403) { if (this.sessionkey === used) this.sessionkey = ''; await this.ensure(); ({ status, j } = await send()); }
     if (j?.result !== 'ZCFG_SUCCESS') throw new Error(`${oid}: الراوتر رفض (${String(j?.ReplyMsg || j?.result || status).slice(0, 60)})`);
     return method === 'GET' ? unesc(j) : j;
   }
