@@ -2002,6 +2002,11 @@ export const EN: Record<string, string> = {
   'أساسي + ثانوي': 'Primary + secondary',
   // ═══ الاستهلاك اليومي (UsageDaysCard) ═══
   'استهلاكك اليومي': 'Daily usage',
+  'تفاصيل الاستهلاك': 'Usage details',
+  'هالاتصال': 'This session',
+  'هالشهر': 'This month',
+  'مدة الاتصال': 'Connected for',
+  'مدة الشهر': 'Time this month',
   'المتصلين والاستهلاك': 'Connected & usage',
   'بدأنا نحسب استهلاكك من الحين — افتح التطبيق بعد شوي وتطلع لك أرقام اليوم والأسبوع.': 'We started counting your usage now — open the app again later to see today and this week.',
   'آخر ٧ أيام': 'Last 7 days',

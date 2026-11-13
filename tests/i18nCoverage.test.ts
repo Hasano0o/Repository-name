@@ -28,6 +28,7 @@ const DONE = [
   'app/nrdual/[id].tsx', 'app/techs.tsx', 'src/ui/BandPicker.tsx',
   // الاستهلاك اليومي (١٣ نوفمبر)
   'src/ui/UsageDaysCard.tsx',
+  'src/ui/UsageTableCard.tsx',
 ];
 
 // ═══ القاموس نفسه ═══

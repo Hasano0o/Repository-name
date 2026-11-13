@@ -36,7 +36,11 @@ export interface NetworkInfo {
 }
 /** قراءة حرارة وحدة: key ثابت للتخزين، label للعرض */
 export interface DeviceTemp { key: string; label: string; c: number }
-export interface Traffic { downBytesPerSec: number; upBytesPerSec: number; connectedSecs: number; }
+export interface Traffic {
+  downBytesPerSec: number; upBytesPerSec: number; connectedSecs: number;
+  /** تنزيل/رفع هالاتصال (من آخر ما اتصل الراوتر) — لو الراوتر يعطيه */
+  sessionDownBytes?: number; sessionUpBytes?: number;
+}
 /** راديو واي فاي واحد (2.4 أو 5) وقناته الحالية — '0' = تلقائي */
 export interface WifiRadio {
   band: '2.4' | '5';
@@ -85,7 +89,11 @@ export interface RouterExtras {
 export interface TimeRule { id: string; mac: string; on: boolean; days: string; start: string; end: string; raw?: string }
 
 export interface ConnectedDevice { mac: string; ip?: string; name?: string; blocked?: boolean; }
-export interface Usage { downloadBytes: number; uploadBytes: number; }
+export interface Usage {
+  downloadBytes: number; uploadBytes: number;
+  /** مدة الاتصال هالشهر بالثواني — لو الراوتر يعطيها */
+  monthSecs?: number;
+}
 export interface NetworkModeOption { value: string; label: string; }
 export interface DeviceUsage { mac: string; name?: string; ip?: string; down: number; up: number; total: number }
 export interface DeviceUsageReport { enabled: boolean; list: DeviceUsage[]; canEnable: boolean }

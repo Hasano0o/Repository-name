@@ -4,12 +4,13 @@ import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
-import { DeviceDetails, Usage, DataPlan, ConnectedDevice } from '../../src/drivers/types';
+import { DeviceDetails, Usage, DataPlan, ConnectedDevice, Traffic } from '../../src/drivers/types';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { UsageRing } from '../../src/ui/UsageRing';
 import { DeviceRow } from '../../src/ui/DeviceRow';
 import { DeviceUsageCard } from '../../src/ui/DeviceUsageCard';
 import { UsageDaysCard } from '../../src/ui/UsageDaysCard';
+import { UsageTableCard } from '../../src/ui/UsageTableCard';
 import { recordUsage } from '../../src/store/usageLog';
 import { Icon } from '../../src/ui/Icon';
 import { C } from '../../src/ui/theme';
@@ -31,6 +32,7 @@ export default function DeviceScreen() {
   const [details, setDetails] = useState<DeviceDetails | null>(null);
   const [usage, setUsage] = useState<Usage | null>(null);
   const [usageTick, setUsageTick] = useState(0);
+  const [traffic, setTraffic] = useState<Traffic | null>(null);
   const [plan, setPlan] = useState<DataPlan | null>(null);
   const [devices, setDevices] = useState<ConnectedDevice[]>([]);
   const [blocked, setBlocked] = useState<ConnectedDevice[]>([]);
@@ -67,6 +69,7 @@ export default function DeviceScreen() {
 
   useFocusEffect(useCallback(() => {
     let alive = true;
+    let timer: ReturnType<typeof setInterval> | undefined;
     (async () => {
       const r = await getRouter(id);
       if (!alive) return;
@@ -74,8 +77,15 @@ export default function DeviceScreen() {
       setInfo(r);
       try { await load(r); } catch (e: any) { setError(e?.message ?? String(e)); }
       if (alive) setLoading(false);
+      // السرعة واستهلاك هالاتصال — تتحدّث كل ٣ ثواني والشاشة مفتوحة
+      const tick = async () => {
+        const t = await withSession(r, async d => (d.getTraffic ? d.getTraffic().catch(() => null) : null)).catch(() => null);
+        if (alive) setTraffic(t);
+      };
+      await tick();
+      if (alive) timer = setInterval(tick, 3000);
     })();
-    return () => { alive = false; };
+    return () => { alive = false; if (timer) clearInterval(timer); };
   }, [id, load]));
 
   const setLimit = async (gb: number) => {
@@ -167,6 +177,8 @@ export default function DeviceScreen() {
           </View>}
         </GlassCard>
       )}
+
+      <UsageTableCard traffic={traffic} usage={usage} />
 
       {!!usage && !!info && <UsageDaysCard routerId={info.id} refresh={usageTick} />}
 

@@ -802,20 +802,23 @@ export class ZteDriver implements RouterDriver {
 
   async getTraffic(): Promise<Traffic> {
     await this.ensure();
-    const r = await this.get(['realtime_tx_thrpt', 'realtime_rx_thrpt', 'realtime_time']);
+    const r = await this.get(['realtime_tx_thrpt', 'realtime_rx_thrpt', 'realtime_time', 'realtime_rx_bytes', 'realtime_tx_bytes']);
     return {
       downBytesPerSec: num(r.realtime_rx_thrpt) ?? 0,
       upBytesPerSec: num(r.realtime_tx_thrpt) ?? 0,
       connectedSecs: num(r.realtime_time) ?? 0,
+      sessionDownBytes: num(r.realtime_rx_bytes),
+      sessionUpBytes: num(r.realtime_tx_bytes),
     };
   }
 
   async getUsage(): Promise<Usage> {
     await this.ensure();
-    const r = await this.get(['monthly_rx_bytes', 'monthly_tx_bytes', 'realtime_rx_bytes', 'realtime_tx_bytes']);
+    const r = await this.get(['monthly_rx_bytes', 'monthly_tx_bytes', 'realtime_rx_bytes', 'realtime_tx_bytes', 'monthly_time']);
     return {
       downloadBytes: num(pick(r, 'monthly_rx_bytes', 'realtime_rx_bytes')) ?? 0,
       uploadBytes: num(pick(r, 'monthly_tx_bytes', 'realtime_tx_bytes')) ?? 0,
+      monthSecs: num(r.monthly_time),
     };
   }
 

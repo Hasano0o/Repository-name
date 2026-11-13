@@ -709,12 +709,15 @@ export class ZteNgDriver implements RouterDriver {
 
   async getTraffic(): Promise<Traffic> {
     const w = await this.wanStats();
-    return { downBytesPerSec: num(w.real_rx_speed) ?? 0, upBytesPerSec: num(w.real_tx_speed) ?? 0, connectedSecs: num(w.real_time) ?? 0 };
+    return {
+      downBytesPerSec: num(w.real_rx_speed) ?? 0, upBytesPerSec: num(w.real_tx_speed) ?? 0, connectedSecs: num(w.real_time) ?? 0,
+      sessionDownBytes: num(w.real_rx_bytes), sessionUpBytes: num(w.real_tx_bytes),
+    };
   }
 
   async getUsage(): Promise<Usage> {
     const w = await this.wanStats();
-    return { downloadBytes: num(w.month_rx_bytes) ?? 0, uploadBytes: num(w.month_tx_bytes) ?? 0 };
+    return { downloadBytes: num(w.month_rx_bytes) ?? 0, uploadBytes: num(w.month_tx_bytes) ?? 0, monthSecs: num(w.month_time) };
   }
 
   async reboot(): Promise<void> {

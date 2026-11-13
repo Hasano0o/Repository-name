@@ -1133,6 +1133,8 @@ export class HuaweiDriver implements RouterDriver {
       downBytesPerSec: num(tag(xml, 'CurrentDownloadRate')) ?? 0,
       upBytesPerSec: num(tag(xml, 'CurrentUploadRate')) ?? 0,
       connectedSecs: num(tag(xml, 'CurrentConnectTime')) ?? 0,
+      sessionDownBytes: num(tag(xml, 'CurrentDownload')),
+      sessionUpBytes: num(tag(xml, 'CurrentUpload')),
     };
   }
   async getDevices(): Promise<ConnectedDevice[]> {
@@ -1200,6 +1202,7 @@ export class HuaweiDriver implements RouterDriver {
     return {
       downloadBytes: num(tag(xml, 'CurrentMonthDownload')) ?? 0,
       uploadBytes: num(tag(xml, 'CurrentMonthUpload')) ?? 0,
+      monthSecs: num(tag(xml, 'MonthDuration')),
     };
   }
   async getDataPlan(): Promise<DataPlan> {
