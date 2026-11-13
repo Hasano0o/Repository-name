@@ -2,6 +2,9 @@ import { CellTower, RouterDriver } from '../drivers/types';
 
 const URL = 'https://speed.cloudflare.com/__down?bytes=8000000';
 
+/** كم مرة علّق التحميل ووقّفناه بالحد النهائي (للتشخيص) */
+export let burstStuck = 0;
+
 /**
  * تحميل قصير يصحّي وصلة 5G النائمة (شبكات NSA لا تضيف 5G إلا عند وجود بيانات).
  * خيطان متوازيان لمدة محددة، بسقف أعلى للاستهلاك. يرجع عدد البايتات المكتملة (تقدير أدنى).
@@ -16,11 +19,18 @@ export async function trafficBurst(
   const worker = async () => {
     while (Date.now() < end && used < capBytes && !isCancelled()) {
       const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), Math.max(400, end - Date.now()));
+      // الإلغاء نفسه ينهي الانتظار — في آيفون (fetch حق Expo) الـ abort أحياناً ما يوقف arrayBuffer
+      // اللي بدأ، فالطلب يعلّق ويعلّق معه كل اللي ينتظر التحميل (تقارير «ما رد وقت القياس» ١٢–١٣ نوفمبر)
+      let stop: () => void = () => {};
+      const aborted = new Promise<never>((_, rej) => { stop = () => rej(new Error('burst-timeout')); });
+      aborted.catch(() => {});
+      const t = setTimeout(() => { try { ctrl.abort(); } catch {} stop(); }, Math.max(400, end - Date.now()));
       try {
-        const r = await fetch(`${URL}&r=${Math.random()}`, { signal: ctrl.signal });
-        const b = await r.arrayBuffer();
-        used += b.byteLength;
+        const n = await Promise.race([
+          fetch(`${URL}&r=${Math.random()}`, { signal: ctrl.signal }).then(r => r.arrayBuffer()).then(b => b.byteLength),
+          aborted,
+        ]);
+        used += n;
       } catch {
         // انتهى الوقت أو انقطع — طبيعي
       } finally {
@@ -28,7 +38,14 @@ export async function trafficBurst(
       }
     }
   };
-  await Promise.all([worker(), worker()]);
+  // حد نهائي: التحميل ما يطوّل عن مدته + ٣ ثواني مهما صار — اللي ينتظره (القياس قبل التثبيت) ما يعلق
+  let hard: ReturnType<typeof setTimeout> | undefined;
+  const late = await Promise.race([
+    Promise.all([worker(), worker()]).then(() => false),
+    new Promise<boolean>(res => { hard = setTimeout(() => res(true), durationMs + 3000); }),
+  ]);
+  clearTimeout(hard);
+  if (late) burstStuck++;
   return used;
 }
 

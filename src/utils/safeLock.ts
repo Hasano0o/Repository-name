@@ -7,7 +7,7 @@ import { reportError } from '../services/errors';
 import { diag } from '../services/diag';
 import { getBaseline } from '../store/baseline';
 import { driverById } from '../drivers/registry';
-import { trafficBurst } from './nrprobe';
+import { trafficBurst, burstStuck } from './nrprobe';
 import { isNoService } from './signal';
 import { progress, Tracker } from '../ui/Progress';
 import { runApply, trackWrites } from './applyGuard';
@@ -577,7 +577,9 @@ async function safeApplyInner(o: SafeApplyOpts, track: Tracker = progress.none):
     const burst = trafficBurst(11000, 25_000_000, cancelled);
     await sleep(2500);
     const s = await snapshot(o.r, true);
+    const stuck0 = burstStuck;
     await burst.catch(() => 0);
+    if (burstStuck !== stuck0) diag(`[${o.key}] التحميل علّق — وقّفناه بالحد النهائي وكمّلنا`);
     return s;
   };
 
