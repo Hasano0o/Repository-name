@@ -13,8 +13,7 @@ import { BandConfig, Carrier, CellTower } from '../../src/drivers/types';
 import { snapshot, waitOnline, trialMessage, Snapshot, safeApply } from '../../src/utils/safeLock';
 import { C, R, S, tFg } from '../../src/ui/theme';
 import { trafficBurst } from '../../src/utils/nrprobe';
-import { useOperatorBands } from '../../src/store/operator';
-import { freqLabel } from '../../src/utils/bands';
+import { ManualPickCard } from '../../src/ui/ManualPickCard';
 import { squashBands, manualCombos } from '../../src/utils/nsaPick';
 
 import { sheet } from '../../src/i18n';
@@ -79,12 +78,9 @@ export default function NsaCombo() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const cancel = useRef(false);
-  const op = useOperatorBands(id);
-  /** «اختار بنفسي» — مفتوحة؟ والترددات المختارة */
-  const [manual, setManual] = useState(false);
+  /** «اختار بنفسي» — الترددات المختارة */
   const [pickLte, setPickLte] = useState<number[]>([]);
   const [pickNr, setPickNr] = useState<number[]>([]);
-  const [allBands, setAllBands] = useState(false);
   // خروج وقت الفحص ← تأكيد (كان يكمل بالخلفية ويطلع «الراوتر مشغول» لو رجع)
   useLeaveGuard(running, { what: 'فحص الدمج', onStop: () => { cancel.current = true; } });
   const mounted = useRef(true);
@@ -257,14 +253,6 @@ export default function NsaCombo() {
   const ranked = [...done].sort((a, b) => (b.snap!.cap) - (a.snap!.cap));
   const best = ranked[0];
   const bestRow = best;
-  const keepLte = (b: number) => allBands || !op || op.bands.lte.includes(b) || lteTop.includes(b) || pickLte.includes(b);
-  const keepNr = (b: number) => allBands || !op || op.bands.nr.includes(b) || nrTop.includes(b) || pickNr.includes(b);
-  const lteChoices = cfg ? [...cfg.supported].sort((a, b) => a - b).filter(keepLte) : [];
-  const nrPool = cfg ? (cfg.nrPreferred?.length ? cfg.nrPreferred : cfg.nrSupported) : [];
-  const nrChoices = [...nrPool].sort((a, b) => a - b).filter(keepNr);
-  const hidden = cfg && op && !allBands ? (cfg.supported.length - lteChoices.length) + (nrPool.length - nrChoices.length) : 0;
-  const toggle = (list: number[], set: (v: number[]) => void, b: number) =>
-    set(list.includes(b) ? list.filter(x => x !== b) : [...list, b]);
   const myCombos = manualCombos(pickLte, pickNr);
 
   return (
@@ -300,63 +288,17 @@ export default function NsaCombo() {
           {!!error && <Text style={s.err}>{error}</Text>}
         </View>
 
-        {!loading && !!cfg && (
-          <View style={s.card}>
-            <Pressable onPress={() => setManual(v => !v)} hitSlop={6} style={s.manualHead}>
-              <Text style={s.title}>✋ اختار بنفسي</Text>
-              <Text style={s.manualToggle}>{manual ? 'اخفِ' : 'افتح'}</Text>
-            </Pressable>
-            {manual && (
-              <>
-                <Text style={s.body}>اختار تردد 4G (المرساة) وتردد 5G أو أكثر — تقدر تجرّبها وتقارن، أو تثبّتها على طول.</Text>
-                <Text style={s.pickTitle}>4G</Text>
-                <View style={s.chips}>
-                  {lteChoices.map(b => {
-                    const on = pickLte.includes(b);
-                    return (
-                      <Pressable key={'l' + b} disabled={running} onPress={() => toggle(pickLte, setPickLte, b)} style={[s.chip, on && s.chipOn]}>
-                        <Text style={[s.chipTxt, on && s.chipTxtOn]}>B{b}</Text>
-                        {!!freqLabel('LTE', b) && <Text style={[s.chipSub, on && s.chipTxtOn]}>{freqLabel('LTE', b)}</Text>}
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                <Text style={s.pickTitle}>5G</Text>
-                <View style={s.chips}>
-                  {nrChoices.map(b => {
-                    const on = pickNr.includes(b);
-                    return (
-                      <Pressable key={'n' + b} disabled={running} onPress={() => toggle(pickNr, setPickNr, b)} style={[s.chip, on && s.chipOnNr]}>
-                        <Text style={[s.chipTxt, on && s.chipTxtOn]}>n{b}</Text>
-                        {!!freqLabel('NR', b) && <Text style={[s.chipSub, on && s.chipTxtOn]}>{freqLabel('NR', b)}</Text>}
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                {!!op && (hidden > 0 || allBands) && (
-                  <Pressable onPress={() => setAllBands(v => !v)} hitSlop={6}>
-                    <Text style={s.more}>{allBands ? `اعرض ترددات ${op.name} بس` : `معروض ترددات ${op.name} بس · اعرض كل ترددات الراوتر (+${hidden})`}</Text>
-                  </Pressable>
-                )}
-                {myCombos.length > 0 ? (
-                  <>
-                    <Text style={s.meta}>بنجرب: {myCombos.map(comboName).join('، ')}</Text>
-                    <View style={s.btnRow}>
-                      <Pressable style={[s.btn, s.btnHalf, running && s.off]} disabled={running} onPress={() => start(myCombos)}>
-                        <Text style={s.btnText}>▶ جرّب اختياري</Text>
-                      </Pressable>
-                      <Pressable style={[s.btn, s.btnHalf, { backgroundColor: C.green }, running && s.off]} disabled={running}
-                        onPress={() => apply({ lte: [...pickLte].sort((a, b) => a - b), nr: [...pickNr].sort((a, b) => a - b) })}>
-                        <Text style={s.btnText}>ثبّت على طول</Text>
-                      </Pressable>
-                    </View>
-                  </>
-                ) : (
-                  <Text style={s.note}>اختار تردد 4G واحد على الأقل وتردد 5G واحد على الأقل.</Text>
-                )}
-              </>
-            )}
-          </View>
+        {!loading && !!cfg && !!info && (
+          <ManualPickCard
+            routerId={info.id} cfg={cfg} lteTop={lteTop} nrTop={nrTop}
+            pickLte={pickLte} pickNr={pickNr} setPickLte={setPickLte} setPickNr={setPickNr}
+            running={running} accent={ACCENT}
+            intro="اختار تردد 4G (المرساة) وتردد 5G أو أكثر — تقدر تجرّبها وتقارن، أو تثبّتها على طول."
+            preview={myCombos.length ? `بنجرب: ${myCombos.map(comboName).join('، ')}` : null}
+            needHint="اختار تردد 4G واحد على الأقل وتردد 5G واحد على الأقل."
+            onTry={() => start(myCombos)}
+            onApply={() => apply({ lte: [...pickLte].sort((x, y) => x - y), nr: [...pickNr].sort((x, y) => x - y) })}
+          />
         )}
 
         {rows.map(r => {
@@ -438,19 +380,6 @@ const s = sheet({
   rowNote: { color: C.muted, fontSize: 12, textAlign: 'right' },
   verdict: { color: C.text, fontWeight: '800', fontSize: 14.5, textAlign: 'right', lineHeight: 22 },
   note: { color: C.muted, fontSize: 11.5, textAlign: 'right', lineHeight: 17 },
-  manualHead: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
-  manualToggle: { color: ACCENT, fontWeight: '800', fontSize: 13 },
-  pickTitle: { color: C.text, fontWeight: '800', fontSize: 13, textAlign: 'right', marginTop: 4 },
-  chips: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6 },
-  chip: { borderWidth: 1, borderColor: C.line, borderRadius: R.md, paddingVertical: 6, paddingHorizontal: 10, alignItems: 'center', minWidth: 58, backgroundColor: C.card },
-  chipOn: { backgroundColor: '#2f6bff', borderColor: '#2f6bff' },
-  chipOnNr: { backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' },
-  chipTxt: { color: C.text, fontWeight: '800', fontSize: 13 },
-  chipSub: { color: C.muted, fontSize: 10 },
-  chipTxtOn: { color: '#ffffff' },
-  more: { color: ACCENT, fontSize: 12, fontWeight: '700', textAlign: 'right' },
-  btnRow: { flexDirection: 'row-reverse', gap: 8 },
-  btnHalf: { flex: 1 },
   off: { opacity: 0.5 },
   tapHint: { color: ACCENT, fontSize: 11, fontWeight: '700', textAlign: 'right' },
 });

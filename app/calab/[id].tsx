@@ -10,6 +10,8 @@ import { BandConfig, Carrier, CellTower } from '../../src/drivers/types';
 import { labBands, seenBands, buildAllCombos, runCaLab, LabRow, Combo } from '../../src/utils/bandLab';
 import { snapshot, safeApply, trialMessage, Snapshot } from '../../src/utils/safeLock';
 import { C, R, S, tBd, tBg, tFg } from '../../src/ui/theme';
+import { ManualPickCard } from '../../src/ui/ManualPickCard';
+import { squashBands } from '../../src/utils/nsaPick';
 
 import { sheet } from '../../src/i18n';
 const ACCENT = '#0ea5a4';
@@ -51,6 +53,9 @@ export default function CaLab() {
   const [error, setError] = useState('');
   const cancel = useRef(false);
   const mounted = useRef(true);
+  /** «اختار بنفسي» */
+  const [pickLte, setPickLte] = useState<number[]>([]);
+  const [pickNr, setPickNr] = useState<number[]>([]);
 
   useEffect(() => {
     mounted.current = true;
@@ -75,6 +80,8 @@ export default function CaLab() {
 
         setLteTop(ltes);
         setNrTop(nrs);
+        setPickLte(ltes.slice(0, 2));
+        setPickNr(nrs.slice(0, 1));
 
         const combos: Combo[] = buildAllCombos(ltes, nrs);
         setRows(combos.map(x => ({ bands: x.lte, nrBands: x.nr, status: 'pending' })));
@@ -87,24 +94,26 @@ export default function CaLab() {
     return () => { mounted.current = false; cancel.current = true; };
   }, [id]);
 
-  const start = () => {
-    if (!info || !cfg || !rows.length) return;
-    const mins = Math.ceil((rows.length * (measureSpeed ? 55 : 30)) / 60);
-    const mbEst = measureSpeed ? rows.length * 25 : rows.length * 10;
+  const start = (custom?: Combo[]) => {
+    if (!info || !cfg) return;
+    const list: LabRow[] = custom ? custom.map(x => ({ bands: x.lte, nrBands: x.nr, status: 'pending' })) : rows;
+    if (!list.length) return;
+    const mins = Math.ceil((list.length * (measureSpeed ? 55 : 30)) / 60);
+    const mbEst = measureSpeed ? list.length * 25 : list.length * 10;
     Alert.alert(
       'مختبر الدمج',
-      `بنجرب ${rows.length} تركيبة (4G فردي + 4G+5G + 4G مزدوج).\n\n` +
+      `بنجرب ${list.length} تركيبة (${custom ? 'اختيارك' : '4G فردي + 4G+5G + 4G مزدوج'}).\n\n` +
       `⏱ ~${mins} دقيقة · 📶 ينقطع الاتصال · 📊 ~${mbEst} ميقا.\n\n` +
       'بالآخر نرجع إعدادك تلقائياً.',
-      [{ text: 'إلغاء', style: 'cancel' }, { text: 'ابدأ', onPress: run }],
+      [{ text: 'إلغاء', style: 'cancel' }, { text: 'ابدأ', onPress: () => run(list) }],
     );
   };
 
-  const run = async () => {
+  const run = async (from: LabRow[]) => {
     if (!info || !cfg) return;
     cancel.current = false;
     setRunning(true); setFinished(false); setError('');
-    const list: LabRow[] = rows.map(r => ({ bands: r.bands, nrBands: r.nrBands, status: 'pending' }));
+    const list: LabRow[] = from.map(r => ({ bands: r.bands, nrBands: r.nrBands, status: 'pending' }));
     setRows([...list]);
     try {
       setStatus('نقيس الإعداد الحالي (التلقائي)...');
@@ -134,9 +143,12 @@ export default function CaLab() {
     return (b.snap!.cap) - (a.snap!.cap);
   });
   const best = ranked[0];
+  const bestRow = best;
   const best5g = ranked.find(r => r.nrActive);
+  const myCombos: Combo[] = pickLte.length ? buildAllCombos([...pickLte].sort((a, b) => a - b), [...pickNr].sort((a, b) => a - b)).slice(0, 12) : [];
 
-  const apply = () => {
+  const apply = (pick?: { bands: number[]; nrBands?: number[] }) => {
+    const best = pick ?? bestRow;
     if (!info || !cfg || !best) return;
     const lbl = rowLabel(best);
     Alert.alert(`تثبيت ${lbl}`, 'بنثبّتها بأمان: نقيس قبل وبعد، ولو ما كانت أفضل نرجع إعدادك.', [
@@ -204,7 +216,7 @@ export default function CaLab() {
           {!loading && rows.length > 0 && (
             <Pressable
               style={[s.btn, running && { backgroundColor: C.red }]}
-              onPress={running ? () => { cancel.current = true; } : start}
+              onPress={running ? () => { cancel.current = true; } : () => start()}
             >
               <Text style={s.btnText}>
                 {running ? '⏹ إيقاف (ونرجع إعدادك)' : finished ? '🔁 أعد التجربة' : '▶ ابدأ التجربة'}
@@ -214,6 +226,19 @@ export default function CaLab() {
           {!!status && <Text style={s.status}>{status}</Text>}
           {!!error && <Text style={s.err}>{error}</Text>}
         </View>
+
+        {!loading && !!cfg && !!info && (
+          <ManualPickCard
+            routerId={info.id} cfg={cfg} lteTop={lteTop} nrTop={nrTop}
+            pickLte={pickLte} pickNr={pickNr} setPickLte={setPickLte} setPickNr={setPickNr}
+            running={running} accent={ACCENT}
+            intro="اختار ترددات 4G و5G اللي تبي تجرّبها — نجرّب كل وحدة لحالها، وكل 4G مع كل 5G، و4G مع بعض. أو ثبّت اختيارك كله على طول."
+            preview={myCombos.length ? `🧪 ${myCombos.length} تركيبة: ${myCombos.map(c => rowLabel({ bands: c.lte, nrBands: c.nr })).join('، ')}` : null}
+            needHint="اختار تردد 4G واحد على الأقل (5G اختياري)."
+            onTry={() => start(myCombos)}
+            onApply={() => apply({ bands: [...pickLte].sort((a, b) => a - b), nrBands: [...pickNr].sort((a, b) => a - b) })}
+          />
+        )}
 
         {base && (
           <View style={[s.row, { borderColor: C.cardBorder }]}>
@@ -234,7 +259,7 @@ export default function CaLab() {
           const sg = gradeSpeed(r.speedMbps);
           const pg = gradePing(r.pingMs);
           return (
-            <View key={i} style={[
+            <Pressable key={i} disabled={running || r.status !== 'done'} onPress={() => apply(r)} style={[
               s.row,
               isBest && { borderColor: tBd('#16a34a'), borderWidth: 2, backgroundColor: tBg('#f0fdf4') },
               isBest5g && { borderColor: C.violet + '80' },
@@ -281,11 +306,12 @@ export default function CaLab() {
                 <Text style={s.rowLine}>
                   RSRP {r.snap.rsrp !== undefined ? Math.round(r.snap.rsrp) : '—'} dBm
                   {r.snap.sinr !== undefined ? ` · SINR ${Math.round(r.snap.sinr)}` : ''}
-                  {r.snap.bands ? ` · ${r.snap.bands}` : ''}
+                  {r.snap.bands ? ` · ${squashBands(r.snap.bands)}` : ''}
                 </Text>
               )}
+              {finished && !running && r.status === 'done' && <Text style={[s.rowNote, { color: ACCENT, fontWeight: '700' }]}>اضغط عشان تثبّت هذي</Text>}
               {!!r.note && r.status !== 'done' && <Text style={s.rowNote}>{r.note}</Text>}
-            </View>
+            </Pressable>
           );
         })}
 
@@ -305,13 +331,14 @@ export default function CaLab() {
                     📡 الأفضل مع 5G نشط: {rowLabel(best5g)} — {best5g.speedMbps?.toFixed(1) ?? '—'} Mbps
                   </Text>
                 )}
-                <Pressable style={[s.btn, { backgroundColor: tBg('#16a34a') }]} onPress={apply} disabled={running}>
+                <Pressable style={[s.btn, { backgroundColor: tBg('#16a34a') }]} onPress={() => apply(best)} disabled={running}>
                   <Text style={s.btnText}>ثبّت {rowLabel(best)} بأمان</Text>
                 </Pressable>
               </>
             ) : (
               <Text style={s.verdict}>ما قدرنا نقيس — جرّب مرة ثانية.</Text>
             )}
+            {!!best && <Text style={s.rowNote}>تقدر تضغط أي تركيبة فوق وتثبّتها بدل الأفضل.</Text>}
           </View>
         )}
       </ScrollView>

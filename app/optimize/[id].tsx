@@ -14,6 +14,7 @@ import { bandLabel, freqLabel } from '../../src/utils/bands';
 import { saveProfile } from '../../src/store/profiles';
 import { C, tBg, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
+import { ManualPickCard } from '../../src/ui/ManualPickCard';
 import {
   testBand, scoreResult, testLabel, verdictText,
   BandTestResult, TestMode,
@@ -65,6 +66,9 @@ export default function OptimizeScreen() {
   const [info, setInfo] = useState<SavedRouter | null>(null);
   const [cfg, setCfg] = useState<BandConfig | null>(null);
   const [cands, setCands] = useState<OptTarget[]>([]);
+  /** «اختار بنفسي» */
+  const [pickLte, setPickLte] = useState<number[]>([]);
+  const [pickNr, setPickNr] = useState<number[]>([]);
   const [mode, setMode] = useState<TestMode>('quick');
   const [rows, setRows] = useState<BandTestResult[]>([]);
   const [running, setRunning] = useState(false);
@@ -90,7 +94,10 @@ export default function OptimizeScreen() {
     setCfg(c);
     const fromCells: OptTarget[] = [];
     for (const x of cells) if (x.band) fromCells.push({ tech: x.tech, band: x.band });
-    setCands(buildCandidates(fromCells, c?.supported ?? [], c?.nrPreferred ?? c?.nrSupported ?? [], 6));
+    const cs = buildCandidates(fromCells, c?.supported ?? [], c?.nrPreferred ?? c?.nrSupported ?? [], 6);
+    setCands(cs);
+    setPickLte(p => (p.length ? p : cs.filter(x => x.tech === 'LTE').map(x => x.band)));
+    setPickNr(p => (p.length ? p : cs.filter(x => x.tech === 'NR').map(x => x.band)));
   }, []);
 
   useFocusEffect(useCallback(() => {
@@ -119,14 +126,15 @@ export default function OptimizeScreen() {
     return false;
   };
 
-  const run = async () => {
-    if (!info || !cfg || !cands.length) return;
+  const run = async (override?: OptTarget[]) => {
+    const base = override ?? cands;
+    if (!info || !cfg || !base.length) return;
     await runRouterOp(info, 'مُحسّن الترددات', async op => {
     const origLte = cfg.locked;
     const origNr = cfg.nrLocked;
     cancel.current = false;
     setRunning(true); setError('');
-    const list: BandTestResult[] = cands.map(t => ({
+    const list: BandTestResult[] = base.map(t => ({
       tech: t.tech, band: t.band, status: 'pending' as const,
       disconnectCount: 0, totalSamples: 0, onlinePct: 100,
       pciChanges: 0, durationMs: 0, samples: [],
@@ -276,6 +284,38 @@ export default function OptimizeScreen() {
     });
   };
 
+  /** «ثبّت هذي» — صف من النتائج أو اختيار العضو، بنفس الحماية */
+  const applyOne = (t: OptTarget) => {
+    if (!info || !cfg || running) return;
+    const label = `التثبيت على ${nameOf(t)}`;
+    Alert.alert(label, 'بنثبّتها بأمان: نقيس قبل وبعد، ولو ما كانت أفضل نرجع إعدادك.', [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'ثبّت', onPress: async () => {
+          setRunning(true); setError('');
+          try {
+            const origLte = cfg.locked, origNr = cfg.nrLocked;
+            const res = await safeApply({
+              r: info,
+              key: `band:${targetKey(t)}`,
+              label,
+              withNr: t.tech === 'NR' || !!t.nr?.length,
+              apply: d => applyTarget(d, t),
+              revert: d => d.setBand!(origLte, origNr),
+              onStatus: st => { if (mounted.current) setStatus(st); },
+            });
+            const m = trialMessage(res, label);
+            Alert.alert(m.title, m.body);
+          } catch (e: any) {
+            if (mounted.current) setError(e?.message ?? String(e));
+          } finally {
+            if (mounted.current) { setRunning(false); setStatus(''); try { await load(info); } catch {} }
+          }
+        },
+      },
+    ]);
+  };
+
   // فتحها المساعد («اختار لي أفضل تردد») ← نعرض التأكيد مباشرة: التجربة تقطع النت
   useAutoStart(!loading && !!cfg && cands.length > 0 && !running, () => Alert.alert(
     'أجرّب الترددات؟',
@@ -290,6 +330,10 @@ export default function OptimizeScreen() {
   const best = ranked[0];
   const canRun = !!cfg && cands.length > 0 && !running;
   const estMin = mode === 'full' ? Math.ceil((cands.length * 65) / 60) : Math.ceil((cands.length * 12) / 60);
+  const myCands: OptTarget[] = [
+    ...[...pickLte].sort((a, b) => a - b).map(b => ({ tech: 'LTE' as const, band: b })),
+    ...[...pickNr].sort((a, b) => a - b).map(b => ({ tech: 'NR' as const, band: b })),
+  ].slice(0, 10);
 
   return (
     <ScrollView style={s.wrap} contentContainerStyle={s.content}>
@@ -337,7 +381,7 @@ export default function OptimizeScreen() {
           </>
         ) : (
           <>
-            <Pressable style={[s.btn, !canRun && s.btnOff]} disabled={!canRun} onPress={run}>
+            <Pressable style={[s.btn, !canRun && s.btnOff]} disabled={!canRun} onPress={() => run()}>
               <Text style={s.btnTxt}>ابدأ التحسين</Text>
             </Pressable>
             <Pressable
@@ -349,6 +393,25 @@ export default function OptimizeScreen() {
           </>
         )}
       </GlassCard>
+
+      {!!cfg && !!info && (
+        <ManualPickCard
+          routerId={info.id} cfg={cfg}
+          lteTop={cands.filter(x => x.tech === 'LTE').map(x => x.band)}
+          nrTop={cands.filter(x => x.tech === 'NR').map(x => x.band)}
+          pickLte={pickLte} pickNr={pickNr} setPickLte={setPickLte} setPickNr={setPickNr}
+          running={running} accent="#7c3aed"
+          intro="اختار الترددات اللي تبي نجرّبها — نقيس كل وحدة لحالها، وبعدها نجرّب دمج الأفضل منها مع بعض. أو ثبّت اختيارك كله على طول."
+          preview={myCands.length ? `بنجرب: ${myCands.map(c => bandLabel(c.tech, c.band)).join('، ')} — وبعدها دمج الأفضل` : null}
+          needHint="اختار تردد واحد على الأقل."
+          onTry={() => run(myCands)}
+          onApply={() => applyOne({
+            tech: pickLte.length ? 'LTE' : 'NR', band: (pickLte[0] ?? pickNr[0]) ?? 0,
+            lte: pickLte.length ? [...pickLte].sort((a, b) => a - b) : undefined,
+            nr: pickNr.length ? [...pickNr].sort((a, b) => a - b) : undefined,
+          })}
+        />
+      )}
 
       {rows.length > 0 && (
         <GlassCard title="النتائج" icon="📊" tint={C.blue} collapsible={false}>
@@ -362,7 +425,7 @@ export default function OptimizeScreen() {
             const sc = r.status === 'done' ? scoreResult(r) : 0;
             const col = scoreColor(sc);
             return (
-              <View key={i} style={[s.row, isBest && s.rowBest]}>
+              <Pressable key={i} disabled={running || r.status !== 'done'} onPress={() => applyOne(r)} style={[s.row, isBest && s.rowBest]}>
                 <View style={s.scoreCol}>
                   {r.status === 'done' ? (
                     <>
@@ -390,8 +453,9 @@ export default function OptimizeScreen() {
                   ) : (
                     <Text style={s.rowSub}>{r.note ?? ''}</Text>
                   )}
+                  {!running && r.status === 'done' && <Text style={[s.rowSub, { color: '#7c3aed', fontWeight: '700' }]}>اضغط عشان تثبّت هذي</Text>}
                 </View>
-              </View>
+              </Pressable>
             );
           })}
           {ranked.length > 1 && (
