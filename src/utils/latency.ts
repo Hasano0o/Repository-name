@@ -31,6 +31,11 @@ export const REGIONS: GameRegion[] = [
   { id: 'ae', name: 'الإمارات', hint: 'الأقرب لسيرفرات الشرق الأوسط', url: 'https://dynamodb.me-central-1.amazonaws.com/ping', alt: ['https://s3.me-central-1.amazonaws.com/', 'https://ec2.me-central-1.amazonaws.com/ping'] },
   // الدمام: قوقل كلاود me-central2 — نقطة «إقليمية» (rep.googleapis.com) تنخدم من داخل المنطقة. أي رد يكفي.
   { id: 'sa', name: 'السعودية (الدمام)', hint: 'سيرفرات داخل السعودية (قوقل كلاود)', url: 'https://spanner.me-central2.rep.googleapis.com/', alt: ['https://storage.me-central2.rep.googleapis.com/'] },
+  // الرياض: أوراكل me-riyadh-1 + علي بابا me-central-1 (شريك محلي) · جدة: أوراكل me-jeddah-1 — كلها تنخدم من داخل المدينة.
+  // الرد 404/403 عادي (ما فيه حاوية) — نقيس وقت الوصول بس. تأكدنا إنها ترد من الرسيفر ١٣ نوفمبر.
+  // قريب: مايكروسوفت «Saudi Arabia East» (الشرقية — نوفمبر ٢٠٢٦) وأمازون السعودية (ديسمبر ٢٠٢٦) — نضيفها لما تفتح.
+  { id: 'sa-ruh', name: 'السعودية (الرياض)', hint: 'سيرفرات داخل السعودية (أوراكل وعلي بابا)', url: 'https://objectstorage.me-riyadh-1.oraclecloud.com/', alt: ['https://oss-me-central-1.aliyuncs.com/'] },
+  { id: 'sa-jed', name: 'السعودية (جدة)', hint: 'سيرفرات داخل السعودية (أوراكل)', url: 'https://objectstorage.me-jeddah-1.oraclecloud.com/', alt: [] },
   { id: 'in', name: 'الهند', hint: 'سيرفرات آسيا الغربية (مومباي)', url: 'https://dynamodb.ap-south-1.amazonaws.com/ping', alt: ['https://s3.ap-south-1.amazonaws.com/', 'https://ec2.ap-south-1.amazonaws.com/ping'] },
   { id: 'it', name: 'إيطاليا', hint: 'سيرفرات جنوب أوروبا (ميلان)', url: 'https://dynamodb.eu-south-1.amazonaws.com/ping', alt: ['https://s3.eu-south-1.amazonaws.com/', 'https://ec2.eu-south-1.amazonaws.com/ping'] },
   { id: 'eu', name: 'ألمانيا', hint: 'سيرفرات أوروبا (فرانكفورت)', url: 'https://dynamodb.eu-central-1.amazonaws.com/ping', alt: ['https://s3.eu-central-1.amazonaws.com/', 'https://ec2.eu-central-1.amazonaws.com/ping'] },
