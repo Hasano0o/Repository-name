@@ -34,8 +34,13 @@ export const REGIONS: GameRegion[] = [
   // الرياض: أوراكل me-riyadh-1 + علي بابا me-central-1 (شريك محلي) · جدة: أوراكل me-jeddah-1 — كلها تنخدم من داخل المدينة.
   // الرد 404/403 عادي (ما فيه حاوية) — نقيس وقت الوصول بس. تأكدنا إنها ترد من الرسيفر ١٣ نوفمبر.
   // قريب: مايكروسوفت «Saudi Arabia East» (الشرقية — نوفمبر ٢٠٢٦) وأمازون السعودية (ديسمبر ٢٠٢٦) — نضيفها لما تفتح.
-  { id: 'sa-ruh', name: 'السعودية (الرياض)', hint: 'سيرفرات داخل السعودية (أوراكل وعلي بابا)', url: 'https://objectstorage.me-riyadh-1.oraclecloud.com/', alt: ['https://oss-me-central-1.aliyuncs.com/'] },
+  { id: 'sa-ruh', name: 'السعودية (الرياض)', hint: 'سيرفرات داخل السعودية (أوراكل وعلي بابا)', url: 'https://objectstorage.me-riyadh-1.oraclecloud.com/', alt: ['https://oss-me-central-1.aliyuncs.com/', 'https://obs.me-east-1.myhuaweicloud.com/'] },
   { id: 'sa-jed', name: 'السعودية (جدة)', hint: 'سيرفرات داخل السعودية (أوراكل)', url: 'https://objectstorage.me-jeddah-1.oraclecloud.com/', alt: [] },
+  // ١٤ نوفمبر — تأكدنا من مكان كل عنوان (سجل الـ IP: TR Istanbul · EG Cairo · SA Riyadh — كلها AS136907 هواوي كلاود).
+  // قطر: نقطة قوقل الإقليمية me-central1 (نفس نوع نقطة الدمام). me-central1-run.googleapis.com رد من أوروبا ← مرفوض.
+  { id: 'qa', name: 'قطر (الدوحة)', hint: 'سيرفرات الخليج (قوقل كلاود)', url: 'https://storage.me-central1.rep.googleapis.com/', alt: [] },
+  { id: 'tr', name: 'تركيا (إسطنبول)', hint: 'بوابة أوروبا — سيرفرات كثيرة للألعاب (هواوي كلاود)', url: 'https://obs.tr-west-1.myhuaweicloud.com/', alt: [] },
+  { id: 'eg', name: 'مصر (القاهرة)', hint: 'سيرفرات شمال أفريقيا (هواوي كلاود)', url: 'https://obs.af-north-1.myhuaweicloud.com/', alt: [] },
   { id: 'in', name: 'الهند', hint: 'سيرفرات آسيا الغربية (مومباي)', url: 'https://dynamodb.ap-south-1.amazonaws.com/ping', alt: ['https://s3.ap-south-1.amazonaws.com/', 'https://ec2.ap-south-1.amazonaws.com/ping'] },
   { id: 'it', name: 'إيطاليا', hint: 'سيرفرات جنوب أوروبا (ميلان)', url: 'https://dynamodb.eu-south-1.amazonaws.com/ping', alt: ['https://s3.eu-south-1.amazonaws.com/', 'https://ec2.eu-south-1.amazonaws.com/ping'] },
   { id: 'eu', name: 'ألمانيا', hint: 'سيرفرات أوروبا (فرانكفورت)', url: 'https://dynamodb.eu-central-1.amazonaws.com/ping', alt: ['https://s3.eu-central-1.amazonaws.com/', 'https://ec2.eu-central-1.amazonaws.com/ping'] },
