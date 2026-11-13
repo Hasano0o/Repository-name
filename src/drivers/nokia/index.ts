@@ -84,7 +84,7 @@ export class NokiaDriver implements RouterDriver {
     const res = Number(r?.result);
     if (res === 0 && r?.token) { this.token = String(r.token); return; }
     if (res === -2) throw new Error('الراوتر قفل الدخول بعد محاولات غلط — انتظر شوي وجرّب (محاولات كثيرة)');
-    if (res === -1) throw new Error('كلمة المرور غلط — في نوكيا اسم المستخدم غالباً admin والكلمة تحت الراوتر');
+    if (res === -1) throw new Error('كلمة المرور غلط — اسم المستخدم مكتوب على ملصق الراوتر تحت Username (admin أو userAdmin — بنفس الحروف الكبيرة والصغيرة) والكلمة تحت Password');
     throw new Error(`تعذّر تسجيل الدخول (login_web_app: ${r?.result ?? 'رد غير متوقع'})`);
   }
   async logout(): Promise<void> {

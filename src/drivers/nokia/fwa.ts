@@ -27,6 +27,10 @@ import { buildSnapshot } from '../../utils/snapshot';
 import { ModelProfile } from '../models';
 import { nkLoginBody, nkSha256url, nkEscape, nkEncryptPost } from './crypto';
 import { rawFrom, signalFrom, carriersFrom, cellsFrom, bandNum, NkRaw } from './parse';
+import { NokiaDriver } from './index';
+import { diag } from '../../services/diag';
+
+const USER_HINT = 'اسم المستخدم مكتوب على ملصق الراوتر تحت Username (admin أو userAdmin — بنفس الحروف الكبيرة والصغيرة) والكلمة تحت Password';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const rand = (n: number) => Crypto.getRandomBytes(n);
@@ -69,6 +73,13 @@ export class NokiaFwaDriver implements RouterDriver {
   private token = '';
   private pubkey = '';
   private model = '';
+  /**
+   * فيرموير أقدم بنفس الصفحة (5G-24W-A — ملفات المكتبة Nokia-FastMile-6.1-5G-24W-A، main.7c150fd0…):
+   * login() في صفحته ما فيه «?salt» ولا iterations: response = sha256url(sha256(user, كلمة), nonce) مثل 3.1،
+   * والقراءة من fastmile_radio_status_web_app.cgi (نفس 3.1). الراوتر يرد على ?salt بجسم فاضي ← نكمّل بدرايفر 3.1.
+   * تقارير add-login ١٣ نوفمبر: الكلمة صحيحة (نفس شكل الملصق) و ?salt → len=0 ← «كلمة المرور غلط».
+   */
+  private legacy: NokiaDriver | null = null;
 
   private base() { return 'http://' + this.host.replace(/^https?:\/\//, '').replace(/\/+$/, ''); }
   private hdr(json = false): Record<string, string> {
@@ -123,32 +134,46 @@ export class NokiaFwaDriver implements RouterDriver {
     const m = this.model;
     return {
       id: 'nokia-fwa' + (m ? '-' + m.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : ''),
-      label: 'Nokia FastMile 6.1' + (m ? ` (${m})` : ''), brand: 'nokia', tech: '5G', nrLock: true,
+      label: (/^5G-24W/i.test(m) ? 'Nokia FastMile 5G Gateway' : 'Nokia FastMile 6.1') + (m ? ` (${m})` : ''), brand: 'nokia', tech: '5G', nrLock: !/^5G-24W/i.test(m),
     };
   }
 
   async login(host: string, username: string, password: string): Promise<void> {
     this.host = host;
     this.token = '';
+    this.legacy = null;
     const user = (username || '').trim() || 'admin';
     const n = await this.req('login_web_app.cgi?nonce', `userName=${encodeURIComponent(user)}`);
     const nonce = String(n?.nonce ?? '');
     if (!nonce) throw new Error('login_web_app: الراوتر ما أعطى nonce');
     this.pubkey = String(n?.pubkey ?? '');
-    const s = await this.req('login_web_app.cgi?salt', `userhash=${nkSha256url(user, nonce)}&nonce=${nkEscape(nonce)}`);
+    const s = await this.req('login_web_app.cgi?salt', `userhash=${nkSha256url(user, nonce)}&nonce=${nkEscape(nonce)}`).catch(() => ({}));
     const salt = String(s?.alati ?? '');
     const iters = Number(n?.iterations) || 0;
-    const { body } = nkLoginBody(user, password, nonce, String(n?.randomKey ?? ''), rand, iters, salt);
+    // ما فيه alati = الفيرموير الأقدم: الكلمة كما هي (بدون iterations) — نفس login() في صفحته
+    const { body } = salt
+      ? nkLoginBody(user, password, nonce, String(n?.randomKey ?? ''), rand, iters, salt)
+      : nkLoginBody(user, password, nonce, String(n?.randomKey ?? ''), rand);
+    if (!salt) diag('[nokia-fwa] ?salt رجع فاضي ← دخول الفيرموير الأقدم (sha256(user, كلمة) بدون salt) وقراءة 3.1');
     const r = await this.req('login_web_app.cgi', body, false, 30000);
     const res = Number(r?.result);
-    if (res === 0 && r?.token) { this.token = String(r.token); return; }
+    if (res === 0 && r?.token) {
+      this.token = String(r.token);
+      if (!salt) {
+        const v = new NokiaDriver();
+        Object.assign(v as any, { host: this.host, token: this.token });
+        this.legacy = v;
+      }
+      return;
+    }
     if (res === -2) throw new Error('الراوتر قفل الدخول بعد محاولات غلط — انتظر شوي وجرّب (محاولات كثيرة)');
-    if (res === -1) throw new Error('كلمة المرور غلط' + (r?.failurecount ? ` (المحاولة ${r.failurecount})` : '') + ' — في نوكيا اسم المستخدم غالباً admin والكلمة تحت الراوتر');
+    if (res === -1) throw new Error('كلمة المرور غلط' + (r?.failurecount ? ` (المحاولة ${r.failurecount})` : '') + ' — ' + USER_HINT);
     throw new Error(`تعذّر تسجيل الدخول (login_web_app: ${r?.result ?? 'رد غير متوقع'})`);
   }
   async logout(): Promise<void> {
     try { await this.req('login_web_app.cgi?out'); } catch {}
     this.token = '';
+    this.legacy = null;
   }
 
   // ═══ الإشارة ═══
@@ -159,25 +184,30 @@ export class NokiaFwaDriver implements RouterDriver {
     if (ca) raw.ca = caFrom(ca);
     return raw;
   }
-  async getSignal(): Promise<Signal> { return signalFrom(await this.raw()); }
-  async getCells(): Promise<CellTower[]> { return cellsFrom(signalFrom(await this.raw())); }
-  async getCarriers(): Promise<Carrier[]> { return carriersFrom(await this.raw()); }
+  async getSignal(): Promise<Signal> { return this.legacy ? this.legacy.getSignal() : signalFrom(await this.raw()); }
+  async getCells(): Promise<CellTower[]> { return this.legacy ? this.legacy.getCells() : cellsFrom(signalFrom(await this.raw())); }
+  async getCarriers(): Promise<Carrier[]> { return this.legacy ? this.legacy.getCarriers() : carriersFrom(await this.raw()); }
   async getSnapshot(): Promise<SignalSnapshot> {
+    if (this.legacy) return this.legacy.getSnapshot();
     const r = await this.raw();
     return buildSnapshot(signalFrom(r), carriersFrom(r), cellsFrom(signalFrom(r)), { driverId: this.id, driverName: this.name });
   }
   async getNetworkInfo(): Promise<NetworkInfo> {
+    if (this.legacy) return this.legacy.getNetworkInfo();
     const s = signalFrom(await this.raw());
     return { connected: s.rsrp !== undefined || s.nrRsrp !== undefined, mode: s.network, supports5g: true };
   }
   async isConnected(): Promise<boolean> {
+    if (this.legacy) return this.legacy.isConnected();
     try { const s = signalFrom(await this.raw()); return s.rsrp !== undefined || s.nrRsrp !== undefined; } catch { return false; }
   }
   async getUsage(): Promise<Usage> {
+    if (this.legacy) return this.legacy.getUsage();
     const c = (await this.raw()).cell ?? {};
     return { downloadBytes: Number(c.BytesReceived) || 0, uploadBytes: Number(c.BytesSent) || 0 };
   }
   async getDeviceDetails(): Promise<DeviceDetails> {
+    if (this.legacy) return this.legacy.getDeviceDetails();
     const [st, raw] = await Promise.all([this.req('fastmile_statistics_status_web_app.cgi').catch(() => null), this.raw().catch(() => null)]);
     const sim = st?.sim_cfg?.[0] ?? {};
     await this.identify();
@@ -188,6 +218,7 @@ export class NokiaFwaDriver implements RouterDriver {
   }
 
   async reboot(): Promise<void> {
+    if (this.legacy) return this.legacy.reboot();
     try { await this.postCsrf('reboot_web_app.cgi'); } catch (e) {
       if (!/تعذر الاتصال|ما رد|timeout|network|abort/i.test(String((e as any)?.message ?? e))) throw e;
     }
@@ -201,6 +232,7 @@ export class NokiaFwaDriver implements RouterDriver {
     return Number((await this.ubusOk('GetCellularAccessConfig', [], 'وضع الشبكة'))?.AccessModeNo) || 0;
   }
   async getBandConfig(): Promise<BandConfig> {
+    if (this.legacy) throw noChange('هالإصدار من صفحة نوكيا (5G-24W-A) ما فيه تثبيت ترددات ولا وضع شبكة — ما غيّرنا شي.');
     const [b, no] = await Promise.all([this.bands(), this.accessMode().catch(() => 0)]);
     const n4 = b.b4.map(x => bandNum(x.Band)).filter((x): x is number => !!x);
     const on4 = b.b4.filter(x => x.Enable).map(x => bandNum(x.Band)).filter((x): x is number => !!x);
@@ -215,6 +247,7 @@ export class NokiaFwaDriver implements RouterDriver {
     };
   }
   async setBand(bands: number[] | 'keep', nrBands?: number[]): Promise<void> {
+    if (this.legacy) throw noChange('هالإصدار من صفحة نوكيا (5G-24W-A) ما فيه تثبيت ترددات ولا وضع شبكة — ما غيّرنا شي.');
     const b = await this.bands();
     // الصفحة نفسها تعرض قائمة الترددات للتعديل بس في وضع String_based — غيره (Object_based) معلومات بس
     if (b.mode !== 'String_based') throw noChange('راوترك ما يسمح بتعديل الترددات من صفحته (القائمة للعرض بس) — ما غيّرنا شي.');
@@ -244,6 +277,7 @@ export class NokiaFwaDriver implements RouterDriver {
     if (on(after.b4) !== on(b4)) throw new Error('الراوتر قبل أمر الترددات بس القراءة بعده مختلفة');
   }
   async setNetworkMode(mode: string): Promise<void> {
+    if (this.legacy) throw noChange('هالإصدار من صفحة نوكيا (5G-24W-A) ما فيه تثبيت ترددات ولا وضع شبكة — ما غيّرنا شي.');
     const m = NK_MODES.find(x => x.code === mode);
     if (!m) throw noChange('هالوضع مو موجود في راوترك — ما غيّرنا شي.');
     if ((await this.accessMode().catch(() => 0)) === m.no) return;
