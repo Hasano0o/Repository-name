@@ -217,6 +217,18 @@ const isTokenError = (e: unknown) =>
 
 /** روابط موجودة في كل راوترات هواوي — لو ردّت 100003 فالجلسة فعلاً راحت */
 const CORE_GET = /^(device\/signal|monitoring\/status|device\/information|net\/net-mode)$/;
+/**
+ * ═══ راوتر على «إعدادات المصنع» — معالج الإعداد الأولي ما اكتمل (١٣ نوفمبر) ═══
+ * تقارير session/add-login ١٢–١٣ نوفمبر (آيفون + أندرويد + ويندوز، H155-382 / H155-383 / B535-933): الدخول ينقبل
+ * (authentication_login ينجح و state-login = 0) وبعدها كل قراءة محمية ترد 100003 — بالكوكي اليدوي وبجرة النظام، وكل
+ * محاولة. كنا نحسبها مشكلة كوكي (نطلع ونبدّل الطريقة ← 125003) أو «طرد» («الراوتر يطلّع التطبيق… AI Life»).
+ * ملفات صفحات هالراوترات (add-error): كلها device/basic_information فيها restore_default_status=1، وكود الصفحة نفسها
+ * (main.js / guide.js) يحوّل لمعالج الإعداد «guide» لما تكون 1 وآخر خطوة فيه ترسل restore_default_status=0.
+ * ما نكمّل المعالج عن العضو (فيه موافقته وكلمته) — نقول له يكمّله من المتصفح. القراءات المحمية اللي نحكم منها:
+ */
+const GUARDED_GET = /^(device\/signal|net\/net-mode)$/;
+const setupError = (host: string) => new HuaweiError('SETUP',
+  `راوترك على إعدادات المصنع وما اكتمل إعداده الأولي — يقبل الدخول ويمنع القراءة لين يكتمل. افتح صفحة الراوتر من المتصفح (${host || '192.168.8.1'}) وكمّل خطوات الإعداد لين توصل الصفحة الرئيسية، وبعدها ارجع لـ Bandly وجرّب.`);
 /** أوامر حفظ بطيئة (المودم يعيد الاتصال وهو يطبّقها) — مهلتها أطول */
 const SLOW_POST = /^net\/(lock-freq|net-mode)$/;
 
@@ -267,28 +279,55 @@ export class HuaweiDriver implements RouterDriver {
     } catch { this.devLockband = false; }
     return this.devLockband;
   }
+  /**
+   * إعادة الدخول بوضع المطوّر = خروج ثم دخول على نفس الجلسة، والشاشة عندها ٨–١٠ قراءات شغالة بنفس اللحظة.
+   * تقارير session ١٣ نوفمبر (٢:٤٠ م و٤:٢٧ م، آيفون): lock-freq 100003 ← logout ← القراءات اللي بين الخروج والدخول
+   * ترد 125002/100003 ← طبقة الجلسات تحسبها «طرد» وتدخل من جديد فوق دخول المطوّر ← يلفّون على بعض لين
+   * «الراوتر يطلّع التطبيق» — والراوتر ما طرد أحد. الحين:
+   *  • devRun: طلبين lock-freq مع بعض يشتركون في إعادة دخول وحدة (كان الثاني يرجع «فشل» أو يدخل معه).
+   *  • relog: القراءات الجديدة تنتظر لين تخلص، واللي انرسلت قبلها وانرفضت تنعاد مرة بعدها (get تحت).
+   */
+  private devRun: Promise<boolean> | null = null;
+  private relog: Promise<void> | null = null;
+  private relogEnd = 0;
+  private relogNoted = false;
   /** دخول جلسة المطوّر (نفس الكلمة + loginflag=2) — مرة وحدة بس، ولو فشل نرجع للجلسة العادية */
-  private async devRelogin(): Promise<boolean> {
+  private devRelogin(): Promise<boolean> {
+    if (this.devRun) return this.devRun;
+    const run: Promise<boolean> = this.devReloginOnce().finally(() => { if (this.devRun === run) this.devRun = null; });
+    this.devRun = run;
+    return run;
+  }
+  private async devReloginOnce(): Promise<boolean> {
     if (this.devTried || devDeadHosts.has(this.host) || !this.creds || this.scram === false || !(await this.devLockbandOn())) return false;
     this.devTried = true;
     const { u, p } = this.creds;
     this.log('lock-freq 100003 — retrying with developer-mode login (loginflag=2)');
-    try { await this.post('user/logout', '<Logout>1</Logout>', undefined, false); } catch {}
-    this.queue = [];
-    try { await this.homePage(this.host); } catch {}
-    if (this.manualCookie) { try { await this.sesTok(); } catch {} }
+    let done!: () => void;
+    this.relog = new Promise<void>(r => { done = r; });
+    this.relogNoted = false;
     try {
-      await this.loginScram(u, p, true);
-      return true;
-    } catch (e) {
-      this.log('developer login failed:', (e as any)?.message ?? String(e));
-      diag('[huawei] دخول وضع المطوّر فشل — ما نعيده على هالراوتر، وتثبيت التردد يعتبر غير مدعوم');
-      devDeadHosts.add(this.host);
-      this.lockFreqDead = true;
-      this.lockFreq = false;
+      try { await this.post('user/logout', '<Logout>1</Logout>', undefined, false); } catch {}
       this.queue = [];
-      try { await this.loginScram(u, p); } catch {}
-      return false;
+      try { await this.homePage(this.host); } catch {}
+      if (this.manualCookie) { try { await this.sesTok(); } catch {} }
+      try {
+        await this.loginScram(u, p, true);
+        return true;
+      } catch (e) {
+        this.log('developer login failed:', (e as any)?.message ?? String(e));
+        diag('[huawei] دخول وضع المطوّر فشل — ما نعيده على هالراوتر، وتثبيت التردد يعتبر غير مدعوم');
+        devDeadHosts.add(this.host);
+        this.lockFreqDead = true;
+        this.lockFreq = false;
+        this.queue = [];
+        try { await this.loginScram(u, p); } catch {}
+        return false;
+      }
+    } finally {
+      this.relog = null;
+      this.relogEnd = Date.now();
+      done();
     }
   }
   private async lockFreqUnsupported(e: unknown): Promise<boolean> {
@@ -453,7 +492,23 @@ export class HuaweiDriver implements RouterDriver {
     const t = await this.http(this.url('webserver/token'), { headers: this.headers() });
     return tokenFromReply(await t.text());
   }
-  private async get(p: string, retry = true): Promise<string> {
+  /** قراءة محمية نجحت من آخر دخول فعلي — راوتر يشتغل عادي ما نفحص عليه «إعدادات المصنع» أبداً */
+  private guardedOk = false;
+  /** null = ما فحصنا من آخر دخول · true = restore_default_status=1 */
+  private setupState: boolean | null = null;
+  /** قراءة بدون دخول (نفس اللي تقراه صفحة الراوتر أول ما تفتح) */
+  private async inSetupGuide(): Promise<boolean> {
+    try {
+      const r = await this.http(this.url('device/basic_information'), { headers: this.headers() }, 4000);
+      const v = tag(await r.text(), 'restore_default_status');
+      diag(`[huawei] دخلنا والقراءة ترد 100003 · restore_default_status=${v ?? '؟'}`);
+      return v === '1';
+    } catch { return false; }
+  }
+  private async get(p: string, retry = true, again = true): Promise<string> {
+    // إعادة دخول وضع المطوّر شغالة (خروج ← دخول): قراءة بينهم تنرفض وتنحسب «طرد» — ننتظرها تخلص
+    if (this.relog) await this.relog;
+    const t0 = Date.now();
     const r = await this.http(this.url(p), { headers: this.headers() });
     const xml = await r.text();
     notHuaweiPage(xml);
@@ -462,10 +517,22 @@ export class HuaweiDriver implements RouterDriver {
       this.log('GET', p, 'error', code);
       // صفحة «تحديد النطاق» في وضع المطوّر: الجلسة العادية ترد 100003 — ندخل بجلسة المطوّر ونعيد مرة
       if (retry && code === '100003' && DEV_ONLY.test(p) && await this.devRelogin()) return this.get(p, false);
+      // القراءة انرسلت قبل/وقت إعادة دخول المطوّر وانرفضت بسببها (الجلسة تبدّلت تحتها) — مو طرد: نعيدها مرة بعدها
+      if (again && /^(100003|125002|125003)$/.test(code) && (this.relog || this.relogEnd >= t0)) {
+        if (this.relog) await this.relog;
+        if (!this.relogNoted) { this.relogNoted = true; diag('[huawei] قراءات انرفضت وقت دخول وضع المطوّر — نعيدها بعده (مو طرد)'); }
+        return this.get(p, false, false);
+      }
       // 100003 على رابط أساسي = انطردنا. على رابط اختياري (مثل net/lock-freq في H158) = غير مدعوم — مو طرد
       if (code === '100003' && CORE_GET.test(p)) this.stale = true;
+      // دخلنا وولا قراءة محمية نجحت: هل الراوتر على إعدادات المصنع؟ (مرة لكل دخول) ← رسالة واضحة بدل «طرد»
+      if (code === '100003' && GUARDED_GET.test(p) && !this.guardedOk) {
+        if (this.setupState === null) this.setupState = await this.inSetupGuide();
+        if (this.setupState) throw setupError(this.host);
+      }
       throw new HuaweiError(code);
     }
+    if (GUARDED_GET.test(p)) this.guardedOk = true;
     return xml;
   }
   /** مفتاح التشفير العام للراوتر (للطلبات «;enc») */
@@ -679,6 +746,8 @@ export class HuaweiDriver implements RouterDriver {
       if (!switched && this.manualCookie) {
         let dead = '';
         try { await this.get('net/net-mode', false); } catch (e) {
+          // إعدادات المصنع: تبديل طريقة الكوكي ما يفيد (ينتهي بـ 125003) — نطلع ونقول للعضو يكمّل الإعداد
+          if (e instanceof HuaweiError && e.code === 'SETUP') { await this.leaveQuietly(); throw e; }
           if (e instanceof HuaweiError && /^(100003|125002|125003)$/.test(e.code)) dead = e.code;
         }
         if (dead) {
@@ -692,6 +761,15 @@ export class HuaweiDriver implements RouterDriver {
           this.queue = [];
           this.stale = true;
           return this.loginOnce(host, username, password, opts, true);
+        }
+      }
+      // جرة النظام والمستخدم كتب الكلمة بنفسه (إضافة راوتر): نتأكد بقراءة وحدة — لو على إعدادات المصنع نوقف هنا
+      // برسالة واضحة بدل ما ينحفظ الراوتر وتطلع «طرد» من الشاشة اللي بعدها. أي رد ثاني ما يغيّر شي.
+      else if (!switched && opts?.fresh) {
+        const was = this.stale;
+        try { await this.get('net/net-mode', false); } catch (e) {
+          if (e instanceof HuaweiError && e.code === 'SETUP') { await this.leaveQuietly(); throw e; }
+          this.stale = was;
         }
       }
       if (Platform.OS === 'android' && this.manualCookie) manualHosts.add(host);
@@ -746,6 +824,8 @@ export class HuaweiDriver implements RouterDriver {
       try { await this.homePage(host); } catch {}
     }
     this.stale = false;
+    this.guardedOk = false;
+    this.setupState = null;
     await this.updateCookie();
     if (this.manualCookie) { try { await this.sesTok(); } catch { this.manualCookie = false; } }
     // صفحة الراوتر الجديدة (H158/H155…) تسجّل دخول بـ SCRAM (challenge_login) — والدخول القديم (user/login)
@@ -865,6 +945,12 @@ export class HuaweiDriver implements RouterDriver {
   async logout() {
     try { await this.post('user/logout', '<Logout>1</Logout>'); } catch {}
     this.queue = [];
+  }
+  /** هواوي مدير واحد بالمرة — ما نخلي جلستنا ماسكة الراوتر والعضو رايح يكمّل الإعداد من المتصفح */
+  private async leaveQuietly() {
+    try { await this.post('user/logout', '<Logout>1</Logout>', undefined, false); } catch {}
+    this.queue = [];
+    this.stale = true;
   }
   /**
    * انطردنا (100003/125002/125003) ← إعادة الدخول الجاية لازم تكون حقيقية: ما نصدّق state-login «داخل»
