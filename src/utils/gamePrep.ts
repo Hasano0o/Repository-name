@@ -9,6 +9,8 @@ import { readSnapOrStop, waitOnline } from './safeLock';
 import { LockSnapshot, mismatchOf, settleMsFor } from '../drivers/lockSnapshot';
 import { driverById } from '../drivers/registry';
 import { diag } from '../services/diag';
+import { listGameLog, periodStats, periodOf } from '../store/gameLog';
+import { rushReport, hourLabel } from './rushHours';
 
 /* ═══ «جهّزني للعب» — ضغطة وحدة قبل المباراة ═══
  * ١) يقرأ تقارير كاشف اللاق اللي فاتت ويعرف أكثر سبب تقطيع عند هالمستخدم
@@ -114,6 +116,22 @@ export async function prepareForGame(r: SavedRouter, reg: GameRegion, say: (s: s
   if (!prof) tips.push('شغّل «مُحسّن اللعبة» مرة وحدة — يلقى أفضل باند لك، والمرة الجاية نطبّقه هنا تلقائياً');
   if (topCause && !['nr', 'handover'].includes(topCause)) tips.push(`${CAUSE_TEXT[topCause].icon} أكثر سبب عندك: ${CAUSE_TEXT[topCause].title} — ${CAUSE_TEXT[topCause].fix}`);
   if (!topCause) tips.push('شغّل «كاشف اللاق» وأنت تلعب مرة — نعرف سبب التقطيع عندك ونعالجه هنا');
+
+  // ═══ أوقات الزحمة: هل الحين وقت زحمة عندك؟ وأي إعداد كان أفضل بهالوقت من اليوم؟ ═══
+  try {
+    const log = await listGameLog(r.id);
+    const rush = rushReport(log, Date.now(), reg.id);
+    const h = new Date().getHours();
+    const w = rush.worst;
+    const inRush = !!w && (w.to > w.from ? h >= w.from && h < w.to : h >= w.from || h < w.to);
+    if (inRush && rush.best && (rush.risePct ?? 0) >= 15) {
+      tips.unshift(`🚦 الحين وقت الزحمة عندك (${hourLabel(w!.from)}–${hourLabel(w!.to)}) — البنق عادة أعلى ${rush.risePct}٪. أهدى وقت للعب: ${hourLabel(rush.best.from)}–${hourLabel(rush.best.to)}`);
+    }
+    if (!prof) {
+      const now = periodStats(log, reg.id).find(p => p.id === periodOf(h));
+      if (now?.bestSetup) tips.unshift(`⭐ بهالوقت من اليوم أفضل إعداد طلع لك في الفحوصات: ${now.bestSetup} — ثبّته من «مُحسّن اللعبة»`);
+    }
+  } catch {}
 
   // جهاز ثاني يحمّل؟
   const tr = await withSession(r, async d => (d.getTraffic ? d.getTraffic() : null), false).catch(() => null);
