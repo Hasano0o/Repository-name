@@ -58,6 +58,7 @@ const files = [
   'src/drivers/http.ts',
   'src/services/diag.ts',
   'src/utils/snapshot.ts',
+  'src/utils/usageDays.ts',
   'src/utils/normalize.ts',
   'src/drivers/noChange.ts',
   'src/services/routerDump.ts',

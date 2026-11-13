@@ -8,6 +8,7 @@ import {
 import { overallLevel, LEVEL_LABEL, parseNrBands, Level } from '../utils/signal';
 import { notify } from '../utils/notify';
 import { Signal, NetworkInfo, Usage, DataPlan } from '../drivers/types';
+import { recordUsage } from '../store/usageLog';
 import { reportOutage } from '../services/community';
 import { buildWeekly, weeklyLines, weeklyDue, markWeeklySent } from '../utils/weekly';
 import { runAutomation } from './automation';
@@ -55,6 +56,8 @@ export async function runMonitorCheck(): Promise<boolean> {
       ]))) as [Signal | null, NetworkInfo | null, Usage | null, DataPlan | null];
 
       const prev: RouterMonState = states[r.id] ?? {};
+      // الاستهلاك اليومي: كل قراءة بالخلفية تخلي حساب «اليوم» و«الأسبوع» أدق
+      await recordUsage(r.id, usage).catch(() => null);
 
       // ما قدرنا نوصل الراوتر (الجوال بعيد عن الشبكة مثلاً) — نتجاهل، ما نرسل انقطاع
       const reachable = sig !== null || net !== null;

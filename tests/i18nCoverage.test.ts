@@ -26,6 +26,8 @@ const DONE = [
   // الدفعة ٤
   'app/newdevice.tsx', 'app/autopilot/[id].tsx', 'app/places/[id].tsx', 'app/assistant/[id].tsx',
   'app/nrdual/[id].tsx', 'app/techs.tsx', 'src/ui/BandPicker.tsx',
+  // الاستهلاك اليومي (١٣ نوفمبر)
+  'src/ui/UsageDaysCard.tsx',
 ];
 
 // ═══ القاموس نفسه ═══

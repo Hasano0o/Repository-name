@@ -31,6 +31,7 @@ import { LinkHealthCard } from '../../src/ui/LinkHealth';
 import { CongestionCard } from '../../src/ui/Congestion';
 import { DiagnosisCard } from '../../src/ui/Diagnosis';
 import { UsageRing } from '../../src/ui/UsageRing';
+import { recordUsage } from '../../src/store/usageLog';
 import { DeviceRow } from '../../src/ui/DeviceRow';
 import { SyncIcon } from '../../src/ui/SyncIcon';
 import { FONT } from '../../src/ui/fonts';
@@ -301,6 +302,7 @@ export default function RouterDashboard() {
         const blockedMacs = new Set(blk.map(b => b.mac));
         applySignal(sig);
         setUsage(use);
+        recordUsage(r.id, use).catch(() => {});
         setDevices(dev.filter(x => !blockedMacs.has(x.mac)));
         setBlocked(blk);
         setOnline(net?.connected);
@@ -1034,7 +1036,7 @@ export default function RouterDashboard() {
                 onPress={() => router.push(`/speed/${info.id}` as Href)} />
               <ToolTile icon="chart" color={tFg('#0891b2')} title="التفاصيل" sub="الأرقام والدمج والتقرير"
                 onPress={() => router.push(`/details/${info.id}` as Href)} />
-              <ToolTile icon="phone" color={tFg('#8b5cf6')} title="الأجهزة" sub="المتصلين"
+              <ToolTile icon="phone" color={tFg('#8b5cf6')} title="الأجهزة" sub="المتصلين والاستهلاك"
                 onPress={() => router.push(`/device/${info.id}` as Href)} />
               <ToolTile icon="chart" color={tFg('#e5484d')} title="وش يثقّل نتك؟" sub="مين يحمّل الحين"
                 onPress={() => router.push(`/heavy/${info.id}` as Href)} />

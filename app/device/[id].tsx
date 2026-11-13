@@ -9,6 +9,8 @@ import { GlassCard } from '../../src/ui/GlassCard';
 import { UsageRing } from '../../src/ui/UsageRing';
 import { DeviceRow } from '../../src/ui/DeviceRow';
 import { DeviceUsageCard } from '../../src/ui/DeviceUsageCard';
+import { UsageDaysCard } from '../../src/ui/UsageDaysCard';
+import { recordUsage } from '../../src/store/usageLog';
 import { Icon } from '../../src/ui/Icon';
 import { C } from '../../src/ui/theme';
 import { fmtBytes } from '../../src/utils/format';
@@ -28,6 +30,7 @@ export default function DeviceScreen() {
   const [info, setInfo] = useState<SavedRouter | null>(null);
   const [details, setDetails] = useState<DeviceDetails | null>(null);
   const [usage, setUsage] = useState<Usage | null>(null);
+  const [usageTick, setUsageTick] = useState(0);
   const [plan, setPlan] = useState<DataPlan | null>(null);
   const [devices, setDevices] = useState<ConnectedDevice[]>([]);
   const [blocked, setBlocked] = useState<ConnectedDevice[]>([]);
@@ -52,6 +55,7 @@ export default function DeviceScreen() {
     ])) as [DeviceDetails | null, Usage | null, DataPlan | null, ConnectedDevice[] | null | undefined, ConnectedDevice[]];
     if (!alive.current) return;
     setDetails(d); setUsage(u); setPlan(p); setDevices(dev ?? []); setBlocked(blk);
+    recordUsage(r.id, u).then(l => { if (l && alive.current) setUsageTick(t => t + 1); });
     setDevState(dev === undefined ? 'none' : dev === null ? 'fail' : 'ok');
     const caps = await withSession(r, async drv => ({
       plan: typeof drv.setDataPlan === 'function',
@@ -163,6 +167,8 @@ export default function DeviceScreen() {
           </View>}
         </GlassCard>
       )}
+
+      {!!usage && !!info && <UsageDaysCard routerId={info.id} refresh={usageTick} />}
 
       <GlassCard
         title={devState === 'ok' ? `الأجهزة المتصلة (${devices.length})` : 'الأجهزة المتصلة'}

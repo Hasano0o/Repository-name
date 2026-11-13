@@ -2000,6 +2000,13 @@ export const EN: Record<string, string> = {
   'تراجع عن التغييرات': 'Undo the changes',
   'ثانوي بس': 'Secondary only',
   'أساسي + ثانوي': 'Primary + secondary',
+  // ═══ الاستهلاك اليومي (UsageDaysCard) ═══
+  'استهلاكك اليومي': 'Daily usage',
+  'المتصلين والاستهلاك': 'Connected & usage',
+  'بدأنا نحسب استهلاكك من الحين — افتح التطبيق بعد شوي وتطلع لك أرقام اليوم والأسبوع.': 'We started counting your usage now — open the app again later to see today and this week.',
+  'آخر ٧ أيام': 'Last 7 days',
+  'متوسط اليوم': 'Daily average',
+  'الأرقام تقريبية للأيام الباهتة أو الفاضية (التطبيق ما انفتح وقتها). شغّل «المراقبة بالخلفية» عشان تصير دقيقة.': 'Faded or empty days are estimates (the app was closed then). Turn on background monitoring for exact numbers.',
 };
 
 export const EN_PATTERNS: Record<string, string> = {
