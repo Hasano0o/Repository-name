@@ -150,3 +150,33 @@ test('NR5103EV2: لقطة «Auto» ← الإرجاع يكتب Auto ويتأكد
   await d.restoreLockState(snap);
   assert.equal(r.band.INTF_Preferred_Bands, 'Auto');
 });
+
+test('NR5103EV2: SCC_Info — الخانة المطفية أو بقيم افتراضية ما تطلع ناقل، والشغالة تطلع', async () => {
+  const r = v2('B3,n78');
+  const d = await driver();
+  const status = {
+    INTF_Current_Band: 'LTE_BC3', INTF_RFCN: 1300, INTF_PhyCell_ID: 10, INTF_RSRP: -90, INTF_RSRQ: -10,
+    SCC_Info: [
+      { Enable: true, Band: 'LTE_BC1', RFCN: 100, PhysicalCellID: 5, RSRP: -95 },
+      { Enable: false, Band: 'LTE_BC40', RFCN: 38950, PhysicalCellID: 7, RSRP: -99 },
+      { Band: 'LTE_BC20', RFCN: 6300, PhysicalCellID: 0, RSRP: -140 },
+    ],
+    NSA_Enable: true, NSA_Band: 'n78', NSA_RFCN: 636666, NSA_PCI: 1, NSA_RSRP: -100,
+  };
+  const realFetch = (globalThis as any).fetch;
+  (globalThis as any).fetch = async (url: string, init?: any) => {
+    if (new URL(url).searchParams.get('oid') === 'cellwan_status') {
+      const resp = await realFetch(url.replace('cellwan_status', 'cellwan_band'), init);
+      const j = await resp.json();
+      const aes = (d as any).aesKey;
+      const iv = nc.randomBytes(32);
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ content: b64(aesCbcEncrypt(aes, iv, utf8(JSON.stringify({ result: 'ZCFG_SUCCESS', Object: [status] })))), iv: b64(iv) }) } as any;
+    }
+    return realFetch(url, init);
+  };
+  try {
+    const ca = await d.getCarriers();
+    assert.deepEqual(ca.map((c: any) => `${c.role}:${c.tech}${c.band}`), ['PCC:LTE3', 'SCC:LTE1', 'SCC:NR78']);
+  } finally { (globalThis as any).fetch = realFetch; }
+  void r;
+});

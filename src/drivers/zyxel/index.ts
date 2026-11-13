@@ -16,6 +16,7 @@ import { unesc, zxWlanPayload, zxSecured, zxSmsList, zxSmsBody, zxBlocked, zxBlo
 import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { noChange } from '../noChange';
 import { http } from '../http';
+import { diag } from '../../services/diag';
 import { buildSnapshot } from '../../utils/snapshot';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import { ModelProfile } from '../models';
@@ -219,17 +220,34 @@ export class ZyxelDriver implements RouterDriver {
     const b = bandOf(c.INTF_Current_Band);
     if (b) out.push({ tech: /^NR/i.test(str(c.INTF_Current_Band)) ? 'NR' : 'LTE', role: 'PCC', band: b, arfcn: str(c.INTF_RFCN) || undefined, pci: str(c.INTF_PhyCell_ID) || undefined, rsrp: neg(c.INTF_RSRP), rsrq: num(c.INTF_RSRQ) });
     // SCC_Info: أسماء الحقول تختلف بين الفيرموير — نلقط اللي فيه Band/PCI/RFCN/RSRP
-    for (const s of Array.isArray(c.SCC_Info) ? c.SCC_Info : []) {
+    // صفحة الراوتر نفسها (NR5103EV2) ما تعرض SCC_Info أبداً، فما عندنا دليل على صيغته. شكوى ١٣ نوفمبر:
+    // ثبّت B3+n78 والترويسة تعرض B1 و B40 بعد ساعة ← نسجّل الخام مرة لكل جلسة (التقرير يوضّح هل هي
+    // نواقل شغالة فعلاً أو خانات مطفية/فاضية)، ونتجاهل الخانة اللي تقول إنها مطفية أو قيمها افتراضية (-140).
+    const scc = Array.isArray(c.SCC_Info) ? c.SCC_Info : [];
+    const raw = JSON.stringify(scc).slice(0, 600);
+    if (scc.length && raw !== this.sccLogged) {
+      this.sccLogged = raw;
+      diag(`[zyxel] SCC_Info خام: ${raw} · المفضّل: ${this.prefSeen || '—'}`);
+    }
+    for (const s of scc) {
       if (!s || typeof s !== 'object') continue;
       const pick = (re: RegExp) => { const k = Object.keys(s).find(x => re.test(x)); return k ? s[k] : undefined; };
       const sb = bandOf(pick(/band/i));
       if (!sb) continue;
+      const st = pick(/^(enable|enabled|active|activated|status|state)$/i);
+      if (st === false || /^(0|false|inactive|deactivated?|disabled?|idle)$/i.test(str(st))) continue;
+      const rp = num(pick(/rsrp/i));
+      if (rp !== undefined && rp <= -140) continue;
       out.push({ tech: /NR|n\d/i.test(str(pick(/band/i))) ? 'NR' : 'LTE', role: 'SCC', band: sb, arfcn: str(pick(/rfcn|earfcn|arfcn/i)) || undefined, pci: str(pick(/pci|phy.*cell/i)) || undefined, rsrp: neg(pick(/rsrp/i)) });
     }
     const nb = bandOf(c.NSA_Band);
     if (c.NSA_Enable && nb) out.push({ tech: 'NR', role: out.length ? 'SCC' : 'PCC', band: nb, arfcn: num(c.NSA_RFCN) ? str(c.NSA_RFCN) : undefined, pci: str(c.NSA_PCI) || undefined, rsrp: neg(c.NSA_RSRP), rsrq: num(c.NSA_RSRQ) });
     return out;
   }
+
+  private sccLogged = '';
+  /** آخر قائمة مفضّلة قريناها (للتشخيص مع SCC_Info) */
+  private prefSeen = '';
 
   async getSnapshot(): Promise<SignalSnapshot> {
     const sig = await this.getSignal();
@@ -316,6 +334,7 @@ export class ZyxelDriver implements RouterDriver {
   private async bandObj(): Promise<Record<string, any>> {
     const o = await this.dal('cellwan_band');
     if (!o) throw new Error('راوترك ما يعطي إعدادات الترددات');
+    this.prefSeen = str(o.INTF_Preferred_Bands).slice(0, 120);
     return o;
   }
   /** الترددات المفضلة — «Auto» (اختيار تلقائي في صفحة الراوتر) = كل المدعوم */
