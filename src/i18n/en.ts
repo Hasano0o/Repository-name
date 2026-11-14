@@ -4,6 +4,7 @@
  * نص ما له ترجمة يطلع عربي — فزيد هنا بأي وقت.
  */
 export const EN: Record<string, string> = {
+  'الواي فاي · ملفاتي · المراقبة…': 'Wi-Fi · My files · Monitoring…',
   'استقبال الفايبر': 'Fiber receive (Rx)',
   'الراوتر غير متصل بالإنترنت': 'The router isn\'t connected to the internet',
   'الوصلة': 'Link',

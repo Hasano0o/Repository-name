@@ -1189,7 +1189,7 @@ export default function RouterDashboard() {
                 </LinearGradient>
                 <View style={{ flex: 1, alignItems: 'flex-end', gap: 2 }}>
                   <Text style={s.moreBtnTitle}>أدوات أكثر</Text>
-                  <Text style={s.moreBtnSub} numberOfLines={1}>{moreOpen ? 'اضغط للإخفاء' : 'الأنتنا · الأماكن · ملفاتي · الإعدادات…'}</Text>
+                  <Text style={s.moreBtnSub} numberOfLines={1}>{moreOpen ? 'اضغط للإخفاء' : feat.cellular ? 'الأنتنا · الأماكن · ملفاتي · الإعدادات…' : 'الواي فاي · ملفاتي · المراقبة…'}</Text>
                 </View>
                 <View style={s.moreBtnChev}>
                   <View style={{ transform: [{ rotate: moreOpen ? '-90deg' : '90deg' }] }}>
@@ -1200,6 +1200,7 @@ export default function RouterDashboard() {
             </Pressable>
             {moreOpen && (
             <View style={s.moreGrid}>
+              {feat.cellular && (<>
               <Pressable style={[s.moreTile, { backgroundColor: tBg('#f9731612'), borderColor: tBd('#f9731630') }]} onPress={() => router.push(`/antenna/${info.id}` as Href)}>
                 <View style={[s.moreIcon, { backgroundColor: tBg('#f97316') }]}>
                   <Icon name="antenna" size={18} color={tFg('#fff')} />
@@ -1212,6 +1213,7 @@ export default function RouterDashboard() {
                 </View>
                 <Text style={s.moreLbl}>الأماكن</Text>
               </Pressable>
+              </>)}
               {info.driverId !== 'device' && (
                 <Pressable style={[s.moreTile, { backgroundColor: tBg('#2f6bff12'), borderColor: tBd('#2f6bff30') }]} onPress={() => router.push(`/wifi/${info.id}` as Href)}>
                   <View style={[s.moreIcon, { backgroundColor: tBg('#2f6bff') }]}>
