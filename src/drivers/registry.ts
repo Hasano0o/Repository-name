@@ -10,6 +10,7 @@ import { NokiaDriver } from './nokia';
 import { NokiaFwaDriver } from './nokia/fwa';
 import { ZteUfiDriver } from './zteufi';
 import { LuciDriver } from './luci';
+import { StcAxDriver } from './stcax';
 import { DlinkDriver } from './dlink';
 import { InseegoDriver } from './inseego';
 import { HuaweiOntDriver } from './hgont';
@@ -50,6 +51,8 @@ const factories: (() => RouterDriver)[] = [
   () => new NokiaDriver(),
   // Nokia FastMile 6.1 (Angular جديد بدون main-es2015، دخول بـ salt، ubus service_function) — درايفر لحاله، من ملفات صفحة عضو (٣١ أكتوبر)
   () => new NokiaFwaDriver(),
+  // STC 5G AX3600 (OpenWrt + واجهة Vue، JSON على svcrunner) — قبل LuCI القديم. من ملفات صفحة عضو (١٤ نوفمبر)، لسا ما انجرّب ميداني
+  () => new StcAxDriver(),
   // OpenWrt / LuCI القديم (5G CPE Pro 7 — ١ نوفمبر): الدخول + ملفات FULL، والإشارة بعد ما نشوف صفحاتها
   () => new LuciDriver(),
   // D-Link DWR-2000M / DWR-3000M (React «cpe-webui»، JSON على /acfun/، دخول HMAC-MD5) — من ملفات صفحة ٣ أعضاء (٣١ أكتوبر). قراءة بس للحين
