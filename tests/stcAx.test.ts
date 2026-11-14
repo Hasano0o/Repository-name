@@ -15,10 +15,12 @@ Module._load = function (req: string, ...rest: unknown[]) {
   return origLoad.call(this, req, ...rest);
 };
 (globalThis as any).__DEV__ = false;
+const realSet = setTimeout;
+(globalThis as any).setTimeout = (fn: any, ms?: number) => realSet(fn, ms && ms >= 1000 ? 1 : ms);
 const C: any = ncrypto;
 const sha = (s: string) => C.createHash('sha256').update(s).digest('hex');
 
-function router(opts: { pass?: string; path?: string } = {}) {
+function router(opts: { pass?: string; path?: string; lazy?: boolean } = {}) {
   const st: any = { authed: false, lock: { cell_cat: '', cell_band: '', cell_arfun: '', cell_pci: '' }, sent: [] as any[], rebooted: false };
   const svc = opts.path ?? 'cgi-bin/luci/svcrunner';
   const res = (status: number, text: string) => ({ ok: status < 400, status, url: 'http://192.168.1.1/', headers: { get: () => null }, text: async () => text } as any);
@@ -48,7 +50,11 @@ function router(opts: { pass?: string; path?: string } = {}) {
       { NR5G: { sig_rsrp: '-88', sig_rsrq: '-10', sig_snr: '18', cell_id: '77AA' } }]);
     if (b.namespace === 'sim_info' && b.name === 'all_status') return R([{ network_mode: 'ENDC', CA_MODE: '2CA', operator: '42001', sim_status: 'Ready' }]);
     if (b.namespace === 'lock_cell') {
-      if (b.name === 'get') return R({ ...st.lock });
+      if (b.name === 'get') {
+        if (st.pending && ++st.gets >= 2) { st.lock = st.pending; st.pending = null; }
+        return R({ ...st.lock, cell_cat: st.lock.cell_cat ? Number(st.lock.cell_cat) : '' });
+      }
+      if (b.name === 'set' && opts.lazy) { st.gets = 0; st.pending = { cell_cat: b.payload.cell_act, cell_band: b.payload.cell_band, cell_arfun: b.payload.cell_arfcn, cell_pci: b.payload.cell_pci }; return R({ result: 'ok' }); }
       if (b.name === 'set') { st.lock = { cell_cat: b.payload.cell_act, cell_band: b.payload.cell_band, cell_arfun: b.payload.cell_arfcn, cell_pci: b.payload.cell_pci }; return R({ result: 'ok' }); }
       if (b.name === 'clr') { st.lock = { cell_cat: '', cell_band: '', cell_arfun: '', cell_pci: '' }; return R({ result: 'ok' }); }
     }
@@ -105,4 +111,12 @@ test('STC AX3600: تثبيت ترددات 4G ثم 5G ثم برج ثم فك · م
   await d.unlockCell();
   assert.equal(st.lock.cell_band, ''); assert.ok(st.sent.includes('lock_cell/clr'));
   await d.reboot(); assert.equal(st.rebooted, true);
+});
+
+test('STC AX3600: الراوتر يطبّق التثبيت بعد ثواني و cell_cat رقم ← ننتظر ونقبل', async () => {
+  const st = router({ lazy: true });
+  const d = driver();
+  await d.detect('192.168.1.1'); await d.login('192.168.1.1', 'admin', '9eTest');
+  await d.setBand([3]);
+  assert.equal(st.lock.cell_band, '3');
 });

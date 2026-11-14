@@ -24,6 +24,9 @@ import { noChange } from '../noChange';
 import { buildSnapshot } from '../../utils/snapshot';
 import { ModelProfile } from '../models';
 import { utf8 } from '../zyxel/crypto';
+import { diag } from '../../services/diag';
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 /** قوائم صفحته (33.js: cellBandOpt / cellNrOpt) */
 export const AX_LTE = [1, 3, 5, 7, 8, 18, 19, 20, 26, 28, 32, 38, 40, 42, 46];
@@ -211,15 +214,25 @@ export class StcAxDriver implements RouterDriver {
     const list = cat === '7' ? AX_LTE : AX_NR;
     const bad = bands.filter(b => !list.includes(b));
     if (bad.length) throw noChange(`صفحة الراوتر ما فيها ${cat === '7' ? 'B' : 'n'}${bad.join(', ')} — ما غيّرنا شي.`);
-    const p = await this.call({ payload: { cell_act: cat, cell_band: bands.map(String).join(','), cell_arfcn: arfcn, cell_pci: pci }, name: 'set', namespace: 'lock_cell' }, 30000);
+    const payload = { cell_act: cat, cell_band: bands.map(String).join(','), cell_arfcn: arfcn, cell_pci: pci };
+    const p = await this.call({ payload, name: 'set', namespace: 'lock_cell' }, 30000);
+    diag(`[stc-ax] lock_cell/set ${JSON.stringify(payload)} ← ${JSON.stringify(p ?? null).slice(0, 200)}`);
     if (p && typeof p === 'object' && p.result && !['ok', 'okay'].includes(String(p.result))) throw new Error(`الراوتر رفض التثبيت (${p.result})`);
-    const now = await this.lock();
-    const same = now.cat === cat && [...now.bands].sort((a, b) => a - b).join(',') === [...bands].sort((a, b) => a - b).join(',')
-      && (!pci || now.pci === pci);
-    if (!same) throw new Error('الراوتر قبل الأمر بس الإعداد ما تغيّر — جرّب مرة ثانية');
+    // الراوتر ممكن يطبّق بعد ثواني — نقرأ لين ٤ مرات. المقارنة بالأرقام (7 و "7" نفس الشي)
+    const want = [...bands].sort((a, b) => a - b).join(',');
+    let now: AxLock | null = null;
+    for (let i = 0; i < 4; i++) {
+      if (i) await sleep(1500);
+      const raw = await this.call({ payload: '', name: 'get', namespace: 'lock_cell' });
+      diag(`[stc-ax] lock_cell/get (${i + 1}) ← ${JSON.stringify(raw ?? null).slice(0, 200)}`);
+      now = axLock(raw);
+      if (Number(now.cat) === Number(cat) && [...now.bands].sort((a, b) => a - b).join(',') === want && (!pci || now.pci === pci)) return;
+    }
+    throw new Error(`الراوتر قبل الأمر بس الإعداد ما تغيّر (يقول: ${now?.cat || '—'} · ${now?.bands.join(',') || '—'}) — جرّب مرة ثانية`);
   }
   private async clear(): Promise<void> {
     const p = await this.call({ namespace: 'lock_cell', name: 'clr', payload: { clr_lock_cell: '' } }, 30000);
+    diag(`[stc-ax] lock_cell/clr ← ${JSON.stringify(p ?? null).slice(0, 200)}`);
     if (String(p?.status) !== '1') throw new Error('الراوتر رفض فك التثبيت');
   }
 
