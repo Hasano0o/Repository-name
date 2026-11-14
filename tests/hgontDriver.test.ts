@@ -113,3 +113,16 @@ test('الراوتر قافل (LockLeftTime) ← ما نرسل الكلمة', as
   await assert.rejects(d.login('192.168.1.1', 'user', 'FSY49JFW', { fresh: true }), (e: any) => /42/.test(e.message));
   assert.ok(!r.log.includes('POST /login.cgi'));
 });
+
+test('DG8245V (تقرير ٢٢:٣٧): login.cgi رد صغير + set-cookie و «/» يبقى صفحة الدخول ← دخلنا (الحكم من رد login.cgi)', async () => {
+  const page = fx('dg8245v.html');
+  (globalThis as any).fetch = async (url: string, init?: any) => {
+    const u = new URL(url);
+    const res = (text: string, sc = '') => ({ ok: true, status: 200, url, headers: { get: (k: string) => (k.toLowerCase() === 'set-cookie' && sc ? sc : null) }, text: async () => text } as any);
+    if (u.pathname === '/login.cgi') return res('<html><script>var pageName = "/index.asp"; top.location.replace(pageName);</script></html>', 'Cookie=sid=Z:Language:arabic:id=1; path=/');
+    return res(page);
+  };
+  const d = new HuaweiOntDriver();
+  await d.login('192.168.1.1', 'user', '9TDXBNTF', { fresh: true });
+  assert.deepEqual(d.authHeaders(), { Cookie: 'Cookie=sid=Z:Language:arabic:id=1' });
+});

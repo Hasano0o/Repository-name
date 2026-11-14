@@ -124,12 +124,19 @@ export class HuaweiOntDriver implements RouterDriver {
       throw new Error(`الراوتر ما رد على الدخول (POST /login.cgi) — ${String((e as any)?.message ?? e).slice(0, 60)}`);
     }
     // بعد الدخول: «/» يرجع الصفحة الرئيسية — لو رجع فورم الدخول = ما دخلنا
-    let after = res.text;
-    // رد login.cgi نفسه: فشل = صفحة الدخول بعدّاد المحاولات. نجاح = تحويل للرئيسية.
-    // لو مسكنا كوكي الجلسة نتأكد بـ «/»؛ لو ما مسكناه (الجوال ما عطانا set-cookie) نصدّق رد login.cgi بدل ما نحكم على كلمة صحيحة إنها غلط
-    if (!isOntLoginPage(after) && res.setCookie) { try { after = (await this.get('/', 10000)).text; } catch {} }
-    if (!res.setCookie && !isOntLoginPage(after)) diag('[ont] ما وصلنا set-cookie — صدّقنا رد login.cgi');
+    // الحكم من رد login.cgi نفسه: فشل = صفحة الدخول (فورم + عدّاد المحاولات). نجاح = رد صغير يحوّل للرئيسية + set-cookie.
+    // تقرير ١٤ نوفمبر ٢٢:٣٧ (DG8245V): login.cgi → 200 · 538B · set-cookie ✓ وبعدها «/» رجّع فورم الدخول بـ «محاولات 0»
+    // (يعني الراوتر ما حسبها غلط) ← كنا نحكم من «/» ونقول «الكلمة غلط» وهي صحيحة. «/» عند هالأجهزة يبقى صفحة الدخول.
+    const after = res.text;
     const ok = !isOntLoginPage(after);
+    diag(`[ont] رد login.cgi: ${after.replace(/\s+/g, ' ').replace(/[0-9a-f]{16,}/gi, '«…»').slice(0, 160)}`);
+    if (ok) {
+      // تأكيد للتشخيص بس (ما يغيّر الحكم): الرئيسية بالجلسة
+      try {
+        const h = await this.get('/index.asp', 10000);
+        diag(`[ont] /index.asp بعد الدخول → ${h.status} · ${h.text.length}B · ${isOntLoginPage(h.text) ? 'فورم دخول ⚠️' : 'الرئيسية ✓'}`);
+      } catch {}
+    }
     const lk2 = lockInfo(after);
     diag(`[ont] login.cgi → ${res.status} · ${res.text.length}B · ${ok ? 'دخلنا ✓' : `رفض${lk2.times !== undefined ? ` (محاولات ${lk2.times})` : ''}${lk2.leftSecs ? ` · قفل ${lk2.leftSecs}ث` : ''}`}`);
     if (!ok) {
