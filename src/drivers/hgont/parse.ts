@@ -7,6 +7,10 @@
  *  • القفل: errloginlockNum (DG8245V = 3 محاولات) · LockTime · LockLeftTime (ثواني باقية) · LoginTimes · FailStat
  */
 
+import { pbkdf2Async } from '@noble/hashes/pbkdf2';
+import { sha256 } from '@noble/hashes/sha2';
+import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
+
 const unhex = (s: string) => s.replace(/\\x([0-9a-f]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16)));
 const jsVar = (html: string, name: string): string | undefined => {
   const m = html.match(new RegExp(`var\\s+${name}\\s*=\\s*['"]([^'"]*)['"]`));
@@ -176,4 +180,35 @@ export function opticLevel(rx?: number): 'excellent' | 'good' | 'fair' | 'poor' 
   if (rx >= -20) return 'excellent';
   if (rx >= -24) return 'good';
   return 'fair';
+}
+
+/** الفيرموير الجديد (HG8145V5 ١٥ نوفمبر): صفحة الدخول فيها loginWithSha256 + /asp/GetRandInfo.asp */
+export function pageUsesSha256(html: string): boolean {
+  return /function\s+loginWithSha256/.test(html) && /GetRandInfo\.asp/.test(html);
+}
+
+/**
+ * رد GetRandInfo.asp ← [token, salt, iterations]. الصفحة تمرّره لـ dealDataWithFun:
+ * لو نص يبدأ بـ «function» تنفّذه (يرجّع مصفوفة)، وإلا jQuery حوّله JSON. ما ننفّذ شي — نطلع النصوص بس.
+ */
+export function parseRandInfo(text: string): [string, string, number] | null {
+  const t = text.replace(/^﻿/, '').trim();
+  let arr: unknown[] | null = null;
+  try { const j = JSON.parse(t); if (Array.isArray(j)) arr = j; } catch {}
+  if (!arr) {
+    const m = t.match(/\[([^\]]*)\]/);
+    if (m) arr = [...m[1].matchAll(/['"]([^'"]*)['"]|(\d+)/g)].map(x => x[1] ?? x[2]);
+  }
+  if (!arr || arr.length < 3) return null;
+  const [tok, salt, it] = arr.map(x => String(x ?? '').trim());
+  const n = parseInt(it, 10);
+  if (!/^[0-9a-zA-Z]{8,128}$/.test(tok) || !salt || !Number.isFinite(n) || n < 1 || n > 1_000_000) return null;
+  return [tok, salt, n];
+}
+
+/** PassWord = base64( hex( sha256( hex( PBKDF2-SHA256(pw, salt, iters, 32 بايت) ) ) ) ) — نفس CryptoJS في الصفحة */
+export async function sha256LoginPassword(pw: string, salt: string, iters: number): Promise<string> {
+  const dk: Uint8Array = await pbkdf2Async(sha256, utf8ToBytes(pw), utf8ToBytes(salt), { c: iters, dkLen: 32 });
+  const h = bytesToHex(sha256(utf8ToBytes(bytesToHex(dk))));
+  return b64(h);
 }

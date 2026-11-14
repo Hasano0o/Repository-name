@@ -15,7 +15,7 @@ import { diag } from '../../services/diag';
 import { isLanHost } from '../../utils/host';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import type { ModelProfile } from '../models';
-import { isOntLoginPage, tokenFromPage, tokenFromReply, productName, loginLanguage, lockInfo, loginBody, pageSendsLanguage, cookieFrom, deviceInfo, userDevices, uplinkState, opticInfo } from './parse';
+import { isOntLoginPage, tokenFromPage, tokenFromReply, productName, loginLanguage, lockInfo, loginBody, pageSendsLanguage, cookieFrom, deviceInfo, userDevices, uplinkState, opticInfo, pageUsesSha256, parseRandInfo, sha256LoginPassword } from './parse';
 
 export class HuaweiOntDriver implements RouterDriver {
   // ⚠️ المعرّف بدون كلمة «huawei»: قاعدة كرت FULL تعامل أي «huawei» كراوتر شريحة (ما يطلع إلا لموديل مجهول)
@@ -118,7 +118,19 @@ export class HuaweiOntDriver implements RouterDriver {
     const p = productName(page); if (p) this.setModel(p);
     const lk = lockInfo(page);
     if (lk.leftSecs > 0) throw new Error(`الراوتر قافل الدخول بعد محاولات غلط — انتظر ${lk.leftSecs} ثانية وجرّب`);
-    let token = tokenFromPage(page);
+    // الفيرموير الجديد: الرمز والملح والتكرارات من GetRandInfo.asp والكلمة PBKDF2-SHA256 (loginWithSha256 في الصفحة)
+    let sha: [string, string, number] | null = null;
+    if (pageUsesSha256(page)) {
+      try {
+        const r = await this.req('/asp/GetRandInfo.asp?&1=1', {
+          method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+          body: 'Username=' + encodeURIComponent(user),
+        }, 8000);
+        sha = parseRandInfo(r.text);
+        diag(`[ont] GetRandInfo → ${r.status} · ${sha ? `تكرارات ${sha[2]}` : `ما فهمنا الرد: ${r.text.replace(/[0-9a-f]{16,}/gi, '«…»').slice(0, 80)}`}`);
+      } catch {}
+    }
+    let token = sha?.[0] ?? tokenFromPage(page);
     if (!token) {
       try {
         const r = await this.req('/asp/GetRandCount.asp', {
@@ -137,9 +149,11 @@ export class HuaweiOntDriver implements RouterDriver {
       res = await this.req('/login.cgi', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded', Referer: this.base() + '/' },
-        body: loginBody(user, password, lang, token, withLang),
+        body: sha
+          ? `UserName=${encodeURIComponent(user)}&PassWord=${encodeURIComponent(await sha256LoginPassword(password, sha[1], sha[2]))}&Language=${encodeURIComponent(lang)}&x.X_HW_Token=${encodeURIComponent(token)}`
+          : loginBody(user, password, lang, token, withLang),
       }, 15000, `Cookie=body:Language:${lang}:id=-1`);
-      diag(`[ont] login.cgi: Language ${withLang ? 'مع' : 'بدون'} · set-cookie ${res.setCookie ? '✓' : '✗'}`);
+      diag(`[ont] login.cgi${sha ? ' (sha256)' : ''}: Language ${sha || withLang ? 'مع' : 'بدون'} · set-cookie ${res.setCookie ? '✓' : '✗'}`);
     } catch (e) {
       throw new Error(`الراوتر ما رد على الدخول (POST /login.cgi) — ${String((e as any)?.message ?? e).slice(0, 60)}`);
     }

@@ -159,3 +159,17 @@ test('موبايلي فايبر: الإشارة الضوئية من opticinfo.as
   assert.deepEqual(P.opticInfo('new stOpticInfo("InternetGatewayDevice.X_HW_DEBUG.AMP.Optic","--","--","--","--","--","--")'), { linkOk: false });
   assert.equal(P.opticInfo('<html>Waiting</html>'), null);
 });
+
+test('HG8145V5 الفيرموير الجديد: GetRandInfo + كلمة PBKDF2-SHA256 مثل CryptoJS', async () => {
+  const page = 'function loginWithSha256(Username, Password) { $.ajax({ url: \'/asp/GetRandInfo.asp?&1=1\' }); }';
+  assert.ok(P.pageUsesSha256(page));
+  assert.ok(!P.pageUsesSha256(fx('dg8245v.html')));
+  assert.deepEqual(P.parseRandInfo('["a1b2c3d4e5f6a7b8","s4lTxyz","1000"]'), ['a1b2c3d4e5f6a7b8', 's4lTxyz', 1000]);
+  assert.deepEqual(P.parseRandInfo("function(){return function(){return ['a1b2c3d4e5f6a7b8','s4lTxyz','5000'];}}"), ['a1b2c3d4e5f6a7b8', 's4lTxyz', 5000]);
+  assert.equal(P.parseRandInfo('<html>err</html>'), null);
+  // المرجع: Node crypto بنفس خطوات CryptoJS (PBKDF2 hex ← SHA256 ← hex ← base64)
+  const c = require('crypto');
+  const dk = c.pbkdf2Sync('Pa$$w0rd', 's4lTxyz', 1000, 32, 'sha256').toString('hex');
+  const want = Buffer.from(c.createHash('sha256').update(dk, 'utf8').digest('hex'), 'utf8').toString('base64');
+  assert.equal(await P.sha256LoginPassword('Pa$$w0rd', 's4lTxyz', 1000), want);
+});
