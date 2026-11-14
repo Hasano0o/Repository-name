@@ -85,6 +85,8 @@ export default function GameScreen() {
   const insets = useSafeAreaInsets();
   const [info, setInfo] = useState<SavedRouter | null>(null);
   const [cfg, setCfg] = useState<BandConfig | null>(null);
+  /** فايبر/كابل (ما فيه getSignal) ← نخفي أدوات الترددات ونشخّص بدون برج */
+  const [wired, setWired] = useState(false);
   const [avail, setAvail] = useState<Target[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
@@ -175,10 +177,10 @@ export default function GameScreen() {
 
   const load = useCallback(async (r: SavedRouter) => {
     try {
-      const [c, cells] = await withSession(r, async d => Promise.all([
+      const [c, cells] = await withSession(r, async d => { if (!d.getSignal && mounted.current) setWired(true); return Promise.all([
         d.getBandConfig ? d.getBandConfig() : Promise.resolve(null),
         d.getCells ? d.getCells().catch(() => [] as CellTower[]) : Promise.resolve([] as CellTower[]),
-      ]));
+      ]); });
       if (!mounted.current) return;
       setCfg(c);
       const seen = new Map<string, Target>();
@@ -250,7 +252,7 @@ export default function GameScreen() {
       } catch {}
       const downs = [down1, down2].filter((x): x is number => typeof x === 'number');
       const down = downs.length ? Math.max(...downs) : undefined;
-      const dx = diagnose(game, wifi, sinr, down);
+      const dx = diagnose(game, wifi, sinr, down, wired);
       if (!mounted.current) return;
       setCheck({ game, wifi, dx, note });
       if (game.samples) {
@@ -559,7 +561,7 @@ export default function GameScreen() {
         {!loading && info && <GamePrepCard info={info} reg={reg} disabled={running || busy} />}
 
         {/* الأوضاع بضغطة (ألعاب / مشاهدة / اجتماعات) — انتقلت هنا من صفحة الراوتر */}
-        {!loading && info && <ModeChips r={info} />}
+        {!loading && info && !wired && <ModeChips r={info} />}
 
         {!loading && (
           <GlassCard title="جاهز للعب؟" icon="🎮" tint={C.greenSoft} collapsible={false}>
@@ -623,7 +625,7 @@ export default function GameScreen() {
           </Pressable>
         )}
 
-        {!loading && avail.length > 1 && !cfg && (
+        {!loading && avail.length > 1 && !cfg && !wired && (
           <Text style={s.hint}>راوترك ما يدعم قفل الترددات — مُحسّن اللعبة غير متاح</Text>
         )}
 

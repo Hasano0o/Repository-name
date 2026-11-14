@@ -229,7 +229,7 @@ export interface Diagnosis {
  * «جاهز للعب؟» — يجمع قياس الواي فاي وقياس السيرفر والإشارة ويطلع السبب.
  * wifi = بين الجوال والراوتر، game = للسيرفر، sinr = نقاء إشارة الراوتر (إن توفر)
  */
-export function diagnose(game: LatencyResult, wifi: LatencyResult | null, sinr?: number, downBps?: number): Diagnosis {
+export function diagnose(game: LatencyResult, wifi: LatencyResult | null, sinr?: number, downBps?: number, wired = false): Diagnosis {
   const score = gameScore(game);
   const light = scoreLight(score);
 
@@ -285,6 +285,15 @@ export function diagnose(game: LatencyResult, wifi: LatencyResult | null, sinr?:
       cause: `نقاء الإشارة ضعيف (SINR ${sinr.toFixed(1)}) فالبيانات تتعاد وتتأخر`,
       fix: 'وجّه الأنتنا من توجيه الأنتنا، أو شغّل مُحسّن اللعبة تحت',
       action: 'aim',
+    };
+  }
+
+  if (wired && (game.jitter > 20 || game.lossPct > 1)) {
+    // فايبر/كابل: ما فيه برج ولا تردد — التذبذب من خط المزوّد أو الشبكة بالبيت
+    return {
+      light, score, title: 'الخط متذبذب الحين',
+      cause: `التذبذب ${game.jitter}ms${game.lossPct ? ` والفقد ${game.lossPct}%` : ''} — غالباً من خط مزوّد الخدمة أو ضغط وقت الذروة`,
+      fix: 'وصّل جهاز اللعب بكيبل، وأعد تشغيل الراوتر لو استمر — ولو يتكرر كل يوم كلّم مزوّد الخدمة',
     };
   }
 
