@@ -48,6 +48,23 @@ export class HuaweiOntDriver implements RouterDriver {
     return this.req(path, { method: 'GET' }, timeout);
   }
   authHeaders(): Record<string, string> { return this.cookie ? { Cookie: this.cookie } : {}; }
+  /** آخر دخول ناجح (بالذاكرة بس) — عشان نجدد الجلسة لو انتهت وقت سحب الصفحات */
+  private creds: { user: string; password: string } | null = null;
+  /**
+   * صفحة بعد الدخول من خلال الدرايفر نفسه (نفس الكوكي) — الجامع يستخدمها بدل fetch حقه.
+   * FULL ١٤ نوفمبر ٢٣:٠٣: كل الصفحات رجعت «Waiting… top.location.replace('/')» (530B) والدرايفر نفسه فتح /index.asp (21516B)
+   * ← الجلسة راحت قبل الجامع. لو شفنا صفحة التحويل ندخل من جديد مرة وحدة ونعيد.
+   */
+  async fetchAuthPage(path: string): Promise<{ ok: boolean; status: number; text: string; type: string }> {
+    const expired = (t: string) => t.length < 1500 && /top\.location\.replace\(\s*pageName\s*\)|<title>\s*Waiting/i.test(t) && /pageName\s*=\s*['"]\/['"]/.test(t);
+    let r = await this.get(path, 10000);
+    if (expired(r.text) && this.creds) {
+      diag(`[ont] الجلسة انتهت عند ${path} — دخول جديد`);
+      try { await this.login(this.host, this.creds.user, this.creds.password, { fresh: true }); r = await this.get(path, 10000); } catch {}
+    }
+    const type = /\.js(\?|$)/i.test(path) ? 'application/javascript' : /\.css(\?|$)/i.test(path) ? 'text/css' : 'text/html';
+    return { ok: r.status >= 200 && r.status < 400, status: r.status, text: r.text, type };
+  }
 
   async detect(host: string): Promise<boolean> {
     if (!isLanHost(host)) return false;
@@ -145,6 +162,7 @@ export class HuaweiOntDriver implements RouterDriver {
       throw new Error(`الراوتر رفض اسم المستخدم أو الكلمة. أجهزة الفايبر غالباً اسم المستخدم مو admin — شوف الملصق (مثل «user» عند STC) واكتبه مع الكلمة اللي جنبه. انتبه: الراوتر يقفل بعد ${lk.maxTries ?? 3} محاولات غلط.`);
     }
     await markBadPassword(key, null);
+    this.creds = { user, password };
     this.logged = true;
   }
 

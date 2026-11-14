@@ -213,7 +213,15 @@ export function originOf(url: string): string {
 
 /** ترويسات جلسة من الدرايفر (كوكي يدوي — هواوي ONT) للصفحات اللي بعد الدخول؛ فاضي = جرة النظام */
 let authHdr: Record<string, string> = {};
+/** سحب من خلال الدرايفر (نفس جلسته) — هواوي ONT */
+let authFetch: ((path: string) => Promise<{ ok: boolean; status: number; text: string; type: string }>) | null = null;
 async function get(url: string, ms = 6000, method: 'GET' | 'POST' = 'GET'): Promise<{ ok: boolean; text: string; type: string; status: number }> {
+  if (authFetch && method === 'GET') {
+    try {
+      const path = url.replace(/^https?:\/\/[^/]+/i, '') || '/';
+      return await authFetch(path);
+    } catch { return { ok: false, text: '', type: '', status: 0 }; }
+  }
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
   try {
@@ -256,9 +264,10 @@ function topMisses(m: string[], n = 25): string[] {
   return [...m.filter(x => /\.html?\b/.test(x)), ...m.filter(x => !/\.html?\b/.test(x))].slice(0, n);
 }
 
-export async function collectRouterFiles(host: string, onStep?: (n: number) => void, opts?: { start?: string[]; afterLogin?: boolean; headers?: Record<string, string> }): Promise<{ files: DumpFile[]; skipped: string[] }> {
+export async function collectRouterFiles(host: string, onStep?: (n: number) => void, opts?: { start?: string[]; afterLogin?: boolean; headers?: Record<string, string>; fetcher?: (path: string) => Promise<{ ok: boolean; status: number; text: string; type: string }> }): Promise<{ files: DumpFile[]; skipped: string[] }> {
   if (!isLanHost(host)) throw new Error('العنوان لازم يكون محلي');
   authHdr = opts?.headers ?? {};
+  authFetch = opts?.fetcher ?? null;
   const base = 'http://' + host.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   const files: DumpFile[] = [];
   const skipped: string[] = [];

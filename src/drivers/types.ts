@@ -281,6 +281,8 @@ export interface RouterDriver {
   afterLoginPages?(): string[];
   /** ترويسات الجلسة (كوكي يدوي) للجامع لما الدرايفر ما يستخدم جرة النظام — هواوي ONT */
   authHeaders?(): Record<string, string>;
+  /** يسحب صفحة بعد الدخول بجلسة الدرايفر (ويجددها لو انتهت) — الجامع يستخدمها بدل fetch حقه */
+  fetchAuthPage?(path: string): Promise<{ ok: boolean; status: number; text: string; type: string }>;
   /**
    * يدخل قبل سحب صفحات بعد الدخول (FULL / AUTH) — للراوترات اللي ما تدخل إلا وقت الكتابة (ZTE zwrt):
    * سيرفر الصفحة يعطي كوكي الجلسة مع web_login، وبدونه صفحات /tmpl/auth و /js/auth ترد 404/405.
