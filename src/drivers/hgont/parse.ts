@@ -85,3 +85,50 @@ export function cookieFrom(setCookie: string): string {
   }
   return out.join('; ');
 }
+
+/** معاملات نصية لكل «new <Ctor>(…)» في الصفحة (نصوص "…" أو '…' بس، مع فك \xNN) */
+export function ctorArgs(html: string, ctor: string): string[][] {
+  const out: string[][] = [];
+  const re = new RegExp(`new\\s+${ctor}\\s*\\(`, 'g');
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) {
+    const args: string[] = [];
+    let i = re.lastIndex;
+    while (i < html.length) {
+      while (/[\s,]/.test(html[i])) i++;
+      const q = html[i];
+      if (q === ')') break;
+      if (q !== '"' && q !== "'") { // رقم أو متغير — ناخذه لين الفاصلة
+        const e = html.slice(i).search(/[,)]/); if (e < 0) break;
+        args.push(html.slice(i, i + e).trim()); i += e; continue;
+      }
+      let j = i + 1, s = '';
+      while (j < html.length && html[j] !== q) { if (html[j] === '\\') { s += html[j] + html[j + 1]; j += 2; } else s += html[j++]; }
+      args.push(unhex(s).replace(/\\(.)/g, '$1')); i = j + 1;
+    }
+    out.push(args);
+  }
+  return out;
+}
+
+export interface OntDeviceInfo { serial?: string; hardware?: string; software?: string; model?: string; mac?: string }
+
+/** deviceinfo.asp — new stDeviceInfo(domain, SN, HW, SW, Model, Vendor, Release, MAC, Desc, …) (DG8245V ١٤ نوفمبر) */
+export function deviceInfo(html: string): OntDeviceInfo | null {
+  const a = ctorArgs(html, 'stDeviceInfo').find(x => /DeviceInfo/.test(x[0] ?? ''));
+  if (!a) return null;
+  const v = (i: number) => (a[i] ?? '').trim() || undefined;
+  return { serial: v(1), hardware: v(2), software: v(3), model: v(4), mac: v(7) };
+}
+
+export interface OntUserDev { ip?: string; mac: string; port?: string; online: boolean; conn?: string; name?: string }
+
+/** GetLanUserDevInfo.asp — new USERDevice(domain, IP, MAC, Port, IpType, DevType, Status, ConnType, Time, HostName, …) */
+export function userDevices(html: string): OntUserDev[] {
+  return ctorArgs(html, 'USERDevice')
+    .filter(a => /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i.test(a[2] ?? ''))
+    .map(a => ({
+      ip: a[1] || undefined, mac: a[2].toUpperCase(), port: a[3] || undefined,
+      online: /^online$/i.test(a[6] ?? ''), conn: a[7] || undefined, name: (a[9] ?? '').trim() || undefined,
+    }));
+}

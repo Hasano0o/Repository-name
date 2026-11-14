@@ -7,7 +7,7 @@
  * ⚠️ DG8245V يقفل بعد ٣ محاولات غلط (errloginlockNum='3'، LockTime 60) ← محاولة وحدة لكل دخول،
  *    والكلمة المرفوضة تنحفظ وما نعيدها لحالنا (نفس ZTE).
  */
-import { RouterDriver, Capability, DeviceDetails, NetworkInfo } from '../types';
+import { RouterDriver, Capability, DeviceDetails, NetworkInfo, ConnectedDevice } from '../types';
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import { http } from '../http';
@@ -15,13 +15,13 @@ import { diag } from '../../services/diag';
 import { isLanHost } from '../../utils/host';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import type { ModelProfile } from '../models';
-import { isOntLoginPage, tokenFromPage, tokenFromReply, productName, loginLanguage, lockInfo, loginBody, pageSendsLanguage, cookieFrom } from './parse';
+import { isOntLoginPage, tokenFromPage, tokenFromReply, productName, loginLanguage, lockInfo, loginBody, pageSendsLanguage, cookieFrom, deviceInfo, userDevices } from './parse';
 
 export class HuaweiOntDriver implements RouterDriver {
   // ⚠️ المعرّف بدون كلمة «huawei»: قاعدة كرت FULL تعامل أي «huawei» كراوتر شريحة (ما يطلع إلا لموديل مجهول)
   readonly id = 'hgont';
   name = 'هواوي فايبر';
-  readonly capabilities: Capability[] = [];
+  readonly capabilities: Capability[] = ['devices'];
 
   private host = '';
   private model = '';
@@ -180,6 +180,9 @@ export class HuaweiOntDriver implements RouterDriver {
       '/html/amp/wlaninfo/wlaninfo.asp', '/html/amp/wlanbasic/WlanBasic.asp', '/html/amp/wlanadv/WlanAdvance.asp',
       '/html/bbsp/dhcpinfo/dhcpinfo.asp', '/html/ssmp/devmanage/devmanage.asp', '/html/ssmp/reset/reset.asp',
       '/html/ssmp/accoutcfg/ontmngt.asp', '/html/ssmp/common/getmenu.asp', '/menu.asp', '/frame.asp',
+      // DG8245V: الإشارة الضوئية — مسارات هواوي الثانية (opticinfo.asp ما وصل في FULL ١٤ نوفمبر)
+      '/html/amp/opticinfo/opticinfo_ont.asp', '/html/amp/ponopticinfo/ponopticinfo.asp', '/html/bbsp/common/GetLanUserDevInfo.asp',
+      '/html/ssmp/devmanage/cfgfile.asp', '/html/ssmp/reset/rebootdevice.asp',
     ];
   }
 
@@ -193,6 +196,16 @@ export class HuaweiOntDriver implements RouterDriver {
 
   /** software = نسخة قائمة الصفحات — نرفعها لو أضفنا صفحات عشان يرجع كرت FULL */
   async getDeviceDetails(): Promise<DeviceDetails> {
-    return { model: this.name, software: 'hgont-pages-1' };
+    // software = نسخة قائمة الصفحات (كرت FULL يرجع لو تغيّرت) — نخليها لو الصفحة ما قرت
+    let info: ReturnType<typeof deviceInfo> = null;
+    try { info = deviceInfo((await this.fetchAuthPage('/html/ssmp/deviceinfo/deviceinfo.asp')).text); } catch {}
+    if (!info) return { model: this.name, software: 'hgont-pages-2' };
+    return { model: info.model || this.name, software: info.software, hardware: info.hardware, imei: info.serial };
+  }
+
+  /** الأجهزة المتصلة (Online بس) — GetLanUserDevInfo.asp (قراءة بس؛ الحظر ما شفنا أمره) */
+  async getDevices(): Promise<ConnectedDevice[]> {
+    const r = await this.fetchAuthPage('/html/bbsp/common/GetLanUserDevInfo.asp');
+    return userDevices(r.text).filter(d => d.online).map(d => ({ mac: d.mac, ip: d.ip, name: d.name }));
   }
 }

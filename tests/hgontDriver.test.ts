@@ -126,3 +126,16 @@ test('DG8245V (تقرير ٢٢:٣٧): login.cgi رد صغير + set-cookie و «
   await d.login('192.168.1.1', 'user', '9TDXBNTF', { fresh: true });
   assert.deepEqual(d.authHeaders(), { Cookie: 'Cookie=sid=Z:Language:arabic:id=1' });
 });
+
+test('DG8245V بعد الدخول: معلومات الجهاز والأجهزة المتصلة (أسطر حقيقية من FULL ١٤ نوفمبر)', () => {
+  const di = 'x=new stDeviceInfo("InternetGatewayDevice.DeviceInfo","4857544327C345A9","1C1A\\x2eA","V500R020C00SPC270","DG8245V","HWTC","2023\\x2d05\\x2d24\\x5f00\\x3a35\\x3a18\\x20","9C\\x3a73\\x3a70\\x3a19\\x3a6B\\x3a9A","DG8245V","2153037804HYN3016100\\x2e0002","");';
+  const d = P.deviceInfo(di);
+  assert.deepEqual(d, { serial: '4857544327C345A9', hardware: '1C1A.A', software: 'V500R020C00SPC270', model: 'DG8245V', mac: '9C:73:70:19:6B:9A' });
+  assert.equal(P.deviceInfo('<html>Waiting</html>'), null);
+  const ud = 'var a=new Array(new USERDevice("InternetGatewayDevice.LANDevice.1.X_HW_UserDev.1","192\\x2e168\\x2e1\\x2e79","5e\\x3a4f\\x3aa7\\x3a20\\x3aec\\x3a17","SSID1","DHCP","","Offline","WIFI","7\\x3a45","iPhone","1","0","0","","","0"),'
+    + 'new USERDevice("InternetGatewayDevice.LANDevice.1.X_HW_UserDev.2","192\\x2e168\\x2e1\\x2e80","46\\x3a55\\x3a87\\x3aea\\x3af1\\x3a7e","LAN1","DHCP","","Online","ETH","1\\x3a02","My\\x20PC","1","0","0","","","0"),null);';
+  const list = P.userDevices(ud);
+  assert.equal(list.length, 2);
+  assert.deepEqual(list[0], { ip: '192.168.1.79', mac: '5E:4F:A7:20:EC:17', port: 'SSID1', online: false, conn: 'WIFI', name: 'iPhone' });
+  assert.equal(list[1].online, true); assert.equal(list[1].name, 'My PC');
+});
