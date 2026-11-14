@@ -143,29 +143,46 @@ export class NokiaFwaDriver implements RouterDriver {
     this.token = '';
     this.legacy = null;
     const user = (username || '').trim() || 'admin';
+    // 5G-24W-A (main_web_app يرد قبل الدخول): نفس login() في صفحته بالضبط — GET ?nonce ثم الدخول مباشرة، بدون ?salt.
+    // تقرير ١٤ نوفمبر ١٧:٥١: بعد ?salt (رد فاضي) الدخول بالكلمة الصحيحة رجع -1 ← ?salt يحرق الـ nonce عند هالفيرموير.
+    await this.identify();
+    if (/^5G-24W/i.test(this.model)) return this.loginLegacy(user, password);
     const n = await this.req('login_web_app.cgi?nonce', `userName=${encodeURIComponent(user)}`);
     const nonce = String(n?.nonce ?? '');
     if (!nonce) throw new Error('login_web_app: الراوتر ما أعطى nonce');
     this.pubkey = String(n?.pubkey ?? '');
     const s = await this.req('login_web_app.cgi?salt', `userhash=${nkSha256url(user, nonce)}&nonce=${nkEscape(nonce)}`).catch(() => ({}));
     const salt = String(s?.alati ?? '');
-    const iters = Number(n?.iterations) || 0;
-    // ما فيه alati = الفيرموير الأقدم: الكلمة كما هي (بدون iterations) — نفس login() في صفحته
-    const { body } = salt
-      ? nkLoginBody(user, password, nonce, String(n?.randomKey ?? ''), rand, iters, salt)
-      : nkLoginBody(user, password, nonce, String(n?.randomKey ?? ''), rand);
-    if (!salt) diag('[nokia-fwa] ?salt رجع فاضي ← دخول الفيرموير الأقدم (sha256(user, كلمة) بدون salt) وقراءة 3.1');
-    const r = await this.req('login_web_app.cgi', body, false, 30000);
+    if (!salt) {
+      // فيرموير أقدم ما نعرف موديله: nonce جديد (القديم انحرق مع ?salt) والدخول بطريقة صفحته
+      diag('[nokia-fwa] ?salt رجع فاضي ← nonce جديد ودخول الفيرموير الأقدم (sha256(user, كلمة)) وقراءة 3.1');
+      return this.loginLegacy(user, password);
+    }
+    const { body } = nkLoginBody(user, password, nonce, String(n?.randomKey ?? ''), rand, Number(n?.iterations) || 0, salt);
+    this.finish(await this.req('login_web_app.cgi', body, false, 30000), false);
+  }
+  /** login() في صفحة 5G-24W-A (main.7c150fd0…): userservice.getnonce() = GET ?nonce ← response = sha256url(sha256(user, كلمة), nonce) */
+  private async loginLegacy(user: string, password: string): Promise<void> {
+    diag('[nokia-fwa] دخول 5G-24W-A: GET ?nonce ← sha256(user, كلمة) بدون salt');
+    const n = await this.req('login_web_app.cgi?nonce');
+    const nonce = String(n?.nonce ?? '');
+    if (!nonce) throw new Error('login_web_app: الراوتر ما أعطى nonce');
+    this.pubkey = String(n?.pubkey ?? '');
+    const { body } = nkLoginBody(user, password, nonce, String(n?.randomKey ?? ''), rand);
+    this.finish(await this.req('login_web_app.cgi', body, false, 30000), true);
+  }
+  private finish(r: any, legacy: boolean): void {
     const res = Number(r?.result);
     if (res === 0 && r?.token) {
       this.token = String(r.token);
-      if (!salt) {
+      if (legacy) {
         const v = new NokiaDriver();
         Object.assign(v as any, { host: this.host, token: this.token });
         this.legacy = v;
       }
       return;
     }
+    if (legacy) diag(`[nokia-fwa] رد الدخول القديم: ${JSON.stringify(r ?? null).slice(0, 120)}`);
     if (res === -2) throw new Error('الراوتر قفل الدخول بعد محاولات غلط — انتظر شوي وجرّب (محاولات كثيرة)');
     if (res === -1) throw new Error('كلمة المرور غلط' + (r?.failurecount ? ` (المحاولة ${r.failurecount})` : '') + ' — ' + USER_HINT);
     throw new Error(`تعذّر تسجيل الدخول (login_web_app: ${r?.result ?? 'رد غير متوقع'})`);

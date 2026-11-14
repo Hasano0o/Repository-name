@@ -180,8 +180,9 @@ test('Nokia 6.1: وضع الشبكة 4G فقط ← AccessModeNo 4 · إعادة 
  * response = sha256url(sha256(user, كلمة), nonce)، والقراءة من fastmile_radio_status (مثل 3.1).
  * تقارير add-login ١٣ نوفمبر: ?salt → len=0 ← كنا نحسب بدون salt بس مع iterations ← «كلمة المرور غلط» والكلمة صحيحة.
  */
-function legacyRouter(pass = 'Rn5Test4yZ', user = 'userAdmin') {
-  const st: any = { nonce: 'Le9+acy/=', randomKey: 'RK2', token: '', loginTries: 0 };
+function legacyRouter(pass = 'Rn5Test4yZ', user = 'userAdmin', model = '5G-24W-A') {
+  // مثل الراوتر الحقيقي (تقرير ١٤ نوفمبر): كل طلب ?nonce يعطي nonce جديد، وأي POST على login_web_app.cgi (حتى ?salt) يحرقه
+  const st: any = { nonce: '', n: 0, randomKey: 'RK2', token: '', loginTries: 0, saltCalls: 0, nonceGets: 0 };
   const res = (status: number, text: string) => ({ ok: status < 400, status, url: 'http://192.168.1.254/', headers: { get: () => null }, text: async () => text } as any);
   const J = (o: unknown) => res(200, JSON.stringify(o));
   (globalThis as any).fetch = async (url: string, init?: any) => {
@@ -191,12 +192,13 @@ function legacyRouter(pass = 'Rn5Test4yZ', user = 'userAdmin') {
     const q = new URLSearchParams(String(init?.body ?? ''));
     if (p === '') return res(200, '<!doctype html><base href="/web_whw/"><script src="main.7c150fd0d3398810cea0.js"></script>');
     // نفس الفيرموير الجديد: nonce فيه iterations و pubkey — بس صفحته تتجاهل iterations
-    if (p === 'login_web_app.cgi?nonce') return J({ nonce: st.nonce, randomKey: st.randomKey, iterations: 1000, pubkey: kp.publicKey });
-    if (p === 'main_web_app.cgi') return J({ gwmodel: '5G-24W-A' });
-    if (p === 'login_web_app.cgi?salt') return res(200, '');
+    if (p === 'login_web_app.cgi?nonce') { if (m === 'GET') st.nonceGets++; st.nonce = `Le9+acy/${++st.n}=`; return J({ nonce: st.nonce, randomKey: st.randomKey, iterations: 1000, pubkey: kp.publicKey }); }
+    if (p === 'main_web_app.cgi') return J({ gwmodel: model });
+    if (p === 'login_web_app.cgi?salt') { st.saltCalls++; st.nonce = ''; return res(200, ''); }
     if (p === 'login_web_app.cgi' && m === 'POST') {
       st.loginTries++;
-      const ok = q.get('userhash') === hu(user, st.nonce) && q.get('response') === hu(h(user, pass), st.nonce);
+      const ok = !!st.nonce && q.get('nonce') === esc(st.nonce) && q.get('userhash') === hu(user, st.nonce) && q.get('response') === hu(h(user, pass), st.nonce);
+      st.nonce = '';
       if (!ok) return J({ result: -1, failurecount: st.loginTries });
       st.token = 'LT';
       return J({ result: 0, token: 'LT', sid: 'S' });
@@ -213,8 +215,9 @@ test('Nokia 5G-24W-A: ?salt فاضي ← دخول بالكلمة كما هي (us
   const st = legacyRouter();
   const d = driver();
   assert.equal(await d.detect('192.168.1.254'), true);
+  st.nonceGets = 0;
   await d.login('192.168.1.254', 'userAdmin', 'Rn5Test4yZ');
-  assert.equal(st.loginTries, 1);
+  assert.equal(st.loginTries, 1); assert.equal(st.saltCalls, 0, 'صفحته ما تنادي ?salt'); assert.equal(st.nonceGets, 1, 'nonce بـ GET مثل صفحته');
   const s = await d.getSignal();
   assert.equal(s.rsrp, -101); assert.equal(s.nrBand, 'n78');
   assert.match((await d.identify()).label, /FastMile 5G Gateway \(5G-24W-A\)/);
@@ -224,4 +227,12 @@ test('Nokia 5G-24W-A: ?salt فاضي ← دخول بالكلمة كما هي (us
 test('Nokia 5G-24W-A: كلمة غلط ← الرسالة تذكر userAdmin مو admin بس', async () => {
   legacyRouter();
   await assert.rejects(driver().login('192.168.1.254', 'userAdmin', 'wrong'), /userAdmin/);
+});
+
+test('Nokia 6.1 بفيرموير قديم موديله مو معروف: ?salt فاضي (يحرق الـ nonce) ← nonce جديد ودخول ناجح من أول محاولة', async () => {
+  const st = legacyRouter('Rn5Test4yZ', 'userAdmin', '');
+  const d = driver();
+  await d.login('192.168.1.254', 'userAdmin', 'Rn5Test4yZ');
+  assert.equal(st.saltCalls, 1); assert.equal(st.loginTries, 1); assert.equal(st.nonceGets, 1);
+  assert.equal((await d.getSignal()).rsrp, -101);
 });
