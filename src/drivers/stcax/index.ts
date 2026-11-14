@@ -221,14 +221,17 @@ export class StcAxDriver implements RouterDriver {
     // الراوتر ممكن يطبّق بعد ثواني — نقرأ لين ٤ مرات. المقارنة بالأرقام (7 و "7" نفس الشي)
     const want = [...bands].sort((a, b) => a - b).join(',');
     let now: AxLock | null = null;
+    let lastRaw = '';
     for (let i = 0; i < 4; i++) {
       if (i) await sleep(1500);
       const raw = await this.call({ payload: '', name: 'get', namespace: 'lock_cell' });
+      lastRaw = JSON.stringify(raw ?? null);
       diag(`[stc-ax] lock_cell/get (${i + 1}) ← ${JSON.stringify(raw ?? null).slice(0, 200)}`);
       now = axLock(raw);
       if (Number(now.cat) === Number(cat) && [...now.bands].sort((a, b) => a - b).join(',') === want && (!pci || now.pci === pci)) return;
     }
-    throw new Error(`الراوتر قبل الأمر بس الإعداد ما تغيّر (يقول: ${now?.cat || '—'} · ${now?.bands.join(',') || '—'}) — جرّب مرة ثانية`);
+    // الرد الخام في الرسالة نفسها — يطلع في صورة العضو بدون ما نحتاج تقرير (تقرير ١٤ نوفمبر ٢١:٠٣: «يقول: 7 · —»)
+    throw new Error(`الراوتر قبل الأمر بس الإعداد ما تغيّر — set: ${JSON.stringify(p ?? null).slice(0, 60)} · get: ${lastRaw.slice(0, 110)}`);
   }
   private async clear(): Promise<void> {
     const p = await this.call({ namespace: 'lock_cell', name: 'clr', payload: { clr_lock_cell: '' } }, 30000);
