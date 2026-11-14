@@ -58,9 +58,11 @@ import { rememberBands } from '../../src/store/bandsAvail';
 
 interface Features {
   bands: boolean; sms: boolean; block: boolean; reboot: boolean; devices: boolean; cells: boolean; details: boolean; plan: boolean; network: boolean; carriers: boolean; antenna: boolean;
+  /** فيه إشارة شبكة جوال؟ لا = فايبر/كابل (هواوي ONT) ← نخفي أدوات الأبراج والترددات والأنتنا */
+  cellular: boolean;
 }
 const NO_FEATURES: Features = {
-  bands: false, sms: false, block: false, reboot: false, devices: false, cells: false, details: false, plan: false, network: false, carriers: false, antenna: false,
+  bands: false, sms: false, block: false, reboot: false, devices: false, cells: false, details: false, plan: false, network: false, carriers: false, antenna: false, cellular: true,
 };
 const featuresOf = (d: RouterDriver): Features => ({
   bands: !!d.getBandConfig,
@@ -74,6 +76,7 @@ const featuresOf = (d: RouterDriver): Features => ({
   network: !!d.getApnProfiles || !!d.getDns,
   carriers: !!d.getCarriers,
   antenna: !!d.getAntenna,
+  cellular: !!d.getSignal,
 });
 
 /** خلفية البطاقة الرئيسية حسب جودة الاتصال */
@@ -1012,6 +1015,7 @@ export default function RouterDashboard() {
             <ModemsCard r={info} />
             <TempCard r={info} />
             {/* الذكي فوق: المساعد يسوي كل شي عنك — وبعدها الأدوات اليدوية */}
+            {feat.cellular && (<>
             <GroupTitle title="خلّ Bandly يسويها عنك" color={tFg('#7c5cff')} />
             <TileGrid>
               <ToolTile wide icon="spark" color={tFg('#7c5cff')} title="اضبط لي كل شي" sub="تردد · برج · قناة"
@@ -1021,14 +1025,17 @@ export default function RouterDashboard() {
                   onPress={() => router.push(`/assistant/${info.id}` as Href)} />
               )}
             </TileGrid>
+            </>)}
             <GroupTitle title="حسّن اتصالك" color={tFg('#2f6bff')} />
             <TileGrid>
+              {feat.cellular && (<>
               <ToolTile wide icon="aim" color={tFg('#2f6bff')} title="توجيه الأنتنا" sub="الأنتنا أو الراوتر نفسه"
                 onPress={() => router.push(`/aim/${info.id}` as Href)} />
               <ToolTile wide icon="tower" color={tFg('#12b76a')} title="الأبراج" sub="النواقل والدمج"
                 onPress={() => router.push(`/towers/${info.id}` as Href)} />
               <ToolTile wide icon="spark" color={tFg('#f97316')} title="اختار الأفضل" sub="سرعة · ألعاب · ثبات"
                 onPress={() => router.push(`/finder/${info.id}` as Href)} />
+              </>)}
               <ToolTile wide icon="game" color={tFg('#ec4899')} title="مُحسّن الألعاب" sub="أقل بنق للعبتك"
                 onPress={() => router.push(`/ping/${info.id}` as Href)} />
             </TileGrid>
@@ -1042,8 +1049,10 @@ export default function RouterDashboard() {
                 onPress={() => router.push(`/device/${info.id}` as Href)} />
               <ToolTile icon="chart" color={tFg('#e5484d')} title="وش يثقّل نتك؟" sub="مين يحمّل الحين"
                 onPress={() => router.push(`/heavy/${info.id}` as Href)} />
-              <ToolTile icon="pin" color={tFg('#e0a100')} title="أفضل شركة" sub="في منطقتك"
-                onPress={() => router.push('/carriers' as Href)} />
+              {feat.cellular && (
+                <ToolTile icon="pin" color={tFg('#e0a100')} title="أفضل شركة" sub="في منطقتك"
+                  onPress={() => router.push('/carriers' as Href)} />
+              )}
             </TileGrid>
           </>
         )}
@@ -1113,7 +1122,7 @@ export default function RouterDashboard() {
             {/* الأكثر طلباً — ظاهرة دايماً */}
             <GroupTitle title="الأكثر طلباً" color={tFg('#0e7d93')} />
             <View style={s.moreGrid}>
-              {info.driverId !== 'device' && (
+              {info.driverId !== 'device' && feat.cellular && (
                 <Pressable style={[s.moreTile, { backgroundColor: tBg('#0e7d9312'), borderColor: tBd('#0e7d9330') }]} onPress={() => router.push(`/newip/${info.id}` as Href)}>
                   <View style={[s.moreIcon, { backgroundColor: tBg('#0e7d93') }]}>
                     <Icon name="refresh" size={18} color={tFg('#fff')} />
