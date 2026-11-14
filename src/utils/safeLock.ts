@@ -639,11 +639,35 @@ async function safeApplyInner(o: SafeApplyOpts, track: Tracker = progress.none):
       reportError(`${o.key}-revert`, (items ? `mismatch: ${items.join(',')}` : `error: ${error}`).slice(0, 200), o.r);
     }
     diag(`[${o.key}] restore: ${exact ? 'exact' : items ? 'partial ' + items.join(',') : error ? 'error' : 'sent (unverified)'}`);
+    // الإرجاع فشل (الراوتر ما رد / رجع ناقص) ← محاولة ثانية بعد ما يهدأ. تقرير ١٤ نوفمبر ٢٠:٤٤ (هواوي B535،
+    // pilot:cell:LTE:233): «restore: error» والنت كان شغال لحظتها ← ما فكّينا شي ومسحنا الحفظ ← الراوتر بقى
+    // مثبّت على برج التجربة وبعدين طاح («منقطع — الأبراج طايحة»).
+    if (snap && !exact) {
+      say('الراوتر ما رد على الإرجاع — ننتظره يهدأ ونحاول مرة ثانية...');
+      track.extend(90);
+      await sleep(20_000);
+      try {
+        await withSessionPatient(o.r, d => d.restoreLockState!(snap!), 60_000);
+        exact = true; sent = true; items = undefined; error = undefined;
+        diag(`[${o.key}] restore (retry): exact`);
+      } catch (e) {
+        items = mismatchOf(e) ?? items;
+        diag(`[${o.key}] restore (retry): ${String((e as any)?.message ?? e).slice(0, 80)}`);
+      }
+    }
     const good = exact || (sent && !snap);
     say(good ? 'ننتظر الراوتر يتصل على إعدادك...' : 'ننتظر الراوتر يتصل...');
     let online = await waitOnline(o.r, good ? settleMs : 45_000, () => false);
     let freed = false;
-    if (!online) {
+    // ما رجع إعدادك بعد محاولتين ← حتى لو النت شغال الحين، تثبيت التجربة لسا على الراوتر: نفكه (يلقط أقوى برج)
+    // بدل ما نخليه — إعدادك القديم ينحفظ (freeRelease keep) وتقدر ترجّعه من «رجّع إعدادي».
+    if (online && snap && !exact) {
+      say('ما قدرنا نرجّع إعدادك بالضبط — نفك تثبيت التجربة عشان ما يبقى الراوتر عليه...');
+      track.extend(150);
+      online = await freeRelease(o.r, say, snap, o.op).catch(() => false);
+      freed = true;
+    }
+    if (!online && !freed) {
       say('ما رجع — نفك التثبيتات عشان يلقط أقوى برج...');
       track.extend(150);
       online = await freeRelease(o.r, say, snap ?? undefined, o.op).catch(() => false);
