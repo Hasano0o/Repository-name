@@ -132,3 +132,17 @@ export function userDevices(html: string): OntUserDev[] {
       online: /^online$/i.test(a[6] ?? ''), conn: a[7] || undefined, name: (a[9] ?? '').trim() || undefined,
     }));
 }
+
+export interface OntUplink { pon: string; online: boolean; mode: string }
+
+/** ontstate.asp — نوع الوصلة للإنترنت: PonMode 'ge' = كابل إيثرنت (المنفذ الضوئي مو مستخدم) · gpon/epon = فايبر */
+export function uplinkState(html: string): OntUplink | null {
+  const pm = html.match(/var\s+PonMode\s*=\s*['"]([^'"]*)['"]/);
+  if (!pm) return null;
+  const pon = pm[1].toLowerCase();
+  const eth = ctorArgs(html, 'stLinkStatus').some(a => /up/i.test(a[1] ?? ''));
+  const gpon = ctorArgs(html, 'stGponOntStateInfo').concat(ctorArgs(html, 'stOntState')).some(a => a.some(x => /^O5/i.test(x)));
+  const online = /OntState\s*=\s*["']ONLINE["']\s*;\s*$/m.test(html) || eth || gpon;
+  const mode = pon === 'ge' ? 'كابل إيثرنت (GE)' : pon ? `فايبر ${pon.toUpperCase()}` : 'فايبر';
+  return { pon, online, mode };
+}

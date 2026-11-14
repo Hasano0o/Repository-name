@@ -139,3 +139,11 @@ test('DG8245V بعد الدخول: معلومات الجهاز والأجهزة 
   assert.deepEqual(list[0], { ip: '192.168.1.79', mac: '5E:4F:A7:20:EC:17', port: 'SSID1', online: false, conn: 'WIFI', name: 'iPhone' });
   assert.equal(list[1].online, true); assert.equal(list[1].name, 'My PC');
 });
+
+test('DG8245V: نوع الوصلة من ontstate.asp (PonMode ge + إيثرنت Up)', () => {
+  const h = `var OntState = "OFFLINE";\nvar ethLinkStatus = new Array(new stLinkStatus("InternetGatewayDevice.WANDevice.1.WANEthernetInterfaceConfig","Up"),null);\nvar GponOntStateInfo = new Array(null);\nvar PonMode = 'ge';`;
+  assert.deepEqual(P.uplinkState(h), { pon: 'ge', online: true, mode: 'كابل إيثرنت (GE)' });
+  const g = h.replace("'ge'", "'gpon'").replace('"Up"', '"Down"');
+  assert.deepEqual(P.uplinkState(g), { pon: 'gpon', online: false, mode: 'فايبر GPON' });
+  assert.equal(P.uplinkState('<html>Waiting</html>'), null);
+});

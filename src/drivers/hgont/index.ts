@@ -15,7 +15,7 @@ import { diag } from '../../services/diag';
 import { isLanHost } from '../../utils/host';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import type { ModelProfile } from '../models';
-import { isOntLoginPage, tokenFromPage, tokenFromReply, productName, loginLanguage, lockInfo, loginBody, pageSendsLanguage, cookieFrom, deviceInfo, userDevices } from './parse';
+import { isOntLoginPage, tokenFromPage, tokenFromReply, productName, loginLanguage, lockInfo, loginBody, pageSendsLanguage, cookieFrom, deviceInfo, userDevices, uplinkState } from './parse';
 
 export class HuaweiOntDriver implements RouterDriver {
   // ⚠️ المعرّف بدون كلمة «huawei»: قاعدة كرت FULL تعامل أي «huawei» كراوتر شريحة (ما يطلع إلا لموديل مجهول)
@@ -190,7 +190,12 @@ export class HuaweiOntDriver implements RouterDriver {
     try { await this.get('/', 4000); return true; } catch { return false; }
   }
 
+  /** DG8245V ١٤ نوفمبر: PonMode='ge' ← النت داخل من كابل إيثرنت مو من الفايبر (ما فيه قراءة ضوئية أصلاً) */
   async getNetworkInfo(): Promise<NetworkInfo> {
+    try {
+      const u = uplinkState((await this.fetchAuthPage('/html/bbsp/common/ontstate.asp')).text);
+      if (u) return { connected: u.online, mode: u.mode };
+    } catch {}
     return { connected: true, mode: 'فايبر' };
   }
 
