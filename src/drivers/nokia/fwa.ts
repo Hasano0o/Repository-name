@@ -200,11 +200,33 @@ export class NokiaFwaDriver implements RouterDriver {
     }
     this.capabilities = on ? ['signal', 'cells', 'reboot', 'usage', 'bandLock'] : ['signal', 'cells', 'reboot', 'usage'];
   }
+  /**
+   * فحص (قراءة بس — ما يغيّر شي): هل نظام 5G-24W-A يعرف أوامر الترددات حق 6.1 حتى لو صفحته ما تعرضها؟
+   * GetSupportedCellularBands على service_function_web_app.cgi — الرد يوصل للرسيفر (errors.jsonl: nokia24w-bandprobe) مرة باليوم.
+   * لو رد بالقائمة (result 0 + Bands4G) نفتح الترددات بأوامر 6.1 في خطوة ثانية — قرار حسن ١٤ نوفمبر.
+   */
+  private probed = false;
+  private async probeBands(): Promise<void> {
+    if (this.probed) return;
+    this.probed = true;
+    let msg: string;
+    try {
+      const body = JSON.stringify({ version: 1, csrf_token: this.token, id: 1, interface: 'Nokia.GenericService', service: 'OAM', function: 'GetSupportedCellularBands', paralist: [] });
+      const r = await http(`${this.base()}/service_function_web_app.cgi`, { method: 'POST', headers: this.hdr(true), body }, 8000);
+      const t = (await r.text()).replace(/\s+/g, ' ').trim();
+      msg = `HTTP ${r.status} · ${t.slice(0, 200) || '(فاضي)'}`;
+    } catch (e) {
+      msg = 'ما رد: ' + String((e as any)?.message ?? e).slice(0, 100);
+    }
+    diag(`[nokia-fwa] فحص ترددات 5G-24W-A (قراءة بس): ${msg}`);
+    try { require('../../services/errors').reportError('nokia24w-bandprobe', msg, { driverName: 'Nokia ' + (this.model || '5G-24W-A') }); } catch {}
+  }
   private finish(r: any, legacy: boolean): void {
     const res = Number(r?.result);
     if (res === 0 && r?.token) {
       this.token = String(r.token);
       if (legacy) {
+        void this.probeBands().catch(() => {});
         const v = new NokiaDriver();
         Object.assign(v as any, { host: this.host, token: this.token });
         this.bandTools(false);

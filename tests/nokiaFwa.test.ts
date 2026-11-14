@@ -212,7 +212,8 @@ function legacyRouter(pass = 'Rn5Test4yZ', user = 'userAdmin', model = '5G-24W-A
       cell_LTE_stats_cfg: [{ stat: { Band: 'B3', RSRQCurrent: -11, PCI: 211, Cellid: 777, RSRPCurrent: -86 } }],
       cell_5G_stats_cfg: [{ stat: { Band: 'n78', PCI: 505, RSRPCurrent: -93 } }],
       network_cfg: [{ IMEI: '355880' }], sim_cfg: [{ Status: 'Ready' }], stats_cfg: [{}] });
-    if (p === 'status_get_web_app.cgi' || p === 'service_function_web_app.cgi') return res(404, 'nf');
+    if (p === 'service_function_web_app.cgi') { st.probe = JSON.parse(String(init?.body ?? '{}')); return res(404, 'nf'); }
+    if (p === 'status_get_web_app.cgi') return res(404, 'nf');
     return res(404, 'nf');
   };
   return st;
@@ -232,6 +233,9 @@ test('Nokia 5G-24W-A: ?salt فاضي ← دخول بالكلمة كما هي (us
   assert.match((await d.identify()).label, /FastMile 5G Gateway \(5G-24W-A\)/);
   // صفحته ما فيها ترددات ← الدوال تنخفي من النسخة نفسها (الشاشات ما تعرض أدوات الترددات)
   assert.equal(d.getBandConfig, undefined); assert.equal(d.setBand, undefined); assert.equal(d.setNetworkMode, undefined);
+  // فحص قراءة بس: GetSupportedCellularBands (ما فيه Set)
+  await new Promise(r => setTimeout(r, 5));
+  assert.equal(st.probe?.function, 'GetSupportedCellularBands'); assert.equal(st.probe?.csrf_token, 'LT');
   assert.ok(!d.capabilities.includes('bandLock'));
 });
 
