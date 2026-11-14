@@ -204,7 +204,14 @@ function legacyRouter(pass = 'Rn5Test4yZ', user = 'userAdmin', model = '5G-24W-A
       return J({ result: 0, token: 'LT', sid: 'S' });
     }
     if (!st.token) return res(200, '<!doctype html><html></html>');
-    if (p === 'fastmile_radio_status_web_app.cgi') return J(STATUS);
+    // نفس شكل صفحته: radio فيه PCI بدل PhysicalCellID وبدون Band/RSRQ — الناقص في statistics
+    if (p === 'fastmile_radio_status_web_app.cgi') return J({ ...STATUS,
+      cell_LTE_stats_cfg: [{ stat: { RSRPCurrent: -85, SNRCurrent: 9, PCI: 211 } }],
+      cell_5G_stats_cfg: [{ stat: { RSRPCurrent: -92, SNRCurrent: 11, PCI: 505 } }] });
+    if (p === 'fastmile_statistics_status_web_app.cgi') return J({
+      cell_LTE_stats_cfg: [{ stat: { Band: 'B3', RSRQCurrent: -11, PCI: 211, Cellid: 777, RSRPCurrent: -86 } }],
+      cell_5G_stats_cfg: [{ stat: { Band: 'n78', PCI: 505, RSRPCurrent: -93 } }],
+      network_cfg: [{ IMEI: '355880' }], sim_cfg: [{ Status: 'Ready' }], stats_cfg: [{}] });
     if (p === 'status_get_web_app.cgi' || p === 'service_function_web_app.cgi') return res(404, 'nf');
     return res(404, 'nf');
   };
@@ -219,7 +226,9 @@ test('Nokia 5G-24W-A: ?salt فاضي ← دخول بالكلمة كما هي (us
   await d.login('192.168.1.254', 'userAdmin', 'Rn5Test4yZ');
   assert.equal(st.loginTries, 1); assert.equal(st.saltCalls, 0, 'صفحته ما تنادي ?salt'); assert.equal(st.nonceGets, 1, 'nonce بـ GET مثل صفحته');
   const s = await d.getSignal();
-  assert.equal(s.rsrp, -101); assert.equal(s.nrBand, 'n78');
+  assert.equal(s.rsrp, -85, 'الأساس من radio'); assert.equal(s.sinr, 9);
+  assert.equal(s.band, 'B3'); assert.equal(s.rsrq, -11); assert.equal(s.pci, '211');
+  assert.equal(s.nrRsrp, -92); assert.equal(s.nrBand, 'n78'); assert.equal(s.nrPci, '505');
   assert.match((await d.identify()).label, /FastMile 5G Gateway \(5G-24W-A\)/);
   await assert.rejects(d.setBand([3]), /ما غيّرنا شي/);
 });
@@ -234,5 +243,11 @@ test('Nokia 6.1 بفيرموير قديم موديله مو معروف: ?salt ف
   const d = driver();
   await d.login('192.168.1.254', 'userAdmin', 'Rn5Test4yZ');
   assert.equal(st.saltCalls, 1); assert.equal(st.loginTries, 1); assert.equal(st.nonceGets, 1);
-  assert.equal((await d.getSignal()).rsrp, -101);
+  assert.equal((await d.getSignal()).rsrp, -85);
+});
+
+test('Nokia 5G-24W-A: merge24w — statistics ما رد ← نكمّل بـ radio بس و PCI يصير برج', () => {
+  const { merge24w } = require('../src/drivers/nokia/fwa');
+  const m = merge24w({ cell_LTE_stats_cfg: [{ stat: { RSRPCurrent: -80, PCI: 9 } }] }, null);
+  assert.equal(m.cell_LTE_stats_cfg[0].stat.PhysicalCellID, 9); assert.equal(m.cell_LTE_stats_cfg[0].stat.RSRPCurrent, -80);
 });

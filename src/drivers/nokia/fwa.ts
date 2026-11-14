@@ -55,6 +55,22 @@ export function caFrom(r: any): any {
   return ca;
 }
 
+/**
+ * 5G-24W-A (ملف 6.e95274c… في صفحته): fastmile_radio_status فيه stat ناقص — البرج اسمه «PCI» مو PhysicalCellID،
+ * والتردد و RSRQ تعرضها الصفحة من fastmile_statistics_status (cell_LTE/5G_stats_cfg[0].stat: Band RSRQCurrent PCI Cellid).
+ * ندمج: قراءة radio هي الأساس، والناقص منها من statistics، و PCI ← PhysicalCellID. 5G في صفحته بدون RSRQ أصلاً.
+ */
+export function merge24w(radio: any, stats: any): any {
+  const fill = (key: string) => {
+    const a = radio?.[key]?.[0]?.stat ?? {}, b = stats?.[key]?.[0]?.stat ?? {};
+    const m: any = { ...b };
+    for (const [k, v] of Object.entries(a)) if (v !== null && v !== undefined && v !== '') m[k] = v;
+    if ((m.PhysicalCellID === undefined || m.PhysicalCellID === '') && m.PCI !== undefined && m.PCI !== '') m.PhysicalCellID = m.PCI;
+    return Object.keys(m).length ? [{ ...(radio?.[key]?.[0] ?? {}), stat: m }] : radio?.[key];
+  };
+  return { ...(radio ?? {}), cell_LTE_stats_cfg: fill('cell_LTE_stats_cfg'), cell_5G_stats_cfg: fill('cell_5G_stats_cfg') };
+}
+
 export interface NkBands { mode: string; b4: { Band: unknown; Enable: boolean }[]; b5: { Band: unknown; ForNSA: boolean; ForSA: boolean }[] }
 export function bandsFrom(fr: any): NkBands {
   return {
@@ -178,6 +194,13 @@ export class NokiaFwaDriver implements RouterDriver {
       if (legacy) {
         const v = new NokiaDriver();
         Object.assign(v as any, { host: this.host, token: this.token });
+        // 5G-24W-A: القراءة = radio + الناقص من statistics (merge24w) — يخص هالدرايفر بس، 3.1 ما يتأثر
+        const vr = v as any;
+        vr.raw = async () => {
+          const [r, st] = await Promise.all([vr.req('fastmile_radio_status_web_app.cgi'), vr.req('fastmile_statistics_status_web_app.cgi').catch(() => null)]);
+          if (!r || typeof r !== 'object' || (!r.cell_LTE_stats_cfg && !r.cell_5G_stats_cfg)) throw new Error('fastmile_radio_status: رد غير متوقع');
+          return rawFrom(merge24w(r, st));
+        };
         this.legacy = v;
       }
       return;
