@@ -917,8 +917,15 @@ export class HuaweiDriver implements RouterDriver {
     // dev: نفس صفحة المطوّر (main.js: route developermode ← loginflag "2" في الطلبين)
     const flag = dev ? '<loginflag>2</loginflag>' : '';
     const ck0 = this.cookie;
-    const ch = await this.post('user/challenge_login',
+    let ch = await this.post('user/challenge_login',
       `<username>${esc(username)}</username><firstnonce>${firstNonce}</firstnonce><mode>1</mode>${flag}`);
+    // servernonce فيه رموز مرمّزة (&amp; …) ← نطلب تحدي جديد بدل ما نحسب عليه (لين ٣ مرات، والتحدي بدون تحقق ما يُحسب محاولة).
+    // تقرير ١٤ نوفمبر ١٩:٥٠ (H165-383 «5G CPE 6»): الكلمة الصحيحة (دخل فيها من المتصفح) + «رموز مرمّزة 2» ← 108006.
+    for (let i = 0; i < 3 && /&[#a-z0-9]+;/i.test(tag(ch, 'servernonce') ?? ''); i++) {
+      diag(`[huawei] servernonce فيه رموز مرمّزة — تحدي جديد (${i + 1})`);
+      ch = await this.post('user/challenge_login',
+        `<username>${esc(username)}</username><firstnonce>${firstNonce}</firstnonce><mode>1</mode>${flag}`);
+    }
     // الـ nonce من الراوتر ممكن فيه رموز مكتوبة بصيغة XML (&quot; …) — لازم نفكها قبل الحساب ونرجّعها مرمّزة.
     // كنا نحسب على النص المرمّز ← 108006 «كلمة غلط» وهي صحيحة، وبس لما يطلع رمز (عشان كذا نفس الراوتر ينجح
     // مرة ويفشل مرة). تقرير ٢ نوفمبر ٥:٥٣: servernonce:101 بدل 96 (+5 = &quot;) ← 108006.
