@@ -11,8 +11,7 @@
  */
 import * as Crypto from 'expo-crypto';
 import {
-  RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, Carrier, ConnectedDevice, Usage, DeviceDetails,
-} from '../types';
+  RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, Carrier, ConnectedDevice, Usage, DeviceDetails, CellLockTarget, CellLockState } from '../types';
 import { http } from '../http';
 import { noChange } from '../noChange';
 import { buildSnapshot } from '../../utils/snapshot';
@@ -142,6 +141,48 @@ export class NokiaDriver implements RouterDriver {
       // الراوتر يطفي قبل ما يرد أحياناً — مو فشل
       if (!/تعذر الاتصال|ما رد|timeout|network|abort/i.test(String((e as any)?.message ?? e))) throw e;
     }
+  }
+
+  // ═══ تثبيت البرج (صفحة «Cell management» — main-es2015.455f…، ١٤ نوفمبر) ═══
+  // GET cell_management_get_web_app.cgi ← {CellList4G/5G: [{oid, PhysicalCellID, DownlinkEarfcn | Downlink_NR_ARFCN, Band}],
+  //   CellMeasurement4G/5G, MeasurementStatus, reason 5 = الحساب بدون صلاحية}
+  // إضافة 4G: POST cell_management_4GCell_add_web_app.cgi «PhysicalCellID & DownlinkEarfcn» + csrf_token · حذف: «oid» على *_delete
+  // القائمة = الأبراج المسموحة ← برج واحد فيها = مثبّت عليه. 5G يحتاج «Band» بصيغة ما شفناها ← مقفول لين نشوفها.
+  private async cellList(): Promise<{ l4: any[]; l5: any[] }> {
+    let r: any;
+    try { r = await this.req('cell_management_get_web_app.cgi'); } catch (e) {
+      if (/HTTP 404/.test(String((e as any)?.message ?? e))) throw noChange('صفحة راوترك ما فيها تثبيت البرج — ما غيّرنا شي.');
+      throw e;
+    }
+    if (Number(r?.reason) === 5) throw noChange('حسابك في الراوتر ما عنده صلاحية تثبيت البرج — ادخل بحساب المدير (admin). ما غيّرنا شي.');
+    if (!r || typeof r !== 'object' || (!Array.isArray(r.CellList4G) && !Array.isArray(r.CellList5G))) throw noChange('صفحة راوترك ما فيها تثبيت البرج — ما غيّرنا شي.');
+    return { l4: Array.isArray(r.CellList4G) ? r.CellList4G : [], l5: Array.isArray(r.CellList5G) ? r.CellList5G : [] };
+  }
+  async getCellLocks(): Promise<CellLockState[]> {
+    const { l4, l5 } = await this.cellList();
+    return [
+      ...l4.map(c => ({ tech: 'LTE' as const, pci: String(c.PhysicalCellID), arfcn: String(c.DownlinkEarfcn) })),
+      ...l5.map(c => ({ tech: 'NR' as const, pci: String(c.PhysicalCellID), arfcn: String(c.Downlink_NR_ARFCN), band: Number(String(c.Band ?? '').replace(/\D/g, '')) || undefined })),
+    ];
+  }
+  async getCellLock(): Promise<CellLockState | null> { return (await this.getCellLocks().catch(() => []))[0] ?? null; }
+  async lockCell(t: CellLockTarget): Promise<void> {
+    if (t.tech === 'NR') throw noChange('تثبيت برج 5G في نوكيا يحتاج صيغة ما تأكدنا منها للحين — جرّب برج 4G. ما غيّرنا شي.');
+    if (!t.arfcn || !/^\d+$/.test(String(t.arfcn)) || !/^\d+$/.test(String(t.pci))) throw noChange('نحتاج رقم القناة (EARFCN) ورقم البرج (PCI) — ما غيّرنا شي.');
+    const { l4 } = await this.cellList();
+    const same = (c: any) => String(c.PhysicalCellID) === String(t.pci) && String(c.DownlinkEarfcn) === String(t.arfcn);
+    // نشيل الأبراج الثانية (القائمة = المسموح) ونضيف المطلوب لو مو موجود
+    for (const c of l4.filter(c => !same(c))) await this.post('cell_management_4GCell_delete_web_app.cgi', `oid=${encodeURIComponent(String(c.oid))}`);
+    if (!l4.some(same)) await this.post('cell_management_4GCell_add_web_app.cgi', `PhysicalCellID=${t.pci}&DownlinkEarfcn=${t.arfcn}`);
+    const now = await this.cellList();
+    if (!(now.l4.length === 1 && same(now.l4[0]))) throw new Error('الراوتر قبل الأمر بس قائمة الأبراج ما صارت على البرج المطلوب — جرّب مرة ثانية');
+  }
+  async unlockCell(tech?: 'LTE' | 'NR'): Promise<void> {
+    const { l4, l5 } = await this.cellList();
+    if (tech !== 'NR') for (const c of l4) await this.post('cell_management_4GCell_delete_web_app.cgi', `oid=${encodeURIComponent(String(c.oid))}`);
+    if (tech !== 'LTE') for (const c of l5) await this.post('cell_management_5GCell_delete_web_app.cgi', `oid=${encodeURIComponent(String(c.oid))}`);
+    const now = await this.cellList();
+    if ((tech !== 'NR' && now.l4.length) || (tech !== 'LTE' && now.l5.length)) throw new Error('الراوتر ما شال كل الأبراج من القائمة — جرّب مرة ثانية');
   }
 
   // ═══ الترددات: مو موجودة في صفحة هالراوتر ═══

@@ -32,7 +32,7 @@ const RADIO = {
 };
 
 function router(opts: { password?: string; noLte?: boolean; iterations?: number } = {}) {
-  const st: any = { nonce: 'abc+/=XYZ', randomKey: 'RK123', sid: '', posts: [] as string[], rebooted: false, fails: 0 };
+  const st: any = { nonce: 'abc+/=XYZ', randomKey: 'RK123', sid: '', posts: [] as string[], rebooted: false, fails: 0, cells4: [] as any[], cells5: [] as any[], oid: 0 };
   const res = (status: number, text: string, headers: Record<string, string> = {}) =>
     ({ ok: status < 400, status, url: 'http://192.168.1.1/', headers: { get: (k: string) => headers[k.toLowerCase()] ?? null }, text: async () => text } as any);
   const J = (o: unknown) => res(200, JSON.stringify(o));
@@ -70,6 +70,15 @@ function router(opts: { password?: string; noLte?: boolean; iterations?: number 
       ],
     });
     if (p === 'fastmile_statistics_status_web_app.cgi') return J({ sim_cfg: [{ Status: 'Ready', IMSI: 'x' }], network_cfg: [{ IMEI: '356000000000001' }] });
+    if (p === 'cell_management_get_web_app.cgi') return J({ CellList4G: st.cells4.map((c: any) => ({ ...c })), CellList5G: st.cells5, CellMeasurement4G: [], CellMeasurement5G: [], MeasurementStatus: { X_ALU_COM_CellListMeasurementStat: 'Completed' } });
+    if (p === 'cell_management_4GCell_add_web_app.cgi' && m === 'POST') {
+      assert.equal(q.get('csrf_token'), 'TOK9');
+      st.cells4.push({ oid: String(++st.oid), PhysicalCellID: Number(q.get('PhysicalCellID')), DownlinkEarfcn: Number(q.get('DownlinkEarfcn')) }); return J({ result: 0 });
+    }
+    if (/^cell_management_(4|5)GCell_delete_web_app\.cgi$/.test(p) && m === 'POST') {
+      assert.equal(q.get('csrf_token'), 'TOK9');
+      const k = p.includes('4G') ? 'cells4' : 'cells5'; st[k] = st[k].filter((c: any) => c.oid !== q.get('oid')); return J({ result: 0 });
+    }
     if (p === 'reboot_web_app.cgi' && m === 'POST') { st.posts.push(body); st.rebooted = q.get('csrf_token') === 'TOK9'; return J({ result: 0 }); }
     return res(404, 'not found');
   };
@@ -130,4 +139,17 @@ test('Nokia: الفيرموير الأحدث يرسل iterations ← الكلم�
   assert.equal((await d.getSignal()).network, '5G NSA');
   router({ iterations: 1 });
   await driver().login('192.168.1.1', 'admin', 'pw');
+});
+
+test('Nokia 3.1: تثبيت برج 4G من «Cell management» — يشيل الباقي ويضيف المطلوب ويتأكد · الفك يفضّي القائمة · 5G مقفول', async () => {
+  const st = router();
+  st.cells4 = [{ oid: '7', PhysicalCellID: 99, DownlinkEarfcn: 100 }]; st.cells5 = [{ oid: '8', PhysicalCellID: 5, Downlink_NR_ARFCN: 643334, Band: 'n78' }]; st.oid = 10;
+  const d = driver();
+  await d.login('192.168.1.1', 'admin', 'pw');
+  await d.lockCell({ tech: 'LTE', pci: '211', arfcn: '1650', band: 3 });
+  assert.deepEqual(st.cells4.map((c: any) => `${c.PhysicalCellID}/${c.DownlinkEarfcn}`), ['211/1650']);
+  assert.deepEqual(await d.getCellLock(), { tech: 'LTE', pci: '211', arfcn: '1650' });
+  await assert.rejects(d.lockCell({ tech: 'NR', pci: '1', arfcn: '643334' }), (e: any) => e.noChange === true);
+  await d.unlockCell();
+  assert.equal(st.cells4.length, 0); assert.equal(st.cells5.length, 0);
 });
