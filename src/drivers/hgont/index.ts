@@ -50,6 +50,7 @@ export class HuaweiOntDriver implements RouterDriver {
   authHeaders(): Record<string, string> { return this.cookie ? { Cookie: this.cookie } : {}; }
   /** آخر دخول ناجح (بالذاكرة بس) — عشان نجدد الجلسة لو انتهت وقت سحب الصفحات */
   private creds: { user: string; password: string } | null = null;
+  private reloginAt = 0;
   /**
    * صفحة بعد الدخول من خلال الدرايفر نفسه (نفس الكوكي) — الجامع يستخدمها بدل fetch حقه.
    * FULL ١٤ نوفمبر ٢٣:٠٣: كل الصفحات رجعت «Waiting… top.location.replace('/')» (530B) والدرايفر نفسه فتح /index.asp (21516B)
@@ -58,7 +59,9 @@ export class HuaweiOntDriver implements RouterDriver {
   async fetchAuthPage(path: string): Promise<{ ok: boolean; status: number; text: string; type: string }> {
     const expired = (t: string) => t.length < 1500 && /top\.location\.replace\(\s*pageName\s*\)|<title>\s*Waiting/i.test(t) && /pageName\s*=\s*['"]\/['"]/.test(t);
     let r = await this.get(path, 10000);
-    if (expired(r.text) && this.creds) {
+    // دخول جديد مرة وحدة بس لكل دقيقتين — HG8145V5 (١٥ نوفمبر) رجّع 403 لكل صفحة فصار يدخل مع كل صفحة (يحرق محاولات)
+    if ((expired(r.text) || r.status === 403) && this.creds && Date.now() - this.reloginAt > 120_000) {
+      this.reloginAt = Date.now();
       diag(`[ont] الجلسة انتهت عند ${path} — دخول جديد`);
       try { await this.login(this.host, this.creds.user, this.creds.password, { fresh: true }); r = await this.get(path, 10000); } catch {}
     }
@@ -145,17 +148,24 @@ export class HuaweiOntDriver implements RouterDriver {
     // تقرير ١٤ نوفمبر ٢٢:٣٧ (DG8245V): login.cgi → 200 · 538B · set-cookie ✓ وبعدها «/» رجّع فورم الدخول بـ «محاولات 0»
     // (يعني الراوتر ما حسبها غلط) ← كنا نحكم من «/» ونقول «الكلمة غلط» وهي صحيحة. «/» عند هالأجهزة يبقى صفحة الدخول.
     const after = res.text;
-    const ok = !isOntLoginPage(after);
+    let ok = !isOntLoginPage(after);
+    let fakeOk = false;
     diag(`[ont] رد login.cgi: ${after.replace(/\s+/g, ' ').replace(/[0-9a-f]{16,}/gi, '«…»').slice(0, 160)}`);
     if (ok) {
       // تأكيد للتشخيص بس (ما يغيّر الحكم): الرئيسية بالجلسة
       try {
         const h = await this.get('/index.asp', 10000);
         diag(`[ont] /index.asp بعد الدخول → ${h.status} · ${h.text.length}B · ${isOntLoginPage(h.text) ? 'فورم دخول ⚠️' : 'الرئيسية ✓'}`);
+        // HG8145V5 (١٥ نوفمبر): login.cgi ما رجّع فورم الدخول بس كل الصفحات 403 ← ما دخلنا فعلياً (الفيرموير يشفّر الكلمة PBKDF2)
+        if (h.status === 403) { ok = false; fakeOk = true; }
       } catch {}
     }
     const lk2 = lockInfo(after);
     diag(`[ont] login.cgi → ${res.status} · ${res.text.length}B · ${ok ? 'دخلنا ✓' : `رفض${lk2.times !== undefined ? ` (محاولات ${lk2.times})` : ''}${lk2.leftSecs ? ` · قفل ${lk2.leftSecs}ث` : ''}`}`);
+    if (fakeOk) {
+      // ما نعلّم الكلمة غلط — المشكلة في طريقة الدخول مو الكلمة
+      throw new Error('راوترك بفيرموير جديد يشفّر الكلمة بطريقة ثانية — نضيفها قريب. اضغط «أرسل الخطأ للمطوّر».');
+    }
     if (!ok) {
       await markBadPassword(key, fp);
       if (lk2.leftSecs > 0) throw new Error(`الراوتر قفل الدخول ${lk2.leftSecs} ثانية بعد محاولات غلط — انتظر وجرّب بالكلمة اللي على الملصق`);
