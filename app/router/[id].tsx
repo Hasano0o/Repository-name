@@ -10,7 +10,8 @@ import { SavedRouter, getRouter, deleteRouter } from '../../src/store/routers';
 import { withSession, dropSession, routerWrite } from '../../src/store/sessions';
 import { discoverFeatures } from '../../src/services/autoprog';
 import { discoverySummary, writeLabels } from '../../src/utils/autoprogCore';
-import { Carrier, Signal, Usage, ConnectedDevice, Traffic, RouterDriver, DeviceDetails, DataPlan, ActiveLock } from '../../src/drivers/types';
+import { Carrier, Signal, Usage, ConnectedDevice, Traffic, RouterDriver, DeviceDetails, DataPlan, ActiveLock, OpticReading } from '../../src/drivers/types';
+import { opticLevel } from '../../src/drivers/hgont/parse';
 import {
   Level, LEVEL_COLOR, LEVEL_LABEL, overallLevel, parseBands, parseNrBands, signalScore,
   rsrpLevel, rsrqLevel, sinrLevel, rssiLevel, isNoService } from '../../src/utils/signal';
@@ -169,6 +170,8 @@ export default function RouterDashboard() {
   const [details, setDetails] = useState<DeviceDetails | null>(null);
   const [online, setOnline] = useState<boolean | undefined>();
   const [mode, setMode] = useState<string | undefined>();
+  /** فايبر: استقبال/إرسال الضوء */
+  const [optic, setOptic] = useState<OpticReading | null>(null);
   const [has5g, setHas5g] = useState<boolean | undefined>();
   const [lock, setLock] = useState<ActiveLock | null>(null);
   const [traffic, setTraffic] = useState<Traffic | null>(null);
@@ -304,6 +307,7 @@ export default function RouterDashboard() {
           d.getDataPlan ? d.getDataPlan().catch(() => null) : Promise.resolve(null),
           d.getActiveLock ? d.getActiveLock().catch(() => null) : Promise.resolve(null),
         ]);
+        if (d.getOptic) setOptic(await d.getOptic().catch(() => null));
         const blockedMacs = new Set(blk.map(b => b.mac));
         applySignal(sig);
         setUsage(use);
@@ -337,6 +341,7 @@ export default function RouterDashboard() {
           d.getSignal ? d.getSignal() : Promise.resolve(null),
           d.getTraffic ? d.getTraffic().catch(() => null) : Promise.resolve(null),
         ]);
+        if (d.getOptic) { const o = await d.getOptic().catch(() => null); if (o) setOptic(o); }
         // نواقل 5G (عشان «5G ×2») — بس لما يكون فيه 5G، ما نزيد طلبات على غيره
         const on5g = !!s1 && (s1.nrRsrp !== undefined || !!s1.nrBand);
         const c1 = on5g && d.getCarriers ? await d.getCarriers().catch(() => null) : on5g ? null : [];
@@ -879,12 +884,22 @@ export default function RouterDashboard() {
         {!loading && info && !feat.cellular && (
           // فايبر/كابل (ما فيه إشارة جوال): بدل عداد الإشارة والبرج والترددات — نوع الوصلة والحالة والأجهزة
           <LinearGradient colors={HERO_BG[online === false ? 'poor' : 'good']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.heroX}>
-            <Text style={{ fontSize: 46, textAlign: 'center', marginTop: 6 }}>{online === false ? '⛔' : '🌐'}</Text>
+            {optic?.rx !== undefined ? (() => {
+              const lv = opticLevel(optic.rx);
+              return (
+                <View style={{ alignItems: 'center', marginTop: 6 }}>
+                  <Text style={{ fontSize: 13, color: C.sub }}>استقبال الفايبر</Text>
+                  <Text style={{ fontSize: 40, fontWeight: '800', color: LEVEL_COLOR[lv] }}>{optic.rx.toFixed(1)} <Text style={{ fontSize: 18 }}>dBm</Text></Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: LEVEL_COLOR[lv] }}>{LEVEL_LABEL[lv]} · المقبول من −8 إلى −27</Text>
+                </View>
+              );
+            })() : <Text style={{ fontSize: 46, textAlign: 'center', marginTop: 6 }}>{online === false ? '⛔' : '🌐'}</Text>}
             <Text style={s.heroLine}>{online === false ? 'الراوتر غير متصل بالإنترنت' : `متصل${mode ? ` · ${mode}` : ''}`}</Text>
             <View style={s.heroBox}>
               <View style={s.heroCell}>
-                <Text style={s.heroCellLbl}>الوصلة</Text>
-                <Text style={s.heroCellVal} numberOfLines={1} adjustsFontSizeToFit>{mode || 'فايبر'}</Text>
+                <Text style={s.heroCellLbl}>{optic?.tx !== undefined ? 'الإرسال' : 'الوصلة'}</Text>
+                <Text style={s.heroCellVal} numberOfLines={1} adjustsFontSizeToFit>{optic?.tx !== undefined ? `${optic.tx.toFixed(1)} dBm` : mode || 'فايبر'}</Text>
+                {optic?.tempC !== undefined && <Text style={s.heroCellSub} numberOfLines={1}>حرارة {optic.tempC}°</Text>}
               </View>
               <View style={s.heroDiv} />
               <Pressable style={s.heroCell} onPress={() => router.push(`/device/${info.id}` as Href)}>

@@ -146,3 +146,34 @@ export function uplinkState(html: string): OntUplink | null {
   const mode = pon === 'ge' ? 'كابل إيثرنت (GE)' : pon ? `فايبر ${pon.toUpperCase()}` : 'فايبر';
   return { pon, online, mode };
 }
+
+export interface OntOptic {
+  /** استقبال الضوء (dBm) — المهم: −8 إلى −27 مقبول */
+  rx?: number;
+  /** إرسال الضوء (dBm) — 0.5 إلى 5 */
+  tx?: number;
+  tempC?: number; voltageMv?: number; biasMa?: number;
+  linkOk: boolean;
+}
+
+/**
+ * opticinfo.asp — new stOpticInfo(domain, LinkStatus, TxPower, RxPower, Voltage(mV), Temperature(°C), Bias(mA), RfRx, RfTx, Vendor, SN, Date, TxWL, RxWL, MaxDist, LOS)
+ * موبايلي فايبر HG8245X6 (١٤ نوفمبر): ("…AMP.Optic","ok","2.31 ","-22.44","3274","54","9","--","--","HUAWEI",…,"1310","1490","20","0")
+ */
+export function opticInfo(html: string): OntOptic | null {
+  const a = ctorArgs(html, 'stOpticInfo').find(x => /Optic/.test(x[0] ?? '') && !/OltOptic/.test(x[0] ?? ''));
+  if (!a) return null;
+  const num = (i: number) => { const v = parseFloat((a[i] ?? '').trim()); return Number.isFinite(v) ? v : undefined; };
+  const rx = num(3), tx = num(2);
+  if (rx === undefined && tx === undefined) return { linkOk: false };
+  return { rx, tx, voltageMv: num(4), tempC: num(5), biasMa: num(6), linkOk: /^ok$/i.test((a[1] ?? '').trim()) };
+}
+
+/** تقييم استقبال الضوء (GPON: النطاق المقبول −8 إلى −27 dBm حسب صفحة الجهاز نفسها) */
+export function opticLevel(rx?: number): 'excellent' | 'good' | 'fair' | 'poor' | 'unknown' {
+  if (rx === undefined) return 'unknown';
+  if (rx > -8 || rx < -27) return 'poor';
+  if (rx >= -20) return 'excellent';
+  if (rx >= -24) return 'good';
+  return 'fair';
+}

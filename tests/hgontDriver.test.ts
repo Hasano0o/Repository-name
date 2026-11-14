@@ -147,3 +147,15 @@ test('DG8245V: نوع الوصلة من ontstate.asp (PonMode ge + إيثرنت 
   assert.deepEqual(P.uplinkState(g), { pon: 'gpon', online: false, mode: 'فايبر GPON' });
   assert.equal(P.uplinkState('<html>Waiting</html>'), null);
 });
+
+test('موبايلي فايبر: الإشارة الضوئية من opticinfo.asp (سطر حقيقي ١٤ نوفمبر)', () => {
+  const h = 'var opticInfos = new Array(new stOpticInfo("InternetGatewayDevice.X_HW_DEBUG.AMP.Optic","ok","2\\x2e31\\x20","\\x2d22\\x2e44","3274","54","9","\\x2d\\x2d","\\x2d\\x2d","HUAWEI\\x20\\x20","2513VL307645C\\x20","250523","1310","1490","20","0"),null);'
+    + 'var OltOptics = new Array(new stOLTOpticInfo("InternetGatewayDevice.X_HW_DEBUG.AMP.OltOptic","\\x2d\\x2d","\\x2d\\x2d",""),null);';
+  assert.deepEqual(P.opticInfo(h), { rx: -22.44, tx: 2.31, voltageMv: 3274, tempC: 54, biasMa: 9, linkOk: true });
+  assert.equal(P.opticLevel(-22.44), 'good');
+  assert.equal(P.opticLevel(-17), 'excellent');
+  assert.equal(P.opticLevel(-26), 'fair');
+  assert.equal(P.opticLevel(-29), 'poor');
+  assert.deepEqual(P.opticInfo('new stOpticInfo("InternetGatewayDevice.X_HW_DEBUG.AMP.Optic","--","--","--","--","--","--")'), { linkOk: false });
+  assert.equal(P.opticInfo('<html>Waiting</html>'), null);
+});

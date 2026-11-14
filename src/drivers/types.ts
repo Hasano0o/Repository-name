@@ -106,6 +106,9 @@ export interface ModemSignal {
   rsrp?: number; rsrq?: number; sinr?: number; rssi?: number;
 }
 
+/** قراءة الفايبر الضوئية (هواوي ONT) */
+export interface OpticReading { rx?: number; tx?: number; tempC?: number; voltageMv?: number; biasMa?: number; linkOk: boolean }
+
 export interface DeviceDetails {
   model?: string; imei?: string; software?: string; hardware?: string;
   wanIp?: string; dns?: string; operator?: string; simStatus?: string;
@@ -326,6 +329,8 @@ export interface RouterDriver {
   /** تشغيل/إطفاء مودم إضافي (key من getModems) — يتأكد بالقراءة بعده */
   setModemPower?(key: string, on: boolean): Promise<void>;
   getDevices?(): Promise<ConnectedDevice[]>;
+  /** الإشارة الضوئية للفايبر (Rx/Tx dBm) — null لو الجهاز على كابل إيثرنت أو الصفحة ما ردت */
+  getOptic?(): Promise<OpticReading | null>;
   getBlockedDevices?(): Promise<ConnectedDevice[]>;
   blockDevice?(mac: string, block: boolean, name?: string): Promise<void>;
   getUsage?(): Promise<Usage>;

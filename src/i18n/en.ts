@@ -4,6 +4,7 @@
  * نص ما له ترجمة يطلع عربي — فزيد هنا بأي وقت.
  */
 export const EN: Record<string, string> = {
+  'استقبال الفايبر': 'Fiber receive (Rx)',
   'الراوتر غير متصل بالإنترنت': 'The router isn\'t connected to the internet',
   'الوصلة': 'Link',
   'فايبر': 'Fiber',
@@ -2028,6 +2029,8 @@ export const EN: Record<string, string> = {
 };
 
 export const EN_PATTERNS: Record<string, string> = {
+  '{0} · المقبول من −8 إلى −27': '{0} · acceptable −8 to −27',
+  'حرارة {0}°': 'Temp {0}°',
   'متصل{0}': 'Connected{0}',
   'فايبر {0}': 'Fiber {0}',
   'التذبذب {0}ms{1} — غالباً من خط مزوّد الخدمة أو ضغط وقت الذروة': 'Jitter {0}ms{1} — usually from the provider\'s line or peak-hour load',

@@ -7,7 +7,7 @@
  * ⚠️ DG8245V يقفل بعد ٣ محاولات غلط (errloginlockNum='3'، LockTime 60) ← محاولة وحدة لكل دخول،
  *    والكلمة المرفوضة تنحفظ وما نعيدها لحالنا (نفس ZTE).
  */
-import { RouterDriver, Capability, DeviceDetails, NetworkInfo, ConnectedDevice } from '../types';
+import { RouterDriver, Capability, DeviceDetails, NetworkInfo, ConnectedDevice, OpticReading } from '../types';
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import { http } from '../http';
@@ -15,7 +15,7 @@ import { diag } from '../../services/diag';
 import { isLanHost } from '../../utils/host';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import type { ModelProfile } from '../models';
-import { isOntLoginPage, tokenFromPage, tokenFromReply, productName, loginLanguage, lockInfo, loginBody, pageSendsLanguage, cookieFrom, deviceInfo, userDevices, uplinkState } from './parse';
+import { isOntLoginPage, tokenFromPage, tokenFromReply, productName, loginLanguage, lockInfo, loginBody, pageSendsLanguage, cookieFrom, deviceInfo, userDevices, uplinkState, opticInfo } from './parse';
 
 export class HuaweiOntDriver implements RouterDriver {
   // ⚠️ المعرّف بدون كلمة «huawei»: قاعدة كرت FULL تعامل أي «huawei» كراوتر شريحة (ما يطلع إلا لموديل مجهول)
@@ -206,6 +206,13 @@ export class HuaweiOntDriver implements RouterDriver {
     try { info = deviceInfo((await this.fetchAuthPage('/html/ssmp/deviceinfo/deviceinfo.asp')).text); } catch {}
     if (!info) return { model: this.name, software: 'hgont-pages-2' };
     return { model: info.model || this.name, software: info.software, hardware: info.hardware, imei: info.serial };
+  }
+
+  /** الإشارة الضوئية — opticinfo.asp (موبايلي فايبر HG8245X6 ١٤ نوفمبر). على GE (DG8245V) الصفحة ما ترد ← null */
+  async getOptic(): Promise<OpticReading | null> {
+    const r = await this.fetchAuthPage('/html/amp/opticinfo/opticinfo.asp');
+    if (!r.ok) return null;
+    return opticInfo(r.text);
   }
 
   /** الأجهزة المتصلة (Online بس) — GetLanUserDevInfo.asp (قراءة بس؛ الحظر ما شفنا أمره) */
