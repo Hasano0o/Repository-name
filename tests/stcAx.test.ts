@@ -20,7 +20,7 @@ const realSet = setTimeout;
 const C: any = ncrypto;
 const sha = (s: string) => C.createHash('sha256').update(s).digest('hex');
 
-function router(opts: { pass?: string; path?: string; lazy?: boolean } = {}) {
+function router(opts: { pass?: string; path?: string; lazy?: boolean; noBand?: boolean } = {}) {
   const st: any = { authed: false, lock: { cell_cat: '', cell_band: '', cell_arfun: '', cell_pci: '' }, sent: [] as any[], rebooted: false };
   const svc = opts.path ?? 'cgi-bin/luci/svcrunner';
   const res = (status: number, text: string) => ({ ok: status < 400, status, url: 'http://192.168.1.1/', headers: { get: () => null }, text: async () => text } as any);
@@ -52,6 +52,7 @@ function router(opts: { pass?: string; path?: string; lazy?: boolean } = {}) {
     if (b.namespace === 'lock_cell') {
       if (b.name === 'get') {
         if (st.pending && ++st.gets >= 2) { st.lock = st.pending; st.pending = null; }
+        if (opts.noBand) return R({ cell_arfun: st.lock.cell_arfun || '0', cell_pci: st.lock.cell_pci || '0', cell_cat: st.lock.cell_cat || '7' });
         return R({ ...st.lock, cell_cat: st.lock.cell_cat ? Number(st.lock.cell_cat) : '' });
       }
       if (b.name === 'set' && opts.lazy) { st.gets = 0; st.pending = { cell_cat: b.payload.cell_act, cell_band: b.payload.cell_band, cell_arfun: b.payload.cell_arfcn, cell_pci: b.payload.cell_pci }; return R({ result: 'ok' }); }
@@ -98,7 +99,7 @@ test('STC AX3600: تثبيت ترددات 4G ثم 5G ثم برج ثم فك · م
   const d = driver();
   await d.detect('192.168.1.1'); await d.login('192.168.1.1', 'admin', '9eTest');
   await d.setBand([3, 28]);
-  assert.deepEqual(st.lock, { cell_cat: '7', cell_band: '3,28', cell_arfun: '', cell_pci: '' });
+  assert.deepEqual(st.lock, { cell_cat: '7', cell_band: '3,28', cell_arfun: '0', cell_pci: '0' });
   let c = await d.getBandConfig();
   assert.deepEqual(c.locked, [3, 28]); assert.equal(c.lockKinds.lte, 'band');
   await d.setBand('keep', [78]);
@@ -119,4 +120,18 @@ test('STC AX3600: الراوتر يطبّق التثبيت بعد ثواني و 
   await d.detect('192.168.1.1'); await d.login('192.168.1.1', 'admin', '9eTest');
   await d.setBand([3]);
   assert.equal(st.lock.cell_band, '3');
+});
+
+test('STC AX3600: فيرموير get بدون cell_band (تقرير ٢١:٣٢) ← نرسل 0/0 مثل الصفحة، نقبل بالنوع، ونعرض الترددات من الجلسة', async () => {
+  const st = router({ noBand: true });
+  const d = driver();
+  await d.detect('192.168.1.1'); await d.login('192.168.1.1', 'admin', '9eTest');
+  await d.setBand([3]);
+  assert.equal(st.lock.cell_band, '3'); assert.equal(st.lock.cell_arfun, '0'); assert.equal(st.lock.cell_pci, '0');
+  const c = await d.getBandConfig();
+  assert.deepEqual(c.locked, [3]); assert.equal(c.lockKinds.lte, 'band');
+  assert.equal(await d.getCellLock(), null);
+  await d.setBand([], []);
+  assert.ok(st.sent.includes('lock_cell/clr'));
+  assert.deepEqual((await d.getBandConfig()).locked, []);
 });

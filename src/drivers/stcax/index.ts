@@ -198,19 +198,23 @@ export class StcAxDriver implements RouterDriver {
 
   async getBandConfig(): Promise<BandConfig> {
     const l = await this.lock();
-    const lte = l.cat === '7', nr = l.cat === '11';
+    if (!l.bands.length && this.lastBands && Number(this.lastBands.cat) === Number(l.cat)) l.bands = this.lastBands.bands;
+    const lte = Number(l.cat) === 7 && l.bands.length > 0, nr = Number(l.cat) === 11 && l.bands.length > 0;
     return {
       supported: AX_LTE, nrSupported: AX_NR,
       locked: lte ? l.bands : [], nrLocked: nr ? l.bands : [],
       mode: '00', modes: [], nrLockable: true,
       lockKinds: {
-        lte: lte && l.bands.length ? (l.pci ? 'cell' : 'band') : 'none',
-        nr: nr && l.bands.length ? (l.pci ? 'cell' : 'band') : 'none',
+        lte: lte ? (l.pci && l.pci !== '0' ? 'cell' : 'band') : 'none',
+        nr: nr ? (l.pci && l.pci !== '0' ? 'cell' : 'band') : 'none',
       },
     };
   }
 
-  private async setLock(cat: '7' | '11', bands: number[], arfcn = '', pci = ''): Promise<void> {
+  /** آخر ترددات ثبّتناها في هالجلسة — فيرموير STC ما يرجّع cell_band في get (تقرير ٢١:٣٢) فنعرضها من هنا */
+  private lastBands: { cat: string; bands: number[] } | null = null;
+  // تثبيت ترددات بس: الصفحة ترسل قيم الخانتين من get، وget عند هالفيرموير = "0" و "0" (تقرير ٢١:٣٢) — نرسل "0" مثلها بدل الفاضي
+  private async setLock(cat: '7' | '11', bands: number[], arfcn = '0', pci = '0'): Promise<void> {
     const list = cat === '7' ? AX_LTE : AX_NR;
     const bad = bands.filter(b => !list.includes(b));
     if (bad.length) throw noChange(`صفحة الراوتر ما فيها ${cat === '7' ? 'B' : 'n'}${bad.join(', ')} — ما غيّرنا شي.`);
@@ -228,7 +232,17 @@ export class StcAxDriver implements RouterDriver {
       lastRaw = JSON.stringify(raw ?? null);
       diag(`[stc-ax] lock_cell/get (${i + 1}) ← ${JSON.stringify(raw ?? null).slice(0, 200)}`);
       now = axLock(raw);
-      if (Number(now.cat) === Number(cat) && [...now.bands].sort((a, b) => a - b).join(',') === want && (!pci || now.pci === pci)) return;
+      const cellOk = !pci || pci === '0' || now.pci === pci;
+      // الفيرموير ما يرجّع cell_band أصلاً ← ما نقدر نتأكد من الترددات؛ نتأكد من النوع (والبرج) ونقبل «ok» الراوتر
+      if (raw && typeof raw === 'object' && !('cell_band' in raw)) {
+        if (Number(now.cat) === Number(cat) && cellOk) {
+          diag('[stc-ax] get ما فيه cell_band — قبلنا بـ result ok + نوع الشبكة');
+          this.lastBands = { cat, bands: [...bands] };
+          return;
+        }
+        continue;
+      }
+      if (Number(now.cat) === Number(cat) && [...now.bands].sort((a, b) => a - b).join(',') === want && cellOk) { this.lastBands = { cat, bands: [...bands] }; return; }
     }
     // الرد الخام في الرسالة نفسها — يطلع في صورة العضو بدون ما نحتاج تقرير (تقرير ١٤ نوفمبر ٢١:٠٣: «يقول: 7 · —»)
     throw new Error(`الراوتر قبل الأمر بس الإعداد ما تغيّر — set: ${JSON.stringify(p ?? null).slice(0, 60)} · get: ${lastRaw.slice(0, 110)}`);
@@ -236,6 +250,7 @@ export class StcAxDriver implements RouterDriver {
   private async clear(): Promise<void> {
     const p = await this.call({ namespace: 'lock_cell', name: 'clr', payload: { clr_lock_cell: '' } }, 30000);
     diag(`[stc-ax] lock_cell/clr ← ${JSON.stringify(p ?? null).slice(0, 200)}`);
+    this.lastBands = null;
     if (String(p?.status) !== '1') throw new Error('الراوتر رفض فك التثبيت');
   }
 
@@ -248,7 +263,7 @@ export class StcAxDriver implements RouterDriver {
     const cur = await this.lock();
     const unlock4 = bands !== 'keep' && cur.cat === '7';
     const unlock5 = nrBands !== undefined && cur.cat === '11';
-    if ((unlock4 || unlock5 || (bands !== 'keep' && nrBands !== undefined)) && cur.bands.length) await this.clear();
+    if ((unlock4 || unlock5 || (bands !== 'keep' && nrBands !== undefined)) && (cur.bands.length || this.lastBands)) await this.clear();
   }
 
   async lockCell(t: CellLockTarget): Promise<void> {
@@ -258,11 +273,11 @@ export class StcAxDriver implements RouterDriver {
   }
   async unlockCell(): Promise<void> {
     const cur = await this.lock();
-    if (cur.bands.length || cur.pci) await this.clear();
+    if (cur.bands.length || (cur.pci && cur.pci !== '0') || this.lastBands) await this.clear();
   }
   async getCellLock(): Promise<CellLockState | null> {
     const l = await this.lock();
-    if (!l.pci) return null;
+    if (!l.pci || l.pci === '0') return null;
     return { pci: l.pci, arfcn: l.arfcn, band: l.bands[0], tech: l.cat === '11' ? 'NR' : 'LTE' };
   }
 }
