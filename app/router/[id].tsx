@@ -691,7 +691,7 @@ export default function RouterDashboard() {
   // «منقطع» بس لو ما فيه قراءة برج — بعض الرواترات تقول disconnected والأبراج شغالة
   const disconnected = online === false && signal?.rsrp === undefined && signal?.nrRsrp === undefined;
   // الأبراج طايحة (خدمة محدودة/لا خدمة) — نعرض زر «رجّع الإشارة» الأحمر بدل النصيحة
-  const noService = !error && isNoService(signal, online, mode);
+  const noService = feat.cellular && !error && isNoService(signal, online, mode);
   const showCards = !noService && techRows(signal).some(r => r.rsrp !== undefined);
   // التنبيه يطلع بس لراوتر يدعم 5G ومقفول على 4G — راوتر 4G فقط ما نزعجه
   const fourGOnly = mode === '03' && has5g !== false;
@@ -876,7 +876,34 @@ export default function RouterDashboard() {
           </LinearGradient>
         )}
 
-        {!loading && info && (
+        {!loading && info && !feat.cellular && (
+          // فايبر/كابل (ما فيه إشارة جوال): بدل عداد الإشارة والبرج والترددات — نوع الوصلة والحالة والأجهزة
+          <LinearGradient colors={HERO_BG[online === false ? 'poor' : 'good']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.heroX}>
+            <Text style={{ fontSize: 46, textAlign: 'center', marginTop: 6 }}>{online === false ? '⛔' : '🌐'}</Text>
+            <Text style={s.heroLine}>{online === false ? 'الراوتر غير متصل بالإنترنت' : `متصل${mode ? ` · ${mode}` : ''}`}</Text>
+            <View style={s.heroBox}>
+              <View style={s.heroCell}>
+                <Text style={s.heroCellLbl}>الوصلة</Text>
+                <Text style={s.heroCellVal} numberOfLines={1} adjustsFontSizeToFit>{mode || 'فايبر'}</Text>
+              </View>
+              <View style={s.heroDiv} />
+              <Pressable style={s.heroCell} onPress={() => router.push(`/device/${info.id}` as Href)}>
+                <Text style={s.heroCellLbl}>الأجهزة</Text>
+                <Text style={s.heroCellVal} numberOfLines={1}>{feat.devices ? `${devices.length}` : '—'}</Text>
+                <Text style={s.heroCellSub} numberOfLines={1}>متصل الحين</Text>
+              </Pressable>
+              <View style={s.heroDiv} />
+              <View style={s.heroCell}>
+                <Text style={s.heroCellLbl}>الجهاز</Text>
+                <Text style={s.heroCellVal} numberOfLines={1} adjustsFontSizeToFit>{details?.model || '—'}</Text>
+                {!!details?.software && !details.software.startsWith('hgont-') && <Text style={s.heroCellSub} numberOfLines={1} adjustsFontSizeToFit>{details.software}</Text>}
+              </View>
+            </View>
+            {!!traffic && <Text style={s.heroSub}>السرعة الحين {fmtRate(traffic.downBytesPerSec)}</Text>}
+          </LinearGradient>
+        )}
+
+        {!loading && info && feat.cellular && (
           <LinearGradient colors={HERO_BG[noService ? 'poor' : level]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.heroX, showCards && { paddingHorizontal: 10, paddingTop: 10 }]}>
             {showCards
               ? <>

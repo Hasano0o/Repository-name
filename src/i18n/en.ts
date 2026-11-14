@@ -4,6 +4,13 @@
  * نص ما له ترجمة يطلع عربي — فزيد هنا بأي وقت.
  */
 export const EN: Record<string, string> = {
+  'الراوتر غير متصل بالإنترنت': 'The router isn\'t connected to the internet',
+  'الوصلة': 'Link',
+  'فايبر': 'Fiber',
+  'متصل الحين': 'connected now',
+  'كابل إيثرنت (GE)': 'Ethernet cable (GE)',
+  'الخط متذبذب الحين': 'The line is unstable right now',
+  'وصّل جهاز اللعب بكيبل، وأعد تشغيل الراوتر لو استمر — ولو يتكرر كل يوم كلّم مزوّد الخدمة': 'Plug your gaming device in with a cable and restart the router if it continues — if it happens every day, call your provider',
   // ═══ عام ═══
   'إلغاء': 'Cancel',
   'حذف': 'Delete',
@@ -2021,6 +2028,9 @@ export const EN: Record<string, string> = {
 };
 
 export const EN_PATTERNS: Record<string, string> = {
+  'متصل{0}': 'Connected{0}',
+  'فايبر {0}': 'Fiber {0}',
+  'التذبذب {0}ms{1} — غالباً من خط مزوّد الخدمة أو ضغط وقت الذروة': 'Jitter {0}ms{1} — usually from the provider\'s line or peak-hour load',
   // ═══ أوقات الزحمة (RushCard) ═══
   'الزحمة عندك من {0} إلى {1} — البنق يرتفع {2}٪': 'Your rush hours: {0} to {1} — ping goes up {2}%',
   'أهدى وقت: من {0} إلى {1} (بنق {2}ms بدل {3}ms)': 'Quietest: {0} to {1} ({2}ms instead of {3}ms)',
