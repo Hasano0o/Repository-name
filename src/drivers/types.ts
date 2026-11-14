@@ -279,6 +279,8 @@ export interface RouterDriver {
    * فاضي/غير موجود = ما فيه شي نحتاجه. (FiberHome الجديد: main.html — ٣١ أكتوبر)
    */
   afterLoginPages?(): string[];
+  /** ترويسات الجلسة (كوكي يدوي) للجامع لما الدرايفر ما يستخدم جرة النظام — هواوي ONT */
+  authHeaders?(): Record<string, string>;
   /**
    * يدخل قبل سحب صفحات بعد الدخول (FULL / AUTH) — للراوترات اللي ما تدخل إلا وقت الكتابة (ZTE zwrt):
    * سيرفر الصفحة يعطي كوكي الجلسة مع web_login، وبدونه صفحات /tmpl/auth و /js/auth ترد 404/405.

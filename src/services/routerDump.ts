@@ -211,6 +211,8 @@ export function originOf(url: string): string {
   return url.match(/^https?:\/\/[^/]+/i)?.[0] ?? '';
 }
 
+/** ترويسات جلسة من الدرايفر (كوكي يدوي — هواوي ONT) للصفحات اللي بعد الدخول؛ فاضي = جرة النظام */
+let authHdr: Record<string, string> = {};
 async function get(url: string, ms = 6000, method: 'GET' | 'POST' = 'GET'): Promise<{ ok: boolean; text: string; type: string; status: number }> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
@@ -218,7 +220,8 @@ async function get(url: string, ms = 6000, method: 'GET' | 'POST' = 'GET'): Prom
     // Referer = صفحة الراوتر نفسها: TP-Link (Archer MR600 — ٢٧ أكتوبر) يرفض/يرجّع صفحة الدخول لأي ملف بدونه،
     // فوصلنا index.html بس وضاعت encrypt.js / lib.js / oid_str.js / jquery.tp.min.js
     // credentials: الكوكي من دخول التطبيق (للصفحات اللي بعد الدخول — afterLoginPages)
-    const r = await fetch(url, { method, signal: ctrl.signal, cache: 'no-store', credentials: 'include', headers: { Referer: originOf(url) + '/' } } as any);
+    const manual = !!authHdr.Cookie;
+    const r = await fetch(url, { method, signal: ctrl.signal, cache: 'no-store', credentials: manual ? 'omit' : 'include', headers: { Referer: originOf(url) + '/', ...authHdr } } as any);
     const type = r.headers.get('content-type') || '';
     const text = await r.text();
     return { ok: r.ok, text, type, status: r.status };
@@ -253,8 +256,9 @@ function topMisses(m: string[], n = 25): string[] {
   return [...m.filter(x => /\.html?\b/.test(x)), ...m.filter(x => !/\.html?\b/.test(x))].slice(0, n);
 }
 
-export async function collectRouterFiles(host: string, onStep?: (n: number) => void, opts?: { start?: string[]; afterLogin?: boolean }): Promise<{ files: DumpFile[]; skipped: string[] }> {
+export async function collectRouterFiles(host: string, onStep?: (n: number) => void, opts?: { start?: string[]; afterLogin?: boolean; headers?: Record<string, string> }): Promise<{ files: DumpFile[]; skipped: string[] }> {
   if (!isLanHost(host)) throw new Error('العنوان لازم يكون محلي');
+  authHdr = opts?.headers ?? {};
   const base = 'http://' + host.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   const files: DumpFile[] = [];
   const skipped: string[] = [];

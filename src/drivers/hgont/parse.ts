@@ -66,7 +66,22 @@ export function b64(s: string): string {
   return out;
 }
 
-export function loginBody(user: string, pw: string, lang: string, token: string): string {
+/** الصفحة نفسها ترسل Language؟ (LG8245X6/HG8245X6 إيه · DG8245V لا — صفحة ١٤ نوفمبر) */
+export function pageSendsLanguage(html: string): boolean {
+  return /addParameter\(\s*['"]Language['"]/.test(html);
+}
+
+export function loginBody(user: string, pw: string, lang: string, token: string, withLang = true): string {
   const e = encodeURIComponent;
-  return `UserName=${e(user)}&PassWord=${e(b64(pw))}&Language=${e(lang)}&x.X_HW_Token=${e(token)}`;
+  return `UserName=${e(user)}&PassWord=${e(b64(pw))}${withLang ? `&Language=${e(lang)}` : ''}&x.X_HW_Token=${e(token)}`;
+}
+
+/** كوكي الجلسة من رأس set-cookie (هواوي ONT: «Cookie=sid=…:Language:…:id=1; path=/») ← «اسم=قيمة» بس */
+export function cookieFrom(setCookie: string): string {
+  const out: string[] = [];
+  for (const part of setCookie.split(/,(?=\s*[A-Za-z0-9_.-]+=)/)) {
+    const nv = part.split(';')[0].trim();
+    if (/^[A-Za-z0-9_.-]+=/.test(nv) && !/=\s*$/.test(nv) && !/=deleted$/i.test(nv)) out.push(nv);
+  }
+  return out.join('; ');
 }

@@ -54,17 +54,21 @@ function ont(page: string, opts: { user?: string; pw?: string } = {}) {
     const u = new URL(url);
     const m = (init?.method ?? 'GET').toUpperCase();
     log.push(`${m} ${u.pathname}`);
-    const res = (text: string, status = 200) => ({ ok: true, status, url, headers: { get: () => null }, text: async () => text } as any);
+    const res = (text: string, status = 200, sc = '') => ({ ok: true, status, url, headers: { get: (k: string) => (k.toLowerCase() === 'set-cookie' && sc ? sc : null) }, text: async () => text } as any);
+    // كوكي يدوي: الطلبات لازم credentials: 'omit' (جرة النظام كانت تغطي على كوكي الدخول)
+    assert.equal(init?.credentials, 'omit');
     if (u.pathname === '/asp/GetRandCount.asp') return res('﻿0123456789abcdef0123456789abcdef');
     if (u.pathname === '/login.cgi') {
       lastBody = String(init?.body ?? ''); lastCookie = String(init?.headers?.Cookie ?? '');
       const q = new URLSearchParams(lastBody);
       const okUser = q.get('UserName') === (opts.user ?? 'user');
       const okPw = Buffer.from(q.get('PassWord') ?? '', 'base64').toString() === (opts.pw ?? 'FSY49JFW');
-      logged = okUser && okPw && !!q.get('x.X_HW_Token');
-      return res(logged ? '<script>window.location="/index.asp";</script>' : page.replace("var LoginTimes = '0'", "var LoginTimes = '1'"));
+      logged = okUser && okPw && !!q.get('x.X_HW_Token') && /^Cookie=body:Language:\w+:id=-1$/.test(lastCookie);
+      return logged ? res('<script>window.location="/index.asp";</script>', 200, 'Cookie=sid=S1D:Language:english:id=1; path=/')
+        : res(page.replace("var LoginTimes = '0'", "var LoginTimes = '1'"));
     }
-    if (u.pathname === '/') return res(logged ? '<html><frameset><frame src="/index.asp"></frameset></html>' : page);
+    const sess = logged && String(init?.headers?.Cookie ?? '').includes('sid=S1D');
+    if (u.pathname === '/') return res(sess ? '<html><frameset><frame src="/index.asp"></frameset></html>' : page);
     return res('', 404);
   };
   return { log, body: () => lastBody, cookie: () => lastCookie };
@@ -80,6 +84,8 @@ test('DG8245V: الرمز من الصفحة ← login.cgi ← دخلنا', async
   assert.ok(!r.log.includes('POST /asp/GetRandCount.asp'), 'الرمز من الصفحة');
   assert.match(r.body(), /x\.X_HW_Token=c4400f3fbfc170ec9e182fb307607f56/);
   assert.equal(r.cookie(), 'Cookie=body:Language:english:id=-1');
+  assert.ok(!/Language=/.test(r.body()), 'صفحة DG8245V ما ترسل Language');
+  assert.deepEqual(d.authHeaders(), { Cookie: 'Cookie=sid=S1D:Language:english:id=1' }, 'الجلسة للجامع');
   assert.equal((await d.identify()).label, 'هواوي فايبر DG8245V');
 });
 
@@ -89,6 +95,7 @@ test('HG8245X6 (موبايلي): الرمز من GetRandCount.asp (بدون BOM)
   await d.login('192.168.100.1', 'user', 'FSY49JFW', { fresh: true });
   assert.ok(r.log.includes('POST /asp/GetRandCount.asp'));
   assert.match(r.body(), /x\.X_HW_Token=0123456789abcdef0123456789abcdef/);
+  assert.match(r.body(), /Language=/, 'صفحة HG8245X6 ترسل Language');
 });
 
 test('كلمة غلط ← رسالة اسم المستخدم من الملصق، وما نعيدها بالخلفية (يقفل بعد ٣)', async () => {

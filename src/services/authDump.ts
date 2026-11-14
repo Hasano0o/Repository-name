@@ -24,7 +24,7 @@ export async function sendAfterLoginPagesFor(r: SavedRouter, onStep?: (msg: stri
   await d.prepareAfterLogin?.().catch(() => {});
   const model = `${(r.driverName || r.name || r.driverId).slice(0, 40)}-AUTH`;
   onStep?.('نسحب صفحة الإعدادات…');
-  const { files, skipped } = await collectRouterFiles(r.host, n => onStep?.(`نسحب صفحة الإعدادات… ${n}`), { start: pages, afterLogin: true });
+  const { files, skipped } = await collectRouterFiles(r.host, n => onStep?.(`نسحب صفحة الإعدادات… ${n}`), { start: pages, afterLogin: true, headers: d.authHeaders?.() });
   // الراوتر ممكن يحوّل main.html لصفحة البداية/الدخول (302 يتبعه fetch لحاله) ← هذا مو صفحة الإعدادات
   const loginish = (t: string) => t.length < 6000 && /frmLoad\s*\(|login\.html\?|js\/login\.js|DO_WEB_LOGIN/.test(t);
   const got = pages.filter(p => files.some(f => f.p === p && !loginish(f.t)));
@@ -100,7 +100,7 @@ export async function sendFullRouterFiles(r: SavedRouter, fp: string, onStep?: (
   // من "/" (مثل «جهاز جديد» بالفحوص الحية) + صفحات بعد الدخول لو الدرايفر يعرفها — والكوكي من جلسة التطبيق
   const start = ['/', ...(d.afterLoginPages?.() ?? [])];
   if (start.length > 1) await d.prepareAfterLogin?.().catch(() => {});
-  const { files, skipped } = await collectRouterFiles(r.host, n => onStep?.(`نجمع ملفات الراوتر… ${n}`), { start });
+  const { files, skipped } = await collectRouterFiles(r.host, n => onStep?.(`نجمع ملفات الراوتر… ${n}`), { start, headers: d.authHeaders?.() });
   const extra: DumpFile[] = [
     { p: '/_bandly/router.txt', t: scrub([`driver: ${r.driverId}`, `model: ${label}`, `profile: ${prof?.id ?? '—'}`, `fingerprint: ${fp}`].join('\n')) },
     { p: '/_bandly/diag.txt', t: scrub(diagText('ملفات الراوتر الشاملة', { driverName: label })) },

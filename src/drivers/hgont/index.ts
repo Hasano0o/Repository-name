@@ -15,7 +15,7 @@ import { diag } from '../../services/diag';
 import { isLanHost } from '../../utils/host';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import type { ModelProfile } from '../models';
-import { isOntLoginPage, tokenFromPage, tokenFromReply, productName, loginLanguage, lockInfo, loginBody } from './parse';
+import { isOntLoginPage, tokenFromPage, tokenFromReply, productName, loginLanguage, lockInfo, loginBody, pageSendsLanguage, cookieFrom } from './parse';
 
 export class HuaweiOntDriver implements RouterDriver {
   // ⚠️ المعرّف بدون كلمة «huawei»: قاعدة كرت FULL تعامل أي «huawei» كراوتر شريحة (ما يطلع إلا لموديل مجهول)
@@ -28,10 +28,26 @@ export class HuaweiOntDriver implements RouterDriver {
   private logged = false;
 
   private base(host = this.host) { return 'http://' + host.replace(/^https?:\/\//, '').replace(/\/+$/, ''); }
-  private async get(path: string, timeout = 8000) {
-    const r = await http(this.base() + path, { method: 'GET' }, timeout);
-    return { status: r.status, text: await r.text() };
+  /**
+   * كوكي يدوي (credentials: 'omit') — جرة النظام كانت تغطي على «Cookie=body:Language:…:id=-1» حقت الدخول
+   * (الصفحة تمسح الكوكيز وتكتب هذي قبل login.cgi). ١٤ نوفمبر: DG8245V بكلمة الملصق الصحيحة + LG8245X6 + HS8145C5 كلهم رفض.
+   * الجلسة بعد الدخول من set-cookie، ونعطيها للجامع (authHeaders) عشان صفحات ما بعد الدخول.
+   */
+  private cookie = '';
+  private async req(path: string, init: RequestInit = {}, timeout = 8000, cookieOverride?: string) {
+    const ck = cookieOverride ?? this.cookie;
+    const headers = { ...(init.headers as Record<string, string> | undefined), ...(ck ? { Cookie: ck } : {}) };
+    const r = await http(this.base() + path, { ...init, headers, credentials: 'omit' } as RequestInit, timeout);
+    let sc = '';
+    try { sc = r.headers?.get?.('set-cookie') || ''; } catch {}
+    const c = sc ? cookieFrom(sc) : '';
+    if (c) this.cookie = c;
+    return { status: r.status, text: await r.text(), setCookie: !!c };
   }
+  private async get(path: string, timeout = 8000) {
+    return this.req(path, { method: 'GET' }, timeout);
+  }
+  authHeaders(): Record<string, string> { return this.cookie ? { Cookie: this.cookie } : {}; }
 
   async detect(host: string): Promise<boolean> {
     if (!isLanHost(host)) return false;
@@ -64,6 +80,7 @@ export class HuaweiOntDriver implements RouterDriver {
     if (!isLanHost(host)) throw new Error('العنوان لازم يكون محلي (192.168 / 10 / 172)');
     this.host = host;
     this.logged = false;
+    this.cookie = '';
     const user = (username || '').trim() || 'admin';
     const fp = bytesToHex(sha256(utf8ToBytes(`ont:${user}:${password}`)));
     const key = 'ont:' + host;
@@ -84,34 +101,34 @@ export class HuaweiOntDriver implements RouterDriver {
     let token = tokenFromPage(page);
     if (!token) {
       try {
-        const r = await http(this.base() + '/asp/GetRandCount.asp', {
+        const r = await this.req('/asp/GetRandCount.asp', {
           method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' }, body: '',
         }, 8000);
-        token = tokenFromReply(await r.text());
+        token = tokenFromReply(r.text);
       } catch {}
     }
     diag(`[ont] الرمز: ${token ? (tokenFromPage(page) ? 'من الصفحة' : 'GetRandCount') : 'ما لقيناه'} · ${this.model || '؟'} · القفل بعد ${lk.maxTries ?? '؟'}`);
     if (!token) throw new Error('صفحة الدخول في راوترك مختلفة عن اللي نعرفه — اضغط «أرسل الخطأ للمطوّر» عشان نضيفها');
     const lang = loginLanguage(page);
-    let res: { status: number; text: string };
+    const withLang = pageSendsLanguage(page);
+    let res: { status: number; text: string; setCookie: boolean };
     try {
-      const r = await http(this.base() + '/login.cgi', {
+      // نفس صفحة الجهاز: تمسح الكوكيز وتكتب document.cookie = "Cookie=body:Language:<لغة>:id=-1" — ولا شي غيره
+      res = await this.req('/login.cgi', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          // نفس صفحة الجهاز: document.cookie = "Cookie=body:Language:<لغة>:id=-1"
-          Cookie: `Cookie=body:Language:${lang}:id=-1`,
-          Referer: this.base() + '/',
-        },
-        body: loginBody(user, password, lang, token),
-      }, 15000);
-      res = { status: r.status, text: await r.text() };
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Referer: this.base() + '/' },
+        body: loginBody(user, password, lang, token, withLang),
+      }, 15000, `Cookie=body:Language:${lang}:id=-1`);
+      diag(`[ont] login.cgi: Language ${withLang ? 'مع' : 'بدون'} · set-cookie ${res.setCookie ? '✓' : '✗'}`);
     } catch (e) {
       throw new Error(`الراوتر ما رد على الدخول (POST /login.cgi) — ${String((e as any)?.message ?? e).slice(0, 60)}`);
     }
     // بعد الدخول: «/» يرجع الصفحة الرئيسية — لو رجع فورم الدخول = ما دخلنا
     let after = res.text;
-    if (!isOntLoginPage(after)) { try { after = (await this.get('/', 10000)).text; } catch {} }
+    // رد login.cgi نفسه: فشل = صفحة الدخول بعدّاد المحاولات. نجاح = تحويل للرئيسية.
+    // لو مسكنا كوكي الجلسة نتأكد بـ «/»؛ لو ما مسكناه (الجوال ما عطانا set-cookie) نصدّق رد login.cgi بدل ما نحكم على كلمة صحيحة إنها غلط
+    if (!isOntLoginPage(after) && res.setCookie) { try { after = (await this.get('/', 10000)).text; } catch {} }
+    if (!res.setCookie && !isOntLoginPage(after)) diag('[ont] ما وصلنا set-cookie — صدّقنا رد login.cgi');
     const ok = !isOntLoginPage(after);
     const lk2 = lockInfo(after);
     diag(`[ont] login.cgi → ${res.status} · ${res.text.length}B · ${ok ? 'دخلنا ✓' : `رفض${lk2.times !== undefined ? ` (محاولات ${lk2.times})` : ''}${lk2.leftSecs ? ` · قفل ${lk2.leftSecs}ث` : ''}`}`);
