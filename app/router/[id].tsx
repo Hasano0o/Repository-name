@@ -54,6 +54,7 @@ import { useAssistantUnlocked } from '../../src/assistant/store';
 import { WelcomeTour } from '../../src/ui/WelcomeTour';
 
 import { sheet, tr } from '../../src/i18n';import { LabelCard } from '../../src/ui/LabelCard';
+import { rememberBands } from '../../src/store/bandsAvail';
 
 interface Features {
   bands: boolean; sms: boolean; block: boolean; reboot: boolean; devices: boolean; cells: boolean; details: boolean; plan: boolean; network: boolean; carriers: boolean; antenna: boolean;
@@ -282,6 +283,7 @@ export default function RouterDashboard() {
     try {
       await withSession(r, async d => {
         setFeat(featuresOf(d));
+        rememberBands(r.id, !!d.getBandConfig);
         setAuthPages(!!d.afterLoginPages?.().length);
         // بعد القراءة الأساسية — طلب أو طلبين (الموديل والفيرموير) بنفس الجلسة
         if (!fullChecked.current) {

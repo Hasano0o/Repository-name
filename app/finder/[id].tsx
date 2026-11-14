@@ -2,6 +2,8 @@ import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, Href } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { bandsAvailable } from '../../src/store/bandsAvail';
 import { Icon, IconName } from '../../src/ui/Icon';
 
 import { C, tBg, tFg } from '../../src/ui/theme';
@@ -138,9 +140,18 @@ const SECTIONS: Section[] = [
 
 ];
 
+/** الأدوات اللي تثبّت ترددات — تنخفي لو الراوتر ما يسمح */
+const BAND_PATHS = ['optimize', 'ping', 'bands', 'calab', 'nsacombo', 'nrdual', 'nrprimary'];
+
 export default function Finder() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
+  // راوتر صفحته ما فيها تثبيت ترددات (نوكيا 3.1 / 5G-24W-A…) ← نخفي الأدوات اللي تحتاجه بدل ما تفتح وتطلّع خطأ
+  const [noBands, setNoBands] = useState(false);
+  useEffect(() => { bandsAvailable(String(id)).then(v => setNoBands(v === false)).catch(() => {}); }, [id]);
+  const sections = noBands
+    ? SECTIONS.map(sec => ({ ...sec, items: sec.items.filter(it => !BAND_PATHS.includes(it.path)) })).filter(sec => sec.items.length)
+    : SECTIONS;
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
       <ScrollView
@@ -152,7 +163,10 @@ export default function Finder() {
           <Text style={s.sub}>اختر هدفك والتطبيق يكمّل، أو تحكّم بنفسك من تحت</Text>
         </View>
 
-        {SECTIONS.map((sec) => (
+        {noBands && (
+          <Text style={s.note}>راوترك ما يسمح بتثبيت الترددات من صفحته، فأخفينا الأدوات اللي تحتاجه.</Text>
+        )}
+        {sections.map((sec) => (
           <View key={sec.key} style={s.section}>
             <View style={s.secHead}>
               <Text style={s.secIcon}>{sec.icon}</Text>

@@ -230,7 +230,20 @@ test('Nokia 5G-24W-A: ?salt فاضي ← دخول بالكلمة كما هي (us
   assert.equal(s.band, 'B3'); assert.equal(s.rsrq, -11); assert.equal(s.pci, '211');
   assert.equal(s.nrRsrp, -92); assert.equal(s.nrBand, 'n78'); assert.equal(s.nrPci, '505');
   assert.match((await d.identify()).label, /FastMile 5G Gateway \(5G-24W-A\)/);
-  await assert.rejects(d.setBand([3]), /ما غيّرنا شي/);
+  // صفحته ما فيها ترددات ← الدوال تنخفي من النسخة نفسها (الشاشات ما تعرض أدوات الترددات)
+  assert.equal(d.getBandConfig, undefined); assert.equal(d.setBand, undefined); assert.equal(d.setNetworkMode, undefined);
+  assert.ok(!d.capabilities.includes('bandLock'));
+});
+
+test('Nokia 6.1 العادي بعد 5G-24W-A على نفس النسخة ← أدوات الترددات ترجع', async () => {
+  legacyRouter();
+  const d = driver();
+  await d.login('192.168.1.254', 'userAdmin', 'Rn5Test4yZ');
+  assert.equal(d.getBandConfig, undefined);
+  router();
+  await d.login('192.168.1.1', 'admin', 'pw');
+  assert.equal(typeof d.getBandConfig, 'function');
+  assert.ok(d.capabilities.includes('bandLock'));
 });
 
 test('Nokia 5G-24W-A: كلمة غلط ← الرسالة تذكر userAdmin مو admin بس', async () => {

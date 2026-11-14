@@ -158,6 +158,8 @@ export class NokiaFwaDriver implements RouterDriver {
     this.host = host;
     this.token = '';
     this.legacy = null;
+    this.bandTools(true);
+    this.model = '';
     const user = (username || '').trim() || 'admin';
     // 5G-24W-A (main_web_app يرد قبل الدخول): نفس login() في صفحته بالضبط — GET ?nonce ثم الدخول مباشرة، بدون ?salt.
     // تقرير ١٤ نوفمبر ١٧:٥١: بعد ?salt (رد فاضي) الدخول بالكلمة الصحيحة رجع -1 ← ?salt يحرق الـ nonce عند هالفيرموير.
@@ -187,6 +189,17 @@ export class NokiaFwaDriver implements RouterDriver {
     const { body } = nkLoginBody(user, password, nonce, String(n?.randomKey ?? ''), rand);
     this.finish(await this.req('login_web_app.cgi', body, false, 30000), true);
   }
+  /**
+   * 5G-24W-A: صفحته ما فيها ترددات ولا وضع شبكة ← نخفي الدوال من هالنسخة نفسها، فالشاشات (featuresOf / !!d.getBandConfig)
+   * ما تعرض «الأساسي والثانوي» وأدوات الترددات بدل ما تفتح وتطلّع خطأ. on = نرجّعها (دخول جديد لموديل 6.1 العادي).
+   */
+  private bandTools(on: boolean): void {
+    const self = this as any;
+    for (const k of ['getBandConfig', 'setBand', 'setNetworkMode']) {
+      if (on) delete self[k]; else self[k] = undefined;
+    }
+    this.capabilities = on ? ['signal', 'cells', 'reboot', 'usage', 'bandLock'] : ['signal', 'cells', 'reboot', 'usage'];
+  }
   private finish(r: any, legacy: boolean): void {
     const res = Number(r?.result);
     if (res === 0 && r?.token) {
@@ -194,6 +207,7 @@ export class NokiaFwaDriver implements RouterDriver {
       if (legacy) {
         const v = new NokiaDriver();
         Object.assign(v as any, { host: this.host, token: this.token });
+        this.bandTools(false);
         // 5G-24W-A: القراءة = radio + الناقص من statistics (merge24w) — يخص هالدرايفر بس، 3.1 ما يتأثر
         const vr = v as any;
         vr.raw = async () => {
