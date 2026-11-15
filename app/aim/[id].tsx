@@ -53,9 +53,15 @@ import { Signal, CellTower, CellLockTarget } from '../../src/drivers/types';
 import { Level, LEVEL_COLOR, overallLevel, signalScore, parseBands, parseNrBands } from '../../src/utils/signal';
 import { trafficBurst } from '../../src/utils/nrprobe';
 import { AimBeeper } from '../../src/utils/aimSound';
+import { normPci, pciHit } from '../../src/utils/pciTarget';
+// expo-speech: ممكن النسخة المثبتة ما فيها المكتبة الأصلية ← ما نطيّح الشاشة، نكتفي بالنغمة والاهتزاز
+let Speech: { speak: (t: string, o?: any) => void; stop: () => void } | null = null;
+try { Speech = require('expo-speech'); } catch { Speech = null; }
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { TextInput } from '../../src/i18n/rn';
 
 import { tBd, tBg, tFg, isDark } from '../../src/ui/theme';
-import { sheet } from '../../src/i18n';
+import { sheet, L, LOCALE } from '../../src/i18n';
 // ═══ Design tokens ═══
 const BLUE = P.blue;
 const PURPLE = P.violet;
@@ -263,6 +269,11 @@ export default function AimScreen() {
   const [nrNb, setNrNb] = useState(false);
   const [waking, setWaking] = useState<number | null>(null);
   const [sound, setSound] = useState(false);
+  // ═══ تنبيه برج معيّن (PCI) — اقتراح عضو ١٥ نوفمبر ═══
+  const [targetPci, setTargetPci] = useState('');
+  const [pciOn, setPciOn] = useState<'LTE' | 'NR' | null>(null);
+  const targetRef = useRef<string | null>(null);
+  const pciHitRef = useRef<'LTE' | 'NR' | null>(null);
   const wakeStop = useRef(false);
   useEffect(() => () => { wakeStop.current = true; }, []);
 
@@ -302,6 +313,29 @@ export default function AimScreen() {
     return () => { b.stop(); beeperRef.current = null; };
   }, [sound]);
 
+  // رقم البرج المحفوظ لهالراوتر
+  useEffect(() => {
+    AsyncStorage.getItem(`bandly.aimPci.${id}`).then(v => { if (v) setTargetPci(v); }).catch(() => {});
+  }, [id]);
+  useEffect(() => {
+    const t = normPci(targetPci);
+    targetRef.current = t;
+    pciHitRef.current = null;
+    setPciOn(null);
+    AsyncStorage.setItem(`bandly.aimPci.${id}`, t ?? '').catch(() => {});
+  }, [targetPci, id]);
+  /** صوت + اهتزاز عند الوصول للبرج المطلوب أو الخروج منه — حتى لو زر «الصوت» مطفي (العضو يوجّه بدون ما يطالع) */
+  const pciAlert = useCallback((hit: 'LTE' | 'NR' | null, pci: string) => {
+    try { Speech?.stop(); } catch {}
+    try {
+      Speech?.speak(hit ? L(`وصلت للبرج المطلوب، بي سي آي ${pci}`, `You're on the target tower, PCI ${pci}`) : L('طلعت من البرج المطلوب', 'Left the target tower'),
+        { language: LOCALE, rate: 0.95 });
+    } catch {}
+    beeperRef.current?.event(hit ? 'best' : 'drop');
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    if (hit) setTimeout(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}), 700);
+  }, []);
+
   const pulse = useCallback((score: number) => {
     if (!hapticsRef.current) return;
     const now = Date.now();
@@ -332,6 +366,12 @@ export default function AimScreen() {
       if (!sig) return;
       setSignal(sig);
       setError('');
+      if (targetRef.current) {
+        const hit = pciHit(targetRef.current, sig);
+        if (!!hit !== !!pciHitRef.current) pciAlert(hit, targetRef.current);
+        pciHitRef.current = hit;
+        setPciOn(hit);
+      }
       if (sig.nrRsrp !== undefined && !nrRef.current) {
         nrRef.current = true;
         setNrSeen(true);
@@ -418,7 +458,7 @@ export default function AimScreen() {
     } finally {
       busy.current = false;
     }
-  }, [pulse]);
+  }, [pulse, pciAlert]);
 
   useFocusEffect(useCallback(() => {
     let alive = true;
@@ -867,6 +907,29 @@ export default function AimScreen() {
               </View>
             </View>
 
+            {/* ═══ تنبيه برج معيّن (PCI) ═══ */}
+            <View style={[a.pciCard, { borderColor: pciOn ? SUCCESS : tBd('#d7e1f3'), backgroundColor: pciOn ? P.greenSoft : tBg('#ffffff') }]}>
+              <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 10 }}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ color: TEXT, fontSize: 15, fontWeight: '800', textAlign: 'right' }}>تنبيه برج معيّن</Text>
+                  <Text style={{ color: MUTED, fontSize: 12, textAlign: 'right' }}>اكتب رقم PCI (من NetMonster مثلاً) — يجيك صوت أول ما الراوتر يشبك عليه</Text>
+                </View>
+                <TextInput value={targetPci} onChangeText={v => setTargetPci(v.replace(/[^0-9٠-٩]/g, '').slice(0, 4))}
+                  keyboardType="number-pad" placeholder="PCI" placeholderTextColor={MUTED} maxLength={4}
+                  style={[a.pciInput, { color: TEXT, borderColor: tBd('#c9d6ee'), backgroundColor: tBg('#f5f8ff') }]} />
+              </View>
+              {!!normPci(targetPci) && (
+                <View style={{ flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <Text style={{ color: pciOn ? SUCCESS : MUTED, fontSize: 13, fontWeight: '800', textAlign: 'right', flex: 1 }}>
+                    {pciOn ? `على البرج المطلوب ✓ (${pciOn === 'NR' ? '5G' : '4G'})` : signal?.pci || signal?.nrPci ? `الحين على PCI ${[signal?.pci, signal?.nrPci].filter(Boolean).join(' / ')} — كمّل توجيه` : 'ننتظر قراءة البرج…'}
+                  </Text>
+                  <Pressable onPress={() => setTargetPci('')} hitSlop={8}>
+                    <Text style={{ color: DANGER, fontSize: 12.5, fontWeight: '700' }}>إلغاء</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+
             {/* ═══ صيد الإشارة: بوصلة للأنتنا الخارجية ═══ */}
             <Pressable onPress={() => nav.push(`/hunt/${id}` as Href)}
               style={({ pressed }) => [{ borderRadius: 22, overflow: 'hidden' }, pressed && { opacity: 0.9 }]}>
@@ -1108,6 +1171,8 @@ const a = sheet({
   headerSub: { fontSize: 11.5, color: MUTED, textAlign: 'center', marginTop: 1 },
 
   aimBar: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
+  pciCard: { borderRadius: 18, borderWidth: 1.5, padding: 12, gap: 8 },
+  pciInput: { width: 86, height: 44, borderRadius: 12, borderWidth: 1, textAlign: 'center', fontSize: 18, fontWeight: '800' },
   aimTgl: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 6, height: 40, paddingHorizontal: 12,
     borderRadius: 14, borderWidth: 1.5, borderColor: P.border, backgroundColor: P.card,
