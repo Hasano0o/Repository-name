@@ -23,6 +23,10 @@ import { tpIsWelcome, tpIsLoginPage, tpPageVars, tpLoginUser, tpBusy, tpRet, tpT
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const OK_STACK = '0,0,0,0,0,0';
+/** آخر بروتوكول اشتغل لكل عنوان (بالذاكرة) */
+const PROTO = new Map<string, 'http' | 'https'>();
+/** نوع الحساب (admin/user) من صفحة الدخول لكل عنوان */
+const ADMIN = new Map<string, string>();
 
 export class TplinkDriver implements RouterDriver {
   readonly id = 'tplink-gdpr';
@@ -45,8 +49,13 @@ export class TplinkDriver implements RouterDriver {
     return { status: r.status, text: await r.text() };
   }
 
-  /** نختار http/https: صفحة http «ترحيب» ← https */
+  /** نختار http/https: صفحة http «ترحيب» ← https. آخر اختيار ناجح ينحفظ لكل عنوان (الجلسة الجاية تبدأ فيه) */
   private async pickProto(): Promise<string> {
+    const known = PROTO.get(this.host);
+    if (known) {
+      this.proto = known;
+      try { const t = (await this.raw('/', {}, 5000)).text; if (t && !tpIsWelcome(t)) return t; } catch {}
+    }
     this.proto = 'http';
     let t = '';
     try { t = (await this.raw('/', {}, 4000)).text; } catch {}
@@ -55,6 +64,25 @@ export class TplinkDriver implements RouterDriver {
       try { t = (await this.raw('/', {}, 5000)).text; } catch { if (!t) throw new Error('الراوتر ما رد'); }
     }
     return t;
+  }
+
+  /**
+   * المفتاح العام — نجرّب البروتوكول الحالي وبعده الثاني.
+   * تقرير حسن ١٥ نوفمبر ٣:٥٧: انضاف وبعدها «getGDPRParm» فشل: بعد الدخول http «/» ما يرجّع صفحة الترحيب
+   * (يحوّل لـ https والجرة تتبعه) فبقينا على http، و POST http://…/cgi/getGDPRParm يرجّع صفحة الترحيب.
+   */
+  private async parm(): Promise<{ nn: string; ee: string; seq: number } | null> {
+    const order: ('http' | 'https')[] = this.proto === 'https' ? ['https', 'http'] : ['http', 'https'];
+    for (const pr of order) {
+      this.proto = pr;
+      try {
+        const r = await this.raw('/cgi/getGDPRParm', { method: 'POST' }, 6000);
+        const p = tpParm(r.text);
+        diag(`[tplink] ${pr} getGDPRParm → ${r.status} · ${r.text.length}B · ${p ? '✓' : r.text.replace(/\s+/g, ' ').slice(0, 60)}`);
+        if (p) { PROTO.set(this.host, pr); return p; }
+      } catch (e: any) { diag(`[tplink] ${pr} getGDPRParm ✗ ${String(e?.message ?? e).slice(0, 60)}`); }
+    }
+    return null;
   }
 
   async detect(host: string): Promise<boolean> {
@@ -66,8 +94,7 @@ export class TplinkDriver implements RouterDriver {
       const v = tpPageVars(t);
       if (v.model) this.setModel(v.model);
       // تأكيد: المفتاح العام يرد بدون دخول (قراءة)
-      const p = tpParm((await this.raw('/cgi/getGDPRParm', { method: 'POST' }, 5000)).text);
-      return !!p;
+      return !!(await this.parm());
     } catch { return false; }
   }
 
@@ -91,8 +118,13 @@ export class TplinkDriver implements RouterDriver {
     if (v.model) this.setModel(v.model);
     if (v.forbidForever) throw new Error('الراوتر قافل الدخول نهائياً بعد محاولات غلط — يحتاج إعادة ضبط المصنع');
     if (v.forbidFlag) throw new Error(`الراوتر قافل الدخول بعد محاولات غلط — انتظر${v.forbidTime ? ` ${v.forbidTime} ثانية` : ' شوي'} وجرّب (محاولات كثيرة)`);
-    const user = tpLoginUser(v.adminType, username);
-    const parm = tpParm((await this.raw('/cgi/getGDPRParm', { method: 'POST' }, 8000)).text);
+    const parm = await this.parm();
+    // نوع الحساب من صفحة الدخول — لو الصفحة الحين الرئيسية (جلسة قديمة) ناخذ آخر نوع شفناه لهالعنوان
+    let adminType = v.adminType;
+    if (!adminType) { try { adminType = tpPageVars((await this.raw('/', {}, 6000)).text).adminType; } catch {} }
+    adminType = adminType || ADMIN.get(this.host);
+    if (adminType) ADMIN.set(this.host, adminType);
+    const user = tpLoginUser(adminType, username);
     if (!parm) throw new Error('صفحة الدخول في راوترك مختلفة عن اللي نعرفه (getGDPRParm) — اضغط «أرسل الخطأ للمطوّر»');
     // أحد داخل (المتصفح مثلاً) ومشغول ← الصفحة تنتظر شوي وبعدها تدخل على كل حال (نفس الطلب)
     try {
