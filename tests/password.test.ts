@@ -31,3 +31,15 @@ test('cleanPassword: حروف الخط المزخرف ترجع لأصلها (Soy
   assert.equal(cleanPassword('ＡＢ１２'), 'AB12');
   assert.equal(cleanPassword('كلمة٢٠'), 'كلمة٢٠', 'العربي والأرقام العربية ما تنلمس');
 });
+
+test('labelMixup: WPS PIN وكلمة الواي فاي من ملصق هواوي (H122-373 / H155-381 — ١٥ نوفمبر)', async () => {
+  const { labelMixup } = await import('../src/utils/password');
+  assert.equal(labelMixup('35219828'), 'wps');
+  assert.equal(labelMixup('27766774'), 'wps');
+  assert.equal(labelMixup('AT3Y1EH2NQ6'), 'wifi');
+  assert.equal(labelMixup('fB7g85q5'), null);
+  assert.equal(labelMixup('iAEYt6Ba'), null);
+  assert.equal(labelMixup('YbDiH498tg9'), null);
+  assert.equal(labelMixup('1234567'), null);
+  assert.equal(labelMixup('ABCDEFGHIJK'), null);
+});

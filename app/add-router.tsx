@@ -9,6 +9,7 @@ import { Icon, IconName } from '../src/ui/Icon';
 import { C, R, S, T, tBd, tBg, tFg } from '../src/ui/theme';
 import { isLanHost, cleanHostInput } from '../src/utils/host';
 import { detectDriver } from '../src/drivers/registry';
+import { huaweiModelNoLogin, confirmLabelMixup, modelLine } from '../src/services/labelHint';
 import { addDemoRouter } from '../src/drivers/demo';
 import { DesktopNetCard, explainDetectFailure, useDesktopNet } from '../src/ui/DesktopNet';
 import { getRouter, saveRouter, updateRouter, deleteRouter, listRouters, SavedRouter, setWifi, SavedWifi, getLabel, setLabel, LabelCreds } from '../src/store/routers';
@@ -471,6 +472,11 @@ export default function AddRouterScreen() {
         await new Promise(r => setTimeout(r, 900));
       }
 
+      // هواوي: الموديل اللي رد فعلاً (بدون دخول) + كلمة شكلها WPS PIN / كلمة الواي فاي ← نسأله قبل نصرف محاولة
+      const isHw = /^huawei/.test(String((driver as any).id ?? ''));
+      const hwModel = isHw ? await withTimeout(huaweiModelNoLogin(h), 3500, null) : null;
+      if (isHw && !(await confirmLabelMixup(password, hwModel))) return;
+
       setStep('نسجّل الدخول...');
       try {
         await driver.login(h, u, password, { fresh: true });
@@ -519,7 +525,7 @@ export default function AddRouterScreen() {
             return;
           }
         } else {
-          addFail(msg || 'بدون رسالة', prof?.label ?? (driver as any).name);
+          addFail(msg || 'بدون رسالة', hwModel ? `Huawei ${hwModel}` : prof?.label ?? (driver as any).name);
           // الكلمة الغلط غالباً فيها زيادة ما تنشاف (حرف زايد/كلمتين لازقات) — نعطيه عدد الحروف يقارنه بالملصق
           const lenTip = /غلط|108006|incorrect|password/i.test(msg) ? `\n\nالكلمة اللي كتبتها: ${password.length} حرف — قارنها بالملصق أو باللي تدخل فيه من المتصفح.` : '';
           // اسم المستخدم مو دايماً admin: Soyealink / Orange (هواوي HiLink) على الملصق «User Name: user» (عضو ٨ نوفمبر —
@@ -527,7 +533,8 @@ export default function AddRouterScreen() {
           const userTip = /غلط|108006|incorrect|password/i.test(msg) && u === 'admin'
             ? `\n\nاسم المستخدم مكتوب «admin» — تأكد منه بالملصق (عند بعض الراوترات مثل Soyealink يكون «user»). الخانة فوق كلمة المرور.`
             : '';
-          failAlert('فشل الدخول', (msg || 'تحقق من اسم المستخدم وكلمة المرور') + userTip + lenTip);
+          const hwTip = isHw && /غلط|108006|incorrect|password/i.test(msg) ? modelLine(hwModel) : '';
+          failAlert('فشل الدخول', (msg || 'تحقق من اسم المستخدم وكلمة المرور') + userTip + lenTip + hwTip);
           return;
         }
       }

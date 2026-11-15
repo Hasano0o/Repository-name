@@ -46,3 +46,14 @@ export function passwordShape(pw: string): string {
     return `<U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}>`;
   }).join('');
 }
+
+/**
+ * كلمة شكلها سطر ثاني من ملصق هواوي (بدون ما نعرف الكلمة): ٨ أرقام = WPS PIN ·
+ * ١٠–١٣ خانة حروف كبيرة وأرقام بس = Wi-Fi Password (كلمة الدخول فيها حروف صغيرة).
+ */
+export function labelMixup(pw: string): 'wps' | 'wifi' | null {
+  const p = (pw ?? '').trim();
+  if (/^\d{8}$/.test(p)) return 'wps';
+  if (p.length >= 10 && p.length <= 13 && /^[A-Z0-9]+$/.test(p) && /[A-Z]/.test(p) && /\d/.test(p)) return 'wifi';
+  return null;
+}

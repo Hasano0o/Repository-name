@@ -17,6 +17,7 @@ import { View, Text, TextInput, Pressable } from '../src/i18n/rn';
 import { router, Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { detectDriver } from '../src/drivers/registry';
+import { huaweiModelNoLogin, confirmLabelMixup, modelLine } from '../src/services/labelHint';
 import type { RouterDriver } from '../src/drivers/types';
 import { listRouters, saveRouter, updateRouter, SavedRouter } from '../src/store/routers';
 import { dropSession } from '../src/store/sessions';
@@ -132,6 +133,10 @@ export default function SetupScreen() {
     setStep('login'); setErr('');
     const { host, d } = found;
     const user = userName.trim() || 'admin';
+    // هواوي: كلمة شكلها WPS PIN / كلمة الواي فاي ← نسأله قبل نصرف محاولة (labelHint)
+    const isHw = /^huawei/.test(String((d as any).id ?? ''));
+    const hwModel = isHw ? await huaweiModelNoLogin(host) : null;
+    if (isHw && !lastTry && !(await confirmLabelMixup(cp, hwModel))) { setStep('password'); return; }
     try {
       setStatus('أسجّل الدخول عنك…');
       await d.login(host, user, cp, { fresh: true, lastTry });
@@ -149,7 +154,7 @@ export default function SetupScreen() {
       }
       const wrongPw = /كلمة المرور|108006|108002|غلط/.test(msg);
       setErr(wrongPw
-        ? `كلمة المرور ما ضبطت مع اسم المستخدم «${user}». تأكد منها من الملصق (حروف كبيرة وصغيرة تفرق، و0 غير O) — ولو الملصق فيه اسم مستخدم (Username) غير ${user} اكتبه تحت.\n\nرد الراوتر: ${msg}`
+        ? `كلمة المرور ما ضبطت مع اسم المستخدم «${user}». تأكد منها من الملصق (حروف كبيرة وصغيرة تفرق، و0 غير O) — ولو الملصق فيه اسم مستخدم (Username) غير ${user} اكتبه تحت.\n\nرد الراوتر: ${msg}${isHw ? modelLine(hwModel) : ''}`
         : msg);
       if (wrongPw) setShowUser(true);
       // تقرير: الموديل ورد الراوتر بس (بدون الكلمة) — عشان نعرف أسباب رفض الدخول الحقيقية

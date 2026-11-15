@@ -4,6 +4,14 @@
  * نص ما له ترجمة يطلع عربي — فزيد هنا بأي وقت.
  */
 export const EN: Record<string, string> = {
+  'تأكد من الكلمة قبل نرسلها': 'Check the password before we send it',
+  'الكلمة اللي كتبتها ٨ أرقام — هذا شكل «WPS PIN» في الملصق، مو كلمة الدخول.': 'The password you typed is 8 digits — that looks like the label\'s «WPS PIN», not the login password.',
+  'الكلمة اللي كتبتها شكلها كلمة الواي فاي (Wi-Fi Password)، مو كلمة الدخول.': 'The password you typed looks like the Wi-Fi Password, not the login password.',
+  'كلمة الدخول سطر «Password» في الملصق تحت IP — فيها حروف كبيرة وصغيرة وأرقام.': 'The login password is the «Password» line on the label, under IP — it has upper- and lower-case letters and digits.',
+  'كل كلمة غلط تقفل الراوتر ٥ دقايق.': 'Every wrong password locks the router for 5 minutes.',
+  'تأكد إنه نفس الموديل اللي على الملصق — لو غيره، جوالك على واي فاي راوتر ثاني.': 'Make sure it is the same model as on the label — if not, your phone is on another router\'s Wi-Fi.',
+  'أعدّل الكلمة': 'Edit password',
+  'متأكد، جرّب': 'I\'m sure, try',
   'مستشار الفايبر ‹': 'Fiber advisor ‹',
   'مستشار الفايبر': 'Fiber advisor',
   'الراوتر مو موجود': 'Router not found',
@@ -2076,6 +2084,7 @@ export const EN: Record<string, string> = {
 };
 
 export const EN_PATTERNS: Record<string, string> = {
+  'الراوتر اللي جوالك متصل فيه: {0}': 'The router your phone is connected to: {0}',
   'من {0} إلى {1} dBm · نحفظ قراءة كل ما تفتح الراوتر (وحدة كل ١٠ دقايق)': 'From {0} to {1} dBm · we save a reading each time you open the router (one per 10 min)',
   '{0} · المقبول من −8 إلى −27': '{0} · acceptable −8 to −27',
   'حرارة {0}°': 'Temp {0}°',
