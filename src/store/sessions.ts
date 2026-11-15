@@ -80,6 +80,11 @@ async function doConnect(r: SavedRouter, force = false): Promise<RouterDriver> {
     // لا نقدر "نمسح" متغير نصي في JS، لكن تضييق النطاق يخفف.
   }
   sessions.set(k, { d, authAt: Date.now() });
+  // راوتر حقيقي باقي باسم «راوتر تجريبي» (عدّل التجريبي لراوتره قبل إصلاح الاسم) ← اسم الموديل
+  if (r.host !== 'demo' && r.name === 'راوتر تجريبي' && d.name && d.name !== 'راوتر تجريبي') {
+    const { id: _i, createdAt: _c, ...rest } = r as any;
+    import('./routers').then(m => m.updateRouter(r.id, { ...rest, name: d.name, driverName: r.driverName === 'راوتر تجريبي' ? d.name : r.driverName })).catch(() => {});
+  }
   // الإحصائيات: دخول حقيقي لراوتر (مو التجريبي ولا الجوال نفسه)
   if (r.host !== 'demo' && r.host !== 'device' && d.name !== 'راوتر تجريبي') {
     import('../services/stats').then(m => m.markLogin(d.name || r.driverId)).catch(() => {});

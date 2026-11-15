@@ -540,8 +540,11 @@ export default function AddRouterScreen() {
       // أي تعرّف حقيقي (مو الاحتياطي) = الراوتر صار مدعوم عادي ← تنشال «قراءة بس».
       const prevRo = editId ? await getRouter(editId).catch(() => null) : null;
       const keepRo = !!prevRo?.readOnly && dId === 'unknown';
+      // اسم تلقائي قديم (اسم الدرايفر السابق، أو «راوتر تجريبي» لما العضو يعدّل التجريبي لراوتره — فيديو ١٥ نوفمبر)
+      // ← ناخذ اسم الموديل الجديد بداله. اسم كتبه العضو بنفسه يبقى.
+      const staleName = !!prevRo && (nameNow === prevRo.driverName || (nameNow === 'راوتر تجريبي' && h !== 'demo'));
       const payload = {
-        name: nameNow || dName || 'راوتر',
+        name: (staleName ? '' : nameNow) || dName || 'راوتر',
         host: h,
         username: u,
         driverId: keepRo ? prevRo!.driverId : dId,

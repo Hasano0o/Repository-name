@@ -30,6 +30,8 @@ const files = [
   'src/assistant/core.ts',
   'src/drivers/models.ts',
   'src/drivers/zyxel/crypto.ts',
+  'src/utils/arfcn.ts',
+  'src/drivers/zyxel/ca.ts',
   'src/drivers/tplink/crypto.ts',
   'src/drivers/tplink/parse.ts',
   'src/drivers/stcax/index.ts',

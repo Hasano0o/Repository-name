@@ -21,6 +21,7 @@ import { buildSnapshot } from '../../utils/snapshot';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import { ModelProfile } from '../models';
 import { aesCbcEncrypt, aesCbcDecrypt, b64, unb64, rsaPkcs1Encrypt, utf8, fromUtf8 } from './crypto';
+import { zxCells, zxPcc } from './ca';
 
 const num = (v: unknown): number | undefined => {
   if (v === undefined || v === null || v === '') return undefined;
@@ -188,18 +189,20 @@ export class ZyxelDriver implements RouterDriver {
 
   async getSignal(): Promise<Signal> {
     const c = (await this.dal('cellwan_status')) ?? {};
-    const b = bandOf(c.INTF_Current_Band);
+    // NR5103EV2: الخانات قوائم للدمج كله (أول عنصر = الأساسي) — zxPcc
+    const pcc = zxPcc(c);
+    const b = pcc?.band;
     const nsaBand = bandOf(c.NSA_Band);
     const nrOn = !!c.NSA_Enable && (neg(c.NSA_RSRP) !== undefined || !!nsaBand);
     const sinr = num(c.INTF_SINR);
     const nsinr = num(c.NSA_SINR);
-    const lteIsNr = /^NR/i.test(str(c.INTF_Current_Band));
+    const lteIsNr = pcc?.tech === 'NR';
     return {
       network: str(c.INTF_Current_Access_Technology) || undefined,
       band: b && !lteIsNr ? `B${b}` : undefined,
       cellId: str(c.INTF_Cell_ID) || undefined,
-      pci: str(c.INTF_PhyCell_ID) || undefined,
-      earfcn: str(c.INTF_RFCN) || undefined,
+      pci: pcc?.pci || undefined,
+      earfcn: pcc?.arfcn || undefined,
       rsrp: neg(c.INTF_RSRP),
       rsrq: num(c.INTF_RSRQ),
       sinr: sinr !== undefined && sinr > -20 && sinr < 50 ? sinr : undefined,
@@ -217,8 +220,15 @@ export class ZyxelDriver implements RouterDriver {
   async getCarriers(): Promise<Carrier[]> {
     const c = (await this.dal('cellwan_status')) ?? {};
     const out: Carrier[] = [];
-    const b = bandOf(c.INTF_Current_Band);
-    if (b) out.push({ tech: /^NR/i.test(str(c.INTF_Current_Band)) ? 'NR' : 'LTE', role: 'PCC', band: b, arfcn: str(c.INTF_RFCN) || undefined, pci: str(c.INTF_PhyCell_ID) || undefined, rsrp: neg(c.INTF_RSRP), rsrq: num(c.INTF_RSRQ) });
+    const cells = zxCells(c);
+    const pc = cells[0];
+    if (pc?.band) out.push({ tech: pc.tech, role: 'PCC', band: pc.band, arfcn: pc.arfcn, pci: pc.pci, rsrp: neg(c.INTF_RSRP), rsrq: num(c.INTF_RSRQ) });
+    // باقي القائمة = نواقل ثانوية (NR5103EV2). 5G يجي من خانات NSA تحت (فيها القراءات) — ما نكرره
+    for (const x of cells.slice(1)) {
+      if (!x.band || (x.tech === 'NR' && c.NSA_Enable && bandOf(c.NSA_Band))) continue;
+      out.push({ tech: x.tech, role: 'SCC', band: x.band, arfcn: x.arfcn, pci: x.pci });
+    }
+    const listed = out.length > 1;
     // SCC_Info: أسماء الحقول تختلف بين الفيرموير — نلقط اللي فيه Band/PCI/RFCN/RSRP
     // صفحة الراوتر نفسها (NR5103EV2) ما تعرض SCC_Info أبداً، فما عندنا دليل على صيغته. شكوى ١٣ نوفمبر:
     // ثبّت B3+n78 والترويسة تعرض B1 و B40 بعد ساعة ← نسجّل الخام مرة لكل جلسة (التقرير يوضّح هل هي
@@ -229,7 +239,7 @@ export class ZyxelDriver implements RouterDriver {
       this.sccLogged = raw;
       diag(`[zyxel] SCC_Info خام: ${raw} · المفضّل: ${this.prefSeen || '—'}`);
     }
-    for (const s of scc) {
+    for (const s of listed ? [] : scc) {
       if (!s || typeof s !== 'object') continue;
       const pick = (re: RegExp) => { const k = Object.keys(s).find(x => re.test(x)); return k ? s[k] : undefined; };
       const sb = bandOf(pick(/band/i));
