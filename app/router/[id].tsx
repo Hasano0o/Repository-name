@@ -6,7 +6,9 @@ import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router';
-import { SavedRouter, getRouter, deleteRouter } from '../../src/store/routers';
+import { SavedRouter, getRouter, deleteRouter, updateRouter } from '../../src/store/routers';
+import { detectDriver } from '../../src/drivers/registry';
+import { diag } from '../../src/services/diag';
 import { withSession, dropSession, routerWrite } from '../../src/store/sessions';
 import { discoverFeatures } from '../../src/services/autoprog';
 import { discoverySummary, writeLabels } from '../../src/utils/autoprogCore';
@@ -145,6 +147,27 @@ function Acc({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+
+
+/**
+ * ١٥ نوفمبر (عضو F660): راوتر انضاف «غير معروف» قبل ما ينزل درايفره يبقى unknown للأبد (الدرايفر محفوظ مع الراوتر).
+ * أول فتح بعد كل تشغيل للتطبيق: نعيد التعرّف بهدوء، ولو طلع له درايفر نحدّث الراوتر المحفوظ.
+ */
+const reDetected = new Set<string>();
+async function upgradeUnknown(r: SavedRouter): Promise<SavedRouter> {
+  if (r.driverId !== 'unknown' || reDetected.has(r.id)) return r;
+  reDetected.add(r.id);
+  try {
+    const d = await detectDriver(r.host);
+    if (!d || d.id === 'unknown' || d.id === 'demo' || d.id === 'device') return r;
+    const { id: _i, createdAt: _c, ...rest } = r;
+    const up = await updateRouter(r.id, { ...rest, driverId: d.id, driverName: d.name });
+    if (!up) return r;
+    dropSession(r.id);
+    diag(`[router] غير معروف ← ${d.id} (${d.name}) — انضاف درايفره بعد ما حفظ الراوتر`);
+    return up;
+  } catch { return r; }
+}
 
 export default function RouterDashboard() {
   const { id, welcome } = useLocalSearchParams<{ id: string; welcome?: string }>();
@@ -392,9 +415,11 @@ export default function RouterDashboard() {
     let alive = true;
     let timer: ReturnType<typeof setInterval> | undefined;
     (async () => {
-      const r = await getRouter(id);
+      const r0 = await getRouter(id);
       if (!alive) return;
-      if (!r) { setError('الراوتر غير موجود'); setLoading(false); return; }
+      if (!r0) { setError('الراوتر غير موجود'); setLoading(false); return; }
+      const r = await upgradeUnknown(r0);
+      if (!alive) return;
       setInfo(r);
       await loadAll(r);
       if (!alive) return;
@@ -887,7 +912,8 @@ export default function RouterDashboard() {
           </View>
         )}
 
-        {!loading && info && (
+        {/* الفايبر: الاسم والحالة في كرت الهوية — الشريط الأزرق كان يكررهم (صورة عضو F660) */}
+        {!loading && info && feat.cellular && (
           <LinearGradient colors={[tBg('#2f6bff'), tBg('#6a4cff')]} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={s.topBar}>
             {/* سطر واحد مضغوط (طلب حسن): الراوتر · الشركة · الحالة — العنوان والأيقونة شلناهم (العنوان في الإعدادات والتفاصيل) */}
             <View style={[s.statusPill, { backgroundColor: tBg('#ffffff') }]}>
