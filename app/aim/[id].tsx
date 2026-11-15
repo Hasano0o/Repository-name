@@ -53,7 +53,7 @@ import { Signal, CellTower, CellLockTarget } from '../../src/drivers/types';
 import { Level, LEVEL_COLOR, overallLevel, signalScore, parseBands, parseNrBands } from '../../src/utils/signal';
 import { trafficBurst } from '../../src/utils/nrprobe';
 import { AimBeeper } from '../../src/utils/aimSound';
-import { normPci, pciHit } from '../../src/utils/pciTarget';
+import { normPci, pciFind, pciChoices, pciRel, PciFind } from '../../src/utils/pciTarget';
 // expo-speech: ممكن النسخة المثبتة ما فيها المكتبة الأصلية ← ما نطيّح الشاشة، نكتفي بالنغمة والاهتزاز
 let Speech: { speak: (t: string, o?: any) => void; stop: () => void } | null = null;
 try { Speech = require('expo-speech'); } catch { Speech = null; }
@@ -271,9 +271,15 @@ export default function AimScreen() {
   const [sound, setSound] = useState(false);
   // ═══ تنبيه برج معيّن (PCI) — اقتراح عضو ١٥ نوفمبر ═══
   const [targetPci, setTargetPci] = useState('');
-  const [pciOn, setPciOn] = useState<'LTE' | 'NR' | null>(null);
+  const [pciAt, setPciAt] = useState<PciFind>({ state: 'none' });
+  const [seenCells, setSeenCells] = useState<CellTower[]>([]);
+  const [pciBest, setPciBest] = useState<number | undefined>(undefined);
+  const [pciLockBusy, setPciLockBusy] = useState(false);
   const targetRef = useRef<string | null>(null);
-  const pciHitRef = useRef<'LTE' | 'NR' | null>(null);
+  const pciStateRef = useRef<PciFind['state']>('none');
+  const pciBestRef = useRef<number | undefined>(undefined);
+  const tickNoRef = useRef(0);
+  const lastPciRsrp = useRef<number | undefined>(undefined);
   const wakeStop = useRef(false);
   useEffect(() => () => { wakeStop.current = true; }, []);
 
@@ -320,20 +326,23 @@ export default function AimScreen() {
   useEffect(() => {
     const t = normPci(targetPci);
     targetRef.current = t;
-    pciHitRef.current = null;
-    setPciOn(null);
+    pciStateRef.current = 'none';
+    pciBestRef.current = undefined;
+    setPciAt({ state: 'none' });
+    setPciBest(undefined);
     AsyncStorage.setItem(`bandly.aimPci.${id}`, t ?? '').catch(() => {});
   }, [targetPci, id]);
   /** صوت + اهتزاز عند الوصول للبرج المطلوب أو الخروج منه — حتى لو زر «الصوت» مطفي (العضو يوجّه بدون ما يطالع) */
-  const pciAlert = useCallback((hit: 'LTE' | 'NR' | null, pci: string) => {
+  const pciAlert = useCallback((to: PciFind['state'], from: PciFind['state'], pci: string) => {
+    const say = to === 'serving' ? L(`وصلت للبرج المطلوب، بي سي آي ${pci}`, `You're on the target tower, PCI ${pci}`)
+      : to === 'seen' && from === 'none' ? L('البرج المطلوب ظهر، كمّل على نفس الاتجاه', 'Target tower spotted — keep going this way')
+      : from === 'serving' ? L('طلعت من البرج المطلوب', 'Left the target tower') : '';
+    if (!say) return;
     try { Speech?.stop(); } catch {}
-    try {
-      Speech?.speak(hit ? L(`وصلت للبرج المطلوب، بي سي آي ${pci}`, `You're on the target tower, PCI ${pci}`) : L('طلعت من البرج المطلوب', 'Left the target tower'),
-        { language: LOCALE, rate: 0.95 });
-    } catch {}
-    beeperRef.current?.event(hit ? 'best' : 'drop');
+    try { Speech?.speak(say, { language: LOCALE, rate: 0.95 }); } catch {}
+    beeperRef.current?.event(to === 'serving' ? 'best' : to === 'none' || from === 'serving' ? 'drop' : 'best');
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    if (hit) setTimeout(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}), 700);
+    if (to === 'serving') setTimeout(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}), 700);
   }, []);
 
   const pulse = useCallback((score: number) => {
@@ -366,11 +375,22 @@ export default function AimScreen() {
       if (!sig) return;
       setSignal(sig);
       setError('');
+      // ═══ البرج المطلوب: الأبراج اللي يشوفها الراوتر (كل ثانيتين لو فيه رقم، وإلا كل ١٠ث للاختيار) ═══
+      const tn = ++tickNoRef.current;
+      let cellsNow: CellTower[] | null = null;
+      if (targetRef.current || tn % 5 === 1) {
+        try {
+          cellsNow = await withSession(r, d => (d.getCells ? d.getCells() : Promise.resolve([] as CellTower[])));
+          setSeenCells(cellsNow);
+        } catch {}
+      }
       if (targetRef.current) {
-        const hit = pciHit(targetRef.current, sig);
-        if (!!hit !== !!pciHitRef.current) pciAlert(hit, targetRef.current);
-        pciHitRef.current = hit;
-        setPciOn(hit);
+        const f = pciFind(targetRef.current, sig, cellsNow);
+        if (f.state !== pciStateRef.current) pciAlert(f.state, pciStateRef.current, targetRef.current);
+        pciStateRef.current = f.state;
+        if (f.rsrp !== undefined && (pciBestRef.current === undefined || f.rsrp > pciBestRef.current)) { pciBestRef.current = f.rsrp; setPciBest(f.rsrp); }
+        lastPciRsrp.current = f.rsrp;
+        setPciAt(f);
       }
       if (sig.nrRsrp !== undefined && !nrRef.current) {
         nrRef.current = true;
@@ -416,8 +436,10 @@ export default function AimScreen() {
         const bestV = bestRef.current ? (bestRef.current.smooth ?? bestRef.current.rsrp) : undefined;
         const gap = cur !== undefined && bestV !== undefined ? Math.max(0, bestV - cur) : undefined;
         const rel = gap === undefined ? score : Math.max(0, Math.min(1, 1 - gap / 12));
-        pulse(rel);
-        beeperRef.current?.update(rel);
+        // فيه برج مطلوب ويوصل للراوتر ← الصوت والاهتزاز يتبعون قوة هالبرج بداله
+        const tf = targetRef.current && pciStateRef.current !== 'none' ? pciRel(lastPciRsrp.current, pciBestRef.current) : undefined;
+        pulse(tf ?? rel);
+        beeperRef.current?.update(tf ?? rel);
         const now = Date.now();
         if (newBest && now - lastEventRef.current > 3000) {
           lastEventRef.current = now;
@@ -606,6 +628,31 @@ export default function AimScreen() {
           } catch (e: any) {
             Alert.alert('ما نجح', e?.message ?? String(e));
           } finally { setPinBusy(false); }
+        },
+      },
+    ]);
+  };
+
+  /** تثبيت على البرج المطلوب (PCI) — نفس تثبيت «أفضل نقطة» (لقطة قبل + تحقق بعد) */
+  const pinTarget = () => {
+    const tp = targetRef.current;
+    if (!info || !tp || pciAt.state === 'none') return;
+    const cell: CellId = { tech: pciAt.tech ?? 'LTE', band: pciAt.band, pci: tp, arfcn: pciAt.arfcn };
+    const target = toTarget(cell);
+    if (!target) return;
+    const warn = pciAt.state === 'seen' ? 'الراوتر مو شابك عليه الحين — لو إشارته ضعيفة ممكن ينقطع النت شوي.' : '';
+    Alert.alert('ثبّت على البرج المطلوب', `بنثبّت الراوتر على ${cellName(cell)} ويبقى مثبّت بعد ما تطلع.` + (warn ? '\n\n' + warn : ''), [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'ثبّت', onPress: async () => {
+          setPciLockBusy(true);
+          try {
+            const ok = await lockAndVerify(info, target);
+            if (ok) { setPinned(cell); tempPinRef.current = false; Alert.alert('تم', `الراوتر مثبّت على ${cellName(cell)}`); }
+            else Alert.alert('ما نجح', 'الراوتر ما اتصل على هذا البرج.');
+          } catch (e: any) {
+            Alert.alert('ما نجح', e?.message ?? String(e));
+          } finally { setPciLockBusy(false); }
         },
       },
     ]);
@@ -907,28 +954,92 @@ export default function AimScreen() {
               </View>
             </View>
 
-            {/* ═══ تنبيه برج معيّن (PCI) ═══ */}
-            <View style={[a.pciCard, { borderColor: pciOn ? SUCCESS : tBd('#d7e1f3'), backgroundColor: pciOn ? P.greenSoft : tBg('#ffffff') }]}>
-              <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 10 }}>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={{ color: TEXT, fontSize: 15, fontWeight: '800', textAlign: 'right' }}>تنبيه برج معيّن</Text>
-                  <Text style={{ color: MUTED, fontSize: 12, textAlign: 'right' }}>اكتب رقم PCI (من NetMonster مثلاً) — يجيك صوت أول ما الراوتر يشبك عليه</Text>
+            {/* ═══ البرج المطلوب (PCI): وجّه عليه بالصوت ← ثبّت عليه ═══ */}
+            {(() => {
+              const tp = normPci(targetPci);
+              const st = tp ? pciAt.state : 'none';
+              const col = st === 'serving' ? SUCCESS : st === 'seen' ? BLUE : MUTED;
+              const soft = st === 'serving' ? P.greenSoft : st === 'seen' ? P.blueSoft : P.soft;
+              const rel = st !== 'none' ? pciRel(pciAt.rsrp, pciBest) : 0;
+              const bandTxt = pciAt.band ? (pciAt.tech === 'NR' ? `n${pciAt.band}` : `B${pciAt.band}`) : pciAt.tech === 'NR' ? '5G' : '4G';
+              const choices = pciChoices(signal, seenCells);
+              const pinnedHere = !!tp && pinned?.pci === tp;
+              return (
+                <View style={[a.pciCard, { borderColor: st === 'serving' ? SUCCESS : tBd('#d7e1f3') }]}>
+                  <View style={a.pciHead}>
+                    <View style={[a.pciIcon, { backgroundColor: st === 'serving' ? SUCCESS : P.blueSoft }]}>
+                      <Icon name="tower" size={20} color={st === 'serving' ? '#ffffff' : BLUE} stroke={2.2} />
+                    </View>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={a.pciTitle}>البرج المطلوب</Text>
+                      <Text style={a.pciSub}>اختار برج (أو اكتب رقمه من NetMonster) — نوجّهك عليه بالصوت، وأول ما تشبك عليه تثبّته بضغطة</Text>
+                    </View>
+                  </View>
+
+                  <View style={a.pciInRow}>
+                    <View style={[a.pciInBox, { borderColor: tp ? col : tBd('#c9d6ee'), backgroundColor: tBg('#f5f8ff') }]}>
+                      <Text style={a.pciInLbl}>PCI</Text>
+                      <TextInput value={targetPci} onChangeText={v => setTargetPci(v.replace(/[^0-9٠-٩]/g, '').slice(0, 4))}
+                        keyboardType="number-pad" placeholder="مثلاً 38" placeholderTextColor={MUTED} maxLength={4}
+                        style={[a.pciInput, { color: TEXT }]} />
+                    </View>
+                    {!!targetPci && (
+                      <Pressable onPress={() => setTargetPci('')} hitSlop={8} style={[a.pciClear, { borderColor: tBd('#f3c1c1') }]}>
+                        <Text style={{ color: DANGER, fontSize: 13, fontWeight: '800' }}>إلغاء</Text>
+                      </Pressable>
+                    )}
+                  </View>
+
+                  {choices.length > 0 && (
+                    <View style={{ gap: 6 }}>
+                      <Text style={a.pciHint}>الأبراج اللي يشوفها راوترك الحين</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, flexDirection: 'row-reverse', paddingHorizontal: 2 }}>
+                        {choices.map(c => {
+                          const on = tp === c.pci;
+                          const cc = c.tech === 'NR' ? PURPLE : BLUE;
+                          return (
+                            <Pressable key={c.pci} onPress={() => setTargetPci(on ? '' : c.pci)}
+                              style={[a.pciChip, { borderColor: on ? cc : tBd('#d7e1f3'), backgroundColor: on ? cc : tBg('#ffffff') }]}>
+                              <Text style={[a.pciChipNum, { color: on ? '#ffffff' : TEXT }]}>{c.pci}</Text>
+                              <Text style={[a.pciChipSub, { color: on ? 'rgba(255,255,255,0.9)' : MUTED }]}>
+                                {`${c.band ? (c.tech === 'NR' ? 'n' : 'B') + c.band : c.tech === 'NR' ? '5G' : '4G'}${c.rsrp !== undefined ? ` · ${Math.round(c.rsrp)}` : ''}`}
+                              </Text>
+                              {c.serving && <Text style={[a.pciChipSub, { color: on ? '#ffffff' : SUCCESS }]}>الحالي</Text>}
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                    </View>
+                  )}
+
+                  {!!tp && (
+                    <View style={[a.pciState, { backgroundColor: soft }]}>
+                      <View style={{ flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <Text style={[a.pciStateTxt, { color: col }]}>
+                          {st === 'serving' ? `شابك عليه ✓ · ${bandTxt}` : st === 'seen' ? `يوصل لراوترك · ${bandTxt}` : 'ما يوصل لراوترك الحين'}
+                        </Text>
+                        {pciAt.rsrp !== undefined && st !== 'none' && (
+                          <Text style={[a.pciRsrp, { color: col }]}>{Math.round(pciAt.rsrp)} <Text style={{ fontSize: 11 }}>dBm</Text></Text>
+                        )}
+                      </View>
+                      {st !== 'none' && (
+                        <View style={a.pciBar}><View style={[a.pciBarFill, { width: `${Math.round(rel * 100)}%`, backgroundColor: col }]} /></View>
+                      )}
+                      <Text style={a.pciStateSub}>
+                        {st === 'serving'
+                          ? (pinnedHere ? 'الراوتر مثبّت على هالبرج' : canPin ? 'ثبّته عشان الراوتر ما ينتقل لبرج ثاني' : 'راوترك ما يدعم تثبيت البرج — خل الأنتنا على هالاتجاه')
+                          : st === 'seen'
+                            ? `الراوتر شايفه بس شابك على ${[signal?.pci, signal?.nrPci].filter(Boolean).join(' / ') || '—'} — لف الأنتنا ببطء، النغمة تسرع كل ما قرّبت`
+                            : `الحين على ${[signal?.pci, signal?.nrPci].filter(Boolean).join(' / ') || '—'} — لف الأنتنا ببطء لين يظهر، ويجيك صوت`}
+                      </Text>
+                      {st !== 'none' && canPin && !pinnedHere && (
+                        <PrimaryBtn small text={st === 'serving' ? 'ثبّت على هالبرج' : 'ثبّت عليه مباشرة'} icon="pin" onPress={pinTarget} busy={pciLockBusy} />
+                      )}
+                    </View>
+                  )}
                 </View>
-                <TextInput value={targetPci} onChangeText={v => setTargetPci(v.replace(/[^0-9٠-٩]/g, '').slice(0, 4))}
-                  keyboardType="number-pad" placeholder="PCI" placeholderTextColor={MUTED} maxLength={4}
-                  style={[a.pciInput, { color: TEXT, borderColor: tBd('#c9d6ee'), backgroundColor: tBg('#f5f8ff') }]} />
-              </View>
-              {!!normPci(targetPci) && (
-                <View style={{ flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                  <Text style={{ color: pciOn ? SUCCESS : MUTED, fontSize: 13, fontWeight: '800', textAlign: 'right', flex: 1 }}>
-                    {pciOn ? `على البرج المطلوب ✓ (${pciOn === 'NR' ? '5G' : '4G'})` : signal?.pci || signal?.nrPci ? `الحين على PCI ${[signal?.pci, signal?.nrPci].filter(Boolean).join(' / ')} — كمّل توجيه` : 'ننتظر قراءة البرج…'}
-                  </Text>
-                  <Pressable onPress={() => setTargetPci('')} hitSlop={8}>
-                    <Text style={{ color: DANGER, fontSize: 12.5, fontWeight: '700' }}>إلغاء</Text>
-                  </Pressable>
-                </View>
-              )}
-            </View>
+              );
+            })()}
 
             {/* ═══ صيد الإشارة: بوصلة للأنتنا الخارجية ═══ */}
             <Pressable onPress={() => nav.push(`/hunt/${id}` as Href)}
@@ -1171,8 +1282,26 @@ const a = sheet({
   headerSub: { fontSize: 11.5, color: MUTED, textAlign: 'center', marginTop: 1 },
 
   aimBar: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
-  pciCard: { borderRadius: 18, borderWidth: 1.5, padding: 12, gap: 8 },
-  pciInput: { width: 86, height: 44, borderRadius: 12, borderWidth: 1, textAlign: 'center', fontSize: 18, fontWeight: '800' },
+  pciCard: { borderRadius: 22, borderWidth: 1.5, padding: 14, gap: 12, backgroundColor: P.card, ...shadow },
+  pciHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
+  pciIcon: { width: 42, height: 42, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  pciTitle: { color: TEXT, fontSize: 16, fontWeight: '900', textAlign: 'right' },
+  pciSub: { color: MUTED, fontSize: 12, lineHeight: 18, textAlign: 'right' },
+  pciInRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
+  pciInBox: { flex: 1, height: 52, borderRadius: 16, borderWidth: 1.5, flexDirection: 'row-reverse', alignItems: 'center', paddingHorizontal: 14, gap: 10 },
+  pciInLbl: { color: MUTED, fontSize: 13, fontWeight: '800' },
+  pciInput: { flex: 1, height: 52, textAlign: 'center', fontSize: 22, fontWeight: '900', letterSpacing: 1 },
+  pciClear: { height: 52, paddingHorizontal: 14, borderRadius: 16, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  pciHint: { color: MUTED, fontSize: 12, fontWeight: '700', textAlign: 'right' },
+  pciChip: { borderRadius: 14, borderWidth: 1.5, paddingVertical: 7, paddingHorizontal: 12, alignItems: 'center', minWidth: 70 },
+  pciChipNum: { fontSize: 16, fontWeight: '900' },
+  pciChipSub: { fontSize: 10.5, fontWeight: '700', marginTop: 1 },
+  pciState: { borderRadius: 16, padding: 12, gap: 8 },
+  pciStateTxt: { fontSize: 14, fontWeight: '900', textAlign: 'right', flex: 1 },
+  pciRsrp: { fontSize: 18, fontWeight: '900' },
+  pciBar: { height: 8, borderRadius: 999, backgroundColor: 'rgba(120,130,160,0.18)', overflow: 'hidden' },
+  pciBarFill: { height: 8, borderRadius: 999 },
+  pciStateSub: { color: MUTED, fontSize: 12, lineHeight: 18, textAlign: 'right' },
   aimTgl: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 6, height: 40, paddingHorizontal: 12,
     borderRadius: 14, borderWidth: 1.5, borderColor: P.border, backgroundColor: P.card,
