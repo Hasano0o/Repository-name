@@ -385,7 +385,7 @@ export default function AddRouterScreen() {
    * over: قيم من الماسح (حالة React ما تتحدّث فوراً) — findHost: العنوان مو على الملصق،
    * فلو ما رد العنوان الحالي نجرّب العناوين المشهورة (هواوي/ZTE/غيرها) قبل ما نستسلم.
    */
-  async function onSave(over?: { host?: string; username?: string; password?: string; findHost?: boolean; wifi?: SavedWifi; name?: string }) {
+  async function onSave(over?: { host?: string; username?: string; password?: string; findHost?: boolean; wifi?: SavedWifi; name?: string; finishSetup?: boolean }) {
     if (isDevice && editId) {
       setBusy(true);
       try {
@@ -475,7 +475,9 @@ export default function AddRouterScreen() {
       // هواوي: الموديل اللي رد فعلاً (بدون دخول) + كلمة شكلها WPS PIN / كلمة الواي فاي ← نسأله قبل نصرف محاولة
       const isHw = /^huawei/.test(String((driver as any).id ?? ''));
       const hwModel = isHw ? await withTimeout(huaweiModelNoLogin(h), 3500, null) : null;
-      if (isHw && !(await confirmLabelMixup(password, hwModel))) return;
+      if (isHw && !over?.finishSetup && !(await confirmLabelMixup(password, hwModel))) return;
+      // «كمّل الإعداد عنّي»: الدخول يكمّل معالج الإعداد الأولي بدل ما يوقف (huawei finishSetupOnce)
+      if (isHw && over?.finishSetup) { (driver as any).finishSetupOnce = true; setStep('نكمّل إعداد الراوتر عنك...'); }
 
       setStep('نسجّل الدخول...');
       try {
@@ -533,6 +535,15 @@ export default function AddRouterScreen() {
           const userTip = /غلط|108006|incorrect|password/i.test(msg) && u === 'admin'
             ? `\n\nاسم المستخدم مكتوب «admin» — تأكد منه بالملصق (عند بعض الراوترات مثل Soyealink يكون «user»). الخانة فوق كلمة المرور.`
             : '';
+          // راوتر هواوي على معالج الإعداد الأولي (الكلمة صحيحة): نعرض «كمّل الإعداد عنّي» — نفس «تخطي» في صفحة الراوتر
+          if (isHw && (e as any)?.code === 'SETUP') {
+            failAlert('الراوتر يبي يكمّل إعداده الأولي',
+              over?.finishSetup
+                ? 'جرّبنا نكمّل الإعداد عنك والراوتر ما قبل.\nافتح 192.168.8.1 من المتصفح (سفاري أو كروم) وكمّل الخطوات لين توصل الصفحة الرئيسية، وبعدها ارجع لـ Bandly وجرّب.'
+                : 'كلمتك صحيحة ✓ بس الراوتر جديد (أو انسوى له ضبط مصنع) وما اكتمل إعداده الأولي — يمنع القراءة لين يكتمل.\nنقدر نكمّله عنك بضغطة: نفس زر «تخطي» في صفحة الراوتر، وما نغيّر الواي فاي ولا الكلمة ولا أي إعداد.\nأو افتح 192.168.8.1 من المتصفح وكمّله بنفسك.',
+              over?.finishSetup ? [] : [{ text: 'كمّل الإعداد عنّي', onPress: () => { onSave({ ...over, host: h, username: u, password, finishSetup: true }); } }]);
+            return;
+          }
           const hwTip = isHw && /غلط|108006|incorrect|password/i.test(msg) ? modelLine(hwModel) : '';
           failAlert('فشل الدخول', (msg || 'تحقق من اسم المستخدم وكلمة المرور') + userTip + lenTip + hwTip);
           return;

@@ -4,10 +4,21 @@
  * نص ما له ترجمة يطلع عربي — فزيد هنا بأي وقت.
  */
 export const EN: Record<string, string> = {
+  'كلمتك صحيحة ✓ بس الراوتر جديد (أو انسوى له ضبط مصنع) وما اكتمل إعداده الأولي — يمنع القراءة لين يكتمل. نقدر نكمّله عنك بضغطة: نفس زر «تخطي» في صفحة الراوتر، وما نغيّر الواي فاي ولا الكلمة ولا أي إعداد. أو افتح 192.168.8.1 من المتصفح وكمّله بنفسك.': 'Your password is correct ✓ but the router is new (or was factory reset) and its first-time setup isn\'t finished — it blocks reading until it is. We can finish it for you in one tap: same as «Skip» on the router page — we don\'t change the Wi-Fi, the password or any setting. Or open 192.168.8.1 in the browser and finish it yourself.',
+  'جرّبنا نكمّل الإعداد عنك والراوتر ما قبل. افتح 192.168.8.1 من المتصفح (سفاري أو كروم) وكمّل الخطوات لين توصل الصفحة الرئيسية، وبعدها ارجع لـ Bandly وجرّب.': 'We tried to finish the setup for you and the router refused. Open 192.168.8.1 in the browser (Safari or Chrome) and finish the steps until you reach the home page, then come back to Bandly and try again.',
+  'كلمة الدخول سطر «Password» في الملصق تحت IP — فيها حروف كبيرة وصغيرة وأرقام. لو أنت غيّرتها بنفسك لأرقام، اضغط «متأكد، جرّب».': 'The login password is the «Password» line on the label, under IP — it has upper- and lower-case letters and digits. If you changed it to digits yourself, tap «I\'m sure, try».',
+  'الكلمة اللي كتبتها كلها أرقام — كلمة دخول هواوي اللي على الملصق فيها حروف دايماً.': 'The password you typed is all digits — the Huawei login password on the label always has letters.',
+  'الراوتر يبي يكمّل إعداده الأولي': 'The router needs to finish its first-time setup',
+  'كلمتك صحيحة ✓ بس الراوتر جديد (أو انسوى له ضبط مصنع) وما اكتمل إعداده الأولي — يمنع القراءة لين يكتمل.': 'Your password is correct ✓ but the router is new (or was factory reset) and its first-time setup isn\'t finished — it blocks reading until it is.',
+  'نقدر نكمّله عنك بضغطة: نفس زر «تخطي» في صفحة الراوتر، وما نغيّر الواي فاي ولا الكلمة ولا أي إعداد.': 'We can finish it for you in one tap: same as «Skip» on the router page — we don\'t change the Wi-Fi, the password or any setting.',
+  'أو افتح 192.168.8.1 من المتصفح وكمّله بنفسك.': 'Or open 192.168.8.1 in the browser and finish it yourself.',
+  'جرّبنا نكمّل الإعداد عنك والراوتر ما قبل.': 'We tried to finish the setup for you and the router refused.',
+  'افتح 192.168.8.1 من المتصفح (سفاري أو كروم) وكمّل الخطوات لين توصل الصفحة الرئيسية، وبعدها ارجع لـ Bandly وجرّب.': 'Open 192.168.8.1 in the browser (Safari or Chrome) and finish the steps until you reach the home page, then come back to Bandly and try again.',
+  'كمّل الإعداد عنّي': 'Finish setup for me',
+  'نكمّل إعداد الراوتر عنك...': 'Finishing the router setup for you...',
   'تأكد من الكلمة قبل نرسلها': 'Check the password before we send it',
   'الكلمة اللي كتبتها ٨ أرقام — هذا شكل «WPS PIN» في الملصق، مو كلمة الدخول.': 'The password you typed is 8 digits — that looks like the label\'s «WPS PIN», not the login password.',
   'الكلمة اللي كتبتها شكلها كلمة الواي فاي (Wi-Fi Password)، مو كلمة الدخول.': 'The password you typed looks like the Wi-Fi Password, not the login password.',
-  'كلمة الدخول سطر «Password» في الملصق تحت IP — فيها حروف كبيرة وصغيرة وأرقام.': 'The login password is the «Password» line on the label, under IP — it has upper- and lower-case letters and digits.',
   'كل كلمة غلط تقفل الراوتر ٥ دقايق.': 'Every wrong password locks the router for 5 minutes.',
   'تأكد إنه نفس الموديل اللي على الملصق — لو غيره، جوالك على واي فاي راوتر ثاني.': 'Make sure it is the same model as on the label — if not, your phone is on another router\'s Wi-Fi.',
   'أعدّل الكلمة': 'Edit password',

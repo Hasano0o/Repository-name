@@ -224,7 +224,10 @@ const CORE_GET = /^(device\/signal|monitoring\/status|device\/information|net\/n
  * محاولة. كنا نحسبها مشكلة كوكي (نطلع ونبدّل الطريقة ← 125003) أو «طرد» («الراوتر يطلّع التطبيق… AI Life»).
  * ملفات صفحات هالراوترات (add-error): كلها device/basic_information فيها restore_default_status=1، وكود الصفحة نفسها
  * (main.js / guide.js) يحوّل لمعالج الإعداد «guide» لما تكون 1 وآخر خطوة فيه ترسل restore_default_status=0.
- * ما نكمّل المعالج عن العضو (فيه موافقته وكلمته) — نقول له يكمّله من المتصفح. القراءات المحمية اللي نحكم منها:
+ * ما نكمّل المعالج عن العضو لحالنا — نقول له يكمّله من المتصفح. ١٥ نوفمبر (عضو H155-381 STC: المتصفح في الآيفون ما مشي معه):
+ * زر «كمّل الإعداد عنّي» في إضافة الراوتر ← `finishSetupOnce` ← نرسل نفس آخر خطوة في المعالج لما يضغط «تخطي»
+ * (guide.js: setRestoreFlag ← POST device/basic_information {restore_default_status:0}) بدون أي إعداد ثاني، ونتأكد بقراءة.
+ * القراءات المحمية اللي نحكم منها:
  */
 const GUARDED_GET = /^(device\/signal|net\/net-mode)$/;
 const setupError = (host: string) => new HuaweiError('SETUP',
@@ -233,6 +236,29 @@ const setupError = (host: string) => new HuaweiError('SETUP',
 const SLOW_POST = /^net\/(lock-freq|net-mode)$/;
 
 export class HuaweiDriver implements RouterDriver {
+  /** زر «كمّل الإعداد عنّي» (إضافة الراوتر): الدخول الجاي لو لقى الراوتر على معالج الإعداد يكمّله بدل ما يوقف — مرة وحدة */
+  finishSetupOnce = false;
+  /** نفس «تخطي» في معالج صفحة الراوتر: علامة «الإعداد خلص» بس، ونتأكد إن القراءة صارت تشتغل */
+  private async finishSetupGuide(): Promise<boolean> {
+    this.finishSetupOnce = false;
+    try {
+      const r = await this.post('device/basic_information', '<restore_default_status>0</restore_default_status>', undefined, true);
+      diag(`[huawei] كمّل الإعداد عنّي: restore_default_status=0 → ${/<response>\s*OK\s*<\/response>/i.test(r) ? 'OK' : r.slice(0, 80)}`);
+    } catch (e: any) {
+      diag(`[huawei] كمّل الإعداد عنّي: الراوتر رفض (${e?.code ?? e?.message ?? e})`);
+      return false;
+    }
+    await new Promise(r => setTimeout(r, 1500));
+    this.setupState = null; this.guardedOk = false;
+    try { await this.get('net/net-mode', false); diag('[huawei] كمّل الإعداد عنّي: القراءة اشتغلت ✓'); return true; }
+    catch (e: any) { diag(`[huawei] كمّل الإعداد عنّي: القراءة لسا ترد ${e?.code ?? e}`); return false; }
+  }
+  /** الراوتر على معالج الإعداد: نكمّله لو العضو طلب، وإلا نطلع ونرمي الخطأ */
+  private async onSetup(e: HuaweiError): Promise<void> {
+    if (this.finishSetupOnce && await this.finishSetupGuide()) return;
+    await this.leaveQuietly();
+    throw e;
+  }
   id = 'huawei-lte';
   // بعض الموديلات (H138/H155/H165) 5G-capable — نكشفها ديناميكياً
   name = 'Huawei LTE/5G';
@@ -746,9 +772,9 @@ export class HuaweiDriver implements RouterDriver {
       if (!switched && this.manualCookie) {
         let dead = '';
         try { await this.get('net/net-mode', false); } catch (e) {
-          // إعدادات المصنع: تبديل طريقة الكوكي ما يفيد (ينتهي بـ 125003) — نطلع ونقول للعضو يكمّل الإعداد
-          if (e instanceof HuaweiError && e.code === 'SETUP') { await this.leaveQuietly(); throw e; }
-          if (e instanceof HuaweiError && /^(100003|125002|125003)$/.test(e.code)) dead = e.code;
+          // إعدادات المصنع: تبديل طريقة الكوكي ما يفيد (ينتهي بـ 125003) — نطلع ونقول للعضو يكمّل الإعداد (أو نكمّله لو طلب)
+          if (e instanceof HuaweiError && e.code === 'SETUP') await this.onSetup(e);
+          else if (e instanceof HuaweiError && /^(100003|125002|125003)$/.test(e.code)) dead = e.code;
         }
         if (dead) {
           diag(`[huawei] الكوكي اليدوي: دخلنا بس القراءة ترد ${dead} — نعيد الدخول بجرة كوكيز النظام`);
@@ -768,8 +794,8 @@ export class HuaweiDriver implements RouterDriver {
       else if (!switched && opts?.fresh) {
         const was = this.stale;
         try { await this.get('net/net-mode', false); } catch (e) {
-          if (e instanceof HuaweiError && e.code === 'SETUP') { await this.leaveQuietly(); throw e; }
-          this.stale = was;
+          if (e instanceof HuaweiError && e.code === 'SETUP') await this.onSetup(e);
+          else this.stale = was;
         }
       }
       if (Platform.OS === 'android' && this.manualCookie) manualHosts.add(host);

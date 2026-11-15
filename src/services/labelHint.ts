@@ -30,8 +30,10 @@ export function confirmLabelMixup(password: string, model: string | null): Promi
   if (!mix) return Promise.resolve(true);
   const body = (mix === 'wps'
     ? 'الكلمة اللي كتبتها ٨ أرقام — هذا شكل «WPS PIN» في الملصق، مو كلمة الدخول.'
-    : 'الكلمة اللي كتبتها شكلها كلمة الواي فاي (Wi-Fi Password)، مو كلمة الدخول.')
-    + '\nكلمة الدخول سطر «Password» في الملصق تحت IP — فيها حروف كبيرة وصغيرة وأرقام.'
+    : mix === 'digits'
+      ? 'الكلمة اللي كتبتها كلها أرقام — كلمة دخول هواوي اللي على الملصق فيها حروف دايماً.'
+      : 'الكلمة اللي كتبتها شكلها كلمة الواي فاي (Wi-Fi Password)، مو كلمة الدخول.')
+    + '\nكلمة الدخول سطر «Password» في الملصق تحت IP — فيها حروف كبيرة وصغيرة وأرقام. لو أنت غيّرتها بنفسك لأرقام، اضغط «متأكد، جرّب».'
     + '\nكل كلمة غلط تقفل الراوتر ٥ دقايق.'
     + modelLine(model);
   return new Promise(res => Alert.alert('تأكد من الكلمة قبل نرسلها', body, [

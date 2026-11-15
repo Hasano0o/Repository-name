@@ -40,6 +40,8 @@ test('labelMixup: WPS PIN وكلمة الواي فاي من ملصق هواوي 
   assert.equal(labelMixup('fB7g85q5'), null);
   assert.equal(labelMixup('iAEYt6Ba'), null);
   assert.equal(labelMixup('YbDiH498tg9'), null);
-  assert.equal(labelMixup('1234567'), null);
+  assert.equal(labelMixup('1234567'), 'digits');
+  assert.equal(labelMixup('0123456789'), 'digits');
+  assert.equal(labelMixup('123'), null);
   assert.equal(labelMixup('ABCDEFGHIJK'), null);
 });

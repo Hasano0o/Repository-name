@@ -87,6 +87,7 @@ export default function SetupScreen() {
   const [err, setErr] = useState('');
   const [miss, setMiss] = useState<Miss>({ why: 'none', hosts: [] });
   const reported = useRef(false);
+  const setupTried = useRef(false);
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
 
@@ -149,6 +150,16 @@ export default function SetupScreen() {
           [
             { text: 'أراجع الكلمة', style: 'cancel', onPress: () => setStep('password') },
             { text: 'جرّب الحين', onPress: () => login(true) },
+          ]);
+        return;
+      }
+      // هواوي على معالج الإعداد الأولي (الكلمة صحيحة): «كمّل الإعداد عنّي» — نفس «تخطي» في صفحة الراوتر (مرة وحدة)
+      if (isHw && e?.code === 'SETUP' && !setupTried.current) {
+        Alert.alert('الراوتر يبي يكمّل إعداده الأولي',
+          'كلمتك صحيحة ✓ بس الراوتر جديد (أو انسوى له ضبط مصنع) وما اكتمل إعداده الأولي — يمنع القراءة لين يكتمل.\nنقدر نكمّله عنك بضغطة: نفس زر «تخطي» في صفحة الراوتر، وما نغيّر الواي فاي ولا الكلمة ولا أي إعداد.\nأو افتح 192.168.8.1 من المتصفح وكمّله بنفسك.',
+          [
+            { text: 'رجوع', style: 'cancel', onPress: () => setStep('password') },
+            { text: 'كمّل الإعداد عنّي', onPress: () => { setupTried.current = true; (d as any).finishSetupOnce = true; login(true); } },
           ]);
         return;
       }
