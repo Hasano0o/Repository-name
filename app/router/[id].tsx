@@ -887,11 +887,12 @@ export default function RouterDashboard() {
             {optic?.rx !== undefined ? (() => {
               const lv = opticLevel(optic.rx);
               return (
-                <View style={{ alignItems: 'center', marginTop: 6 }}>
+                <Pressable style={{ alignItems: 'center', marginTop: 6 }} onPress={() => router.push(`/fiber/${info.id}` as Href)}>
                   <Text style={{ fontSize: 13, color: C.sub }}>استقبال الفايبر</Text>
                   <Text style={{ fontSize: 40, fontWeight: '800', color: LEVEL_COLOR[lv] }}>{optic.rx.toFixed(1)} <Text style={{ fontSize: 18 }}>dBm</Text></Text>
                   <Text style={{ fontSize: 13, fontWeight: '700', color: LEVEL_COLOR[lv] }}>{LEVEL_LABEL[lv]} · المقبول من −8 إلى −27</Text>
-                </View>
+                  <Text style={{ fontSize: 12, color: C.blue, marginTop: 2 }}>مستشار الفايبر ‹</Text>
+                </Pressable>
               );
             })() : <Text style={{ fontSize: 46, textAlign: 'center', marginTop: 6 }}>{online === false ? '⛔' : '🌐'}</Text>}
             <Text style={s.heroLine}>{online === false ? 'الراوتر غير متصل بالإنترنت' : `متصل${mode ? ` · ${mode}` : ''}`}</Text>
@@ -1214,6 +1215,14 @@ export default function RouterDashboard() {
                 <Text style={s.moreLbl}>الأماكن</Text>
               </Pressable>
               </>)}
+              {!feat.cellular && !!optic && (
+                <Pressable style={[s.moreTile, { backgroundColor: tBg('#f9731612'), borderColor: tBd('#f9731630') }]} onPress={() => router.push(`/fiber/${info.id}` as Href)}>
+                  <View style={[s.moreIcon, { backgroundColor: tBg('#f97316') }]}>
+                    <Icon name="spark" size={18} color={tFg('#fff')} />
+                  </View>
+                  <Text style={s.moreLbl}>مستشار الفايبر</Text>
+                </Pressable>
+              )}
               {info.driverId !== 'device' && (
                 <Pressable style={[s.moreTile, { backgroundColor: tBg('#2f6bff12'), borderColor: tBd('#2f6bff30') }]} onPress={() => router.push(`/wifi/${info.id}` as Href)}>
                   <View style={[s.moreIcon, { backgroundColor: tBg('#2f6bff') }]}>

@@ -4,6 +4,13 @@
  * نص ما له ترجمة يطلع عربي — فزيد هنا بأي وقت.
  */
 export const EN: Record<string, string> = {
+  'مستشار الفايبر ‹': 'Fiber advisor ‹',
+  'مستشار الفايبر': 'Fiber advisor',
+  'الراوتر مو موجود': 'Router not found',
+  'المعتاد': 'Usual',
+  'الحرارة': 'Temperature',
+  'المقبول: الاستقبال من −8 إلى −27 · الإرسال من 0.5 إلى 5': 'Acceptable: receive −8 to −27 · transmit 0.5 to 5',
+  'آخر القراءات': 'Recent readings',
   'الواي فاي · ملفاتي · المراقبة…': 'Wi-Fi · My files · Monitoring…',
   'استقبال الفايبر': 'Fiber receive (Rx)',
   'الراوتر غير متصل بالإنترنت': 'The router isn\'t connected to the internet',
@@ -2030,6 +2037,7 @@ export const EN: Record<string, string> = {
 };
 
 export const EN_PATTERNS: Record<string, string> = {
+  'من {0} إلى {1} dBm · نحفظ قراءة كل ما تفتح الراوتر (وحدة كل ١٠ دقايق)': 'From {0} to {1} dBm · we save a reading each time you open the router (one per 10 min)',
   '{0} · المقبول من −8 إلى −27': '{0} · acceptable −8 to −27',
   'حرارة {0}°': 'Temp {0}°',
   'متصل{0}': 'Connected{0}',

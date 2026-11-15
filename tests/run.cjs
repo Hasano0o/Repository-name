@@ -13,6 +13,7 @@ const out = fs.mkdtempSync(path.join(os.tmpdir(), 'bandly-tests-'));
 // الملفات اللي تحتاجها الاختبارات (كلها بدون react-native)
 const files = [
   'src/drivers/noChange.ts',
+  'src/utils/fiberAdvice.ts',
   'src/drivers/huawei/cellLock.ts',
   'src/drivers/huawei/session.ts',
   'src/utils/applyGuard.ts',
@@ -64,6 +65,7 @@ const files = [
   'src/utils/rushHours.ts',
   'src/utils/normalize.ts',
   'src/drivers/noChange.ts',
+  'src/utils/fiberAdvice.ts',
   'src/services/routerDump.ts',
   'src/services/live.ts',
   'src/services/fullDumpRule.ts',
