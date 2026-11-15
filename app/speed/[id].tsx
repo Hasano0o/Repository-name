@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState, ReactNode } from 'react';
 import { Animated, Easing, ScrollView } from 'react-native';
 import { View, Text, Pressable } from '../../src/i18n/rn';
 import { useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Path, Circle, Line, Defs, LinearGradient as SvgGrad, Stop, Text as SvgText } from 'react-native-svg';
 import { runSpeedTest, SpeedResult, SpeedProgress, SpeedPhase, ratingsFor } from '../../src/utils/speedtest';
 import { getRouter } from '../../src/store/routers';
@@ -180,13 +181,15 @@ export default function SpeedScreen() {
     try {
       const r = await runSpeedTest(p => { if (alive.current) setProg(p); }, () => cancel.current || !alive.current);
       if (alive.current) setRes(r);
+      // آخر نتيجة لكل راوتر (صفحة الفايبر تعرضها — الراوتر ما يعطي السرعة لحظياً)
+      if (id) AsyncStorage.setItem(`bandly.lastSpeed.${id}`, JSON.stringify({ down: r.downloadMbps, up: r.uploadMbps, ping: Math.round(r.pingMs), at: Date.now() })).catch(() => {});
       contribute(r);
     } catch (e: any) {
       if (alive.current) setErr(e?.message ?? 'فشل الاختبار');
     } finally {
       if (alive.current) setRunning(false);
     }
-  }, [running]);
+  }, [running, id]);
 
   // يبدأ لحاله أول ما تنفتح الشاشة (سواء من الأدوات أو من المساعد ?auto=1)
   const first = useRef(false);

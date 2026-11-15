@@ -11,7 +11,8 @@ import { withSession, dropSession, routerWrite } from '../../src/store/sessions'
 import { discoverFeatures } from '../../src/services/autoprog';
 import { discoverySummary, writeLabels } from '../../src/utils/autoprogCore';
 import { Carrier, Signal, Usage, ConnectedDevice, Traffic, RouterDriver, DeviceDetails, DataPlan, ActiveLock, OpticReading } from '../../src/drivers/types';
-import { opticLevel } from '../../src/drivers/hgont/parse';
+import { FiberHero } from '../../src/ui/FiberHero';
+import { addFiberSample, FiberSample } from '../../src/utils/fiberAdvice';
 import {
   Level, LEVEL_COLOR, LEVEL_LABEL, overallLevel, parseBands, parseNrBands, signalScore,
   rsrpLevel, rsrqLevel, sinrLevel, rssiLevel, isNoService } from '../../src/utils/signal';
@@ -61,9 +62,11 @@ interface Features {
   bands: boolean; sms: boolean; block: boolean; reboot: boolean; devices: boolean; cells: boolean; details: boolean; plan: boolean; network: boolean; carriers: boolean; antenna: boolean;
   /** فيه إشارة شبكة جوال؟ لا = فايبر/كابل (هواوي ONT) ← نخفي أدوات الأبراج والترددات والأنتنا */
   cellular: boolean;
+  /** الدرايفر يعرف يقرأ الإشارة الضوئية (فايبر) */
+  optic: boolean;
 }
 const NO_FEATURES: Features = {
-  bands: false, sms: false, block: false, reboot: false, devices: false, cells: false, details: false, plan: false, network: false, carriers: false, antenna: false, cellular: true,
+  bands: false, sms: false, block: false, reboot: false, devices: false, cells: false, details: false, plan: false, network: false, carriers: false, antenna: false, cellular: true, optic: false,
 };
 const featuresOf = (d: RouterDriver): Features => ({
   bands: !!d.getBandConfig,
@@ -78,6 +81,7 @@ const featuresOf = (d: RouterDriver): Features => ({
   carriers: !!d.getCarriers,
   antenna: !!d.getAntenna,
   cellular: !!d.getSignal,
+  optic: !!d.getOptic,
 });
 
 /** خلفية البطاقة الرئيسية حسب جودة الاتصال */
@@ -172,6 +176,9 @@ export default function RouterDashboard() {
   const [mode, setMode] = useState<string | undefined>();
   /** فايبر: استقبال/إرسال الضوء */
   const [optic, setOptic] = useState<OpticReading | null>(null);
+  /** فايبر: تاريخ القراءات (نفس مستشار الفايبر) + وقت آخر تحديث */
+  const [fiberHist, setFiberHist] = useState<FiberSample[]>([]);
+  const [fiberAt, setFiberAt] = useState<number | undefined>();
   const [has5g, setHas5g] = useState<boolean | undefined>();
   const [lock, setLock] = useState<ActiveLock | null>(null);
   const [traffic, setTraffic] = useState<Traffic | null>(null);
@@ -203,6 +210,21 @@ export default function RouterDashboard() {
   useEffect(() => {
     AsyncStorage.getItem('bandly.router.moreOpen').then(v => { if (v === '1') setMoreOpen(true); }).catch(() => {});
   }, []);
+  // فايبر: كل قراءة ضوء تنحفظ في تاريخ مستشار الفايبر (وحدة كل ١٠ دقايق) — عشان «نزل عن المعتاد»
+  useEffect(() => {
+    if (!id || feat.cellular) return;
+    setFiberAt(Date.now());
+    const rx = optic?.rx;
+    if (rx === undefined) return;
+    const k = `bandly.fiberRx.${id}`;
+    AsyncStorage.getItem(k).then(v => {
+      let h: FiberSample[] = [];
+      try { h = v ? JSON.parse(v) : []; } catch {}
+      const next = addFiberSample(h, rx);
+      setFiberHist(next);
+      if (next !== h) AsyncStorage.setItem(k, JSON.stringify(next)).catch(() => {});
+    }).catch(() => {});
+  }, [id, optic, devices.length, online, feat.cellular]);
   const toggleMore = () => setMoreOpen(o => {
     AsyncStorage.setItem('bandly.router.moreOpen', o ? '0' : '1').catch(() => {});
     return !o;
@@ -882,41 +904,15 @@ export default function RouterDashboard() {
         )}
 
         {!loading && info && !feat.cellular && (
-          // فايبر/كابل (ما فيه إشارة جوال): بدل عداد الإشارة والبرج والترددات — نوع الوصلة والحالة والأجهزة
-          <LinearGradient colors={HERO_BG[online === false ? 'poor' : 'good']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.heroX}>
-            {optic?.rx !== undefined ? (() => {
-              const lv = opticLevel(optic.rx);
-              return (
-                <Pressable style={{ alignItems: 'center', marginTop: 6 }} onPress={() => router.push(`/fiber/${info.id}` as Href)}>
-                  <Text style={{ fontSize: 13, color: C.sub }}>استقبال الفايبر</Text>
-                  <Text style={{ fontSize: 40, fontWeight: '800', color: LEVEL_COLOR[lv] }}>{optic.rx.toFixed(1)} <Text style={{ fontSize: 18 }}>dBm</Text></Text>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: LEVEL_COLOR[lv] }}>{LEVEL_LABEL[lv]} · المقبول من −8 إلى −27</Text>
-                  <Text style={{ fontSize: 12, color: C.blue, marginTop: 2 }}>مستشار الفايبر ‹</Text>
-                </Pressable>
-              );
-            })() : <Text style={{ fontSize: 46, textAlign: 'center', marginTop: 6 }}>{online === false ? '⛔' : '🌐'}</Text>}
-            <Text style={s.heroLine}>{online === false ? 'الراوتر غير متصل بالإنترنت' : `متصل${mode ? ` · ${mode}` : ''}`}</Text>
-            <View style={s.heroBox}>
-              <View style={s.heroCell}>
-                <Text style={s.heroCellLbl}>{optic?.tx !== undefined ? 'الإرسال' : 'الوصلة'}</Text>
-                <Text style={s.heroCellVal} numberOfLines={1} adjustsFontSizeToFit>{optic?.tx !== undefined ? `${optic.tx.toFixed(1)} dBm` : mode || 'فايبر'}</Text>
-                {optic?.tempC !== undefined && <Text style={s.heroCellSub} numberOfLines={1}>حرارة {optic.tempC}°</Text>}
-              </View>
-              <View style={s.heroDiv} />
-              <Pressable style={s.heroCell} onPress={() => router.push(`/device/${info.id}` as Href)}>
-                <Text style={s.heroCellLbl}>الأجهزة</Text>
-                <Text style={s.heroCellVal} numberOfLines={1}>{feat.devices ? `${devices.length}` : '—'}</Text>
-                <Text style={s.heroCellSub} numberOfLines={1}>متصل الحين</Text>
-              </Pressable>
-              <View style={s.heroDiv} />
-              <View style={s.heroCell}>
-                <Text style={s.heroCellLbl}>الجهاز</Text>
-                <Text style={s.heroCellVal} numberOfLines={1} adjustsFontSizeToFit>{details?.model || '—'}</Text>
-                {!!details?.software && !details.software.startsWith('hgont-') && <Text style={s.heroCellSub} numberOfLines={1} adjustsFontSizeToFit>{details.software}</Text>}
-              </View>
-            </View>
-            {!!traffic && <Text style={s.heroSub}>السرعة الحين {fmtRate(traffic.downBytesPerSec)}</Text>}
-          </LinearGradient>
+          // فايبر/كابل (ما فيه إشارة جوال): صفحة الفايبر (تصميم حسن ١٥ نوفمبر) بدل عداد الإشارة والبرج والترددات
+          <FiberHero
+            routerId={info.id} name={details?.model && !/^hgont-|^ztont-/.test(details.model) ? details.model : info.name}
+            mode={mode} online={online ?? null} optic={optic} opticSupported={feat.optic}
+            devices={feat.devices ? devices.length : undefined} updatedAt={fiberAt} hist={fiberHist}
+            onAdvisor={() => router.push(`/fiber/${info.id}` as Href)}
+            onSpeed={() => router.push(`/speed/${info.id}` as Href)}
+            onDevices={feat.devices ? () => router.push(`/device/${info.id}` as Href) : undefined}
+          />
         )}
 
         {!loading && info && feat.cellular && (

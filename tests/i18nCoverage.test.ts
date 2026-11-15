@@ -31,6 +31,7 @@ const DONE = [
   'src/ui/UsageTableCard.tsx',
   'src/ui/RushCard.tsx',
   'src/ui/ManualPickCard.tsx',
+  'src/ui/FiberHero.tsx',
 ];
 
 // ═══ القاموس نفسه ═══
