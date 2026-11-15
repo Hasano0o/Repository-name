@@ -140,7 +140,14 @@ export default function SetupScreen() {
     if (isHw && !lastTry && !(await confirmLabelMixup(cp, hwModel))) { setStep('password'); return; }
     try {
       setStatus('أسجّل الدخول عنك…');
-      await d.login(host, user, cp, { fresh: true, lastTry });
+      try { await d.login(host, user, cp, { fresh: true, lastTry }); }
+      catch (e0: any) {
+        // «كمّل الإعداد عنّي»: العلامة انحفظت بس جلسة المعالج ناقصة ← دخول جديد مرة وحدة
+        if (e0?.code !== 'SETUP_DONE') throw e0;
+        setStatus('كمّلنا الإعداد ✓ — أسجّل الدخول من جديد…');
+        await new Promise(r => setTimeout(r, 2500));
+        await d.login(host, user, cp, { fresh: true });
+      }
     } catch (e: any) {
       if (!alive.current) return;
       const msg = String(e?.message ?? e);

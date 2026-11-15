@@ -481,7 +481,15 @@ export default function AddRouterScreen() {
 
       setStep('نسجّل الدخول...');
       try {
-        await driver.login(h, u, password, { fresh: true });
+        try {
+          await driver.login(h, u, password, { fresh: true });
+        } catch (e0) {
+          // «كمّل الإعداد عنّي»: الراوتر حفظ «الإعداد خلص» بس جلسة المعالج ناقصة ← دخول جديد مرة وحدة
+          if ((e0 as any)?.code !== 'SETUP_DONE') throw e0;
+          setStep('كمّلنا الإعداد ✓ — نسجّل الدخول من جديد...');
+          await new Promise(r => setTimeout(r, 2500));
+          await driver.login(h, u, password, { fresh: true });
+        }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         // ZTE: باقي محاولة/محاولتين — قبل كنا نوقف للأبد (والحل الوحيد ضبط المصنع). الحين نخيّر المستخدم.

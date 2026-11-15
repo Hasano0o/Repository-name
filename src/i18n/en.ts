@@ -4,6 +4,9 @@
  * نص ما له ترجمة يطلع عربي — فزيد هنا بأي وقت.
  */
 export const EN: Record<string, string> = {
+  'كمّلنا إعداد الراوتر ✓ — نعيد الدخول': 'Router setup finished ✓ — logging in again',
+  'كمّلنا الإعداد ✓ — نسجّل الدخول من جديد...': 'Setup finished ✓ — logging in again...',
+  'كمّلنا الإعداد ✓ — أسجّل الدخول من جديد…': 'Setup finished ✓ — logging in again…',
   'كلمتك صحيحة ✓ بس الراوتر جديد (أو انسوى له ضبط مصنع) وما اكتمل إعداده الأولي — يمنع القراءة لين يكتمل. نقدر نكمّله عنك بضغطة: نفس زر «تخطي» في صفحة الراوتر، وما نغيّر الواي فاي ولا الكلمة ولا أي إعداد. أو افتح 192.168.8.1 من المتصفح وكمّله بنفسك.': 'Your password is correct ✓ but the router is new (or was factory reset) and its first-time setup isn\'t finished — it blocks reading until it is. We can finish it for you in one tap: same as «Skip» on the router page — we don\'t change the Wi-Fi, the password or any setting. Or open 192.168.8.1 in the browser and finish it yourself.',
   'جرّبنا نكمّل الإعداد عنك والراوتر ما قبل. افتح 192.168.8.1 من المتصفح (سفاري أو كروم) وكمّل الخطوات لين توصل الصفحة الرئيسية، وبعدها ارجع لـ Bandly وجرّب.': 'We tried to finish the setup for you and the router refused. Open 192.168.8.1 in the browser (Safari or Chrome) and finish the steps until you reach the home page, then come back to Bandly and try again.',
   'كلمة الدخول سطر «Password» في الملصق تحت IP — فيها حروف كبيرة وصغيرة وأرقام. لو أنت غيّرتها بنفسك لأرقام، اضغط «متأكد، جرّب».': 'The login password is the «Password» line on the label, under IP — it has upper- and lower-case letters and digits. If you changed it to digits yourself, tap «I\'m sure, try».',

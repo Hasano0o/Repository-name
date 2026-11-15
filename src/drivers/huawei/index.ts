@@ -251,7 +251,13 @@ export class HuaweiDriver implements RouterDriver {
     await new Promise(r => setTimeout(r, 1500));
     this.setupState = null; this.guardedOk = false;
     try { await this.get('net/net-mode', false); diag('[huawei] كمّل الإعداد عنّي: القراءة اشتغلت ✓'); return true; }
-    catch (e: any) { diag(`[huawei] كمّل الإعداد عنّي: القراءة لسا ترد ${e?.code ?? e}`); return false; }
+    catch (e: any) {
+      // عضو H155-381 (١٥ نوفمبر ١١:٣٢ م): العلامة انحفظت (restore_default_status 1 ← 0) بس جلسة وقت المعالج صلاحياتها ناقصة
+      // (100003) — صفحة الراوتر نفسها تدخل من جديد بعد المعالج. نطلع وإضافة الراوتر تعيد الدخول مرة (SETUP_DONE)
+      diag(`[huawei] كمّل الإعداد عنّي: القراءة لسا ترد ${e?.code ?? e} بنفس الجلسة — نطلع وندخل من جديد`);
+      await this.leaveQuietly();
+      throw new HuaweiError('SETUP_DONE', 'كمّلنا إعداد الراوتر ✓ — نعيد الدخول');
+    }
   }
   /** الراوتر على معالج الإعداد: نكمّله لو العضو طلب، وإلا نطلع ونرمي الخطأ */
   private async onSetup(e: HuaweiError): Promise<void> {
