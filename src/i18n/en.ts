@@ -4,6 +4,11 @@
  * نص ما له ترجمة يطلع عربي — فزيد هنا بأي وقت.
  */
 export const EN: Record<string, string> = {
+  'راوتر واي فاي على 192.168.3.1 (Mesh/AX غالباً)': 'Wi-Fi router on 192.168.3.1 (likely Mesh/AX)',
+  'الجهاز على 192.168.3.1 غالباً راوتر واي فاي من هواوي (WiFi Mesh أو AX) — يقوّي الواي فاي بس، ما فيه شريحة ولا إشارة نقرأها.': 'The device on 192.168.3.1 is most likely a Huawei Wi-Fi router (WiFi Mesh or AX) — it only boosts Wi-Fi, with no SIM and no signal to read.',
+  'اتصل بواي فاي الراوتر الأساسي (اللي داخلة فيه الشريحة أو كيبل الفايبر) وضيفه هو.': 'Connect to the Wi-Fi of the main router (the one with the SIM or the fiber cable) and add that one.',
+  'الجهاز على 192.168.3.1 غالباً راوتر واي فاي من هواوي (WiFi Mesh أو AX) — يقوّي الواي فاي بس، ما فيه شريحة ولا إشارة نقرأها. اتصل بواي فاي الراوتر الأساسي (اللي داخلة فيه الشريحة أو كيبل الفايبر) وضيفه هو.': 'The device on 192.168.3.1 is most likely a Huawei Wi-Fi router (WiFi Mesh or AX) — it only boosts Wi-Fi, with no SIM and no signal to read. Connect to the Wi-Fi of the main router (the one with the SIM or the fiber cable) and add that one.',
+  'هذا راوتر واي فاي بدون شريحة': 'This is a Wi-Fi router without a SIM',
   'كمّلنا إعداد الراوتر ✓ — نعيد الدخول': 'Router setup finished ✓ — logging in again',
   'كمّلنا الإعداد ✓ — نسجّل الدخول من جديد...': 'Setup finished ✓ — logging in again...',
   'كمّلنا الإعداد ✓ — أسجّل الدخول من جديد…': 'Setup finished ✓ — logging in again…',

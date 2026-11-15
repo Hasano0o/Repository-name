@@ -17,6 +17,7 @@ import { View, Text, TextInput, Pressable } from '../src/i18n/rn';
 import { router, Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { detectDriver } from '../src/drivers/registry';
+import { MESH_HOST, MESH_TIP } from '../src/utils/meshHint';
 import { huaweiModelNoLogin, confirmLabelMixup, modelLine } from '../src/services/labelHint';
 import type { RouterDriver } from '../src/drivers/types';
 import { listRouters, saveRouter, updateRouter, SavedRouter } from '../src/store/routers';
@@ -274,7 +275,7 @@ export default function SetupScreen() {
               <View style={s.offline}>
                 <Icon name="compass" size={34} color={tFg('#d97706')} />
                 <Text style={[s.offTitle, { color: tFg('#b45309') }]}>لقيت جهاز بس ما عرفت نوعه</Text>
-                <Text style={s.offSub}>أنت متصل ✓ — فيه جهاز يرد على {miss.hosts.join(' و ')}، بس Bandly ما تعرّف عليه للحين. أرسله لنا من «راوتري مو مدعوم؟» ونضيفه، أو أدخل بياناته بنفسك.{miss.hosts.includes('192.168.100.1') ? '\n\nلو جهازك راوتر فايبر (ألياف بصرية) — Bandly لراوترات الشريحة 4G/5G، بس السرعة والبنق يشتغلون لك بدون إضافة.' : ''}</Text>
+                <Text style={s.offSub}>أنت متصل ✓ — فيه جهاز يرد على {miss.hosts.join(' و ')}، بس Bandly ما تعرّف عليه للحين. أرسله لنا من «راوتري مو مدعوم؟» ونضيفه، أو أدخل بياناته بنفسك.{miss.hosts.includes('192.168.100.1') ? '\n\nلو جهازك راوتر فايبر (ألياف بصرية) — Bandly لراوترات الشريحة 4G/5G، بس السرعة والبنق يشتغلون لك بدون إضافة.' : ''}{miss.hosts.includes(MESH_HOST) ? MESH_TIP : ''}</Text>
               </View>
             ) : (
               <View style={s.offline}>

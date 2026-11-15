@@ -9,6 +9,7 @@ import { Icon, IconName } from '../src/ui/Icon';
 import { C, R, S, T, tBd, tBg, tFg } from '../src/ui/theme';
 import { isLanHost, cleanHostInput } from '../src/utils/host';
 import { detectDriver } from '../src/drivers/registry';
+import { MESH_HOST, MESH_TIP } from '../src/utils/meshHint';
 import { huaweiModelNoLogin, confirmLabelMixup, modelLine } from '../src/services/labelHint';
 import { addDemoRouter } from '../src/drivers/demo';
 import { DesktopNetCard, explainDetectFailure, useDesktopNet } from '../src/ui/DesktopNet';
@@ -448,6 +449,12 @@ export default function AddRouterScreen() {
         const ctrl = new AbortController();
         const tm = setTimeout(() => ctrl.abort(), 2500);
         const answered = await fetch(`http://${h}/`, { signal: ctrl.signal }).then(() => true, () => false).finally(() => clearTimeout(tm));
+        if (answered && h === MESH_HOST) {
+          // Huawei WiFi Mesh / AX (192.168.3.1): واي فاي بس بدون شريحة — مو «غير مدعوم» (عضو WS8100 ١٥ نوفمبر)
+          addFail('راوتر واي فاي على 192.168.3.1 (Mesh/AX غالباً)');
+          failAlert('هذا راوتر واي فاي بدون شريحة', MESH_TIP.trim());
+          return;
+        }
         if (answered) {
           Alert.alert('راوترك مو مدعوم للحين',
             `لقينا راوتر على ${h}، بس نوعه للحين ما يشتغل مع Bandly.\n\nأرسل لنا تفاصيله (دقيقة وحدة) والمبرمج يتواصل معك ويضيفه.`,
