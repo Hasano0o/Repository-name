@@ -1,7 +1,9 @@
 /**
  * TP-Link 4G/5G (نسخة «GDPR» المشفّرة — Archer NX200 v2 وأمثاله). من ملفات صفحة الراوتر نفسه (١٥ نوفمبر ٢٠٢٦، SSID B116).
- * المرحلة ١: التعرّف + الدخول + قراءة أولية + كرت FULL (يسحب ردود أوامر القراءة عشان نعرف أسماء الخانات) — بدون أي أمر كتابة.
- * المرحلة ٢ (بعد FULL): الإشارة كاملة · الترددات · تثبيت البرج (DEV2_LTE_4G/5G_CELL_LOCK موجودة في صفحته) · الرسائل.
+ * المرحلة ١ (FULL ١٥ نوفمبر ٤:١٦ م — الدخول اشتغل عند العضو): الإشارة 4G/5G والدمج والأبراج من gl DEV2_LTE_SERVING_CELL_INFO،
+ *   ومعلومات الجهاز والشريحة — قراءة بس. بدون أي أمر كتابة.
+ * المرحلة ٢: الترددات (DEV2_LTE_BAND_SEARCH في advanceLte.htm) · وضع الشبكة (DEV2_LTE_WAN_CFG.networkPreferredModeSelected) · تثبيت البرج.
+ *   ⚠️ الصفحة تقفل الحفظ لحساب «User» لين unlocked — نتأكد قبل أي كتابة.
  *
  * الدخول من index.html (https) + tpEncrypt.js + gdprProxy.js:
  *   ١. POST /cgi/getGDPRParm ← var nn/ee/seq (مفتاح RSA-512 عام)
@@ -11,7 +13,7 @@
  *   ٤. الرد مشفّر ← «$.ret=0;» نجاح · 71233 الكلمة غلط. الجلسة كوكي.
  *   ٥. باقي الأوامر JSON بنفس التشفير (توقيع بدون key/iv) + رأس TokenID (من الصفحة الرئيسية بعد الدخول).
  */
-import { RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, DeviceDetails } from '../types';
+import { RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, DeviceDetails, Carrier } from '../types';
 import { http } from '../http';
 import { diag } from '../../services/diag';
 import { isLanHost } from '../../utils/host';
@@ -19,10 +21,12 @@ import { buildSnapshot } from '../../utils/snapshot';
 import type { ModelProfile } from '../models';
 import { scrubLive } from '../../services/routerDump';
 import { TpState, tpGenKeys, tpHash, tpBody, tpAesDecrypt, tpParm, tpJson, tpB64 } from './crypto';
-import { tpIsWelcome, tpIsLoginPage, tpPageVars, tpLoginUser, tpBusy, tpRet, tpToken, TP_ERR_PWD, tpSignalGuess, TP_READ_OIDS } from './parse';
+import { tpIsWelcome, tpIsLoginPage, tpPageVars, tpLoginUser, tpBusy, tpRet, tpToken, TP_ERR_PWD, TP_READ_OIDS, TpCell, tpCells, tpSignal, tpTowers, tpCarriers } from './parse';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const OK_STACK = '0,0,0,0,0,0';
+/** stack واجهة الشريحة (advanceLte.htm: lteStack) */
+const LTE_STACK = '1,0,0,0,0,0';
 /** آخر بروتوكول اشتغل لكل عنوان (بالذاكرة) */
 const PROTO = new Map<string, 'http' | 'https'>();
 /** نوع الحساب (admin/user) من صفحة الدخول لكل عنوان */
@@ -31,7 +35,7 @@ const ADMIN = new Map<string, string>();
 export class TplinkDriver implements RouterDriver {
   readonly id = 'tplink-gdpr';
   name = 'TP-Link';
-  readonly capabilities: Capability[] = ['signal'];
+  readonly capabilities: Capability[] = ['signal', 'cells'];
 
   private host = '';
   /** http أو https — NX200: http «ترحيب» بس والواجهة على https */
@@ -105,7 +109,7 @@ export class TplinkDriver implements RouterDriver {
     return {
       id: 'tplink' + (key ? '-' + key : ''), label: this.name, brand: 'tplink', tech: /\b5G\b|NX\d/i.test(this.model) ? '5G' : '4G',
       writeUnverified: true,
-      note: 'TP-Link — الدعم للحين: الدخول وقراءة أولية للإشارة. أرسل ملفات راوترك (الكرت تحت) عشان نضيف الترددات وتثبيت البرج.',
+      note: 'TP-Link — الدعم للحين: الإشارة 4G/5G والدمج والأبراج المتصلة ومعلومات الجهاز (قراءة بس). تغيير الترددات وتثبيت البرج نضيفها بعد ما نجرّبها.',
     };
   }
 
@@ -194,33 +198,43 @@ export class TplinkDriver implements RouterDriver {
     return null;
   }
 
-  // ═══ الإشارة (أولية — أسماء الخانات تتأكد من FULL) ═══
-  async getSignal(): Promise<Signal> {
-    const objs: Record<string, unknown>[] = [];
-    for (const o of ['DEV2_LTE_NET_STATUS', 'DEV2_LTE_SERVING_CELL_INFO']) {
-      const d = await this.first(o, ['2,1,0,0,0,0', '1,0,0,0,0,0', OK_STACK]);
-      if (d) objs.push(d);
-    }
-    const s = tpSignalGuess(objs);
-    if (s.rsrp === undefined && s.nrRsrp === undefined) diag(`[tplink] ما لقينا خانات إشارة واضحة — مفاتيح: ${objs.map(o => Object.keys(o).join(',')).join(' | ').slice(0, 300)}`);
-    return s;
+  // ═══ الإشارة (FULL ١٥ نوفمبر: gl DEV2_LTE_SERVING_CELL_INFO + LINK_CFG — نفس frame/top.htm) ═══
+  private async list(oid: string): Promise<any[]> {
+    const { json } = await this.call('gl', oid, OK_STACK);
+    if (json?.success && Array.isArray(json.data)) return json.data;
+    throw new Error(`الراوتر ما رجّع ${oid}${json?.errorcode ? ` (${json.errorcode})` : ''}`);
   }
-  async getCells(): Promise<CellTower[]> { return []; }
+  private async read(): Promise<{ cells: TpCell[]; link: Record<string, unknown> | null }> {
+    const [list, link] = await Promise.all([this.list('DEV2_LTE_SERVING_CELL_INFO'), this.first('DEV2_LTE_LINK_CFG', [LTE_STACK]).catch(() => null)]);
+    return { cells: tpCells(list), link };
+  }
+  async getSignal(): Promise<Signal> { const { cells, link } = await this.read(); return tpSignal(cells, link); }
+  async getCells(): Promise<CellTower[]> { return tpTowers((await this.read()).cells); }
+  async getCarriers(): Promise<Carrier[]> { return tpCarriers((await this.read()).cells); }
   async getSnapshot(): Promise<SignalSnapshot> {
-    const s = await this.getSignal();
-    return buildSnapshot(s, [], [], { driverId: this.id, driverName: this.name });
+    const { cells, link } = await this.read();
+    return buildSnapshot(tpSignal(cells, link), tpCarriers(cells), tpTowers(cells), { driverId: this.id, driverName: this.name });
   }
   async getNetworkInfo(): Promise<NetworkInfo> {
-    const s = await this.getSignal();
-    return { connected: s.rsrp !== undefined || s.nrRsrp !== undefined, mode: s.network, supports5g: /NX\d|5G/i.test(this.model) || undefined };
+    const [{ cells, link }, prof] = await Promise.all([this.read(), this.first('DEV2_LTE_PROF_STAT', [LTE_STACK]).catch(() => null)]);
+    const s = tpSignal(cells, link);
+    return { connected: s.rsrp !== undefined || s.nrRsrp !== undefined, mode: s.network, operator: prof?.spn ? String(prof.spn) : undefined, supports5g: /NX\d|5G/i.test(this.model) || undefined };
   }
   async isConnected(): Promise<boolean> {
     try { const s = await this.getSignal(); return s.rsrp !== undefined || s.nrRsrp !== undefined; } catch { return false; }
   }
   async getDeviceDetails(): Promise<DeviceDetails> {
-    const d = await this.first('DEV2_DEV_INFO', [OK_STACK]);
-    const g = (k: string) => { const v = d?.[k]; return v === undefined || v === null || v === '' ? undefined : String(v); };
-    return { model: g('modelName') ?? (this.model || 'TP-Link'), software: g('softwareVersion'), hardware: g('hardwareVersion') };
+    const [d, link, prof] = await Promise.all([
+      this.first('DEV2_DEV_INFO', [OK_STACK]), this.first('DEV2_LTE_LINK_CFG', [LTE_STACK]).catch(() => null), this.first('DEV2_LTE_PROF_STAT', [LTE_STACK]).catch(() => null),
+    ]);
+    const g = (o: Record<string, unknown> | null, k: string) => { const v = o?.[k]; return v === undefined || v === null || v === '' ? undefined : String(v); };
+    if (g(d, 'modelName')) this.setModel(g(d, 'modelName')!);
+    const sim = g(link, 'simStatus');
+    return {
+      model: g(d, 'X_TP_DeviceModel') ?? g(d, 'modelName') ?? (this.model || 'TP-Link'), software: g(d, 'softwareVersion'), hardware: g(d, 'hardwareVersion'),
+      wanIp: g(link, 'ipv4'), dns: g(link, 'dns1v4'), operator: g(prof, 'spn') ?? g(prof, 'ispName'),
+      simStatus: sim === '3' ? 'جاهزة' : sim,
+    };
   }
 
   // ═══ FULL: صفحات بعد الدخول + ردود أوامر القراءة (أسماء الخانات) ═══

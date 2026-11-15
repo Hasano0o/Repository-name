@@ -2,7 +2,7 @@
  * TP-Link «GDPR» — قراءة صفحة الدخول وردود الراوتر (بدون react-native).
  * من ملفات NX200 (١٥ نوفمبر): الصفحة على https، وصفحة http «ترحيب» بس.
  */
-import type { Signal } from '../types';
+import type { Signal, CellTower, Carrier } from '../types';
 
 /** صفحة http اللي وظيفتها «روح لـ https» */
 export function tpIsWelcome(t: string): boolean {
@@ -95,4 +95,85 @@ export const TP_READ_OIDS: { op: 'go' | 'gl'; oid: string; stacks: string[] }[] 
   { op: 'gl', oid: 'DEV2_CELL_INTF', stacks: ['0,0,0,0,0,0'] },
   { op: 'go', oid: 'DEV2_CELL_INTF_STAT', stacks: ['1,0,0,0,0,0'] },
   { op: 'go', oid: 'DEV2_XTP_LTE_INTF_CFG', stacks: ['0,0,0,0,0,0', '1,0,0,0,0,0'] },
+  // صفحة advanceLte.htm (اختيار الترددات + بحث الشبكات) — قراءة بس، stack الصفحة نفسها
+  { op: 'go', oid: 'DEV2_LTE_BAND_SEARCH', stacks: ['1,0,0,0,0,0'] },
+  { op: 'go', oid: 'DEV2_LTE_NETWORK_SEARCH', stacks: ['1,0,0,0,0,0'] },
+  { op: 'go', oid: 'DEV2_LTE_PLMNLOCK', stacks: ['1,0,0,0,0,0'] },
 ];
+
+/* ═══ الإشارة الحقيقية (FULL ١٥ نوفمبر ٤:١٦ م) ═══
+ * gl DEV2_LTE_SERVING_CELL_INFO ← قائمة خانات (stack 1,N). من frame/top.htm:
+ *   networkType: 3 LTE · 7 4G+ · 8 NR (٢ WCDMA · ٤ TD-SCDMA) · cellConnectionStatus "1" = الخلية الأساسية
+ *   "2" = ثانوية (الدمج): عند العضو B3 «1» + B1 «2» و LINK_CFG.connectedBand = "B3;B1".
+ *   الخانات: band · cid · PCI · TAC · ARFCN · RSRP · RSRQ · SNR · RSSI · CQI · upMCS/downMCS · txPowerPUCCH · downBandWidth (kHz)
+ *   · nodeBId (hex) · CGI. لـ 5G: SSRSRP / SSRSRQ / SSSINR. صفر = ما فيه قراءة.
+ *   SNR: الراوتر رجّع 47 مع RSRQ -10 و downMCS 2 (QPSK) — هذا ٤٫٧ dB (وحدة ٠٫١ dB مثل rssnr في MediaTek — المودم ccmni)، مو ٤٧.
+ */
+export interface TpCell { tech: 'LTE' | 'NR'; status: string; band: number; arfcn?: string; pci?: string; cellId?: string; tac?: string; enb?: string;
+  rsrp?: number; rsrq?: number; sinr?: number; rssi?: number; cqi?: number; dlMcs?: number; ulMcs?: number; bwMhz?: number }
+
+const nz = (v: unknown, lo: number, hi: number): number | undefined => { const x = num(v); return x === undefined || x === 0 || x < lo || x > hi ? undefined : x; };
+const st = (v: unknown) => { const x = v === null || v === undefined ? '' : String(v).trim(); return x && x !== '0' ? x : undefined; };
+
+export function tpCells(list: unknown): TpCell[] {
+  const arr: any[] = Array.isArray(list) ? list : [];
+  const out: TpCell[] = [];
+  for (const c of arr) {
+    const nt = Number(c?.networkType);
+    const band = Number(c?.band);
+    if (![3, 7, 8].includes(nt) || !(band > 0)) continue;
+    const nr = nt === 8;
+    const snr = num(nr ? (num(c.SSSINR) ? c.SSSINR : c.SNR) : c.SNR);
+    const bw = num(c.downBandWidth);
+    out.push({
+      tech: nr ? 'NR' : 'LTE', status: String(c.cellConnectionStatus ?? ''), band,
+      arfcn: st(c.ARFCN), pci: st(c.PCI), cellId: st(c.cid), tac: st(c.TAC), enb: st(c.nodeBId),
+      rsrp: nz(nr && num(c.SSRSRP) ? c.SSRSRP : c.RSRP, -160, -30),
+      rsrq: nz(nr && num(c.SSRSRQ) ? c.SSRSRQ : c.RSRQ, -45, -1),
+      sinr: snr === undefined || (snr === 0 && !num(c.RSRP)) ? undefined : snr / 10,
+      rssi: nz(c.RSSI, -130, -20), cqi: nz(c.CQI, 1, 15), dlMcs: num(c.downMCS), ulMcs: num(c.upMCS),
+      bwMhz: bw && bw > 0 ? bw / 1000 : undefined,
+    });
+  }
+  return out;
+}
+
+/** link = DEV2_LTE_LINK_CFG (endcStatus · connectedBand · networkType) */
+export function tpSignal(cells: TpCell[], link?: Record<string, unknown> | null): Signal {
+  const s: Signal = {};
+  const lte = cells.find(c => c.tech === 'LTE' && c.status === '1');
+  const nr = cells.find(c => c.tech === 'NR' && c.status === '1');
+  if (lte) {
+    s.band = 'B' + lte.band; s.earfcn = lte.arfcn; s.pci = lte.pci; s.cellId = lte.cellId; s.tac = lte.tac;
+    s.enodebId = lte.enb ? String(parseInt(lte.enb, 16) || lte.enb) : undefined;
+    s.rsrp = lte.rsrp; s.rsrq = lte.rsrq; s.sinr = lte.sinr; s.rssi = lte.rssi; s.cqi = lte.cqi; s.dlMcs = lte.dlMcs; s.ulMcs = lte.ulMcs;
+    s.dlBandwidth = lte.bwMhz ? lte.bwMhz + 'MHz' : undefined;
+  }
+  if (nr) {
+    s.nrBand = 'n' + nr.band; s.nrArfcn = nr.arfcn; s.nrPci = nr.pci; s.nrRsrp = nr.rsrp; s.nrRsrq = nr.rsrq; s.nrSinr = nr.sinr; s.nrCqi = nr.cqi;
+    s.nrDlBandwidth = nr.bwMhz ? nr.bwMhz + 'MHz' : undefined;
+    s.nrActiveFromStatus = true;
+    if (!lte) { s.cellId = nr.cellId; s.tac = nr.tac; }
+  }
+  const active = cells.filter(c => c.status === '1' || c.status === '2');
+  const lteCa = active.filter(c => c.tech === 'LTE').length;
+  if (active.length > 1) {
+    s.caCount = active.length;
+    const bw = active.reduce((a, c) => a + (c.bwMhz ?? 0), 0);
+    if (bw) s.caBandwidthMhz = bw;
+  }
+  const endc = Number(link?.endcStatus ?? -1) > 0;
+  s.network = nr && lte ? '5G NSA' : nr ? (endc ? '5G NSA' : '5G SA') : lte ? (lteCa > 1 || Number(link?.networkType) === 7 ? '4G+' : '4G') : undefined;
+  return s;
+}
+
+export function tpTowers(cells: TpCell[]): CellTower[] {
+  return cells.map(c => ({
+    kind: c.status === '1' ? 'serving' : c.status === '2' ? 'secondary' : 'neighbor',
+    tech: c.tech, band: c.band, arfcn: c.arfcn, pci: c.pci, cellId: c.cellId, rsrp: c.rsrp, rsrq: c.rsrq, sinr: c.sinr, rssi: c.rssi,
+  } as CellTower));
+}
+export function tpCarriers(cells: TpCell[]): Carrier[] {
+  return cells.filter(c => c.status === '1' || c.status === '2')
+    .map(c => ({ tech: c.tech, band: c.band, role: c.status === '1' ? 'PCC' as const : 'SCC' as const, arfcn: c.arfcn, pci: c.pci, bandwidth: c.bwMhz, rsrp: c.rsrp, rsrq: c.rsrq, sinr: c.sinr }));
+}
