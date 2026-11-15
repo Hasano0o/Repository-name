@@ -44,6 +44,7 @@ const SCREENS: [string, string][] = [
   ['towers/[id]', 'الأبراج'],
   ['history/[id]', 'السجل'],
   ['sms/[id]', 'الرسائل'],
+  ['recharge/[id]', 'اشحن رصيدك'],
   ['hwtools/[id]', 'الأنتنا والباقة'],
   ['aim/[id]', 'توجيه الأنتنا'],
   ['hunt/[id]', 'صيد الإشارة'],

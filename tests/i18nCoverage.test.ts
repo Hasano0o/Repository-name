@@ -14,7 +14,7 @@ const scan = require(require('path').join(ROOT, 'tests/i18nScan.cjs'));
  * (شوف الناقص: node tests/i18nScan.cjs <الملف>)
  */
 const DONE = [
-  'app/index.tsx', 'app/_layout.tsx', 'app/setup.tsx', 'app/add-router.tsx', 'app/router/[id].tsx',
+  'app/index.tsx', 'app/_layout.tsx', 'app/setup.tsx', 'app/add-router.tsx', 'app/router/[id].tsx', 'app/recharge/[id].tsx',
   'src/ui/HomeFooter.tsx', 'src/ui/HomeHeader.tsx', 'src/ui/BlockerAsk.tsx', 'src/ui/CityAsk.tsx', 'src/ui/States.tsx',
   'src/ui/WelcomeTour.tsx', 'src/ui/InviteCard.tsx', 'src/ui/ModeChips.tsx', 'src/ui/Congestion.tsx', 'src/ui/RegionGrid.tsx',
   'src/ui/TimeChart.tsx', 'src/ui/AimMeter.tsx', 'src/ui/ComboCard.tsx', 'src/ui/OpPill.tsx',

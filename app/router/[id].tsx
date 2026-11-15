@@ -61,18 +61,19 @@ import { sheet, tr } from '../../src/i18n';import { LabelCard } from '../../src/
 import { rememberBands } from '../../src/store/bandsAvail';
 
 interface Features {
-  bands: boolean; sms: boolean; block: boolean; reboot: boolean; devices: boolean; cells: boolean; details: boolean; plan: boolean; network: boolean; carriers: boolean; antenna: boolean;
+  bands: boolean; sms: boolean; ussd: boolean; block: boolean; reboot: boolean; devices: boolean; cells: boolean; details: boolean; plan: boolean; network: boolean; carriers: boolean; antenna: boolean;
   /** فيه إشارة شبكة جوال؟ لا = فايبر/كابل (هواوي ONT) ← نخفي أدوات الأبراج والترددات والأنتنا */
   cellular: boolean;
   /** الدرايفر يعرف يقرأ الإشارة الضوئية (فايبر) */
   optic: boolean;
 }
 const NO_FEATURES: Features = {
-  bands: false, sms: false, block: false, reboot: false, devices: false, cells: false, details: false, plan: false, network: false, carriers: false, antenna: false, cellular: true, optic: false,
+  bands: false, sms: false, ussd: false, block: false, reboot: false, devices: false, cells: false, details: false, plan: false, network: false, carriers: false, antenna: false, cellular: true, optic: false,
 };
 const featuresOf = (d: RouterDriver): Features => ({
   bands: !!d.getBandConfig,
   sms: !!d.listSms,
+  ussd: !!d.ussd,
   block: !!d.blockDevice,
   reboot: !!d.reboot,
   devices: !!d.getDevices,
@@ -1201,6 +1202,15 @@ export default function RouterDashboard() {
                     <Icon name="settings" size={18} color={tFg('#fff')} />
                   </View>
                   <Text style={s.moreLbl}>مركز التحكم</Text>
+                </Pressable>
+              )}
+              {/* «اشحن رصيدك» (١٦ نوفمبر): بطاقة شحن من شريحة الراوتر — USSD (هواوي) أو SMS (STC) */}
+              {feat.cellular && (feat.ussd || feat.sms) && (
+                <Pressable style={[s.moreTile, { backgroundColor: tBg('#16a34a12'), borderColor: tBd('#16a34a35') }]} onPress={() => router.push(`/recharge/${info.id}` as Href)}>
+                  <View style={[s.moreIcon, { backgroundColor: tBg('#16a34a') }]}>
+                    <Icon name="spark" size={18} color={tFg('#fff')} />
+                  </View>
+                  <Text style={s.moreLbl}>اشحن رصيدك</Text>
                 </Pressable>
               )}
             </View>
