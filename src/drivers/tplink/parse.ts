@@ -177,3 +177,63 @@ export function tpCarriers(cells: TpCell[]): Carrier[] {
   return cells.filter(c => c.status === '1' || c.status === '2')
     .map(c => ({ tech: c.tech, band: c.band, role: c.status === '1' ? 'PCC' as const : 'SCC' as const, arfcn: c.arfcn, pci: c.pci, bandwidth: c.bwMhz, rsrp: c.rsrp, rsrq: c.rsrq, sinr: c.sinr }));
 }
+
+/* ═══ الترددات ووضع الشبكة (AUTH ١٥ نوفمبر ٤:٣٨ م + advanceLte.htm) ═══
+ * go DEV2_LTE_BAND_SEARCH (stack 1,0,0,0,0,0): selectedMode 1 تلقائي / 2 يدوي · selectedBand "B1;B3" ·
+ *   supportBandList "W1;…;B1;B3;…;N1;N3;…;N78" (5G ممكن تجي بلاحقة N/S — الصفحة تشيلها في العرض)
+ * الحفظ في الصفحة: $.dm.set (operation "so") DEV2_LTE_BAND_SEARCH {selectedMode, selectedBand, stack}
+ *   والترددات اللي تنكتب حسب وضع الشبكة: «4G Only/4G Preferred» = ترددات 4G بس · «5G Only» = 5G بس ·
+ *   «5G/4G» و «5G Preferred» = الاثنين.
+ * وضع الشبكة: DEV2_LTE_WAN_CFG {networkPreferredModeSelected: "5G Preferred"…} — الخيارات من networkPreferredModeOptionList.
+ *   الصفحة ترفض «4G Only» لو الترددات اليدوية بدون B، و«5G Only» لو بدون N.
+ */
+export interface TpBands { manual: boolean; lte: number[]; nr: number[]; supLte: number[]; supNr: number[]; raw: string; mode: string; modes: string[] }
+
+const bandNums = (list: string, p: 'B' | 'N') => [...new Set(String(list ?? '').split(/[;,\s]+/)
+  .map(x => x.trim().toUpperCase()).filter(x => x.startsWith(p)).map(x => Number(x.slice(1).replace(/[NS]$/, ''))).filter(n => n > 0))].sort((a, b) => a - b);
+
+export function tpBands(bs: Record<string, unknown> | null, wan: Record<string, unknown> | null): TpBands {
+  const raw = String(bs?.selectedBand ?? '');
+  return {
+    manual: String(bs?.selectedMode ?? '1') === '2',
+    lte: bandNums(raw, 'B'), nr: bandNums(raw, 'N'),
+    supLte: bandNums(String(bs?.supportBandList ?? ''), 'B'), supNr: bandNums(String(bs?.supportBandList ?? ''), 'N'),
+    raw, mode: String(wan?.networkPreferredModeSelected ?? ''),
+    modes: String(wan?.networkPreferredModeOptionList ?? '').split(',').map(x => x.trim()).filter(Boolean),
+  };
+}
+/** وش اللي مثبّت فعلاً لكل تقنية — اختيار كل المدعوم = تلقائي */
+export function tpLocked(b: TpBands): { lte: number[]; nr: number[] } {
+  if (!b.manual) return { lte: [], nr: [] };
+  const all = (x: number[], sup: number[]) => sup.length > 0 && sup.every(n => x.includes(n));
+  return { lte: all(b.lte, b.supLte) ? [] : b.lte, nr: all(b.nr, b.supNr) ? [] : b.nr };
+}
+export const tpBandValue = (lte: number[], nr: number[]) =>
+  [...[...lte].sort((a, b) => a - b).map(n => 'B' + n), ...[...nr].sort((a, b) => a - b).map(n => 'N' + n)].join(';');
+
+export const tpModeHas = (mode: string) => ({
+  lte: !/^5G Only$/i.test(mode) && !/^3G/i.test(mode),
+  nr: /^(5G\/4G|5G Preferred|5G Only)$/i.test(mode),
+});
+
+/**
+ * الإعداد الجديد للصفحة (selectedMode + selectedBand) — نفس منطق حفظ advanceLte.htm.
+ * lte/nr: [] = تلقائي لهالتقنية. اللي تلقائي يتعبّى بكل المدعوم (عشان تثبيت 4G ما يقطع 5G).
+ * يرجّع {error} لو الطلب ما يمشي مع وضع الشبكة الحالي.
+ */
+export function tpBandPlan(b: TpBands, lte: number[], nr: number[]): { mode: '1' | '2'; band: string } | { error: string } {
+  const has = tpModeHas(b.mode);
+  const badL = lte.filter(n => !b.supLte.includes(n)), badN = nr.filter(n => !b.supNr.includes(n));
+  if (badL.length || badN.length) return { error: `راوترك ما يدعم ${[...badL.map(n => 'B' + n), ...badN.map(n => 'n' + n)].join(', ')} — ما غيّرنا شي.` };
+  if (nr.length && !has.nr) return { error: `راوترك على «${b.mode}» — 5G مطفي. غيّر وضع الشبكة لـ «5G Preferred» أول. ما غيّرنا شي.` };
+  if (lte.length && !has.lte) return { error: `راوترك على «${b.mode}» — 4G مطفي. غيّر وضع الشبكة أول. ما غيّرنا شي.` };
+  if (!lte.length && !nr.length) return { mode: '1', band: '' };
+  const L2 = has.lte ? (lte.length ? lte : b.supLte) : [];
+  const N2 = has.nr ? (nr.length ? nr : b.supNr) : [];
+  return { mode: '2', band: tpBandValue(L2, N2) };
+}
+
+const MODE_AR: Record<string, string> = {
+  '5G/4G': '4G + 5G', '5G Preferred': '5G أول (مع 4G)', '5G Only': '5G فقط', '4G Preferred': '4G أول', '4G Only': '4G فقط', '3G Only': '3G فقط',
+};
+export const tpModeLabel = (m: string) => MODE_AR[m] ?? m;

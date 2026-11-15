@@ -17,7 +17,7 @@ Module._load = function (req: string, ...rest: unknown[]) {
   return origLoad.call(this, req, ...rest);
 };
 const { tpAesEncrypt, tpAesDecrypt, tpSign, tpHash, tpJson, tpB64, tpParm, tpBody } = require('../src/drivers/tplink/crypto');
-const { tpIsLoginPage, tpIsWelcome, tpPageVars, tpLoginUser, tpRet, tpBusy, tpSignalGuess, tpToken, tpCells, tpSignal, tpTowers, tpCarriers } = require('../src/drivers/tplink/parse');
+const { tpIsLoginPage, tpIsWelcome, tpPageVars, tpLoginUser, tpRet, tpBusy, tpSignalGuess, tpToken, tpCells, tpSignal, tpTowers, tpCarriers, tpBands, tpLocked, tpBandPlan, tpModeHas } = require('../src/drivers/tplink/parse');
 
 const NN = 'E422748A3E13513CE024E69C1ACA13D2CA9E8D995E470634B2A3B7ED153E2EE29F2A892AC8CA84AE884E909624C2B76B4DACAEC85EDD9B69B2615E0E1E8670A9';
 const ST: TpState = { keys: { key: '1731672345123456', iv: '1731672345654321' }, hash: tpHash('user', 'secret123'), seq: 787162459, nn: NN, ee: '010001' };
@@ -96,4 +96,43 @@ test('TP-Link: 5G (networkType 8) يقرأ SSRSRP/SSSINR', () => {
   assert.equal(s.nrBand, 'n78'); assert.equal(s.nrRsrp, -98); assert.equal(s.nrSinr, 8.5); assert.equal(s.nrDlBandwidth, '100MHz');
   assert.equal(s.network, '5G NSA');
   assert.equal(s.caBandwidthMhz, 100);
+});
+
+// رد DEV2_LTE_BAND_SEARCH و DEV2_LTE_WAN_CFG من راوتر العضو (AUTH ١٥ نوفمبر ٤:٣٨ م)
+const BS = { supportModeList: '1;2', selectedMode: '2', selectedBand: 'B1;B3', supportBandList: 'W1;W5;W8;B1;B3;B5;B7;B8;B20;B28;B38;B40;B41;B42;B43;N1;N3;N5;N7;N8;N20;N28;N38;N40;N41;N77;N78' };
+const WAN = { networkPreferredModeSelected: '4G Only', networkPreferredModeOptionList: '5G Preferred,5G Only,4G Preferred,4G Only,3G Only' };
+const SUP_L = [1, 3, 5, 7, 8, 20, 28, 38, 40, 41, 42, 43];
+const SUP_N = [1, 3, 5, 7, 8, 20, 28, 38, 40, 41, 77, 78];
+
+test('TP-Link: قراءة الترددات (يدوي B1+B3 على 4G فقط)', () => {
+  const b = tpBands(BS, WAN);
+  assert.equal(b.manual, true);
+  assert.deepEqual(b.lte, [1, 3]); assert.deepEqual(b.nr, []);
+  assert.deepEqual(b.supLte, SUP_L); assert.deepEqual(b.supNr, SUP_N);
+  assert.equal(b.mode, '4G Only');
+  assert.deepEqual(b.modes, ['5G Preferred', '5G Only', '4G Preferred', '4G Only', '3G Only']);
+  assert.deepEqual(tpLocked(b), { lte: [1, 3], nr: [] });
+  // كل المدعوم مختار = تلقائي
+  assert.deepEqual(tpLocked(tpBands({ ...BS, selectedBand: SUP_L.map(n => 'B' + n).join(';') }, WAN)).lte, []);
+  // لاحقة 5G (N78N / N78S) تنشال
+  assert.deepEqual(tpBands({ ...BS, selectedBand: 'B3;N78N;N1S' }, WAN).nr, [1, 78]);
+});
+
+test('TP-Link: خطة الحفظ نفس advanceLte.htm', () => {
+  const b4 = tpBands(BS, WAN);
+  // 4G فقط: ترددات 4G بس
+  assert.deepEqual(tpBandPlan(b4, [3], []), { mode: '2', band: 'B3' });
+  assert.deepEqual(tpBandPlan(b4, [], []), { mode: '1', band: '' });
+  assert.ok('error' in tpBandPlan(b4, [], [78]));         // 5G مطفي بهالوضع
+  assert.ok('error' in tpBandPlan(b4, [99], []));         // مو مدعوم
+  // 5G Preferred: تثبيت 4G يخلي 5G تلقائي (كل المدعوم)
+  const b5 = tpBands(BS, { ...WAN, networkPreferredModeSelected: '5G Preferred' });
+  const p = tpBandPlan(b5, [1, 3], []);
+  assert.deepEqual(p, { mode: '2', band: 'B1;B3;' + SUP_N.map(n => 'N' + n).join(';') });
+  assert.deepEqual(tpBandPlan(b5, [], [78]), { mode: '2', band: SUP_L.map(n => 'B' + n).join(';') + ';N78' });
+  // 5G فقط: 5G بس، و4G ممنوع
+  const b5o = tpBands(BS, { ...WAN, networkPreferredModeSelected: '5G Only' });
+  assert.deepEqual(tpBandPlan(b5o, [], [78]), { mode: '2', band: 'N78' });
+  assert.ok('error' in tpBandPlan(b5o, [3], []));
+  assert.deepEqual(tpModeHas('4G Preferred'), { lte: true, nr: false });
 });

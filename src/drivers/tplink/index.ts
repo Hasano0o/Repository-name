@@ -13,7 +13,9 @@
  *   ٤. الرد مشفّر ← «$.ret=0;» نجاح · 71233 الكلمة غلط. الجلسة كوكي.
  *   ٥. باقي الأوامر JSON بنفس التشفير (توقيع بدون key/iv) + رأس TokenID (من الصفحة الرئيسية بعد الدخول).
  */
-import { RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, DeviceDetails, Carrier } from '../types';
+import { RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, DeviceDetails, Carrier, BandConfig, ActiveLock } from '../types';
+import { noChange } from '../noChange';
+import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { http } from '../http';
 import { diag } from '../../services/diag';
 import { isLanHost } from '../../utils/host';
@@ -21,7 +23,7 @@ import { buildSnapshot } from '../../utils/snapshot';
 import type { ModelProfile } from '../models';
 import { scrubLive } from '../../services/routerDump';
 import { TpState, tpGenKeys, tpHash, tpBody, tpAesDecrypt, tpParm, tpJson, tpB64 } from './crypto';
-import { tpIsWelcome, tpIsLoginPage, tpPageVars, tpLoginUser, tpBusy, tpRet, tpToken, TP_ERR_PWD, TP_READ_OIDS, TpCell, tpCells, tpSignal, tpTowers, tpCarriers } from './parse';
+import { tpIsWelcome, tpIsLoginPage, tpPageVars, tpLoginUser, tpBusy, tpRet, tpToken, TP_ERR_PWD, TP_READ_OIDS, TpCell, tpCells, tpSignal, tpTowers, tpCarriers, TpBands, tpBands, tpLocked, tpBandPlan, tpModeLabel, tpModeHas } from './parse';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const OK_STACK = '0,0,0,0,0,0';
@@ -35,7 +37,7 @@ const ADMIN = new Map<string, string>();
 export class TplinkDriver implements RouterDriver {
   readonly id = 'tplink-gdpr';
   name = 'TP-Link';
-  readonly capabilities: Capability[] = ['signal', 'cells'];
+  readonly capabilities: Capability[] = ['signal', 'cells', 'bandLock'];
 
   private host = '';
   /** http أو https — NX200: http «ترحيب» بس والواجهة على https */
@@ -108,8 +110,8 @@ export class TplinkDriver implements RouterDriver {
     const key = this.model.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     return {
       id: 'tplink' + (key ? '-' + key : ''), label: this.name, brand: 'tplink', tech: /\b5G\b|NX\d/i.test(this.model) ? '5G' : '4G',
-      writeUnverified: true,
-      note: 'TP-Link — الدعم للحين: الإشارة 4G/5G والدمج والأبراج المتصلة ومعلومات الجهاز (قراءة بس). تغيير الترددات وتثبيت البرج نضيفها بعد ما نجرّبها.',
+      nrLock: true,
+      note: 'TP-Link — الإشارة 4G/5G والدمج والأبراج، وتثبيت الترددات ووضع الشبكة (من صفحة الراوتر — كل تغيير نتأكد منه بالقراءة). تثبيت البرج لسا ما انضاف.',
     };
   }
 
@@ -166,13 +168,13 @@ export class TplinkDriver implements RouterDriver {
   }
 
   /** أمر JSON مشفّر — قراءة بس في هالمرحلة (go / gl) */
-  private async call(op: 'go' | 'gl', oid: string, stack = OK_STACK, again = true): Promise<{ text: string; json: any }> {
+  private async call(op: 'go' | 'gl' | 'so', oid: string, stack = OK_STACK, again = true, data: Record<string, unknown> = {}): Promise<{ text: string; json: any }> {
     if (!this.st) {
       if (!this.creds) throw new Error('ما دخلنا الراوتر');
       await this.login(this.host, this.creds.user, this.creds.password);
     }
     const st = this.st!;
-    const body = tpBody(tpJson(op, oid, { stack, pstack: OK_STACK }), st, false);
+    const body = tpBody(tpJson(op, oid, { ...data, stack, pstack: OK_STACK }), st, false);
     const r = await this.raw('/cgi_gdpr?9', { method: 'POST', headers: { 'Content-Type': 'text/plain', ...(this.token ? { TokenID: this.token } : {}) }, body }, 10000);
     let text = '';
     try { text = tpAesDecrypt(r.text, st.keys); } catch {}
@@ -182,7 +184,7 @@ export class TplinkDriver implements RouterDriver {
     if (!json && again && this.creds && (r.status === 403 || r.status === 401 || !text)) {
       diag(`[tplink] ${op} ${oid} → ${r.status} بدون رد مفهوم — دخول جديد`);
       this.st = null;
-      return this.call(op, oid, stack, false);
+      return this.call(op, oid, stack, false, data);
     }
     return { text: text || `HTTP ${r.status} · ${r.text.slice(0, 200)}`, json };
   }
@@ -235,6 +237,107 @@ export class TplinkDriver implements RouterDriver {
       wanIp: g(link, 'ipv4'), dns: g(link, 'dns1v4'), operator: g(prof, 'spn') ?? g(prof, 'ispName'),
       simStatus: sim === '3' ? 'جاهزة' : sim,
     };
+  }
+
+  // ═══ الترددات ووضع الشبكة (advanceLte.htm — نفس حفظ الصفحة، وبعده نقرأ ونتأكد) ═══
+  private async bands(): Promise<TpBands> {
+    const [bs, wan] = await Promise.all([this.first('DEV2_LTE_BAND_SEARCH', [LTE_STACK]), this.first('DEV2_LTE_WAN_CFG', [LTE_STACK])]);
+    if (!bs || !wan) throw new Error('ما قدرنا نقرأ إعداد الترددات من الراوتر');
+    return tpBands(bs, wan);
+  }
+  /** set ("so") — الراوتر يرد {success, errorcode} */
+  private async set(oid: string, data: Record<string, unknown>): Promise<void> {
+    const { json, text } = await this.call('so', oid, LTE_STACK, true, data);
+    diag(`[tplink] so ${oid} ${JSON.stringify(data)} ← ${text.replace(/\s+/g, ' ').slice(0, 120)}`);
+    if (!json?.success) {
+      const code = json?.errorcode;
+      throw new Error(code ? `الراوتر رفض التغيير (رمز ${code})${/^(9|7)\d{3,4}$/.test(String(code)) ? ' — يمكن حساب «user» ما عنده صلاحية' : ''}` : 'الراوتر ما رد على التغيير');
+    }
+  }
+  private async verify(check: (b: TpBands) => boolean, what: string): Promise<void> {
+    let last: TpBands | null = null;
+    for (let i = 0; i < 4; i++) {
+      if (i) await sleep(1500);
+      try { last = await this.bands(); if (check(last)) return; } catch {}
+    }
+    throw new Error(`الراوتر قبل الأمر بس ${what} ما تغيّر${last ? ` (الحين: ${last.manual ? last.raw || 'يدوي' : 'تلقائي'} · ${last.mode})` : ''}`);
+  }
+
+  async getBandConfig(): Promise<BandConfig> {
+    const b = await this.bands();
+    const lk = tpLocked(b);
+    const has = tpModeHas(b.mode);
+    return {
+      supported: b.supLte, nrSupported: has.nr ? b.supNr : [],
+      locked: lk.lte, nrLocked: lk.nr,
+      mode: b.mode, modes: b.modes.map(m => ({ value: m, label: tpModeLabel(m) })),
+      nrLockable: has.nr,
+    };
+  }
+  async getActiveLock(): Promise<ActiveLock | null> {
+    const lk = tpLocked(await this.bands());
+    return lk.lte.length || lk.nr.length ? { bands: lk.lte, nrBands: lk.nr } : null;
+  }
+
+  async setBand(bands: number[] | 'keep', nrBands?: number[]): Promise<void> {
+    const b = await this.bands();
+    const cur = tpLocked(b);
+    const lte = bands === 'keep' ? cur.lte : bands;
+    const nr = nrBands === undefined ? cur.nr : nrBands;
+    const plan = tpBandPlan(b, lte, nr);
+    if ('error' in plan) throw noChange(plan.error);
+    const same = plan.mode === '1' ? !b.manual : b.manual && plan.band.split(';').sort().join(';') === [...b.lte.map(n => 'B' + n), ...b.nr.map(n => 'N' + n)].sort().join(';');
+    if (same) return;
+    await this.set('DEV2_LTE_BAND_SEARCH', plan.mode === '1' ? { selectedMode: '1' } : { selectedMode: '2', selectedBand: plan.band });
+    const want = plan.band.split(';').filter(Boolean).sort().join(';');
+    await this.verify(n => plan.mode === '1' ? !n.manual : n.manual && [...n.lte.map(x => 'B' + x), ...n.nr.map(x => 'N' + x)].sort().join(';') === want, 'الترددات');
+  }
+
+  async setNetworkMode(mode: string): Promise<void> {
+    const b = await this.bands();
+    if (!b.modes.includes(mode)) throw noChange(`راوترك ما فيه وضع «${mode}» — ما غيّرنا شي.`);
+    if (b.mode === mode) return;
+    // نفس فحص الصفحة: الترددات اليدوية لازم يكون فيها تقنية الوضع الجديد
+    if (b.manual && ((mode === '4G Only' && !b.lte.length) || (mode === '5G Only' && !b.nr.length))) {
+      throw noChange(`الترددات المثبّتة ما فيها ${mode === '4G Only' ? '4G' : '5G'} — فك تثبيت الترددات أول. ما غيّرنا شي.`);
+    }
+    await this.set('DEV2_LTE_WAN_CFG', { networkPreferredModeSelected: mode });
+    await this.verify(n => n.mode === mode, 'وضع الشبكة');
+    // ترددات يدوية بدون أي 5G والوضع الجديد فيه 5G (عند العضو: «B1;B3» على «4G Only») ← 5G بيبقى مطفي فعلياً.
+    // نفتح ترددات 5G كلها (تلقائي) ونخلي تثبيت 4G مثل ما هو.
+    const nb = await this.bands();
+    if (nb.manual && tpModeHas(mode).nr && !nb.nr.length) await this.setBand(tpLocked(nb).lte, []);
+  }
+
+  // لقطة + إرجاع متحقق منه
+  async readLockState(): Promise<LockSnapshot> {
+    const b = await this.bands();
+    const lk = tpLocked(b);
+    const summary = `4G: ${lk.lte.map(x => 'B' + x).join('+') || 'تلقائي'} · 5G: ${lk.nr.map(x => 'n' + x).join('+') || 'تلقائي'} · ${tpModeLabel(b.mode)}`;
+    return { driver: this.id, at: Date.now(), summary, data: { manual: b.manual, raw: b.raw, mode: b.mode } };
+  }
+  async restoreLockState(snap: LockSnapshot): Promise<void> {
+    if (snap.driver !== this.id) throw new Error('اللقطة من نوع راوتر ثاني — ما نرجّعها');
+    const d = snap.data as { manual: boolean; raw: string; mode: string };
+    const miss: string[] = [];
+    let b = await this.bands();
+    if (d.mode && b.mode !== d.mode) {
+      try { await this.set('DEV2_LTE_WAN_CFG', { networkPreferredModeSelected: d.mode }); } catch { miss.push('وضع الشبكة'); }
+    }
+    b = await this.bands();
+    const wantRaw = d.raw.split(';').filter(Boolean).sort().join(';');
+    const ok = (n: TpBands) => d.manual ? n.manual && n.raw.split(';').filter(Boolean).sort().join(';') === wantRaw : !n.manual;
+    if (!ok(b)) {
+      try {
+        await this.set('DEV2_LTE_BAND_SEARCH', d.manual ? { selectedMode: '2', selectedBand: d.raw } : { selectedMode: '1' });
+        await this.verify(ok, 'الترددات');
+      } catch { miss.push('الترددات'); }
+    }
+    try { if (d.mode && (await this.bands()).mode !== d.mode) miss.push('وضع الشبكة'); } catch {}
+    if (miss.length) throw restoreMismatch([...new Set(miss)]);
+  }
+  async restoreAll(): Promise<void> {
+    try { await this.setBand([], []); } catch {}
   }
 
   // ═══ FULL: صفحات بعد الدخول + ردود أوامر القراءة (أسماء الخانات) ═══
