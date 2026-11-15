@@ -264,11 +264,26 @@ function topMisses(m: string[], n = 25): string[] {
   return [...m.filter(x => /\.html?\b/.test(x)), ...m.filter(x => !/\.html?\b/.test(x))].slice(0, n);
 }
 
+/** صفحة http اللي وظيفتها بس «روح لـ https» (TP-Link: زر يرسل /cgi/welcome ويرجع Location) */
+export function isHttpsWelcome(text: string): boolean {
+  return /\/cgi\/welcome/.test(text) && /go-https-modal|visitHttpsNote/.test(text);
+}
+
 export async function collectRouterFiles(host: string, onStep?: (n: number) => void, opts?: { start?: string[]; afterLogin?: boolean; headers?: Record<string, string>; fetcher?: (path: string) => Promise<{ ok: boolean; status: number; text: string; type: string }> }): Promise<{ files: DumpFile[]; skipped: string[] }> {
   if (!isLanHost(host)) throw new Error('العنوان لازم يكون محلي');
   authHdr = opts?.headers ?? {};
   authFetch = opts?.fetcher ?? null;
-  const base = 'http://' + host.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  let base = 'http://' + host.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  // TP-Link Archer NX200 (١٥ نوفمبر): صفحة http «ترحيب» بس تحوّل لـ https (/cgi/welcome) — كل ملف ثاني يرجّعها،
+  // فوصلنا ١٠ ملفات بدون صفحة الدخول ولا أوامر الإشارة. لو كذا نجمع من https (شهادة ذاتية — محلي بس).
+  if (!opts?.afterLogin && !authFetch && !opts?.start?.length) {
+    const home = await get(base + '/');
+    if (home.ok && isHttpsWelcome(home.text)) {
+      const sb = base.replace(/^http:/, 'https:');
+      const h2 = await get(sb + '/');
+      if (h2.ok && h2.text && !isHttpsWelcome(h2.text)) base = sb;
+    }
+  }
   const files: DumpFile[] = [];
   const skipped: string[] = [];
   const seen = new Set<string>();

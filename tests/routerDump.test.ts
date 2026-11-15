@@ -430,3 +430,26 @@ test('findRefs: صفحات hash تنحمّل بـ jQuery (#/bandSelect ← bandS
   for (const f of ['bandSelect.html', 'channelLock.html', 'deviceinformation.html']) assert.ok(r.includes(f), f);
   assert.ok(!findRefs('<a href="#/x">x</a>').includes('x.html'), 'بدون .load ما نخمّن');
 });
+
+test('TP-Link NX200: صفحة http «روح لـ https» ← الجامع ينتقل لـ https', async () => {
+  const welcome = fs.readFileSync(path.join(process.cwd(), 'tests', 'fixtures', 'tplink-nx200', 'welcome.html'), 'utf8');
+  const https: Record<string, string> = {
+    '/': '<html><script src="/js/lib.js"></script><script src="/js/login.js"></script></html>',
+    '/js/lib.js': 'var a=1;',
+    '/js/login.js': '$.dm.cgi({oid:"/cgi/login"});',
+  };
+  const asked: string[] = [];
+  (globalThis as any).fetch = async (url: string) => {
+    const sec = url.startsWith('https:');
+    const p = url.replace(/^https?:\/\/[^/]+/, '').split('?')[0];
+    asked.push((sec ? 'S' : 'H') + p);
+    const body = sec ? https[p] : welcome; // http يرجّع صفحة الترحيب لأي شي
+    const st = body !== undefined ? 200 : 404;
+    return { ok: st === 200, status: st, headers: { get: () => 'text/html' }, text: async () => body ?? '' } as any;
+  };
+  const { files } = await collectRouterFiles('192.168.1.1');
+  const names = files.map(f => f.p);
+  assert.ok(names.includes('/js/login.js'), names.join(','));
+  assert.ok(asked.includes('S/js/lib.js'));
+  assert.ok(!files.some(f => f.p === '/index.html' && /go-https-modal/.test(f.t)));
+});

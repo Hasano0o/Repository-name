@@ -1,0 +1,312 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+<head>
+    <link rel="shortcut icon" type="image/x-icon" href="../img/favicon.ico" />
+    <link rel="stylesheet" href="../css/main.css" />
+    <link rel="stylesheet" href="../css/theme.css" />
+
+    <script src="../js/jquery-1.8.3.min.js" type="text/javascript"></script>
+    <script src="../js/lib.js" type="text/javascript"></script>
+    <script type="text/javascript" src="../locale/language.js"></script>
+    <script type="text/javascript" src="../js/oid_str.js"></script>
+    <script type="text/javascript" src="../js/locale.js"></script>
+    <script type="text/javascript" src="../js/encrypt.js"></script>
+    <script type="text/javascript" src="../js/oid_str.js"></script>
+    <script src="../js/forge.min.js" type="text/javascript"></script>
+    <script src="../js/tpEncrypt.js" type="text/javascript"></script>
+    <script src="../js/gdprProxy.js" type="text/javascript"></script>
+    <style type="text/css">
+        div.main-content {
+            padding-top: 250px;
+            width: 980px;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            margin: 0 auto;
+        }
+
+        div.content-qrcode {
+            text-align: center;
+            width: 250px;
+            color: #000;
+            background: #ffffff3d;
+            border: 1px solid #fff;
+            border-radius: 6px;
+            display: inline-block;
+        }
+
+        span.qrcode {
+            display: inline-block;
+            width: 190px;
+            height: 190px;
+            margin: 24px 30px 16px;
+            background: url('img/welcome/qrCode.png') no-repeat center;
+        }
+
+        p.T_scanForInfo {
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        div.content-info {
+            width: 100%;
+            color: #fff;
+            white-space: normal;
+            margin-bottom: 0;
+            margin-left: 60px;
+        }
+
+        .T_contentInfoTitle {
+            margin-top: 20px;
+            margin-bottom: 30px;
+            font-size: 36px;
+            font-weight: 700;
+            line-height: 36px;
+            color: #fff;
+        }
+
+        p.T_contentNote {
+            margin-bottom: 16px;
+            font-size: 18px;
+            font-weight: 400;
+            line-height: 24px;
+            color: #fff;
+        }
+
+        div.click-container {
+            cursor: pointer;
+        }
+
+        div.click-container:hover {
+            opacity: 0.6;
+        }
+
+        span.T_clickContinue {
+            height: 24px;
+            font-size: 18px;
+            font-weight: 700;
+            line-height: 24px;
+            text-decoration: underline;
+            vertical-align: middle;
+            color: #fff;
+
+        }
+
+        span.click-icon {
+            background: url('img/welcome/goNext.png') no-repeat center;
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            margin-left: 12px;
+        }
+
+        #go-https-modal-container {
+            width: 670px;
+        }
+
+        #go-https-modal-container div.https-illustration {
+            width: 374px;
+            height: 240px;
+            margin-left: 100px;
+        }
+        #go-https-modal-container div.illustration-google {
+            background: url('img/welcome/illustration-google.png') no-repeat center;
+            background-size: contain;
+        }
+        #go-https-modal-container div.illustration-safari {
+            background: url('img/welcome/illustration-safari.png') no-repeat center;
+            background-size: contain;
+        }
+
+        #go-https-modal p {
+            line-height: 22px;
+        }
+    </style>
+</head>
+<body>
+    <div id="cover" class="nd"></div>
+    <div id="mask" class="mask"></div>
+    <div class="main-container">
+        <div class="main-content">
+            <div class="content-qrcode">
+                <span class="qrcode"></span>
+                <p class="T_scanForInfo">Scan for more info</p>
+            </div>
+            <div class="content-info">
+                <span class="icon-logo"></span>
+                <h1 class="T_contentInfoTitle">Welcome to TP-Link Router</h1>
+                <p class="T_contentNote">
+                    HTTPS is a security-enhanced web access protocol. To comply with security regulations such as the CE RED regulation in
+                    Europe, accessing the router's web page via HTTPS is required. We strongly recommend using HTTPS to ensure a secure
+                    connection
+                </p>
+                <div class="click-container flat-button">
+                    <span class="T_clickContinue">Click here to continue</span>
+                    <span class="click-icon"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-container widget-container msg-container" id="go-https-modal-container">
+        <div class="modal-wrapper">
+            <div class="position-top-left"></div>
+            <div class="position-top-center"></div>
+            <div class="position-top-right"></div>
+            <div class="position-center-left">
+                <div class="position-center-right msg-wrap">
+                    <a class="widget-close msg-close" href="javascript:void(0);"></a>
+                    <div class="scroll-outer">
+                        <div class="scroll-layer">
+                            <div class="msg-content-wrap">
+                                <div class="widget-content msg-content-container">
+                                    <div id="go-https-modal">
+                                        <div class="header-container">
+                                            <h2></h2>
+                                        </div>
+                                        <div class="content">
+                                            <div class="https-illustration illustration-google"></div>
+                                            <div class="https-illustration illustration-safari"></div>
+                                            <p class="T_visitHttpsNote"> When visiting the TP-Link router's web page (%DOMAIN%) via HTTPS, your browser may mark it as "insecure" due to the
+                                                self-signed certificate. Nevertheless, the connection remains secure. Warning messages may vary by browser. Please select an
+                                                option to proceed, instead of going back.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="msg-btn-container">
+                                <div class="msg-btn-wrap">
+                                    <div class="button-container in-line">
+                                        <button type="button" class="green pure-button tp-btn-custom cancel-btn">
+                                            <span>CANCEL</span>
+                                        </button>
+                                    </div>
+                                    <div class="button-container in-line">
+                                        <button type="button" class="green pure-button tp-btn-custom save-btn">
+                                            <span>OK</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="position-bottom-left"></div>
+            <div class="position-bottom-center"></div>
+            <div class="position-bottom-right"></div>
+        </div>
+        <div id="ascrail2002" class="nicescroll-rails nicescroll-rails-vr"
+            style="width: 8px; z-index: 900; cursor: default; position: absolute; top: 34.0972px; left: 650.104px; height: 417px; display: none; opacity: 0.15;">
+            <div class="nicescroll-cursors"
+                style="position: relative; top: 0px; float: right; width: 8px; height: 0px; background-color: rgb(54, 68, 75); border: 0px; background-clip: padding-box; border-radius: 4px;">
+            </div>
+        </div>
+        </div>
+    </div>
+    <script type="text/javascript">
+        $(function () {
+            try {
+                $.locale.load(locale_language, null, null, true);
+            } catch (e) {
+            }
+
+            $('.T_scanForInfo').text($.tpLang.wel_str.scanForInfo)
+            $('.T_contentInfoTitle').text($.tpLang.wel_str.contentInfoTitle)
+            $('.T_contentNote').text($.tpLang.wel_str.contentNote)
+            $('.T_clickContinue').text($.tpLang.wel_str.clickContinue)
+            if(window['INCLUDE_TPLINK_LOGIN_DOMAIN']){
+                $('.T_visitHttpsNote').text($.tpLang.wel_str.visitHttpsNote.replace('%DOMAIN%',window['INCLUDE_TPLINK_LOGIN_DOMAIN']))
+            }
+            $('.cancel-btn span').text($.tpLang.voice_dectadv_nstr.t_cancel)
+            $('.save-btn span').text($.tpLang.m_str.ok)
+            function calModalPosition() {
+                var me = $('#go-https-modal-container');
+                var posX = parseInt(($(window).width() - me.outerWidth()) / 2, 10);
+                var posY = parseInt(($(window).height() - me.outerHeight()) / 2, 10);
+                (posX < 0) && (posX = 0);
+                (posY < 50) && (posY = 50);
+                me.css({
+                    left: posX,
+                    top: posY,
+                    bottom: "auto",
+                    right: "auto",
+                    position: "fixed"
+                });
+                me.find('.scroll-layer').css({
+                    maxHeight: $(window).height() - posY - 75
+                });
+            }
+            function showGoHttpsModal() {
+                $('#mask').show();
+                $('#go-https-modal-container').show()
+                calModalPosition()
+            }
+            function hideGoHttpsModal() {
+                $('#mask').hide();
+                $('#go-https-modal-container').hide()
+            }
+            $(window).on("resize.modal", function () {
+                if ($('#go-https-modal-container').is(':visible')) {
+                    calModalPosition()
+                }
+            });
+            $('div.click-container').on('click', function () {
+                showGoHttpsModal()
+            })
+            $('#go-https-modal-container .msg-close,#go-https-modal-container .cancel-btn').on('click', function () {
+                hideGoHttpsModal()
+            })
+            function getHttpObject(hook) {
+                var xmlHttp = null;
+                try {
+                    xmlHttp = new XMLHttpRequest();
+                } catch (e) {
+                    try {
+                        xmlHttp = new ActiveXObject("Msxml2.XMLHTTP");
+                    } catch (e) {
+                        try {
+                            xmlHttp = new ActiveXObject("Microsoft.XMLHTTP");
+                        } catch (e) {
+                            /* How to handle this error? */
+                        }
+                    }
+                }
+                xmlHttp.onreadystatechange = function () {
+                    if (xmlHttp.readyState == 4) {
+                        if (hook)
+                            hook();
+                    }
+                };
+                return xmlHttp;
+            }
+            $('#go-https-modal-container .save-btn').on('click', function () {
+                var xmlHttpObj;
+                xmlHttpObj = getHttpObject(function () {
+                    if (xmlHttpObj.status == 200) {
+                        var locationUrl = xmlHttpObj.getResponseHeader('Location');
+                        if (locationUrl) {
+                            if (window['INCLUDE_USER_RESTRICTION'])
+                            {
+                                window.location.href = locationUrl + window.location.pathname;
+                            }
+                            else
+                            {
+                                window.location.href = locationUrl;
+                            }
+                        }
+                    } else {
+                        return;
+                    }
+                });
+                xmlHttpObj.open("POST", window.location.protocol + "//" + window.location.host + "/cgi/welcome", true);
+                xmlHttpObj.send(null);
+            })
+        })
+    </script>
+</body>
+</html><script type="text/javascript"> var modelName="Archer NX200"; var modelDesc="5G AX1800 Wireless Dual Band Gigabit Router"; var locale_language="en_US"; var hasMobile="0"; </script>
