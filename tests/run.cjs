@@ -104,6 +104,7 @@ const files = [
   'src/drivers/fg360/parse.ts',
   'src/utils/password.ts',
   'src/utils/recharge.ts',
+  'src/utils/manualPlan.ts',
   'src/drivers/fg360/index.ts',
   'src/utils/arfcn.ts',
   // القفل الآمن (الجلسات والواجهة بدائل داخل الاختبار)

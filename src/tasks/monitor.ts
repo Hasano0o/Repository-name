@@ -9,6 +9,8 @@ import { overallLevel, LEVEL_LABEL, parseNrBands, Level } from '../utils/signal'
 import { notify } from '../utils/notify';
 import { Signal, NetworkInfo, Usage, DataPlan } from '../drivers/types';
 import { recordUsage } from '../store/usageLog';
+import { getManualPlan, setManualPlan } from '../store/manualPlan';
+import { planStatus, dueAlert } from '../utils/manualPlan';
 import { addGameLog, listGameLog } from '../store/gameLog';
 import { measureUrl, regionUrls, selectedRegion, gameScore } from '../utils/latency';
 import { reportOutage } from '../services/community';
@@ -60,7 +62,21 @@ export async function runMonitorCheck(): Promise<boolean> {
 
       const prev: RouterMonState = states[r.id] ?? {};
       // الاستهلاك اليومي: كل قراءة بالخلفية تخلي حساب «اليوم» و«الأسبوع» أدق
-      await recordUsage(r.id, usage).catch(() => null);
+      const ulog = await recordUsage(r.id, usage).catch(() => null);
+      // «باقتي» (الباقة اليدوية): تنبيه ٨٠٪ و٩٥٪ و١٠٠٪ — مرة لكل عتبة في كل دورة
+      if (a.dataPlan && ulog) {
+        const mp = await getManualPlan(r.id).catch(() => null);
+        if (mp) {
+          const st = planStatus(mp, ulog, Date.now());
+          const th = dueAlert(mp, st);
+          if (th) {
+            notify(th === 100 ? 'خلصت باقتك 🚨' : 'تنبيه الباقة 📦',
+              th === 100 ? `${r.name}: خلصت باقة ${mp.sizeGB} جيجا حسب عدّاد الراوتر.` : `${r.name}: استهلكت ${st.pct}% من باقة ${mp.sizeGB} جيجا · باقي ${st.daysLeft} يوم للتجديد.`, r.id);
+            fired = true;
+            await setManualPlan(r.id, { ...mp, alert: { cycle: st.cycle, at: th } }).catch(() => {});
+          }
+        }
+      }
 
       // ما قدرنا نوصل الراوتر (الجوال بعيد عن الشبكة مثلاً) — نتجاهل، ما نرسل انقطاع
       const reachable = sig !== null || net !== null;

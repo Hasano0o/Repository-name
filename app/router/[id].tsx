@@ -35,6 +35,7 @@ import { LinkHealthCard } from '../../src/ui/LinkHealth';
 import { CongestionCard } from '../../src/ui/Congestion';
 import { DiagnosisCard } from '../../src/ui/Diagnosis';
 import { UsageRing } from '../../src/ui/UsageRing';
+import { ManualPlanCard } from '../../src/ui/ManualPlanCard';
 import { recordUsage } from '../../src/store/usageLog';
 import { DeviceRow } from '../../src/ui/DeviceRow';
 import { SyncIcon } from '../../src/ui/SyncIcon';
@@ -1105,6 +1106,8 @@ export default function RouterDashboard() {
               <ToolTile wide icon="game" color={tFg('#ec4899')} title="مُحسّن الألعاب" sub="أقل بنق للعبتك"
                 onPress={() => router.push(`/ping/${info.id}` as Href)} />
             </TileGrid>
+            {/* «باقتي» (١٦ نوفمبر): الباقة اليدوية — بس لو الراوتر يعطي عدّاد استهلاك */}
+            {!!usage && <ManualPlanCard routerId={info.id} refresh={usage} />}
             <GroupTitle title="قِس وتابع" color={tFg('#12b76a')} />
             <TileGrid>
               <ToolTile icon="speed" color={tFg('#12b76a')} title="السرعة" sub="تنزيل ورفع"

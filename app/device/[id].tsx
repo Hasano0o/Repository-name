@@ -10,6 +10,7 @@ import { UsageRing } from '../../src/ui/UsageRing';
 import { DeviceRow } from '../../src/ui/DeviceRow';
 import { DeviceUsageCard } from '../../src/ui/DeviceUsageCard';
 import { UsageDaysCard } from '../../src/ui/UsageDaysCard';
+import { ManualPlanCard } from '../../src/ui/ManualPlanCard';
 import { UsageTableCard } from '../../src/ui/UsageTableCard';
 import { recordUsage } from '../../src/store/usageLog';
 import { Icon } from '../../src/ui/Icon';
@@ -180,6 +181,7 @@ export default function DeviceScreen() {
 
       <UsageTableCard traffic={traffic} usage={usage} />
 
+      {!!usage && !!info && <ManualPlanCard routerId={info.id} refresh={usageTick} />}
       {!!usage && !!info && <UsageDaysCard routerId={info.id} refresh={usageTick} />}
 
       <GlassCard

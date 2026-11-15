@@ -20,7 +20,8 @@ const DAY = 24 * HOUR;
 const EST_GAP = 3 * HOUR;
 /** فجوة أطول من كذا = ما نوزّع (ما نعرف وش صار) — نبدأ من جديد */
 const MAX_GAP = 10 * DAY;
-const KEEP_DAYS = 40;
+// ١٦ نوفمبر: ٤٠ ← ١٠٠ عشان «باقتي» (الباقة اليدوية) تقدر تكون ٣ شهور
+const KEEP_DAYS = 100;
 
 export function dayKey(t: number): string {
   const d = new Date(t);
