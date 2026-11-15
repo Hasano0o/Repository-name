@@ -14,6 +14,7 @@ import { StcAxDriver } from './stcax';
 import { DlinkDriver } from './dlink';
 import { InseegoDriver } from './inseego';
 import { HuaweiOntDriver } from './hgont';
+import { ZteOntDriver } from './ztont';
 import { Fg360Driver } from './fg360';
 import { M2aDriver } from './m2a';
 import { TplinkDriver } from './tplink';
@@ -62,6 +63,8 @@ const factories: (() => RouterDriver)[] = [
   () => new InseegoDriver(),
   // هواوي فايبر (ONT: DG8245V · HG8245 · LG8245X6) — /login.cgi بكلمة base64. الدخول + FULL بس للحين (٧ نوفمبر)
   () => new HuaweiOntDriver(),
+  // ZTE فايبر F660 (١٥ نوفمبر): صفحة Frm_Username — ما تتلخبط مع ZTE الشريحة (goform/ubus)
+  () => new ZteOntDriver(),
   // جيب M2A-77 (٨ نوفمبر): بصمته ipaddr.js بمنفذ الأوامر — قبل Unknown
   () => new M2aDriver(),
   // TP-Link 4G/5G نسخة GDPR (Archer NX200 — ١٥ نوفمبر): http «ترحيب» والواجهة https، /cgi/getGDPRParm + AES/RSA. الدخول + قراءة أولية + FULL

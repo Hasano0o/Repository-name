@@ -98,6 +98,7 @@ const files = [
   'src/drivers/inseego/parse.ts',
   'src/drivers/inseego/index.ts',
   'src/drivers/hgont/parse.ts',
+  'src/drivers/ztont/parse.ts',
   'src/drivers/hgont/index.ts',
   'src/drivers/fg360/parse.ts',
   'src/utils/password.ts',
