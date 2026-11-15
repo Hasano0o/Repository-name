@@ -16,6 +16,7 @@ import { InseegoDriver } from './inseego';
 import { HuaweiOntDriver } from './hgont';
 import { Fg360Driver } from './fg360';
 import { M2aDriver } from './m2a';
+import { TplinkDriver } from './tplink';
 import { UnknownDriver } from './unknown';
 import { DeviceDriver } from './device';
 import { DemoDriver } from './demo';
@@ -63,6 +64,8 @@ const factories: (() => RouterDriver)[] = [
   () => new HuaweiOntDriver(),
   // جيب M2A-77 (٨ نوفمبر): بصمته ipaddr.js بمنفذ الأوامر — قبل Unknown
   () => new M2aDriver(),
+  // TP-Link 4G/5G نسخة GDPR (Archer NX200 — ١٥ نوفمبر): http «ترحيب» والواجهة https، /cgi/getGDPRParm + AES/RSA. الدخول + قراءة أولية + FULL
+  () => new TplinkDriver(),
   () => new UnknownDriver(),
 ];
 
