@@ -19,6 +19,7 @@ import { Fg360Driver } from './fg360';
 import { M2aDriver } from './m2a';
 import { TplinkDriver } from './tplink';
 import { JrdDriver } from './jrd';
+import { HuaweiGwDriver } from './hwgw';
 import { UnknownDriver } from './unknown';
 import { DeviceDriver } from './device';
 import { DemoDriver } from './demo';
@@ -72,6 +73,8 @@ const factories: (() => RouterDriver)[] = [
   () => new TplinkDriver(),
   // عائلة فيرموير JRD/webapi (HH10E وغيره — واجهة Vue، /jrd/webapi JSON-RPC، دخول scramble authType2) — من ملفات صفحة عضو (١٦ نوفمبر). دخول + قراءة، لسا ما انجرّب ميداني
   () => new JrdDriver(),
+  // هواوي البوابة القديمة E5172 (V200R001 — /index/login.cgi بكلمة RSA ثابتة) — من ملفات «مو مدعوم؟» (١٧ نوفمبر). دخول + الحالة + FULL
+  () => new HuaweiGwDriver(),
   () => new UnknownDriver(),
 ];
 

@@ -104,6 +104,8 @@ const files = [
   'src/drivers/hgont/parse.ts',
   'src/drivers/ztont/parse.ts',
   'src/drivers/hgont/index.ts',
+  'src/drivers/hwgw/parse.ts',
+  'src/drivers/hwgw/index.ts',
   'src/drivers/fg360/parse.ts',
   'src/utils/password.ts',
   'src/utils/recharge.ts',
