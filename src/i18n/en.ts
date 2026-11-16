@@ -572,7 +572,7 @@ export const EN: Record<string, string> = {
   'مسارات الاستقبال': 'Receive paths',
   'الكفاءة 5G': '5G efficiency',
   'كل المزايا': 'All features',
-  'توجيه · أبراج · ألعاب · آي بي جديد · والمزيد': 'Aiming · Towers · Games · New IP · and more',
+  'آي بي جديد · مركز التحكم · السرعة · والمزيد': 'New IP · Control center · Speed · and more',
   'الواي فاي · الأجهزة · ملفاتي · والمزيد': 'Wi-Fi · Devices · My files · and more',
   'الإشارة والأبراج': 'Signal & towers',
   'الأجهزة والباقة': 'Devices & plan',

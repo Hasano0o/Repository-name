@@ -10,7 +10,6 @@ import { Stack, useLocalSearchParams, useFocusEffect, router, Href } from 'expo-
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession, dropSession, routerWrite } from '../../src/store/sessions';
 import { getFeatCache, setFeatCache, RouterFeatures } from '../../src/store/featCache';
-import { useAssistantUnlocked } from '../../src/assistant/store';
 import { Icon, IconName } from '../../src/ui/Icon';
 import { shade } from '../../src/ui/Cards';
 import { C, S } from '../../src/ui/theme';
@@ -25,7 +24,6 @@ const CONTROL_DRIVERS = ['huawei-lte', 'zte', 'fiberhome', 'oppo', 'greenpacket'
 
 export default function Features() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const assistantOn = useAssistantUnlocked();
   const [info, setInfo] = useState<SavedRouter | null>(null);
   const [feat, setFeat] = useState<RouterFeatures | undefined>(id ? getFeatCache(id) : undefined);
   const [q, setQ] = useState('');
@@ -92,16 +90,7 @@ export default function Features() {
         ]),
       },
       {
-        title: 'خلّ Bandly يسويها عنك', color: '#7c5cff', items: pick([
-          cell && { key: 'auto', title: 'اضبط لي كل شي', icon: 'spark', color: '#7c5cff', onPress: go(`/autopilot/${rid}`) },
-          cell && assistantOn && { key: 'assist', title: 'المساعد', icon: 'mic', color: '#0e7d93', onPress: go(`/assistant/${rid}`) },
-          cell && { key: 'finder', title: 'اختار الأفضل', icon: 'star', color: '#f97316', onPress: go(`/finder/${rid}`) },
-        ]),
-      },
-      {
         title: 'الإشارة والأبراج', color: '#2f6bff', items: pick([
-          cell && { key: 'aim', title: 'توجيه الأنتنا', icon: 'aim', color: '#2f6bff', onPress: go(`/aim/${rid}`) },
-          cell && { key: 'towers', title: 'الأبراج', icon: 'tower', color: '#12b76a', onPress: go(`/towers/${rid}`) },
           cell && { key: 'antenna', title: 'الأنتنا', icon: 'antenna', color: '#f97316', onPress: go(`/antenna/${rid}`) },
           cell && { key: 'places', title: 'الأماكن', icon: 'pin', color: '#0ea5a4', onPress: go(`/places/${rid}`) },
           { key: 'details', title: 'التفاصيل', icon: 'chart', color: '#0891b2', onPress: go(`/details/${rid}`) },
@@ -115,7 +104,6 @@ export default function Features() {
       },
       {
         title: 'الألعاب', color: '#ec4899', items: pick([
-          { key: 'ping', title: 'مُحسّن الألعاب', icon: 'game', color: '#ec4899', onPress: go(`/ping/${rid}`) },
           { key: 'lag', title: 'كاشف اللاق', icon: 'target', color: '#db2777', onPress: go(`/lag/${rid}`) },
         ]),
       },
@@ -123,7 +111,6 @@ export default function Features() {
         title: 'الأجهزة والباقة', color: '#8b5cf6', items: pick([
           { key: 'devices', title: 'الأجهزة', icon: 'phone', color: '#8b5cf6', onPress: go(`/device/${rid}`) },
           { key: 'heavy', title: 'وش يثقّل نتك؟', icon: 'down', color: '#e5484d', onPress: go(`/heavy/${rid}`) },
-          !!f?.usage && { key: 'plan', title: 'باقتي', icon: 'chart', color: '#16a34a', onPress: go(`/device/${rid}`) },
           cell && (!!f?.ussd || !!f?.sms) && { key: 'recharge', title: 'اشحن رصيدك', icon: 'spark', color: '#16a34a', onPress: go(`/recharge/${rid}`) },
           notDevice && { key: 'wifi', title: 'شارك الواي فاي', icon: 'wifi', color: '#2f6bff', onPress: go(`/wifi/${rid}`) },
           !!f?.sms && { key: 'sms', title: 'الرسائل', icon: 'sms', color: '#16a34a', onPress: go(`/sms/${rid}`) },
@@ -135,7 +122,7 @@ export default function Features() {
         ]),
       },
     ];
-  }, [info, feat, assistantOn, onReboot]);
+  }, [info, feat, onReboot]);
 
   const needle = q.trim().toLowerCase();
   const shown = groups

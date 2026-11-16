@@ -1087,14 +1087,40 @@ export default function RouterDashboard() {
             {feat.bands && <ComboCard r={info} />}
             <ModemsCard r={info} />
             <TempCard r={info} />
-            {/* «كل المزايا» (١٦ نوفمبر — طلب حسن): الصفحة للقراءات بس، وكل الأدوات بأيقونات في صفحة لحالها */}
+            {/* رجعت بطلب حسن (١٦ نوفمبر): المجموعتين و«باقتي» تبقى هنا، والباقي في «كل المزايا» */}
+            {feat.cellular && (<>
+            <GroupTitle title="خلّ Bandly يسويها عنك" color={tFg('#7c5cff')} />
+            <TileGrid>
+              <ToolTile wide icon="spark" color={tFg('#7c5cff')} title="اضبط لي كل شي" sub="تردد · برج · قناة"
+                onPress={() => router.push(`/autopilot/${info.id}` as Href)} />
+              {assistantOn && (
+                <ToolTile wide icon="mic" color={tFg('#0e7d93')} title="المساعد" sub="اسأله بكلامك"
+                  onPress={() => router.push(`/assistant/${info.id}` as Href)} />
+              )}
+            </TileGrid>
+            </>)}
+            <GroupTitle title="حسّن اتصالك" color={tFg('#2f6bff')} />
+            <TileGrid>
+              {feat.cellular && (<>
+              <ToolTile wide icon="aim" color={tFg('#2f6bff')} title="توجيه الأنتنا" sub="الأنتنا أو الراوتر نفسه"
+                onPress={() => router.push(`/aim/${info.id}` as Href)} />
+              <ToolTile wide icon="tower" color={tFg('#12b76a')} title="الأبراج" sub="النواقل والدمج"
+                onPress={() => router.push(`/towers/${info.id}` as Href)} />
+              <ToolTile wide icon="spark" color={tFg('#f97316')} title="اختار الأفضل" sub="سرعة · ألعاب · ثبات"
+                onPress={() => router.push(`/finder/${info.id}` as Href)} />
+              </>)}
+              <ToolTile wide icon="game" color={tFg('#ec4899')} title="مُحسّن الألعاب" sub="أقل بنق للعبتك"
+                onPress={() => router.push(`/ping/${info.id}` as Href)} />
+            </TileGrid>
+            {!!usage && <ManualPlanCard routerId={info.id} refresh={usage} />}
+            {/* «كل المزايا» (١٦ نوفمبر — طلب حسن): باقي الأدوات بأيقونات في صفحة لحالها */}
             <Pressable onPress={() => router.push(`/features/${info.id}` as Href)} accessibilityRole="button" hitSlop={4}
               style={({ pressed }) => [s.allBtnWrap, pressed && { opacity: 0.88, transform: [{ scale: 0.98 }] }]}>
               <LinearGradient colors={['#2f6bff', '#6d4dff']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={s.allBtn}>
                 <View style={s.allIcon}><Icon name="layers" size={24} color="#fff" stroke={2.2} /></View>
                 <View style={{ flex: 1, alignItems: 'flex-end', gap: 2 }}>
                   <Text style={s.allTitle}>كل المزايا</Text>
-                  <Text style={s.allSub} numberOfLines={1}>{feat.cellular ? 'توجيه · أبراج · ألعاب · آي بي جديد · والمزيد' : 'الواي فاي · الأجهزة · ملفاتي · والمزيد'}</Text>
+                  <Text style={s.allSub} numberOfLines={1}>{feat.cellular ? 'آي بي جديد · مركز التحكم · السرعة · والمزيد' : 'الواي فاي · الأجهزة · ملفاتي · والمزيد'}</Text>
                 </View>
                 <View style={{ transform: [{ rotate: '180deg' }] }}><Icon name="chevron" size={20} color="#fff" stroke={2.6} /></View>
               </LinearGradient>
