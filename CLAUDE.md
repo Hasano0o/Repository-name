@@ -41,6 +41,8 @@ Bandly: تطبيق Expo (SDK 57، expo-router، TypeScript strict) يدير را
 - الشاشات: `app/<name>/[id].tsx` — وعناوينها في مصفوفة `SCREENS` داخل `app/_layout.tsx` (أي شاشة جديدة تنضاف هناك).
 - البنق: `src/utils/latency.ts` — يقيس لدولة سيرفر اللعبة المختارة (المفتاح `bandly.gameRegion`). **منطقة AWS البحرين (me-south-1) متوقفة** — لا ترجعها.
 - المجتمع والإحصائيات: `src/services/community.ts` + السيرفر `live-server/community.py`.
+- **«هل يفيدك مسرّع؟»** (١٦ نوفمبر — المرحلة ١ من مسرّع Bandly): بطاقة `src/ui/AccelCheckCard.tsx` في مُحسّن الألعاب تحت «جهّزني للعب»؛ المنطق `src/utils/accelCore.ts` (اختبارات) والقياس `src/services/accel.ts`. تطلع **بس** لو فيه سيرفر في `/root/bandly-live/data/accel.json` (`{"servers":[{"id","name","url":"https://…"}]}` — التطبيق يحدّثها كل ٦ ساعات، بدون تحديث). المقارنة: مباشر (الجوال ← سيرفر اللعبة) مقابل (الجوال ← `/ping` سيرفرنا) + (سيرفرنا ← سيرفر اللعبة من `/routes`) + ٣ms للنفق. النتايج ← `POST community/accel` (جدول `accel` في community.db، إلا لو العضو رافض المشاركة) والملخص `python3 /root/bandly-live/accel_report.py [أيام]`.
+  - سيرفر المسرّع: `accel/` (probe.py بدون مكتبات على 127.0.0.1:8099 + Caddy للـ HTTPS — الآيفون ما يقبل http؛ بدون دومين = `<IP>.sslip.io`). مناطقه `accel/regions.json` من latency.ts (`node accel/regions.cjs > accel/regions.json` — الاختبار يفشل لو اختلفت). التركيب من الرسيفر: `tar c accel | ssh root@IP 'tar x -C /root && bash /root/accel/install.sh'`.
 - المراقبة بالخلفية: `src/tasks/monitor.ts` (ومعها الوضع الذكي والصيانة الليلية في `src/tasks/automation.ts`).
 
 ## طريقة الشغل (مهم)

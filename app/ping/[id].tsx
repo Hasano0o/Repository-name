@@ -28,6 +28,7 @@ import { C, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { RegionGrid, flagOf } from '../../src/ui/RegionGrid';
 import { GamePrepCard } from '../../src/ui/GamePrepCard';
+import { AccelCheckCard } from '../../src/ui/AccelCheckCard';
 import { ModeChips } from '../../src/ui/ModeChips';
 
 import { sheet, LOCALE } from '../../src/i18n';
@@ -559,6 +560,8 @@ export default function GameScreen() {
         )}
 
         {!loading && info && <GamePrepCard info={info} reg={reg} disabled={running || busy} />}
+
+        {!loading && info && <AccelCheckCard info={info} reg={reg} disabled={running || busy} />}
 
         {/* الأوضاع بضغطة (ألعاب / مشاهدة / اجتماعات) — انتقلت هنا من صفحة الراوتر */}
         {!loading && info && !wired && <ModeChips r={info} />}

@@ -33,6 +33,7 @@ const DONE = [
   'src/ui/ManualPickCard.tsx',
   'src/ui/FiberHero.tsx',
   'app/features/[id].tsx',
+  'src/ui/AccelCheckCard.tsx',
 ];
 
 // ═══ القاموس نفسه ═══

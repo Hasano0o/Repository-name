@@ -1,0 +1,78 @@
+{
+ "ae": [
+  "https://dynamodb.me-central-1.amazonaws.com/ping",
+  "https://s3.me-central-1.amazonaws.com/",
+  "https://ec2.me-central-1.amazonaws.com/ping"
+ ],
+ "sa": [
+  "https://spanner.me-central2.rep.googleapis.com/",
+  "https://storage.me-central2.rep.googleapis.com/"
+ ],
+ "sa-ruh": [
+  "https://objectstorage.me-riyadh-1.oraclecloud.com/",
+  "https://oss-me-central-1.aliyuncs.com/",
+  "https://obs.me-east-1.myhuaweicloud.com/"
+ ],
+ "sa-jed": [
+  "https://objectstorage.me-jeddah-1.oraclecloud.com/"
+ ],
+ "qa": [
+  "https://storage.me-central1.rep.googleapis.com/"
+ ],
+ "tr": [
+  "https://obs.tr-west-1.myhuaweicloud.com/"
+ ],
+ "eg": [
+  "https://obs.af-north-1.myhuaweicloud.com/"
+ ],
+ "in": [
+  "https://dynamodb.ap-south-1.amazonaws.com/ping",
+  "https://s3.ap-south-1.amazonaws.com/",
+  "https://ec2.ap-south-1.amazonaws.com/ping"
+ ],
+ "it": [
+  "https://dynamodb.eu-south-1.amazonaws.com/ping",
+  "https://s3.eu-south-1.amazonaws.com/",
+  "https://ec2.eu-south-1.amazonaws.com/ping"
+ ],
+ "eu": [
+  "https://dynamodb.eu-central-1.amazonaws.com/ping",
+  "https://s3.eu-central-1.amazonaws.com/",
+  "https://ec2.eu-central-1.amazonaws.com/ping"
+ ],
+ "fr": [
+  "https://dynamodb.eu-west-3.amazonaws.com/ping",
+  "https://s3.eu-west-3.amazonaws.com/",
+  "https://ec2.eu-west-3.amazonaws.com/ping"
+ ],
+ "uk": [
+  "https://dynamodb.eu-west-2.amazonaws.com/ping",
+  "https://s3.eu-west-2.amazonaws.com/",
+  "https://ec2.eu-west-2.amazonaws.com/ping"
+ ],
+ "se": [
+  "https://dynamodb.eu-north-1.amazonaws.com/ping",
+  "https://s3.eu-north-1.amazonaws.com/",
+  "https://ec2.eu-north-1.amazonaws.com/ping"
+ ],
+ "sg": [
+  "https://dynamodb.ap-southeast-1.amazonaws.com/ping",
+  "https://s3.ap-southeast-1.amazonaws.com/",
+  "https://ec2.ap-southeast-1.amazonaws.com/ping"
+ ],
+ "kr": [
+  "https://dynamodb.ap-northeast-2.amazonaws.com/ping",
+  "https://s3.ap-northeast-2.amazonaws.com/",
+  "https://dynamodb.ap-northeast-1.amazonaws.com/ping"
+ ],
+ "us": [
+  "https://dynamodb.us-east-1.amazonaws.com/ping",
+  "https://s3.us-east-1.amazonaws.com/",
+  "https://ec2.us-east-1.amazonaws.com/ping"
+ ],
+ "br": [
+  "https://dynamodb.sa-east-1.amazonaws.com/ping",
+  "https://s3.sa-east-1.amazonaws.com/",
+  "https://ec2.sa-east-1.amazonaws.com/ping"
+ ]
+}

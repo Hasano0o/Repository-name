@@ -2162,6 +2162,15 @@ export const EN: Record<string, string> = {
   'آخر ٧ أيام': 'Last 7 days',
   'متوسط اليوم': 'Daily average',
   'الأرقام تقريبية للأيام الباهتة أو الفاضية (التطبيق ما انفتح وقتها). شغّل «المراقبة بالخلفية» عشان تصير دقيقة.': 'Faded or empty days are estimates (the app was closed then). Turn on background monitoring for exact numbers.',
+  // «هل يفيدك مسرّع؟» (١٦ نوفمبر)
+  'هل يفيدك مسرّع؟': 'Would an accelerator help you?',
+  'طريقك المباشر ما يوصل، والمسرّع يوصلك ✅': 'Your direct route doesn\'t get through, the accelerator does ✅',
+  'طريقك أصلاً ممتاز — ما تحتاج مسرّع': 'Your route is already excellent — you don\'t need an accelerator',
+  'ما قدرنا نوصل سيرفر المسرّع الحين — جرّب بعد شوي': 'Couldn\'t reach the accelerator server right now — try again shortly',
+  'مباشر': 'Direct',
+  'عبر المسرّع': 'Via accelerator',
+  'افحص (15 ثانية تقريباً)': 'Check (about 15 seconds)',
+  'نجيب قياس سيرفرنا لسيرفر اللعبة...': 'Getting our server\'s measurement to the game server...',
 };
 
 export const EN_PATTERNS: Record<string, string> = {
@@ -2686,4 +2695,12 @@ export const EN_PATTERNS: Record<string, string> = {
   'نفحص لك {0} {1} غير مفحوصة': 'We\'re scanning {0} unscanned {1} for you',
   'الراوتر مو ماسك 5G الحين — 5G مقفل على {0}. لو ما فيه برج عليه، رجّع 5G للتلقائي.': 'The router isn\'t holding 5G right now — 5G is locked to {0}. If there\'s no tower on it, set 5G back to automatic.',
   'اعرض كل ترددات {0} اللي يدعمها الراوتر': 'Show all {0} bands the router supports',
+  // «هل يفيدك مسرّع؟» (١٦ نوفمبر)
+  'نقارن طريقك المباشر لسيرفرات {0} مع الطريق عن طريق سيرفر Bandly في السعودية': 'We compare your direct route to {0} servers with the route through Bandly\'s server in Saudi Arabia',
+  'المسرّع ينقص بنقك {0}ms ✅': 'The accelerator cuts your ping by {0}ms ✅',
+  'فرق بسيط ({0}ms) — ما بتحس فيه كثير': 'Small difference ({0}ms) — you won\'t feel it much',
+  'فقد {0}%': 'Loss {0}%',
+  'عن طريق سيرفر {0} · رقم تقريبي من قياس الطريقين': 'Through the {0} server · estimate from measuring both routes',
+  'نقيس طريقك المباشر لسيرفرات {0}...': 'Measuring your direct route to {0} servers...',
+  'نقيس طريقك لسيرفر {0}...': 'Measuring your route to the {0} server...',
 };

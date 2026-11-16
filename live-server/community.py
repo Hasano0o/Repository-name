@@ -528,3 +528,53 @@ def _known_full() -> dict:
 @router.get("/full-known")
 def full_known():
     return _known_full()
+
+
+# ═══ «هل يفيدك مسرّع؟» (١٦ نوفمبر) — المرحلة ١ من مسرّع Bandly ═══
+# GET  /live-api/community/accel-config ← سيرفرات المسرّع من data/accel.json (فاضي = الزر ما يطلع في التطبيق)
+# POST /live-api/community/accel        ← نتيجة فحص: مباشر مقابل عبر سيرفرنا (الشركة + الحي + الأرقام)
+# الملخص: python3 /root/bandly-live/accel_report.py
+ACCEL_CFG = DB.parent / "accel.json"
+
+
+@router.get("/accel-config")
+def accel_config():
+    import json
+    try:
+        j = json.loads(ACCEL_CFG.read_text())
+        return {"servers": [s for s in j.get("servers", []) if s.get("on", True)]}
+    except Exception:
+        return {"servers": []}
+
+
+def _accel_db():
+    c = _db()
+    c.execute("""CREATE TABLE IF NOT EXISTS accel(
+        at INTEGER, dev TEXT, op TEXT, area TEXT, city TEXT, region TEXT, server TEXT,
+        direct INTEGER, direct_loss INTEGER, direct_jitter INTEGER, to_server INTEGER, route INTEGER,
+        via INTEGER, via_loss INTEGER, via_jitter INTEGER, gain INTEGER, kind TEXT, hour INTEGER)""")
+    c.execute("CREATE INDEX IF NOT EXISTS i_accel ON accel(at)")
+    return c
+
+
+@router.post("/accel")
+async def accel(req: Request):
+    b = await req.json()
+    dev = _dev(b.get("device"))
+    _limit(dev)
+    kind = _clean(b.get("kind"), 8)
+    if kind not in ("helps", "small", "no"):
+        raise HTTPException(400, "bad kind")
+    area = _area(b.get("area"))
+    now = int(time.time())
+    row = (now, dev, _op(b.get("operator")), area, _city(area), _clean(b.get("region"), 10), _clean(b.get("server"), 20),
+           _opt(b.get("direct"), 1, 5000), _opt(b.get("directLoss"), 0, 100), _opt(b.get("directJitter"), 0, 5000),
+           _opt(b.get("toServer"), 1, 5000), _opt(b.get("route"), 1, 5000),
+           _opt(b.get("via"), 1, 10000), _opt(b.get("viaLoss"), 0, 100), _opt(b.get("viaJitter"), 0, 10000),
+           _opt(b.get("gain"), -10000, 10000), kind, time.localtime().tm_hour)
+    with _accel_db() as c:
+        # نفس الجهاز ونفس المنطقة والسيرفر خلال ١٠ دقايق = فحص واحد
+        c.execute("DELETE FROM accel WHERE dev=? AND region=? AND server=? AND at>?", (dev, row[5], row[6], now - 600))
+        c.execute("INSERT INTO accel VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", row)
+        c.execute("DELETE FROM accel WHERE at < ?", (now - OBS_KEEP_DAYS * 86400,))
+    return {"ok": True}
