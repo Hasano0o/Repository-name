@@ -55,7 +55,8 @@ export function AccelCheckCard({ info, reg, disabled }: { info: SavedRouter; reg
           {v.kind === 'helps' && v.direct > 0 && <Text style={[s.lead, { color }]}>المسرّع ينقص بنقك {v.gain}ms ✅</Text>}
           {v.kind === 'helps' && v.direct === 0 && <Text style={[s.lead, { color }]}>طريقك المباشر ما يوصل، والمسرّع يوصلك ✅</Text>}
           {v.kind === 'small' && <Text style={[s.lead, { color }]}>فرق بسيط ({v.gain}ms) — ما بتحس فيه كثير</Text>}
-          {v.kind === 'no' && <Text style={[s.lead, { color }]}>طريقك أصلاً ممتاز — ما تحتاج مسرّع</Text>}
+          {v.kind === 'no' && v.direct <= 70 && <Text style={[s.lead, { color }]}>طريقك أصلاً ممتاز — ما تحتاج مسرّع</Text>}
+          {v.kind === 'no' && v.direct > 70 && <Text style={[s.lead, { color }]}>المسرّع ما يفيدك لهالسيرفر — طريقك المباشر أقصر</Text>}
           {v.kind === 'fail' && <Text style={[s.lead, { color }]}>ما قدرنا نوصل سيرفر المسرّع الحين — جرّب بعد شوي</Text>}
           {v.kind !== 'fail' && (
             <View style={s.row}>
@@ -71,7 +72,8 @@ export function AccelCheckCard({ info, reg, disabled }: { info: SavedRouter; reg
               </View>
             </View>
           )}
-          {v.kind !== 'fail' && <Text style={s.hint}>عن طريق سيرفر {res.server.name} · رقم تقريبي من قياس الطريقين</Text>}
+          {v.kind !== 'fail' && <Text style={s.hint}>طريقك لسيرفر {res.server.name}: {res.toServer.median}ms + منه لسيرفر اللعبة: {res.route?.median ?? 0}ms</Text>}
+          {v.kind !== 'fail' && <Text style={s.hint}>رقم تقريبي من قياس الطريقين</Text>}
         </View>
       )}
 
