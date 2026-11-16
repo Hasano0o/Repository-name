@@ -48,6 +48,7 @@ import { OperatorBadge } from '../../src/ui/OperatorBadge';
 import { bandChips } from '../../src/utils/bandChips';
 import { wakeCa, getWoke, onWoke, WokeCa } from '../../src/services/caWake';
 import { TempCard } from '../../src/ui/TempCard';
+import { setFeatCache } from '../../src/store/featCache';
 import { ModemsCard } from '../../src/ui/ModemsCard';
 import { canRescue, rescueRouter, freeRelease, restoreSavedSettings } from '../../src/utils/safeLock';
 import { getReleaseSnap, clearReleaseSnap } from '../../src/store/lockSnap';
@@ -336,6 +337,11 @@ export default function RouterDashboard() {
     try {
       await withSession(r, async d => {
         setFeat(featuresOf(d));
+        setFeatCache(r.id, {
+          bands: !!d.getBandConfig, sms: !!d.listSms, ussd: !!d.ussd, reboot: !!d.reboot, devices: !!d.getDevices,
+          usage: !!d.getUsage, network: !!d.getApnProfiles || !!d.getDns, antenna: !!d.getAntenna,
+          cellular: !!d.getSignal, optic: !!d.getOptic,
+        });
         rememberBands(r.id, !!d.getBandConfig);
         setAuthPages(!!d.afterLoginPages?.().length);
         // بعد القراءة الأساسية — طلب أو طلبين (الموديل والفيرموير) بنفس الجلسة
@@ -1081,48 +1087,18 @@ export default function RouterDashboard() {
             {feat.bands && <ComboCard r={info} />}
             <ModemsCard r={info} />
             <TempCard r={info} />
-            {/* الذكي فوق: المساعد يسوي كل شي عنك — وبعدها الأدوات اليدوية */}
-            {feat.cellular && (<>
-            <GroupTitle title="خلّ Bandly يسويها عنك" color={tFg('#7c5cff')} />
-            <TileGrid>
-              <ToolTile wide icon="spark" color={tFg('#7c5cff')} title="اضبط لي كل شي" sub="تردد · برج · قناة"
-                onPress={() => router.push(`/autopilot/${info.id}` as Href)} />
-              {assistantOn && (
-                <ToolTile wide icon="mic" color={tFg('#0e7d93')} title="المساعد" sub="اسأله بكلامك"
-                  onPress={() => router.push(`/assistant/${info.id}` as Href)} />
-              )}
-            </TileGrid>
-            </>)}
-            <GroupTitle title="حسّن اتصالك" color={tFg('#2f6bff')} />
-            <TileGrid>
-              {feat.cellular && (<>
-              <ToolTile wide icon="aim" color={tFg('#2f6bff')} title="توجيه الأنتنا" sub="الأنتنا أو الراوتر نفسه"
-                onPress={() => router.push(`/aim/${info.id}` as Href)} />
-              <ToolTile wide icon="tower" color={tFg('#12b76a')} title="الأبراج" sub="النواقل والدمج"
-                onPress={() => router.push(`/towers/${info.id}` as Href)} />
-              <ToolTile wide icon="spark" color={tFg('#f97316')} title="اختار الأفضل" sub="سرعة · ألعاب · ثبات"
-                onPress={() => router.push(`/finder/${info.id}` as Href)} />
-              </>)}
-              <ToolTile wide icon="game" color={tFg('#ec4899')} title="مُحسّن الألعاب" sub="أقل بنق للعبتك"
-                onPress={() => router.push(`/ping/${info.id}` as Href)} />
-            </TileGrid>
-            {/* «باقتي» (١٦ نوفمبر): الباقة اليدوية — بس لو الراوتر يعطي عدّاد استهلاك */}
-            {!!usage && <ManualPlanCard routerId={info.id} refresh={usage} />}
-            <GroupTitle title="قِس وتابع" color={tFg('#12b76a')} />
-            <TileGrid>
-              <ToolTile icon="speed" color={tFg('#12b76a')} title="السرعة" sub="تنزيل ورفع"
-                onPress={() => router.push(`/speed/${info.id}` as Href)} />
-              <ToolTile icon="chart" color={tFg('#0891b2')} title="التفاصيل" sub="الأرقام والدمج والتقرير"
-                onPress={() => router.push(`/details/${info.id}` as Href)} />
-              <ToolTile icon="phone" color={tFg('#8b5cf6')} title="الأجهزة" sub="المتصلين والاستهلاك"
-                onPress={() => router.push(`/device/${info.id}` as Href)} />
-              <ToolTile icon="chart" color={tFg('#e5484d')} title="وش يثقّل نتك؟" sub="مين يحمّل الحين"
-                onPress={() => router.push(`/heavy/${info.id}` as Href)} />
-              {feat.cellular && (
-                <ToolTile icon="pin" color={tFg('#e0a100')} title="أفضل شركة" sub="في منطقتك"
-                  onPress={() => router.push('/carriers' as Href)} />
-              )}
-            </TileGrid>
+            {/* «كل المزايا» (١٦ نوفمبر — طلب حسن): الصفحة للقراءات بس، وكل الأدوات بأيقونات في صفحة لحالها */}
+            <Pressable onPress={() => router.push(`/features/${info.id}` as Href)} accessibilityRole="button" hitSlop={4}
+              style={({ pressed }) => [s.allBtnWrap, pressed && { opacity: 0.88, transform: [{ scale: 0.98 }] }]}>
+              <LinearGradient colors={['#2f6bff', '#6d4dff']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={s.allBtn}>
+                <View style={s.allIcon}><Icon name="layers" size={24} color="#fff" stroke={2.2} /></View>
+                <View style={{ flex: 1, alignItems: 'flex-end', gap: 2 }}>
+                  <Text style={s.allTitle}>كل المزايا</Text>
+                  <Text style={s.allSub} numberOfLines={1}>{feat.cellular ? 'توجيه · أبراج · ألعاب · آي بي جديد · والمزيد' : 'الواي فاي · الأجهزة · ملفاتي · والمزيد'}</Text>
+                </View>
+                <View style={{ transform: [{ rotate: '180deg' }] }}><Icon name="chevron" size={20} color="#fff" stroke={2.6} /></View>
+              </LinearGradient>
+            </Pressable>
           </>
         )}
 
@@ -1187,136 +1163,6 @@ export default function RouterDashboard() {
         )}
 
         {!loading && info && (
-          <View style={s.moreCard}>
-            {/* الأكثر طلباً — ظاهرة دايماً */}
-            <GroupTitle title="الأكثر طلباً" color={tFg('#0e7d93')} />
-            <View style={s.moreGrid}>
-              {info.driverId !== 'device' && feat.cellular && (
-                <Pressable style={[s.moreTile, { backgroundColor: tBg('#0e7d9312'), borderColor: tBd('#0e7d9330') }]} onPress={() => router.push(`/newip/${info.id}` as Href)}>
-                  <View style={[s.moreIcon, { backgroundColor: tBg('#0e7d93') }]}>
-                    <Icon name="refresh" size={18} color={tFg('#fff')} />
-                  </View>
-                  <Text style={s.moreLbl}>آي بي جديد</Text>
-                </Pressable>
-              )}
-              {['huawei-lte', 'zte', 'fiberhome', 'oppo', 'greenpacket', 'zyxel', 'demo'].includes(info.driverId) && (
-                <Pressable style={[s.moreTile, { backgroundColor: tBg('#4338ca12'), borderColor: tBd('#4338ca35') }]} onPress={() => router.push(`/control/${info.id}` as Href)}>
-                  <View style={[s.moreIcon, { backgroundColor: tBg('#4338ca') }]}>
-                    <Icon name="settings" size={18} color={tFg('#fff')} />
-                  </View>
-                  <Text style={s.moreLbl}>مركز التحكم</Text>
-                </Pressable>
-              )}
-              {/* «اشحن رصيدك» (١٦ نوفمبر): بطاقة شحن من شريحة الراوتر — USSD (هواوي) أو SMS (STC) */}
-              {feat.cellular && (feat.ussd || feat.sms) && (
-                <Pressable style={[s.moreTile, { backgroundColor: tBg('#16a34a12'), borderColor: tBd('#16a34a35') }]} onPress={() => router.push(`/recharge/${info.id}` as Href)}>
-                  <View style={[s.moreIcon, { backgroundColor: tBg('#16a34a') }]}>
-                    <Icon name="spark" size={18} color={tFg('#fff')} />
-                  </View>
-                  <Text style={s.moreLbl}>اشحن رصيدك</Text>
-                </Pressable>
-              )}
-            </View>
-            <Pressable onPress={toggleMore} accessibilityRole="button" hitSlop={4}
-              style={({ pressed }) => [s.moreBtnWrap, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}>
-              <LinearGradient colors={[tBg('#fff6ec'), tBg('#ffe4c7')]} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={s.moreBtn}>
-                <LinearGradient colors={['#fb923c', '#ea580c']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.moreBtnIcon}>
-                  <Icon name="layers" size={20} color="#fff" stroke={2.2} />
-                </LinearGradient>
-                <View style={{ flex: 1, alignItems: 'flex-end', gap: 2 }}>
-                  <Text style={s.moreBtnTitle}>أدوات أكثر</Text>
-                  <Text style={s.moreBtnSub} numberOfLines={1}>{moreOpen ? 'اضغط للإخفاء' : feat.cellular ? 'الأنتنا · الأماكن · ملفاتي · الإعدادات…' : 'الواي فاي · ملفاتي · المراقبة…'}</Text>
-                </View>
-                <View style={s.moreBtnChev}>
-                  <View style={{ transform: [{ rotate: moreOpen ? '-90deg' : '90deg' }] }}>
-                    <Icon name="chevron" size={16} color={isDark ? '#fdba74' : '#c2410c'} stroke={2.6} />
-                  </View>
-                </View>
-              </LinearGradient>
-            </Pressable>
-            {moreOpen && (
-            <View style={s.moreGrid}>
-              {feat.cellular && (<>
-              <Pressable style={[s.moreTile, { backgroundColor: tBg('#f9731612'), borderColor: tBd('#f9731630') }]} onPress={() => router.push(`/antenna/${info.id}` as Href)}>
-                <View style={[s.moreIcon, { backgroundColor: tBg('#f97316') }]}>
-                  <Icon name="antenna" size={18} color={tFg('#fff')} />
-                </View>
-                <Text style={s.moreLbl}>الأنتنا</Text>
-              </Pressable>
-              <Pressable style={[s.moreTile, { backgroundColor: tBg('#0ea5a412'), borderColor: tBd('#0ea5a430') }]} onPress={() => router.push(`/places/${info.id}` as Href)}>
-                <View style={[s.moreIcon, { backgroundColor: tBg('#0ea5a4') }]}>
-                  <Icon name="pin" size={18} color={tFg('#fff')} />
-                </View>
-                <Text style={s.moreLbl}>الأماكن</Text>
-              </Pressable>
-              </>)}
-              {!feat.cellular && !!optic && (
-                <Pressable style={[s.moreTile, { backgroundColor: tBg('#f9731612'), borderColor: tBd('#f9731630') }]} onPress={() => router.push(`/fiber/${info.id}` as Href)}>
-                  <View style={[s.moreIcon, { backgroundColor: tBg('#f97316') }]}>
-                    <Icon name="spark" size={18} color={tFg('#fff')} />
-                  </View>
-                  <Text style={s.moreLbl}>مستشار الفايبر</Text>
-                </Pressable>
-              )}
-              {info.driverId !== 'device' && (
-                <Pressable style={[s.moreTile, { backgroundColor: tBg('#2f6bff12'), borderColor: tBd('#2f6bff30') }]} onPress={() => router.push(`/wifi/${info.id}` as Href)}>
-                  <View style={[s.moreIcon, { backgroundColor: tBg('#2f6bff') }]}>
-                    <Icon name="wifi" size={18} color={tFg('#fff')} />
-                  </View>
-                  <Text style={s.moreLbl}>شارك الواي فاي</Text>
-                </Pressable>
-              )}
-              {(info.driverId === 'huawei-lte' || (info.driverId === 'fiberhome' && feat.antenna)) && (
-                <Pressable style={[s.moreTile, { backgroundColor: tBg('#ea580c12'), borderColor: tBd('#ea580c30') }]} onPress={() => router.push(`/hwtools/${info.id}` as Href)}>
-                  <View style={[s.moreIcon, { backgroundColor: tBg('#ea580c') }]}>
-                    <Icon name="antenna" size={18} color={tFg('#fff')} />
-                  </View>
-                  <Text style={s.moreLbl}>{info.driverId === 'fiberhome' ? 'الأنتنا' : 'الأنتنا والباقة'}</Text>
-                </Pressable>
-              )}
-              {feat.sms && (
-                <Pressable style={[s.moreTile, { backgroundColor: tBg('#16a34a12'), borderColor: tBd('#16a34a30') }]} onPress={() => router.push(`/sms/${info.id}` as Href)}>
-                  <View style={[s.moreIcon, { backgroundColor: tBg('#16a34a') }]}>
-                    <Icon name="sms" size={18} color={tFg('#fff')} />
-                  </View>
-                  <Text style={s.moreLbl}>الرسائل</Text>
-                </Pressable>
-              )}
-              {feat.network && (
-                <Pressable style={[s.moreTile, { backgroundColor: tBg('#0891b212'), borderColor: tBd('#0891b230') }]} onPress={() => router.push(`/network/${info.id}` as Href)}>
-                  <View style={[s.moreIcon, { backgroundColor: tBg('#0891b2') }]}>
-                    <Icon name="settings" size={18} color={tFg('#fff')} />
-                  </View>
-                  <Text style={s.moreLbl}>الشبكة</Text>
-                </Pressable>
-              )}
-              <Pressable style={[s.moreTile, { backgroundColor: tBg('#a1620712'), borderColor: tBd('#a1620730') }]} onPress={() => router.push(`/profiles/${info.id}` as Href)}>
-                <View style={[s.moreIcon, { backgroundColor: tBg('#a16207') }]}>
-                  <Icon name="folder" size={18} color={tFg('#fff')} />
-                </View>
-                <Text style={s.moreLbl}>ملفاتي</Text>
-              </Pressable>
-              <Pressable style={[s.moreTile, { backgroundColor: tBg('#f43f5e12'), borderColor: tBd('#f43f5e30') }]} onPress={() => router.push('/monitor' as Href)}>
-                <View style={[s.moreIcon, { backgroundColor: tBg('#f43f5e') }]}>
-                  <Icon name="bell" size={18} color={tFg('#fff')} />
-                </View>
-                <Text style={s.moreLbl}>المراقبة</Text>
-              </Pressable>
-              {feat.reboot && (
-                <Pressable style={[s.moreTile, { backgroundColor: tBg('#e5484d12'), borderColor: tBd('#e5484d30') }]} onPress={onReboot}>
-                  <View style={[s.moreIcon, { backgroundColor: tBg('#e5484d') }]}>
-                    <Icon name="power" size={18} color={tFg('#fff')} />
-                  </View>
-                  <Text style={s.moreLbl}>إعادة التشغيل</Text>
-                </Pressable>
-              )}
-            </View>
-            )}
-          </View>
-        )}
-
-        {!loading && info && info.host !== 'demo' && info.host !== 'device' && <LabelCard routerId={info.id} />}
-        {!loading && info && (
           <Pressable
             onPress={() => router.push(`/add-router?id=${info.id}` as Href)}
             style={s.editBtn}
@@ -1343,6 +1189,11 @@ export default function RouterDashboard() {
 }
 
 const s = sheet({
+  allBtnWrap: { borderRadius: 22, shadowColor: '#2f6bff', shadowOpacity: 0.25, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
+  allBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, borderRadius: 22, paddingVertical: 15, paddingHorizontal: 16 },
+  allIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  allTitle: { color: '#fff', fontFamily: FONT.bold, fontSize: 17 },
+  allSub: { color: 'rgba(255,255,255,0.88)', fontFamily: FONT.medium, fontSize: 11.5 },
   moveBar: { backgroundColor: C.blueSoft, borderColor: C.blue, borderWidth: 1, borderRadius: 14, padding: 12 },
   moveText: { color: C.blue, fontWeight: '800', fontSize: 13, textAlign: 'right', lineHeight: 20 },
   page: { padding: 13, gap: 10 },

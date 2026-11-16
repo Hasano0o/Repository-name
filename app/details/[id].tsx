@@ -19,6 +19,7 @@ import {
 import { tBg, tFg } from '../../src/ui/theme';
 import { hostLabel } from '../../src/drivers/device';
 import { sheet } from '../../src/i18n';import { HubLinks } from '../../src/ui/HubLinks';
+import { DiagnosisCard } from '../../src/ui/Diagnosis';
 
 type Info = { label: string; value?: string; accent?: string };
 
@@ -149,6 +150,9 @@ export default function DetailsScreen() {
                 </Ring>
               </View>
             </Hero>
+
+            {/* التشخيص (١٦ نوفمبر): الكفاءة والإرسال والمسارات لـ4G و5G + زحمة البرج */}
+            {!!id && <DiagnosisCard routerId={id} signal={signal} downBps={traffic?.downBytesPerSec} />}
 
             {/* ═══ 4G ═══ */}
             <Section title="قياسات 4G LTE" sub="الإشارة الأساسية" icon="chart"
