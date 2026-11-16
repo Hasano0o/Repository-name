@@ -9,6 +9,7 @@
 import http.client
 import json
 import random
+import socket
 import ssl
 import statistics
 import threading
@@ -25,10 +26,20 @@ CTX = ssl.create_default_context()
 state = {"at": 0, "regions": {}}
 
 
+class V4Conn(http.client.HTTPSConnection):
+    """IPv4 بس — بعض السيرفرات ما عندها مسار IPv6 سليم ويطلع البنق غلط"""
+    def connect(self):
+        host = socket.getaddrinfo(self.host, self.port, socket.AF_INET, socket.SOCK_STREAM)[0][4][0]
+        sock = socket.create_connection((host, self.port), self.timeout)
+        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+
+
 def _req(conn, path, timeout):
     conn.timeout = timeout
-    if conn.sock:
-        conn.sock.settimeout(timeout)
+    # لو السيرفر قفل الاتصال (Connection: close) نفتحه قبل التوقيت — نقيس الرحلة بس، مو فتح TLS
+    if conn.sock is None:
+        conn.connect()
+    conn.sock.settimeout(timeout)
     sep = "&" if "?" in path else "?"
     t0 = time.perf_counter()
     conn.request("GET", f"{path}{sep}r={random.randrange(1 << 30):x}", headers={"Cache-Control": "no-cache", "Connection": "keep-alive"})
@@ -45,7 +56,7 @@ def measure(urls, n=SAMPLES, timeout=3.0):
         path = p.path or "/"
         if p.query:
             path += "?" + p.query
-        conn = http.client.HTTPSConnection(p.hostname, p.port or 443, timeout=timeout, context=CTX)
+        conn = V4Conn(p.hostname, p.port or 443, timeout=timeout, context=CTX)
         try:
             _req(conn, path, timeout)
             _req(conn, path, timeout)
@@ -59,7 +70,7 @@ def measure(urls, n=SAMPLES, timeout=3.0):
             except Exception:
                 lost += 1
                 conn.close()
-                conn = http.client.HTTPSConnection(p.hostname, p.port or 443, timeout=timeout, context=CTX)
+                conn = V4Conn(p.hostname, p.port or 443, timeout=timeout, context=CTX)
             time.sleep(0.12)
         conn.close()
         if not vals:
