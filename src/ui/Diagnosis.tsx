@@ -14,15 +14,24 @@ import { sheet } from '../i18n';
  */
 export function DiagnosisCard({ routerId, signal, downBps }: { routerId: string; signal: Signal; downBps?: number }) {
   const [open, setOpen] = useState(false);
-  const health = linkHealth(signal, 'LTE');
+  const health = linkHealth(signal, 'LTE', downBps);
+  const nrHealth = linkHealth(signal, 'NR', downBps);
   const hist = useLoadHistory(routerId, signal, downBps);
   const lv = hist.load !== undefined && !hist.own ? loadLevel(hist.load) : undefined;
 
-  const chips: { label: string; value: string; color: string }[] = health.map(h => ({
-    label: h.key === 'efficiency' ? 'الكفاءة' : h.key === 'uplink' ? 'الإرسال' : 'المسارات',
-    value: h.value.split(' · ')[0].replace(' من 23', ''),
-    color: HEALTH_COLOR[h.level],
-  }));
+  const chips: { label: string; value: string; color: string }[] = [
+    ...health.map(h => ({
+      label: h.key === 'efficiency' ? 'الكفاءة' : h.key === 'uplink' ? 'الإرسال' : 'المسارات',
+      value: h.value.split(' · ')[0].replace(' من 23', ''),
+      color: HEALTH_COLOR[h.level],
+    })),
+    // 5G: الكفاءة والإرسال بس (المسارات تزحم الصف)
+    ...nrHealth.filter(h => h.key !== 'mimo').map(h => ({
+      label: h.key === 'efficiency' ? 'الكفاءة 5G' : 'الإرسال 5G',
+      value: h.value.split(' · ')[0].replace(' من 23', ''),
+      color: HEALTH_COLOR[h.level],
+    })),
+  ];
   if (lv) chips.push({ label: 'زحمة البرج', value: LOAD_LABEL[lv], color: LOAD_COLOR[lv] });
   if (!chips.length) return null;
 
@@ -42,7 +51,8 @@ export function DiagnosisCard({ routerId, signal, downBps }: { routerId: string;
       </View>
       {open && (
         <View style={{ gap: S.md, marginTop: S.sm }}>
-          <LinkHealthCard items={health} />
+          <LinkHealthCard items={health} title={nrHealth.length ? 'صحة الوصلة · 4G' : 'صحة الوصلة'} />
+          {nrHealth.length > 0 && <LinkHealthCard items={nrHealth} title="صحة الوصلة · 5G" />}
           <CongestionCard routerId={routerId} signal={signal} downBps={downBps} history={hist} />
         </View>
       )}

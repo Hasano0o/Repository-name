@@ -4,11 +4,11 @@ import { C, R, S } from './theme';
 
 import { sheet } from '../i18n';
 /** بطاقة "صحة الوصلة": ثلاثة أسطر، كل سطر بشريط وجملة تشرح وش يعني */
-export function LinkHealthCard({ items }: { items: HealthItem[] }) {
+export function LinkHealthCard({ items, title = 'صحة الوصلة' }: { items: HealthItem[]; title?: string }) {
   if (!items.length) return null;
   return (
     <View style={s.card}>
-      <Text style={s.title}>صحة الوصلة</Text>
+      <Text style={s.title}>{title}</Text>
       <Text style={s.sub}>اللي يقرر سرعتك فعلياً — مو بس قوة الإشارة</Text>
       {items.map(it => (
         <View key={it.key} style={s.row}>

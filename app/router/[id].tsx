@@ -1005,7 +1005,7 @@ export default function RouterDashboard() {
                     </Text>
                   </View>
                 </Pressable>
-                {!!traffic && <Text style={s.heroSub}>السرعة الحين {fmtRate(traffic.downBytesPerSec)}</Text>}
+                {!!traffic && <Text style={s.heroSub}>{`السرعة الحين ↓ ${fmtRate(traffic.downBytesPerSec)} · ↑ ${fmtRate(traffic.upBytesPerSec)}`}</Text>}
               </>
             )}
             {!!traffic && traffic.connectedSecs > 0 && (

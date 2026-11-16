@@ -1081,6 +1081,7 @@ export class HuaweiDriver implements RouterDriver {
       txPower: parseTxPower(tag(xml, 'txpower')),
       nrCqi: num(tag(xml, 'nrcqi0')),
       nrDlMcs: parseDlMcs(tag(xml, 'nrdlmcs')).mcs ?? num(tag(xml, 'nrdlmcs')),
+      nrUlMcs: parseUlMcs(tag(xml, 'nrulmcs')),
       nrTxPower: parseTxPower(tag(xml, 'nrtxpower')),
       nrRank: num(tag(xml, 'nrrank')),
       enodebId: (tag(xml, 'enodeb_id') ?? '').replace(/^0+(?=\d)/, '') || undefined,

@@ -20,7 +20,7 @@ export interface Signal {
   nrActiveFromStatus?: boolean;
   /** صحة الوصلة: CQI (0–15) وسرعة الترميز MCS وقوة الإرسال وعدد المسارات */
   cqi?: number; dlMcs?: number; ulMcs?: number; txPower?: number; dlStreams?: number;
-  nrCqi?: number; nrDlMcs?: number; nrTxPower?: number; nrRank?: number;
+  nrCqi?: number; nrDlMcs?: number; nrUlMcs?: number; nrTxPower?: number; nrRank?: number;
   /** رقم موقع البرج الفعلي */
   enodebId?: string;
   /** عدد النواقل المدموجة (CA) حين يكشفها الجهاز بعرض النطاقات بدل خلايا منفصلة */

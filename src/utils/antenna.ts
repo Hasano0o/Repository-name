@@ -113,6 +113,11 @@ export function adviseAntenna(sig: Signal, carriers: Carrier[], cells: CellTower
     if (tx >= 18 && rsrp > -100) install.push({ ok: false, text: 'الاستقبال زين لكن الإرسال على الحد — ممكن الكيبل طويل أو الوصلات فيها فقد. قصّر الكيبل أو غيّر الوصلات.' });
     else if (tx < 14) install.push({ ok: true, text: `الإرسال مرتاح (${tx} dBm).` });
   }
+  const nrTx = sig.nrTxPower;
+  if (nrTx !== undefined && sig.nrRsrp !== undefined) {
+    if (nrTx >= 18 && sig.nrRsrp > -100) install.push({ ok: false, text: `استقبال الـ5G زين بس إرساله على الحد (${nrTx} dBm) — وجّه الأنتنا أدق على برج الـ5G أو قصّر الكيبل.` });
+    else if (nrTx < 14) install.push({ ok: true, text: `إرسال الـ5G مرتاح (${nrTx} dBm).` });
+  }
   if (rsrp > -95 && sinr < 5) install.push({ ok: false, text: 'الإشارة قوية لكن مشوّشة — الأنتنا تسمع أكثر من برج. لف الأنتنا شوي يمين ويسار بوضع الصوت لين يعلى SINR.' });
   else if (sinr >= 13) install.push({ ok: true, text: `التوجيه نظيف (SINR ${sinr}).` });
   if (rsrp < -105) install.push({ ok: false, text: 'الإشارة لسا ضعيفة — جرّب ترفع الأنتنا أعلى، أو وجّهها على برج ثاني من شاشة الأبراج.' });

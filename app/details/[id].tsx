@@ -191,6 +191,9 @@ export default function DetailsScreen() {
                     { label: 'PCI 5G', value: str(signal.nrPci) },
                     { label: 'ARFCN 5G', value: str(signal.nrArfcn) },
                     { label: 'عرض نطاق 5G', value: str(signal.nrDlBandwidth) },
+                    { label: 'CQI 5G', value: str(signal.nrCqi) },
+                    { label: 'MCS 5G تنزيل / رفع', value: [signal.nrDlMcs, signal.nrUlMcs].filter(v => v !== undefined).join(' / ') || undefined },
+                    { label: 'قوة إرسال 5G', value: signal.nrTxPower !== undefined ? `${signal.nrTxPower} dBm` : undefined },
                   ]} />
                 </View>
               </Section>

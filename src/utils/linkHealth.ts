@@ -22,7 +22,15 @@ type Tech = 'LTE' | 'NR';
  * كفاءة الوصلة: CQI (٠–١٥) هو تقييم المودم لجودة استقباله، والبرج يختار السرعة (MCS) بناءً عليه.
  * نعتمد CQI لأنه أثبت، ونرجع لـ MCS لو ما وصل.
  */
-function efficiency(cqi?: number, mcs?: number): HealthItem | null {
+/** فوقها نعتبر فيه تحميل فعلي (~٢ ميقا) — MCS منخفض بدون تحميل طبيعي (البرج ما يرسل شي) */
+export const BUSY_BPS = 250_000;
+
+/** الاستقبال نظيف (CQI عالي) بس البرج يرسل بترميز منخفض وقت التحميل ← زحمة/تقييد من البرج */
+export function starved(cqi?: number, mcs?: number, downBps?: number): boolean {
+  return cqi !== undefined && cqi >= 11 && mcs !== undefined && mcs >= 0 && mcs <= 9 && (downBps ?? 0) >= BUSY_BPS;
+}
+
+function efficiency(cqi?: number, mcs?: number, downBps?: number): HealthItem | null {
   let ratio: number | undefined;
   let value = '';
   if (cqi !== undefined && cqi >= 0) {
@@ -33,6 +41,12 @@ function efficiency(cqi?: number, mcs?: number): HealthItem | null {
     value = `MCS ${mcs}`;
   }
   if (ratio === undefined) return null;
+  if (starved(cqi, mcs, downBps)) {
+    return {
+      key: 'efficiency', title: 'كفاءة الوصلة', bar: Math.min(1, (mcs ?? 0) / 27), value: `MCS ${mcs} · CQI ${cqi}`, level: 'fair',
+      note: 'استقبالك نظيف بس البرج يعطيك ترميز منخفض وقت التحميل — غالباً البرج مزحوم. جرّب برج أو تردد ثاني.',
+    };
+  }
   const pct = Math.round(ratio * 100);
   const level: HealthLevel = ratio >= 0.73 ? 'excellent' : ratio >= 0.53 ? 'good' : ratio >= 0.33 ? 'fair' : 'poor';
   const note =
@@ -70,12 +84,13 @@ function mimo(streams?: number, weak = false): HealthItem | null {
   return { key: 'mimo', title: 'مسارات الاستقبال', bar: s / 4, value: s >= 2 ? `${s}×${s}` : '1 مسار', level, note };
 }
 
-export function linkHealth(sig: Signal | null | undefined, tech: Tech = 'LTE'): HealthItem[] {
+export function linkHealth(sig: Signal | null | undefined, tech: Tech = 'LTE', downBps?: number): HealthItem[] {
   if (!sig) return [];
   const isNr = tech === 'NR';
   const weak = ((isNr ? sig.nrSinr : sig.sinr) ?? 99) < 5;
+  if (isNr && sig.nrRsrp === undefined && sig.nrSinr === undefined) return [];
   return [
-    efficiency(isNr ? sig.nrCqi : sig.cqi, isNr ? sig.nrDlMcs : sig.dlMcs),
+    efficiency(isNr ? sig.nrCqi : sig.cqi, isNr ? sig.nrDlMcs : sig.dlMcs, downBps),
     uplink(isNr ? sig.nrTxPower : sig.txPower),
     mimo(isNr ? sig.nrRank : sig.dlStreams, weak),
   ].filter((x): x is HealthItem => !!x);
