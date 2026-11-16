@@ -18,6 +18,7 @@ import { ZteOntDriver } from './ztont';
 import { Fg360Driver } from './fg360';
 import { M2aDriver } from './m2a';
 import { TplinkDriver } from './tplink';
+import { JrdDriver } from './jrd';
 import { UnknownDriver } from './unknown';
 import { DeviceDriver } from './device';
 import { DemoDriver } from './demo';
@@ -69,6 +70,8 @@ const factories: (() => RouterDriver)[] = [
   () => new M2aDriver(),
   // TP-Link 4G/5G نسخة GDPR (Archer NX200 — ١٥ نوفمبر): http «ترحيب» والواجهة https، /cgi/getGDPRParm + AES/RSA. الدخول + قراءة أولية + FULL
   () => new TplinkDriver(),
+  // عائلة فيرموير JRD/webapi (HH10E وغيره — واجهة Vue، /jrd/webapi JSON-RPC، دخول scramble authType2) — من ملفات صفحة عضو (١٦ نوفمبر). دخول + قراءة، لسا ما انجرّب ميداني
+  () => new JrdDriver(),
   () => new UnknownDriver(),
 ];
 

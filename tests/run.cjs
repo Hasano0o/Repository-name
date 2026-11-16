@@ -55,6 +55,8 @@ const files = [
   'src/drivers/nokia/index.ts',
   'src/drivers/nokia/fwa.ts',
   'src/drivers/zteufi/index.ts',
+  'src/drivers/jrd/crypto.ts',
+  'src/drivers/jrd/index.ts',
   'src/services/amdRefs.ts',
   'src/drivers/zte/writeResult.ts',
   'src/drivers/zte/u30.ts',
