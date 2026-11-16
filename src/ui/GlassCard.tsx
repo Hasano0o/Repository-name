@@ -9,7 +9,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 export function GlassCard({
-  title, subtitle, icon, tint, children, collapsible = true, defaultOpen = true, accessory,
+  title, subtitle, icon, tint, children, collapsible = true, defaultOpen = true, accessory, onToggle,
 }: {
   title?: string;
   subtitle?: string;
@@ -19,11 +19,15 @@ export function GlassCard({
   collapsible?: boolean;
   defaultOpen?: boolean;
   accessory?: ReactNode;
+  /** يبلّغ بالحالة الجديدة بعد الفتح/الإخفاء (لحفظها مثلاً) */
+  onToggle?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const toggle = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setOpen(o => !o);
+    const next = !open;
+    setOpen(next);
+    onToggle?.(next);
   };
 
   return (

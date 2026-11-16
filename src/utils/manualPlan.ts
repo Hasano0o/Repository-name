@@ -7,7 +7,8 @@
  */
 import { UsageLog, dayKey } from './usageDays';
 
-export const GB = 1024 ** 3;
+/** جيجا الشركات = مليار بايت (نفس fmtBytes) — 1024³ كان يطلّع «باقي 10.74 GB» من باقة 10 */
+export const GB = 1e9;
 const DAY = 86_400_000;
 
 export interface ManualPlan {

@@ -2327,6 +2327,7 @@ export const EN_PATTERNS: Record<string, string> = {
   'آخر دمج {0}': 'Last CA {0}',
   'السرعة الحين {0}': 'Speed now {0}',
   'السرعة الحين ↓ {0} · ↑ {1}': 'Speed now ↓ {0} · ↑ {1}',
+  'استهلكت {0} · باقي {1} · {2} يوم': 'Used {0} · {1} left · {2} days',
   'استقبال الـ5G زين بس إرساله على الحد ({0} dBm) — وجّه الأنتنا أدق على برج الـ5G أو قصّر الكيبل.': '5G reception is good but its transmit is maxed ({0} dBm) — aim more precisely at the 5G tower or shorten the cable.',
   'إرسال الـ5G مرتاح ({0} dBm).': '5G transmit is comfortable ({0} dBm).',
   'تبرمج تلقائي{0}': 'Auto-programmed{0}',

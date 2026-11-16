@@ -5,6 +5,7 @@
  */
 import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, TextInput, Pressable } from '../i18n/rn';
 import { useFocusEffect } from 'expo-router';
 import { GlassCard } from './GlassCard';
@@ -31,13 +32,17 @@ export function ManualPlanCard({ routerId, refresh }: { routerId: string; refres
   const [size, setSize] = useState('100');
   const [dur, setDur] = useState(30);
   const [ago, setAgo] = useState('0');
+  /** مفتوحة ولا مخفية (سهم في الرأس) — تنحفظ لكل راوتر، والافتراضي مخفية عشان ما تاخذ حيز */
+  const [open, setOpen] = useState(false);
+  const openKey = `bandly.manualPlan.open.${routerId}`;
 
   const load = useCallback(async () => {
-    const [p, log] = await Promise.all([getManualPlan(routerId), getUsageLog(routerId)]);
+    const [p, log, o] = await Promise.all([getManualPlan(routerId), getUsageLog(routerId), AsyncStorage.getItem(openKey).catch(() => null)]);
+    setOpen(o === '1');
     setPlan(p);
     setSt(p ? planStatus(p, log, Date.now()) : null);
     setReady(true);
-  }, [routerId]);
+  }, [routerId, openKey]);
 
   useFocusEffect(useCallback(() => { load().catch(() => {}); }, [load, refresh]));
 
@@ -132,7 +137,10 @@ export function ManualPlanCard({ routerId, refresh }: { routerId: string; refres
 
   const col = st.pct >= 95 ? tFg('#dc2626') : st.pct >= 80 ? tFg('#ea580c') : tFg('#16a34a');
   return (
-    <GlassCard title={`باقتي · ${plan.sizeGB} جيجا`} icon="📦" tint="#16a34a" collapsible={false}>
+    <GlassCard key={open ? 'o' : 'c'} title={`باقتي · ${plan.sizeGB} جيجا`} icon="📦" tint="#16a34a"
+      defaultOpen={open}
+      subtitle={open ? undefined : `استهلكت ${fmtBytes(st.used)} · باقي ${fmtBytes(st.left)} · ${st.daysLeft} يوم`}
+      onToggle={o => { setOpen(o); AsyncStorage.setItem(openKey, o ? '1' : '0').catch(() => {}); }}>
       <Pressable onPress={openEdit}>
         <View style={s.topRow}>
           <Text style={[s.big, { color: col }]}>{fmtBytes(st.used)}</Text>
