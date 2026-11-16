@@ -39,7 +39,7 @@ const rnd = () => Math.random().toString(36).slice(2, 12);
  * rds: قيمة restore_default_status · guide: المعالج ما اكتمل ← الراوتر يمنع القراءات المحمية حتى بعد الدخول
  * (monitoring/status و device/information تبقى مفتوحة — مثل التقارير)
  */
-function router(st: { rds: '0' | '1'; guide: boolean }) {
+function router(st: { rds: '0' | '1'; guide: boolean; privacy?: boolean; privacyBroken?: boolean }) {
   type Sess = { tok: string[]; logged: boolean; scram?: { first: string; server: string } };
   const sessions = new Map<string, Sess>();
   let jar = '';
@@ -66,10 +66,15 @@ function router(st: { rds: '0' | '1'; guide: boolean }) {
     if (p === 'user/state-login') return res(xml(`<State>${s.logged ? '0' : '-1'}</State><password_type>4</password_type><firstlogin>0</firstlogin>`));
     // بدون دخول — نفس رد الراوتر في ملفات add-error
     if (p === 'device/basic_information') return res(xml(`<classify>cpe</classify><multimode>0</multimode><restore_default_status>${st.rds}</restore_default_status><devicename>H155-383</devicename>`));
+    // بيان الخصوصية (JSON) — نفس فيرموير Vue: يرد بدون دخول
+    if (p === 'app/privacypolicy' && method === 'GET') {
+      if (st.privacyBroken) return res('<html>not found</html>');
+      return res(JSON.stringify(st.privacy ? { IsPrivacyPolicyUpdate: 1, IsEULAUpdate: 1, change_status: 0 } : { IsPrivacyPolicyUpdate: 0, IsEULAUpdate: 0, change_status: 2 }));
+    }
     if (method === 'GET') {
       if (p === 'monitoring/status') return res(xml('<CurrentNetworkTypeEx>101</CurrentNetworkTypeEx>'));
       if (p === 'device/information') return s.logged ? res(xml('<DeviceName>H155-383</DeviceName>')) : res(err('100003'));
-      if (!s.logged || st.guide) return res(err('100003'));
+      if (!s.logged || st.guide || st.privacy) return res(err('100003'));
       if (p === 'device/signal') return res(xml('<pci>134</pci><rsrp>-95dBm</rsrp><rsrq>-10dB</rsrq><sinr>12dB</sinr><band>3</band>'));
       if (p === 'net/net-mode') return res(xml('<NetworkMode>00</NetworkMode>'));
       return res(xml(''));
@@ -102,6 +107,15 @@ function router(st: { rds: '0' | '1'; guide: boolean }) {
       return res(xml('OK'));
     }
     if (p === 'user/logout') { s.logged = false; return res(xml('OK')); }
+    if (p === 'app/privacypolicy') {
+      const j = JSON.parse(body);
+      assert.equal(hdrs['Content-Type'], 'application/json;charset=UTF-8');
+      assert.equal(hdrs._ResponseFormat, 'JSON');
+      if (!s.logged) return res(JSON.stringify({ errcode: 100003 }));
+      assert.deepEqual(j, { data: { Approve: '2', Liscence: '0' } });
+      st.privacy = false;
+      return res(JSON.stringify({ errcode: 0 }));
+    }
     return res(xml('OK'));
   };
   return {
@@ -184,4 +198,57 @@ test('هواوي: راوتر مو على إعدادات المصنع والقر�
   await d.login('192.168.8.1', 'admin', PW, { fresh: true });
   await assert.rejects(d.getSignal(), (e: any) => { assert.match(e.message, /100003/); assert.ok(!SETUP.test(e.message), e.message); return true; });
   assert.equal(r.count('GET device/basic_information'), 1, 'فحص واحد لكل دخول');
+});
+
+for (const os of ['ios', 'android']) {
+  test(`هواوي (${os}): بيان الخصوصية ما انقبل (H155-381 بعد ضبط المصنع) ← نوافق مثل الصفحة والقراءة تشتغل`, async () => {
+    OS = os;
+    const r = router({ rds: '0', guide: false, privacy: true });
+    const d = await driver();
+    await d.login('192.168.8.1', 'admin', PW, { fresh: true });
+    assert.equal((await d.getSignal()).pci, '134', r.log.join('\n'));
+    assert.equal(r.count('POST app/privacypolicy'), 1, 'موافقة وحدة');
+    assert.equal(r.st.privacy, false);
+  });
+}
+
+test('هواوي: كمّل الإعداد عنّي ← المعالج ثم بيان الخصوصية ← يقرأ', async () => {
+  OS = 'ios';
+  const r = router({ rds: '1', guide: true, privacy: true });
+  const d = await driver();
+  d.finishSetupOnce = true;
+  // المعالج يخلص بس القراءة لسا محجوبة (بيان الخصوصية) ← نوافق بنفس الجلسة
+  const realPost = (globalThis as any).fetch;
+  (globalThis as any).fetch = async (url: string, init?: any) => {
+    const x = await realPost(url, init);
+    if (/device\/basic_information/.test(url) && init?.method === 'POST') { r.st.rds = '0'; r.st.guide = false; }
+    return x;
+  };
+  let msg = '';
+  try { await d.login('192.168.8.1', 'admin', PW, { fresh: true }); } catch (e: any) { msg = e.message; }
+  if (msg) { assert.match(msg, /كمّلنا إعداد الراوتر/, msg); await d.login('192.168.8.1', 'admin', PW, { fresh: true }); }
+  assert.equal((await d.getSignal()).pci, '134', r.log.join('\n'));
+  assert.equal(r.st.privacy, false);
+});
+
+test('هواوي: راوتر ما عنده بيان خصوصية (رد مو JSON) ← نفس السلوك القديم، بدون POST', async () => {
+  OS = 'android';
+  const r = router({ rds: '0', guide: true, privacyBroken: true });
+  const d = await driver();
+  await d.login('192.168.8.1', 'admin', PW, { fresh: true });
+  await assert.rejects(d.getSignal(), /100003/);
+  assert.equal(r.count('POST app/privacypolicy'), 0);
+});
+
+test('هواوي: privacyNeed / privacyAccepted', () => {
+  const { privacyNeed, privacyAccepted } = require('../src/drivers/huawei/session');
+  assert.deepEqual(privacyNeed('{"IsPrivacyPolicyUpdate":1,"IsEULAUpdate":1,"change_status":0}'), { liscence: '0' });
+  assert.deepEqual(privacyNeed('{"IsPrivacyPolicyUpdate":0,"IsEULAUpdate":1,"change_status":1}'), { liscence: '1' });
+  assert.deepEqual(privacyNeed('{"IsPrivacyPolicyUpdate":1,"IsEULAUpdate":0,"change_status":1}'), { liscence: '2' });
+  assert.equal(privacyNeed('{"IsPrivacyPolicyUpdate":1,"IsEULAUpdate":1,"change_status":2}'), null);
+  assert.equal(privacyNeed('{"IsPrivacyPolicyUpdate":0,"IsEULAUpdate":0,"change_status":0}'), null);
+  assert.equal(privacyNeed('<error><code>100002</code></error>'), null);
+  assert.equal(privacyAccepted('{"errcode":0}'), true);
+  assert.equal(privacyAccepted('{"errcode":100003}'), false);
+  assert.equal(privacyAccepted('OK'), false);
 });

@@ -62,3 +62,27 @@ export function cookieShape(sc: string): string {
     return [`${name.slice(0, 24)}(${len})`, ...at].join(' ');
   }).join(' | ').slice(0, 200);
 }
+
+/**
+ * بيان الخصوصية/اتفاقية المستخدم (api/app/privacypolicy — JSON) — فيرموير Vue الجديدة (H155-381 ١٦ نوفمبر):
+ * بعد إعدادات المصنع وتخطي المعالج، الدخول ينقبل و device/information تقرا، بس الإشارة والأجهزة والترددات ترد 100003
+ * لين العضو يوافق على البيان. نفس شرط main.js (isNeedPrivacy) و common.js (getUpdateStatus):
+ *  • يحتاج موافقة لو IsPrivacyPolicyUpdate=1 أو IsEULAUpdate=1، و change_status ≠ 2
+ *  • Liscence: change_status=0 (أول مرة) ← "0" · الاثنين ← "0" · الاتفاقية بس ← "1" · البيان بس ← "2"
+ * null = ما يحتاج (أو رد مو مفهوم — ما نرسل شي).
+ */
+export function privacyNeed(txt: string): { liscence: '0' | '1' | '2' } | null {
+  let j: any;
+  try { j = JSON.parse(txt); } catch { return null; }
+  if (!j || typeof j !== 'object') return null;
+  const n = (v: unknown) => (v === undefined || v === null || v === '' ? NaN : Number(v));
+  const pp = n(j.IsPrivacyPolicyUpdate) === 1, eula = n(j.IsEULAUpdate) === 1, cs = n(j.change_status);
+  if ((!pp && !eula) || cs === 2 || Number.isNaN(cs)) return null;
+  if (cs === 0) return { liscence: '0' };
+  return { liscence: pp && eula ? '0' : eula ? '1' : '2' };
+}
+
+/** رد POST app/privacypolicy: {errcode:0} = انقبلت */
+export function privacyAccepted(txt: string): boolean {
+  try { const j = JSON.parse(txt); return Number(j?.errcode) === 0 && j?.errcode !== '' && j?.errcode !== undefined; } catch { return false; }
+}

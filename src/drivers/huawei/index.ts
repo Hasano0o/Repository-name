@@ -10,7 +10,7 @@ import {
   BandConfig, SmsMessage, DeviceDetails, CellTower, CellLockTarget, CellLockState, DataPlan, ActiveLock,
   ApnProfile, DnsConfig, Carrier, SignalSnapshot, TimeRule, BandRoles } from '../types';
 import { http as rawHttp } from '../http';
-import { hasSesTok, tokenFromReply, isHuaweiSessionReply, cookieShape, xmlUnesc, escCount } from './session';
+import { hasSesTok, tokenFromReply, isHuaweiSessionReply, cookieShape, xmlUnesc, escCount, privacyNeed, privacyAccepted } from './session';
 import { Platform } from 'react-native';
 import { trafficBurst } from '../../utils/nrprobe';
 import { getApnProfiles, setApn, selectApn, getDns, setDns } from './apn-dns';
@@ -537,6 +537,42 @@ export class HuaweiDriver implements RouterDriver {
       return v === '1';
     } catch { return false; }
   }
+  /** بيان الخصوصية: فحصناه من آخر دخول؟ (مرة لكل دخول) */
+  private privacyTried = false;
+  /**
+   * فيرموير Vue (H155-381 ١٦ نوفمبر): بعد إعدادات المصنع + المعالج، القراءات المحمية ترد 100003 لين الموافقة على بيان
+   * الخصوصية — نفس زر «موافق» في صفحة الراوتر (common.js postPrivacy("2")): POST app/privacypolicy
+   * JSON {data:{Approve:"2",Liscence}} + _ResponseFormat: JSON. true = وافقنا والراوتر قبل.
+   */
+  private async acceptPrivacyIfNeeded(): Promise<boolean> {
+    if (this.privacyTried) return false;
+    this.privacyTried = true;
+    let need: ReturnType<typeof privacyNeed> = null;
+    try {
+      const r = await this.http(this.url('app/privacypolicy?lang=en_us&country=NONE'), { headers: this.headers() }, 4000);
+      const tx = await r.text();
+      need = privacyNeed(tx);
+      diag(`[huawei] بيان الخصوصية: ${need ? `يحتاج موافقة (Liscence ${need.liscence})` : `ما يحتاج · ${tx.replace(/\s+/g, ' ').slice(0, 60)}`}`);
+    } catch (e: any) { diag(`[huawei] بيان الخصوصية: ما قرينا (${String(e?.message ?? e).slice(0, 40)})`); return false; }
+    if (!need) return false;
+    try {
+      const tok = this.queue.shift() || await this.freshToken();
+      const r = await this.http(this.url('app/privacypolicy'), {
+        method: 'POST',
+        headers: this.headers({
+          'Content-Type': 'application/json;charset=UTF-8',
+          _ResponseFormat: 'JSON',
+          __RequestVerificationToken: tok,
+        }),
+        body: JSON.stringify({ data: { Approve: '2', Liscence: need.liscence } }),
+      });
+      this.captureTokens(r);
+      const tx = await r.text();
+      const ok = privacyAccepted(tx);
+      diag(`[huawei] بيان الخصوصية: وافقنا → ${ok ? 'OK' : tx.replace(/\s+/g, ' ').slice(0, 60)}`);
+      return ok;
+    } catch (e: any) { diag(`[huawei] بيان الخصوصية: الموافقة ما مشت (${String(e?.message ?? e).slice(0, 40)})`); return false; }
+  }
   private async get(p: string, retry = true, again = true): Promise<string> {
     // إعادة دخول وضع المطوّر شغالة (خروج ← دخول): قراءة بينهم تنرفض وتنحسب «طرد» — ننتظرها تخلص
     if (this.relog) await this.relog;
@@ -561,6 +597,11 @@ export class HuaweiDriver implements RouterDriver {
       if (code === '100003' && GUARDED_GET.test(p) && !this.guardedOk) {
         if (this.setupState === null) this.setupState = await this.inSetupGuide();
         if (this.setupState) throw setupError(this.host);
+        // مو على المعالج: يمكن بيان الخصوصية ما انقبل (فيرموير Vue بعد ضبط المصنع) — نوافق مثل الصفحة ونعيد القراءة مرة
+        if (again && await this.acceptPrivacyIfNeeded()) {
+          await new Promise(res => setTimeout(res, 800));
+          return this.get(p, false, false);
+        }
       }
       throw new HuaweiError(code);
     }
@@ -858,6 +899,7 @@ export class HuaweiDriver implements RouterDriver {
     this.stale = false;
     this.guardedOk = false;
     this.setupState = null;
+    this.privacyTried = false;
     await this.updateCookie();
     if (this.manualCookie) { try { await this.sesTok(); } catch { this.manualCookie = false; } }
     // صفحة الراوتر الجديدة (H158/H155…) تسجّل دخول بـ SCRAM (challenge_login) — والدخول القديم (user/login)
