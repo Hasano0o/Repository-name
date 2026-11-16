@@ -1,18 +1,29 @@
 #!/usr/bin/env python3
 """
-ملخص «هل يفيدك مسرّع؟» — نقرر عليه نبني المسرّع الفعلي (المرحلة ٢) ولا لا.
-  python3 /root/bandly-live/accel_report.py          (آخر ١٤ يوم)
-  python3 /root/bandly-live/accel_report.py 30       (آخر ٣٠ يوم)
-كل جهاز ينحسب مرة لكل (منطقة لعبة): وسيط فحوصاته — عضو كثير الفحص ما يغلب الباقي.
+تقرير «هل يفيدك مسرّع؟» — نقرر عليه نبني المسرّع الفعلي (المرحلة ٢) ولا لا.
+  python3 /root/bandly-live/accel_report.py            ← يطبع (آخر ١٤ يوم)
+  python3 /root/bandly-live/accel_report.py 30         ← آخر ٣٠ يوم
+  python3 /root/bandly-live/accel_report.py --send     ← التقرير اليومي للمالك على تليجرام (cron ١١:٥٥ م)
+كل جهاز ينحسب مرة لكل منطقة لعبة (وسيط فحوصاته) — عضو كثير الفحص ما يغلب الباقي.
 """
+import json
 import sqlite3
 import sys
 import time
+import urllib.request as ur
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-DB = Path(__file__).resolve().parent / "data" / "community.db"
-DAYS = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 14
+DATA = Path(__file__).resolve().parent / "data"
+DB = DATA / "community.db"
+RIYADH = timezone(timedelta(hours=3))
 GAIN_MIN = 10
+REGION = {
+    "ae": "الإمارات", "sa": "الدمام", "sa-ruh": "الرياض", "sa-jed": "جدة", "qa": "قطر", "tr": "تركيا",
+    "eg": "مصر", "in": "الهند", "it": "إيطاليا", "eu": "ألمانيا", "fr": "فرنسا", "uk": "بريطانيا",
+    "se": "السويد", "sg": "سنغافورة", "kr": "كوريا", "us": "أمريكا", "br": "البرازيل",
+}
+MAIN = ["ae", "sa", "sa-ruh", "eu", "fr", "uk", "tr", "in"]
 
 
 def med(xs):
@@ -20,55 +31,150 @@ def med(xs):
     return xs[len(xs) // 2] if xs else None
 
 
-def main():
-    if not DB.exists():
-        print("ما فيه بيانات للحين")
-        return
-    c = sqlite3.connect(DB)
+def rows_since(c, since):
     try:
-        rows = c.execute("SELECT dev, op, city, region, direct, via, gain, kind, direct_loss, via_loss FROM accel WHERE at>=?",
-                         (int(time.time()) - DAYS * 86400,)).fetchall()
+        return c.execute("SELECT at, dev, op, city, region, direct, via, gain, kind, to_server, route FROM accel WHERE at>=?",
+                         (int(since),)).fetchall()
     except sqlite3.OperationalError:
-        print("ما فيه بيانات للحين (ولا فحص وصل)")
-        return
-    if not rows:
-        print(f"ما فيه فحوصات آخر {DAYS} يوم")
-        return
+        return []
 
-    per = {}
-    for dev, op, city, region, direct, via, gain, kind, dl, vl in rows:
-        per.setdefault((dev, region), []).append((op, city or "—", direct, via, gain, kind, dl, vl))
 
-    users = {}
-    for (dev, region), lst in per.items():
-        op, city = lst[-1][0], lst[-1][1]
-        g = med([x[4] for x in lst])
-        helps = sum(1 for x in lst if x[5] == "helps") * 2 > len(lst)
-        users[(dev, region)] = dict(op=op, city=city, region=region, gain=g, helps=helps,
-                                    direct=med([x[2] for x in lst]), via=med([x[3] for x in lst]))
+def per_user(rows):
+    """(جهاز، منطقة) ← وسيط نتايجه"""
+    g = {}
+    for at, dev, op, city, region, direct, via, gain, kind, to_s, route in rows:
+        g.setdefault((dev, region), []).append((op, city or "—", direct, via, gain, kind, to_s))
+    out = []
+    for (dev, region), lst in g.items():
+        out.append(dict(dev=dev, region=region, op=lst[-1][0], city=lst[-1][1],
+                        direct=med([x[2] for x in lst]), via=med([x[3] for x in lst]),
+                        gain=med([x[4] for x in lst]), to_s=med([x[6] for x in lst]),
+                        helps=sum(1 for x in lst if x[5] == "helps") * 2 > len(lst)))
+    return out
 
-    def block(title, key):
-        groups = {}
-        for u in users.values():
-            groups.setdefault(key(u), []).append(u)
-        print(f"\n── {title} ──")
-        for k, us in sorted(groups.items(), key=lambda kv: -len(kv[1])):
-            h = [u for u in us if u["helps"]]
-            pct = round(100 * len(h) / len(us))
-            gm = med([u["gain"] for u in h])
-            print(f"  {k}: {len(us)} عضو · يستفيد {len(h)} ({pct}%)" + (f" · ينقص بنقهم ~{gm}ms" if gm else "")
-                  + f" · مباشر {med([u['direct'] for u in us])}ms ← عبرنا {med([u['via'] for u in us])}ms")
 
-    devs = {d for d, _ in users}
-    h_all = [u for u in users.values() if u["helps"]]
-    print(f"آخر {DAYS} يوم: {len(rows)} فحص · {len(devs)} جهاز")
-    print(f"يستفيدون من المسرّع: {len({k[0] for k, u in users.items() if u['helps']})} جهاز من {len(devs)}"
-          + (f" · وسيط النقص {med([u['gain'] for u in h_all])}ms" if h_all else ""))
-    block("حسب منطقة سيرفر اللعبة", lambda u: u["region"])
-    block("حسب الشركة", lambda u: u["op"])
-    block("حسب المدينة", lambda u: u["city"])
-    block("الشركة + المنطقة", lambda u: f"{u['op']} → {u['region']}")
+def block(title, users, key, top=6, name=lambda k: k):
+    groups = {}
+    for u in users:
+        groups.setdefault(key(u), []).append(u)
+    if not groups:
+        return []
+    out = [f"\n{title}"]
+    for k, us in sorted(groups.items(), key=lambda kv: -len(kv[1]))[:top]:
+        h = [u for u in us if u["helps"]]
+        gm = med([u["gain"] for u in h])
+        out.append(f"• {name(k)}: {len(us)} · يستفيد {len(h)} ({round(100 * len(h) / len(us))}%)"
+                   + (f" −{gm}ms" if gm else "")
+                   + f" · مباشر {med([u['direct'] for u in us])} ← عبرنا {med([u['via'] for u in us])}")
+    return out
+
+
+def servers_now():
+    try:
+        cfg = json.loads((DATA / "accel.json").read_text()).get("servers", [])
+    except Exception:
+        return ["\n🖥️ ما فيه سيرفر مسرّع مفعّل (data/accel.json)"]
+    out = ["\n🖥️ سيرفراتنا الحين (منها لسيرفرات الألعاب):"]
+    for s in cfg:
+        try:
+            with ur.urlopen(s["url"] + "/routes", timeout=10) as r:
+                d = json.load(r)
+            reg = d.get("regions", {})
+            age = int((time.time() - d.get("at", 0)) / 60)
+            parts = [f"{REGION.get(k, k)} {reg[k]['median']}" + (f"(فقد {reg[k]['lossPct']}%)" if reg[k].get("lossPct") else "")
+                     for k in MAIN if k in reg and reg[k].get("samples")]
+            dead = [REGION.get(k, k) for k in MAIN if k in reg and not reg[k].get("samples")]
+            out.append(f"• {s.get('name', s.get('id'))} ✅ (قبل {age} د): " + " · ".join(parts)
+                       + (f" · ما رد: {'، '.join(dead)}" if dead else ""))
+        except Exception as e:
+            out.append(f"• {s.get('name', s.get('id'))} ❌ ما يرد ({str(e)[:60]})")
+    return out
+
+
+def verdict(users):
+    devs = {u["dev"] for u in users}
+    hdev = {u["dev"] for u in users if u["helps"]}
+    gm = med([u["gain"] for u in users if u["helps"]])
+    if len(devs) < 10:
+        return f"⏳ لسا البيانات قليلة ({len(devs)} جهاز) — نحتاج ١٠ على الأقل قبل نحكم"
+    pct = round(100 * len(hdev) / len(devs))
+    if pct >= 30 and (gm or 0) >= 15:
+        return f"👍 مؤشر قوي للمرحلة ٢: {pct}% يستفيدون بوسيط {gm}ms"
+    if pct >= 15:
+        return f"🤔 متوسط: {pct}% يستفيدون — شوف أي شركة/منطقة بالضبط قبل تقرر"
+    return f"👎 ضعيف: {pct}% بس يستفيدون — المسرّع بهالسيرفر ما يستاهل"
+
+
+def build(days=14):
+    if not DB.exists():
+        return "🚀 تقرير المسرّع\nما فيه بيانات للحين"
+    now = datetime.now(RIYADH)
+    c = sqlite3.connect(DB)
+    all_rows = rows_since(c, time.time() - days * 86400)
+    day0 = now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+    today = [r for r in all_rows if r[0] >= day0]
+    first = c.execute("SELECT MIN(at) FROM accel").fetchone()[0] if all_rows else None
+    old_devs = {r[1] for r in all_rows if r[0] < day0}
+    users = per_user(all_rows)
+    devs = {u["dev"] for u in users}
+    hdev = {u["dev"] for u in users if u["helps"]}
+    gm = med([u["gain"] for u in users if u["helps"]])
+    kinds = {}
+    for u in users:
+        k = "يفيد" if u["helps"] else ("فرق بسيط" if (u["gain"] or 0) >= 4 else "ما يفيد")
+        kinds[k] = kinds.get(k, 0) + 1
+
+    L = [f"🚀 تقرير المسرّع — {now.strftime('%Y-%m-%d')}"]
+    L.append(f"\n📅 اليوم: {len(today)} فحص · {len({r[1] for r in today})} جهاز"
+             f" (جدد {len({r[1] for r in today} - old_devs)})")
+    since = f" من {datetime.fromtimestamp(first, RIYADH).strftime('%m-%d')}" if first else ""
+    L.append(f"📈 آخر {days} يوم{since}: {len(all_rows)} فحص · {len(devs)} جهاز")
+    if users:
+        L.append(f"✅ يستفيدون (≥{GAIN_MIN}ms أو فقد أقل): {len(hdev)} من {len(devs)} جهاز"
+                 + (f" · وسيط النقص {gm}ms" if gm else ""))
+        L.append("📊 النتايج (جهاز×منطقة): " + " · ".join(f"{k} {v}" for k, v in kinds.items()))
+        L.append(f"📶 بنق الأعضاء لسيرفرنا (وسيط): {med([u['to_s'] for u in users])}ms")
+        L += block("🎮 حسب سيرفر اللعبة:", users, lambda u: u["region"], name=lambda k: REGION.get(k, k))
+        L += block("📡 حسب الشركة:", users, lambda u: u["op"])
+        L += block("🏙️ حسب المدينة:", users, lambda u: u["city"])
+        best = sorted([u for u in users if u["helps"] and u["gain"]], key=lambda u: -u["gain"])[:3]
+        if best:
+            L.append("\n🏆 أكبر فايدة:")
+            L += [f"• {u['op']} · {u['city']} → {REGION.get(u['region'], u['region'])}: {u['direct']} ← {u['via']}ms (−{u['gain']})"
+                  for u in best]
+    L += servers_now()
+    L.append("\n" + verdict(users))
+    return "\n".join(L)
+
+
+def send(text):
+    try:
+        tok = (DATA / "bot_token").read_text().strip()
+        owner = int(json.loads((DATA / "config.json").read_text()).get("owner_id") or 0)
+    except Exception:
+        tok, owner = "", 0
+    if not tok or not owner:
+        print("✗ ما فيه bot_token أو owner_id", file=sys.stderr)
+        return False
+    req = ur.Request(f"https://api.telegram.org/bot{tok}/sendMessage",
+                     data=json.dumps({"chat_id": owner, "text": text[:4000], "disable_web_page_preview": True},
+                                     ensure_ascii=False).encode(),
+                     headers={"Content-Type": "application/json"})
+    for _ in range(3):  # انقطاعات تليجرام عادية
+        try:
+            with ur.urlopen(req, timeout=20) as r:
+                if json.load(r).get("ok"):
+                    return True
+        except Exception as e:
+            print(f"تليجرام: {e}", file=sys.stderr)
+        time.sleep(10)
+    return False
 
 
 if __name__ == "__main__":
-    main()
+    days = next((int(a) for a in sys.argv[1:] if a.isdigit()), 14)
+    text = build(days)
+    if "--send" in sys.argv:
+        print("✓ انرسل" if send(text) else "✗ ما انرسل")
+    else:
+        print(text)
