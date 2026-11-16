@@ -48,6 +48,36 @@ const str = (v: unknown) => {
 };
 const truthy = (v: unknown) => v === true || v === 1 || v === '1' || /^(true|yes|on)$/i.test(String(v ?? ''));
 
+/**
+ * صفحة /diagnostics/ (بعد الدخول، HTML جاهز من الجهاز — بدون ajax). من AUTH حقيقي ١٦ نوفمبر (MiFi 8000، ليبيانا LTT4G):
+ *   internetStatus4G «Connected» · internetStatusNetworkOperator4G «LTT4G» · internetStatus4gRSSI «-106 dBm» (عنوانها «Signal strength (RSRP)»)
+ *   internetStatusSNR «0 dB» · lteBand «20» · internetStatus4gRoaming «No»
+ * الفيرموير ما يعطي RSRQ ولا البرج ولا PCI. null لو الصفحة ما فيها خانة RSRP (رجّع صفحة الدخول = الجلسة انتهت).
+ */
+export interface InseegoDiag { rsrp?: number; sinr?: number; band?: string; operator?: string; connected?: boolean; roaming?: boolean }
+export function diagFrom(html: string): InseegoDiag | null {
+  const cell = (id: string) => {
+    const m = html.match(new RegExp(`\\bid=["']${id}["'][^>]*>([^<]*)<`));
+    return m ? m[1].replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim() : undefined;
+  };
+  const raw = cell('internetStatus4gRSSI');
+  if (raw === undefined) return null;
+  const d: InseegoDiag = {};
+  const rsrp = num(raw);
+  if (rsrp !== undefined && rsrp < -40 && rsrp > -150) d.rsrp = rsrp;
+  const snr = num(cell('internetStatusSNR'));
+  if (snr !== undefined && snr > -30 && snr < 50 && d.rsrp !== undefined) d.sinr = snr;
+  const b = num(cell('lteBand'));
+  if (b && b > 0 && b < 300) d.band = String(b);
+  const op = str(cell('internetStatusNetworkOperator4G'));
+  if (op) d.operator = op;
+  const cs = cell('internetStatus4G') ?? '';
+  if (/^connected$/i.test(cs)) d.connected = true; else if (/disconnect|not ?connected|searching|idle/i.test(cs)) d.connected = false;
+  const ro = cell('internetStatus4gRoaming');
+  if (ro) d.roaming = /^yes$/i.test(ro);
+  return d;
+}
+
 /** /srv/status ← statusData (أو الكائن نفسه لو جا بدون غلاف) */
 export function statusFrom(j: any): InseegoStatus | null {
   if (!j || typeof j !== 'object') return null;
@@ -70,10 +100,16 @@ export function techName(t?: string): string | undefined {
  * الإشارة: الأرقام بس من signalstat.cgi (تعديل Band Manager). بدونه ما نخترع أرقام من الأعمدة —
  * نرجع نوع الشبكة بس (وإذا 5G: nrAvailable = الأعمدة).
  */
-export function signalFrom(st: InseegoStatus | null, ss: InseegoSignalStat | null): Signal {
+export function signalFrom(st: InseegoStatus | null, ss: InseegoSignalStat | null, dg: InseegoDiag | null = null): Signal {
   const sig: Signal = {};
   const tech = techName(str(ss?.tech) ?? str(st?.statusBarTechnology) ?? str(st?.statusBarTechnologyText));
   if (tech) sig.network = tech;
+  if (dg && !(ss && truthy(ss.ok))) {
+    if (dg.rsrp !== undefined) sig.rsrp = dg.rsrp;
+    if (dg.sinr !== undefined) sig.sinr = dg.sinr;
+    if (dg.band) sig.band = dg.band;
+    if (!sig.network && dg.rsrp !== undefined) sig.network = 'LTE';
+  }
   if (ss && truthy(ss.ok)) {
     const rsrp = num(ss.rsrp), rsrq = num(ss.rsrq), snr = num(ss.snr), rssi = num(ss.rssi);
     // قيم خارج المدى = المودم ما قراها
@@ -94,12 +130,12 @@ export function signalFrom(st: InseegoStatus | null, ss: InseegoSignalStat | nul
   return sig;
 }
 
-export function networkFrom(st: InseegoStatus | null, ss: InseegoSignalStat | null, model: string): NetworkInfo {
+export function networkFrom(st: InseegoStatus | null, ss: InseegoSignalStat | null, model: string, dg: InseegoDiag | null = null): NetworkInfo {
   const cs = String(st?.statusBarConnectionState ?? '').trim();
-  const op = str(ss?.oper) ?? str(st?.statusBarNetwork);
+  const op = str(ss?.oper) ?? str(st?.statusBarNetwork) ?? dg?.operator;
   return {
     operator: op,
-    connected: /^connected$/i.test(cs) ? true : /disconnect|not ?connected|idle|searching/i.test(cs) ? false : undefined,
+    connected: /^connected$/i.test(cs) ? true : /disconnect|not ?connected|idle|searching/i.test(cs) ? false : dg?.connected,
     mode: techName(str(ss?.tech) ?? str(st?.statusBarTechnology)),
     // M2000 = جيب 5G · 8000/8800L = 4G LTE بس
     supports5g: /M2000|M3000|5G/i.test(model) ? true : /8000|8800/i.test(model) ? false : undefined,

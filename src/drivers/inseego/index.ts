@@ -8,7 +8,8 @@
  *      GET /login/ ← secToken + gSecureToken ← POST /submitLogin/ shaPassword=sha1(الكلمة + secToken)&gSecureToken
  *      200/302 = تمام · 500 + {authError} = كلمة غلط · 429 = محاولات كثيرة
  *  • الإشارة بالأرقام: /cgi/signalstat.cgi — موجود بس لو الجهاز عليه تعديل «Band Manager».
- *    بدونه: نوع الشبكة والشركة والبطارية من /srv/status (ما فيه RSRP) — الأرقام بعد ما يوصل FULL (/diagnostics/).
+ *    بدونه (الفيرموير الأصلي): صفحة /diagnostics/ بعد الدخول ← RSRP و SNR والتردد (١٦ نوفمبر — من AUTH عضو، ليبيانا).
+ *    ما فيها RSRQ ولا رقم البرج ولا PCI.
  *
  * ⚠️ الكتابة (ترددات/برج/وضع) مقفولة: Verizon تقفلها في الفيرموير الأصلي، والموجود عند الأعضاء تعديلات خارجية
  *    («MONDO» على /cgi/mapi.cgi برمز من شاشة الجهاز · «Band Manager» على /cgi/bandset.cgi) — تنفتح ميزة ميزة بعد الدليل.
@@ -22,7 +23,7 @@ import { isLanHost } from '../../utils/host';
 import { buildSnapshot } from '../../utils/snapshot';
 import type { ModelProfile } from '../models';
 import {
-  InseegoStatus, InseegoSignalStat, statusFrom, signalFrom, networkFrom, healthFrom, loginTokens, modelFromHtml, usageFrom,
+  InseegoStatus, InseegoSignalStat, InseegoDiag, diagFrom, statusFrom, signalFrom, networkFrom, healthFrom, loginTokens, modelFromHtml, usageFrom,
 } from './parse';
 
 export const inseegoSha = (pw: string, secToken: string) => bytesToHex(sha1(utf8ToBytes(pw + secToken)));
@@ -37,6 +38,12 @@ export class InseegoDriver implements RouterDriver {
   /** null = ما جرّبنا · false = الجهاز ما فيه signalstat.cgi (فيرموير أصلي) */
   private hasStat: boolean | null = null;
   private logged = false;
+  private password = '';
+  /** آخر قراءة /diagnostics/ (الصفحة ~46KB والجهاز بطيء — ما نسحبها أكثر من مرة كل ٤ ثواني) */
+  private dg: { at: number; v: InseegoDiag | null } | null = null;
+  private dgBusy: Promise<InseegoDiag | null> | null = null;
+  private reloginAt = 0;
+  private reloginFailed = false;
 
   private base(host = this.host) { return 'http://' + host.replace(/^https?:\/\//, '').replace(/\/+$/, ''); }
 
@@ -141,6 +148,7 @@ export class InseegoDriver implements RouterDriver {
     if (!isLanHost(host)) throw new Error('العنوان لازم يكون محلي (192.168 / 10 / 172)');
     this.host = host;
     this.logged = false;
+    this.password = password;
     let r: { status: number; text: string } | null = null;
     // الجهاز أحياناً يعلق على submitLogin (تقرير ٧ نوفمبر: timeout ٢٠–٣٠ث ثم يرد عادي) — مرة ثانية برموز جديدة.
     // انقطاع الشبكة مو محاولة غلط عند الجهاز، فما نخاطر بالقفل.
@@ -180,6 +188,8 @@ export class InseegoDriver implements RouterDriver {
     // رجّع لنا فورم الدخول نفسه = ما دخلنا
     if (/name=["']gSecureToken["']/i.test(t) && /var\s+secToken/.test(t)) throw new Error('كلمة المرور غلط — الجهاز رجّع صفحة الدخول');
     this.logged = true;
+    this.reloginFailed = false;
+    this.dg = null;
     await this.readModel();
   }
 
@@ -201,6 +211,40 @@ export class InseegoDriver implements RouterDriver {
     ];
   }
 
+  /**
+   * الأرقام من صفحة «Diagnostics» (فيرموير Inseego الأصلي): RSRP و SNR والتردد. الجلسة انتهت (رجعت صفحة الدخول)
+   * ← ندخل من جديد مرة وحدة بالكلمة المحفوظة (مرة كل دقيقتين بالكثير، وإذا رُفضت ما نعيد — عشان ما ينقفل الجهاز).
+   */
+  private async diag(): Promise<InseegoDiag | null> {
+    if (this.dg && Date.now() - this.dg.at < 4000) return this.dg.v;
+    if (this.dgBusy) return this.dgBusy;
+    this.dgBusy = (async () => {
+      const get = async () => diagFrom((await this.req('/diagnostics/', {}, 15000)).text);
+      let v: InseegoDiag | null = null;
+      try { v = await get(); } catch (e) { diag(`[inseego] /diagnostics/ ✗ ${String((e as any)?.message ?? e).slice(0, 60)}`); }
+      if (!v && this.password && !this.reloginFailed && Date.now() - this.reloginAt > 120000) {
+        this.reloginAt = Date.now();
+        diag('[inseego] /diagnostics/ بدون أرقام — الجلسة انتهت؟ ندخل من جديد');
+        try { await this.login(this.host, '', this.password); v = await get(); }
+        catch (e) {
+          if (/غلط|وقّف|رفض/.test(String((e as any)?.message ?? e))) this.reloginFailed = true;
+          diag(`[inseego] إعادة الدخول ✗ ${String((e as any)?.message ?? e).slice(0, 80)}`);
+        }
+      }
+      this.dg = { at: Date.now(), v };
+      return v;
+    })().finally(() => { this.dgBusy = null; });
+    return this.dgBusy;
+  }
+
+  /** الإشارة بالأرقام: signalstat.cgi (لو الجهاز معدّل) وإلا صفحة Diagnostics */
+  private async readAll() {
+    const st = await this.status().catch(() => null);
+    const ss = await this.stat();
+    const dg = ss || !this.logged && !this.password ? null : await this.diag();
+    return { st, ss, dg };
+  }
+
   async isConnected(): Promise<boolean> {
     try { return !!(await this.status()); } catch { return false; }
   }
@@ -213,14 +257,14 @@ export class InseegoDriver implements RouterDriver {
   }
 
   async getSignal(): Promise<Signal> {
-    const [st, ss] = await Promise.all([this.status().catch(() => null), this.stat()]);
-    if (!st && !ss) throw new Error('الراوتر ما رد (/srv/status)');
-    return signalFrom(st, ss);
+    const { st, ss, dg } = await this.readAll();
+    if (!st && !ss && !dg) throw new Error('الراوتر ما رد (/srv/status)');
+    return signalFrom(st, ss, dg);
   }
 
   async getNetworkInfo(): Promise<NetworkInfo> {
-    const [st, ss] = await Promise.all([this.status().catch(() => null), this.stat()]);
-    return networkFrom(st, ss, this.model);
+    const { st, ss, dg } = await this.readAll();
+    return networkFrom(st, ss, this.model, dg);
   }
 
   async getSnapshot(): Promise<SignalSnapshot> {

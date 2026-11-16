@@ -21,6 +21,17 @@ Module._load = function (req: string, ...rest: unknown[]) {
 const sha1 = (s: string) => (ncrypto as any).createHash('sha1').update(s, 'utf8').digest('hex');
 // من FULL حقيقي (٧ نوفمبر ٦:٠٦، المدار — ليبيا)
 const REAL = {"loginStatus":1,"statusData":{"statusBarAirplaneMode":"AirplaneModeOff","statusBarBatteryChargingSource":"ChargingSourceNone","statusBarBatteryChargingState":"false","statusBarBatteryDetection":"Present","statusBarBatteryPercent":"96","statusBarBytesReceived":"181331420","statusBarBytesTotal":"203241872","statusBarBytesTransmitted":"21910452","statusBarClientListSize":"2","statusBarConnectionDuration":"3302","statusBarConnectionState":"Connected","statusBarNetwork":"ALMADAR","statusBarNetworkID":"606^\u0002","statusBarSignalBars":"4","statusBarSimStatus":"Ready","statusBarTechnology":"LTE+","statusBarTechnologyText":"","statusBarWiFiClientListSize":"2","statusBarWiFiEnabled":1}};
+// /diagnostics/ من AUTH حقيقي (١٦ نوفمبر، ليبيانا) — مقتطع
+const DIAG = `<div class="row clearfix"><div class="col">4G LTE Network</div></div>
+<div class="row clearfix"><div class="col">Status</div><div class="col" id="internetStatus4G">
+  Connected</div></div>
+<div class="row clearfix"><div class="col">Network operator</div><div class="col" id="internetStatusNetworkOperator4G">LTT4G</div></div>
+<div class="row clearfix"><div class="col">Signal strength (RSRP)</div><div class="col" id="internetStatus4gRSSI">
+  -106 dBm
+</div></div>
+<div class="row clearfix"><div class="col">SNR:</div><div class="col" id="internetStatusSNR">0 dB</div></div>
+<div class="row clearfix"><div class="col">Band</div><div class="col" id="lteBand">20</div></div>
+<div class="row clearfix"><div class="col">Roaming</div><div class="col" id="internetStatus4gRoaming">No</div></div>`;
 const STATUS = { statusData: {
   statusBarSignalBars: 4, statusBarTechnology: '4G LTE', statusBarTechnologyText: '4G LTE', statusBarNetwork: 'Libyana',
   statusBarConnectionState: 'Connected', statusBarBatteryPercent: 76, statusBarBatteryChargingState: 'Charging', statusBarWiFiClientListSize: 2,
@@ -53,6 +64,10 @@ function router(o: { password?: string; stat?: boolean; title?: string; loginPag
         if (!o.stat) return res(404, '<html>404 Not Found</html>');
         return res(200, JSON.stringify({ ok: true, rssi: '-61', rsrp: '-94', rsrq: '-11', snr: '9.4', tech: 'LTE', bars: '4', oper: 'Libyana', cell: '22113281', band: '3', batt: 76, ca: 0 }));
       case '/logout/': st.logged = false; return res(200, '');
+      case '/diagnostics/':
+        st.n++;
+        if (!st.logged) return res(200, `<html><script>var secToken = "${st.sec}";</script><form><input type="hidden" name="gSecureToken" value="${st.g}" /></form></html>`);
+        return res(200, DIAG);
       default: return res(404, 'Not Found');
     }
   };
@@ -114,10 +129,10 @@ test('inseego: صفحة دخول بدون secToken ← ما نرسل شي', asyn
   assert.equal(st.posts.length, 0);
 });
 
-test('inseego: فيرموير أصلي ← نوع الشبكة والشركة والبطارية بس (بدون أرقام مخترعة)', async () => {
+test('inseego: قبل الدخول ← نوع الشبكة والشركة والبطارية بس (بدون أرقام مخترعة)', async () => {
   router();
   const d = driver();
-  await d.login('192.168.1.1', 'admin', 'admin123');
+  assert.equal(await d.detect('192.168.1.1'), true);
   const s = await d.getSignal();
   assert.equal(s.network, 'LTE');
   assert.equal(s.rsrp, undefined);
@@ -205,4 +220,47 @@ test('inseego: رد /srv/status الحقيقي (المدار) ← LTE+ والش�
   assert.equal(n.supports5g, false);
   assert.deepEqual(healthFrom(st, null), { battery: 96, charging: false });
   assert.deepEqual(usageFrom(st), { downloadBytes: 181331420, uploadBytes: 21910452 });
+});
+
+test('inseego: diagFrom يقرأ صفحة Diagnostics الحقيقية', () => {
+  const { diagFrom } = require('../src/drivers/inseego/parse');
+  assert.deepEqual(diagFrom(DIAG), { rsrp: -106, sinr: 0, band: '20', operator: 'LTT4G', connected: true, roaming: false });
+  assert.equal(diagFrom('<html>login</html>'), null);
+  assert.deepEqual(diagFrom('<div id="internetStatus4gRSSI">--</div>'), {});
+});
+
+test('inseego: بعد الدخول الإشارة بالأرقام من /diagnostics/ (بدون Band Manager)', async () => {
+  const st = router();
+  const d = driver();
+  await d.login('192.168.1.1', '', 'admin123');
+  const sig = await d.getSignal();
+  assert.equal(sig.rsrp, -106);
+  assert.equal(sig.sinr, 0);
+  assert.equal(sig.band, '20');
+  const cells = await d.getCells();
+  assert.equal(cells.length, 1);
+  assert.equal(cells[0].rsrp, -106);
+  assert.equal(st.n, 1, 'الصفحة ما تنسحب أكثر من مرة كل ٤ ثواني');
+  assert.equal(st.maxInflight, 1);
+});
+
+test('inseego: الجلسة انتهت ← دخول من جديد مرة وحدة ثم الأرقام', async () => {
+  const st = router();
+  const d = driver();
+  await d.login('192.168.1.1', '', 'admin123');
+  st.logged = false;
+  (d as any).dg = null;
+  const before = st.posts.filter(x => x === '/submitLogin/').length;
+  const sig = await d.getSignal();
+  assert.equal(sig.rsrp, -106);
+  assert.equal(st.posts.filter(x => x === '/submitLogin/').length, before + 1);
+});
+
+test('inseego: signalstat موجود ← ما نسحب /diagnostics/', async () => {
+  const st = router({ stat: true });
+  const d = driver();
+  await d.login('192.168.1.1', '', 'admin123');
+  const sig = await d.getSignal();
+  assert.equal(sig.rsrp, -94);
+  assert.equal(st.n, 0);
 });
