@@ -68,9 +68,15 @@ def measure(urls, n=SAMPLES, timeout=3.0):
             try:
                 vals.append(_req(conn, path, timeout))
             except Exception:
-                lost += 1
+                # بعض السيرفرات (قوقل) تقفل الاتصال الخامل بصمت — نفتح جديد ونعيد مرة، والفقد بس لو فشلت الثانية
                 conn.close()
                 conn = V4Conn(p.hostname, p.port or 443, timeout=timeout, context=CTX)
+                try:
+                    vals.append(_req(conn, path, timeout))
+                except Exception:
+                    lost += 1
+                    conn.close()
+                    conn = V4Conn(p.hostname, p.port or 443, timeout=timeout, context=CTX)
             time.sleep(0.12)
         conn.close()
         if not vals:
