@@ -36,7 +36,11 @@ function router(opts: { password?: string } = {}) {
     st.posts.push(name);
     const authed = (init.headers || {})._RequestVerificationToken === jrdScramble(st.token);
     switch (name) {
-      case 'GetSystemStatus': return rpc(st.db.status);
+      // GetSystemStatus/GetSystemInfo مو أوامر الراوتر (دوال SDK) — الراوتر الحقيقي يرفضها
+      case 'GetSystemStatus': case 'GetSystemInfo': return err('-32601');
+      case 'GetModemStatus': return rpc(st.db.status);
+      case 'GetApStatus': return rpc({ curr_num_2g: 1, curr_num_5g: 2, curr_num_lan: 0 });
+      case 'GetApSystemInfo': return rpc({ HwVersion: 'HW1' });
       case 'Login': {
         const ok = jrdScramble('admin') === b.params.UserName && jrdScramble(opts.password ?? 'admin') === b.params.Password;
         return ok ? rpc({ token: st.token, remaintime: 300 }) : err('010101');
@@ -46,10 +50,9 @@ function router(opts: { password?: string } = {}) {
     if (!authed) return err('010102'); // needLogin
     switch (name) {
       case 'GetNetworkInfo': return rpc(st.db.net);
-      case 'GetSystemInfo': return rpc(st.db.sys);
       case 'GetConnectionState': return rpc(st.db.conn);
       case 'GetConnectedDeviceList': return rpc(st.db.devs);
-      case 'GetModemSystemInfo': return rpc({});
+      case 'GetModemSystemInfo': return rpc(st.db.sys);
       case 'SetDeviceReboot': return rpc({});
       case 'DisConnect': st.connected = false; return rpc({});
       case 'Connect': st.connected = true; return rpc({});

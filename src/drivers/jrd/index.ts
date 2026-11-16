@@ -12,7 +12,9 @@
  *    ترويسات: _RequestVerificationKey (ثابت) + device_name/custom_id (من buildInfo) + بعد الدخول _RequestVerificationToken
  *  • الرد: {result:{...}} نجاح · {error:{code,message,remaintime}} فشل
  *  • الدخول (loginAuthType 2): Login {UserName:scramble(user), Password:scramble(pass)} ← result.token ← الترويسة = scramble(token)
- *  • أوامر بدون توكن (تتعرّف بها قبل الدخول): GetSystemStatus · GetSystemInfo … (NoTokenMethodArray في الكود)
+ *  • أوامر بدون توكن (تتعرّف بها قبل الدخول): GetModemStatus · GetApStatus … (NoTokenMethodArray في الكود)
+ *  ⚠️ GetSystemStatus و GetSystemInfo مو أوامر الراوتر — دوال في SDK الصفحة تدمج GetApStatus+GetModemStatus
+ *    و GetApSystemInfo+GetModemSystemInfo (ملفات HH10E ١٧ نوفمبر). كنا نرسلها خام ← التعرّف يفشل ← «مو مدعوم».
  */
 import {
   RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower,
@@ -122,8 +124,9 @@ export class JrdDriver implements RouterDriver {
       if (!r.ok) return false;
       const bi = parseBuildInfo(await r.text());
       if (!bi.project) return false;
-      // نتأكد إن /jrd/webapi حي (أمر بدون توكن)
-      const st = await this.call('GetSystemStatus', {}, 6000).catch(() => null);
+      // نتأكد إن /jrd/webapi حي (أمر بدون توكن — GetModemStatus/GetApStatus، مو GetSystemStatus: هذي دالة SDK)
+      let st = await this.call('GetModemStatus', {}, 8000).catch(() => null);
+      if (st == null || typeof st !== 'object') st = await this.call('GetApStatus', {}, 8000).catch(() => null);
       if (st == null || typeof st !== 'object') return false;
       this.project = bi.project; this.custom = bi.custom || ''; this.model = bi.project;
       return true;
@@ -175,8 +178,21 @@ export class JrdDriver implements RouterDriver {
   }
 
   // ═══ القراءة ═══
+  /** نفس GetSystemStatus في SDK الصفحة: GetApStatus + GetModemStatus مدموجين */
   private async status(): Promise<Record<string, any>> {
-    return (await this.call('GetSystemStatus').catch(() => ({}))) || {};
+    const [ap, modem] = await Promise.all([
+      this.call('GetApStatus').catch(() => ({})),
+      this.call('GetModemStatus').catch(() => ({})),
+    ]);
+    return { ...(ap || {}), ...(modem || {}) };
+  }
+  /** نفس GetSystemInfo في SDK الصفحة: GetApSystemInfo + GetModemSystemInfo */
+  private async sysInfo(): Promise<Record<string, any>> {
+    const [ap, modem] = await Promise.all([
+      this.call('GetApSystemInfo').catch(() => ({})),
+      this.call('GetModemSystemInfo').catch(() => ({})),
+    ]);
+    return { ...(ap || {}), ...(modem || {}) };
   }
   private async netinfo(): Promise<Record<string, any>> {
     return (await this.call('GetNetworkInfo').catch(() => ({}))) || {};
@@ -211,7 +227,7 @@ export class JrdDriver implements RouterDriver {
   }
   async getDeviceDetails(): Promise<DeviceDetails> {
     const [sys, conn, st] = await Promise.all([
-      this.call('GetSystemInfo').catch(() => ({})),
+      this.sysInfo(),
       this.call('GetConnectionState').catch(() => ({})),
       this.status(),
     ]);
