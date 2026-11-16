@@ -20,6 +20,7 @@ import { M2aDriver } from './m2a';
 import { TplinkDriver } from './tplink';
 import { JrdDriver } from './jrd';
 import { HuaweiGwDriver } from './hwgw';
+import { SrtDriver } from './srt';
 import { UnknownDriver } from './unknown';
 import { DeviceDriver } from './device';
 import { DemoDriver } from './demo';
@@ -75,6 +76,8 @@ const factories: (() => RouterDriver)[] = [
   () => new JrdDriver(),
   // هواوي البوابة القديمة E5172 (V200R001 — /index/login.cgi بكلمة RSA ثابتة) — من ملفات «مو مدعوم؟» (١٧ نوفمبر). دخول + الحالة + FULL
   () => new HuaweiGwDriver(),
+  // زين SRT858M (واجهة «5G Device»: goform/action JSON + تشفير MG اختياري، دخول hmac-md5) — من ملفات «مو مدعوم؟» (١٧ نوفمبر). دخول + الحالة + FULL
+  () => new SrtDriver(),
   () => new UnknownDriver(),
 ];
 
