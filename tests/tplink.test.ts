@@ -50,6 +50,15 @@ test('TP-Link: getGDPRParm وصفحة الدخول', () => {
   assert.equal(tpLoginUser(undefined, ''), 'admin');
 });
 
+test('TP-Link: فيرموير EU/2.20 — صفحة getParm/proxy.js تتعرّف، والمفتاح من getParm', () => {
+  // فيرموير NX200 EU/2.20 (حسن ١٦ نوفمبر): getGDPRParm يرد 406، والصفحة تستخدم /cgi/getParm + proxy.js
+  assert.ok(tpIsLoginPage('<script src="js/proxy.js"></script><script src="js/tpEncrypt.js"></script>'));
+  assert.ok(tpIsLoginPage('oid: "/cgi/getParm"'));
+  // نفس صيغة المفتاح من المسارين — tpParm يفكّها (ويشترط seq فما نمشي بمفتاح ناقص)
+  assert.deepEqual(tpParm('var ee="010001";var nn="' + NN + '";var seq="123456";'), { nn: NN, ee: '010001', seq: 123456 });
+  assert.equal(tpParm('var ee="010001";var nn="' + NN + '";'), null);
+});
+
 test('TP-Link: ردود cgi والإشارة', () => {
   assert.equal(tpRet('$.ret=0;'), 0);
   assert.equal(tpRet('$.ret=71233;'), 71233);

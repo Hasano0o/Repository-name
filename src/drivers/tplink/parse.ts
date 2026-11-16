@@ -8,9 +8,11 @@ import type { Signal, CellTower, Carrier } from '../types';
 export function tpIsWelcome(t: string): boolean {
   return /\/cgi\/welcome/.test(t) && /go-https-modal|visitHttpsNote/.test(t);
 }
-/** صفحة دخول TP-Link (نسخة GDPR): تطلب /cgi/getGDPRParm وفيها gdprProxy.js */
+/** صفحة دخول TP-Link (نسخة GDPR): getGDPRParm/getParm + gdprProxy.js أو proxy.js (NX200 EU/2.20) مع tpEncrypt.js */
 export function tpIsLoginPage(t: string): boolean {
-  return /\/cgi\/getGDPRParm/.test(t) || (/gdprProxy\.js/.test(t) && /tpEncrypt\.js/.test(t));
+  return /\/cgi\/getGDPRParm/.test(t)
+    || /\/cgi\/getParm/.test(t)
+    || (/(gdprProxy|proxy)\.js/.test(t) && /tpEncrypt\.js/.test(t));
 }
 /** متغيرات السطر الأخير في الصفحة: modelName · adminType · authTimes · forbidFlag … */
 export function tpPageVars(t: string): { model?: string; desc?: string; adminType?: string; authTimes?: number; maxAuthTimes?: number; forbidFlag?: boolean; forbidForever?: boolean; forbidTime?: number } {

@@ -79,14 +79,21 @@ export class TplinkDriver implements RouterDriver {
    */
   private async parm(): Promise<{ nn: string; ee: string; seq: number } | null> {
     const order: ('http' | 'https')[] = this.proto === 'https' ? ['https', 'http'] : ['http', 'https'];
+    // فيرموير مختلف يجيب المفتاح من مسار مختلف:
+    //   • getGDPRParm — نسخة العضو (١٥ نوفمبر)
+    //   • getParm — فيرموير NX200 EU/2.20 (حسن ١٦ نوفمبر): getGDPRParm يرد 406، وصفحته تستخدم /cgi/getParm
+    // الاثنين يرجّعون نفس الصيغة (var nn/ee/seq) — tpParm يشترط الثلاثة فما نمشي بمفتاح ناقص.
+    const endpoints = ['/cgi/getGDPRParm', '/cgi/getParm'];
     for (const pr of order) {
       this.proto = pr;
-      try {
-        const r = await this.raw('/cgi/getGDPRParm', { method: 'POST' }, 6000);
-        const p = tpParm(r.text);
-        diag(`[tplink] ${pr} getGDPRParm → ${r.status} · ${r.text.length}B · ${p ? '✓' : r.text.replace(/\s+/g, ' ').slice(0, 60)}`);
-        if (p) { PROTO.set(this.host, pr); return p; }
-      } catch (e: any) { diag(`[tplink] ${pr} getGDPRParm ✗ ${String(e?.message ?? e).slice(0, 60)}`); }
+      for (const ep of endpoints) {
+        try {
+          const r = await this.raw(ep, { method: 'POST' }, 6000);
+          const p = tpParm(r.text);
+          diag(`[tplink] ${pr} ${ep.slice(5)} → ${r.status} · ${r.text.length}B · ${p ? '✓' : r.text.replace(/\s+/g, ' ').slice(0, 60)}`);
+          if (p) { PROTO.set(this.host, pr); return p; }
+        } catch (e: any) { diag(`[tplink] ${pr} ${ep.slice(5)} ✗ ${String(e?.message ?? e).slice(0, 60)}`); }
+      }
     }
     return null;
   }
