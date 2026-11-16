@@ -86,3 +86,24 @@ export function privacyNeed(txt: string): { liscence: '0' | '1' | '2' } | null {
 export function privacyAccepted(txt: string): boolean {
   try { const j = JSON.parse(txt); return Number(j?.errcode) === 0 && j?.errcode !== '' && j?.errcode !== undefined; } catch { return false; }
 }
+
+/** ملخص رد بيان الخصوصية للتشخيص: المفاتيح بقيمها القصيرة (بدون النصوص الطويلة) */
+export function privacyBrief(txt: string): string {
+  try {
+    const j = JSON.parse(txt);
+    if (!j || typeof j !== 'object') return String(txt).slice(0, 80);
+    return Object.entries(j)
+      .filter(([, v]) => v === null || ['number', 'boolean'].includes(typeof v) || (typeof v === 'string' && v.length <= 24))
+      .map(([k, v]) => `${k}=${v}`).join(' ').slice(0, 300);
+  } catch { return String(txt).replace(/\s+/g, ' ').slice(0, 80); }
+}
+
+/** أعلام state-login للتشخيص (أرقام صغيرة بس — بدون اسم المستخدم) */
+export function stateFlags(xml: string): string {
+  const out: string[] = [];
+  for (const k of ['State', 'firstlogin', 'guidemodifypwdpageflag', 'accounts_number', 'userlevel', 'password_type', 'extern_password_type', 'wifipwdsamewithwebpwd', 'forceskipguide', 'history_login_flag']) {
+    const v = xml.match(new RegExp(`<${k}>\\s*(-?\\d{1,3})\\s*</${k}>`, 'i'))?.[1];
+    if (v !== undefined) out.push(`${k}=${v}`);
+  }
+  return out.join(' ') || 'state-login ؟';
+}

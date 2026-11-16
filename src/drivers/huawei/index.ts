@@ -10,7 +10,7 @@ import {
   BandConfig, SmsMessage, DeviceDetails, CellTower, CellLockTarget, CellLockState, DataPlan, ActiveLock,
   ApnProfile, DnsConfig, Carrier, SignalSnapshot, TimeRule, BandRoles } from '../types';
 import { http as rawHttp } from '../http';
-import { hasSesTok, tokenFromReply, isHuaweiSessionReply, cookieShape, xmlUnesc, escCount, privacyNeed, privacyAccepted } from './session';
+import { hasSesTok, tokenFromReply, isHuaweiSessionReply, cookieShape, xmlUnesc, escCount, privacyNeed, privacyAccepted, privacyBrief, stateFlags } from './session';
 import { Platform } from 'react-native';
 import { trafficBurst } from '../../utils/nrprobe';
 import { getApnProfiles, setApn, selectApn, getDns, setDns } from './apn-dns';
@@ -232,6 +232,9 @@ const CORE_GET = /^(device\/signal|monitoring\/status|device\/information|net\/n
 const GUARDED_GET = /^(device\/signal|net\/net-mode)$/;
 const setupError = (host: string) => new HuaweiError('SETUP',
   `راوترك على إعدادات المصنع وما اكتمل إعداده الأولي — يقبل الدخول ويمنع القراءة لين يكتمل. افتح صفحة الراوتر من المتصفح (${host || '192.168.8.1'}) وكمّل خطوات الإعداد لين توصل الصفحة الرئيسية، وبعدها ارجع لـ Bandly وجرّب.`);
+/** الجلسة داخلة بس الراوتر يمنع القراءة (مو معالج، مو بيان خصوصية) — رسالة بدون كود الجلسة عشان ما تنحسب طرد */
+const limitedError = (host: string) => new HuaweiError('LIMITED',
+  `الراوتر قبل الدخول بس يمنع قراءة الإشارة — غالباً ينتظر خطوة في صفحته. افتح صفحة الراوتر من المتصفح (${host || '192.168.8.1'})، ادخل بنفس الكلمة، وكمّل أي طلب يطلع لك (تغيير كلمة المرور أو موافقة)، وبعدها ارجع لـ Bandly وجرّب.`);
 /** أوامر حفظ بطيئة (المودم يعيد الاتصال وهو يطبّقها) — مهلتها أطول */
 const SLOW_POST = /^net\/(lock-freq|net-mode)$/;
 
@@ -552,7 +555,7 @@ export class HuaweiDriver implements RouterDriver {
       const r = await this.http(this.url('app/privacypolicy?lang=en_us&country=NONE'), { headers: this.headers() }, 4000);
       const tx = await r.text();
       need = privacyNeed(tx);
-      diag(`[huawei] بيان الخصوصية: ${need ? `يحتاج موافقة (Liscence ${need.liscence})` : `ما يحتاج · ${tx.replace(/\s+/g, ' ').slice(0, 60)}`}`);
+      diag(`[huawei] بيان الخصوصية: ${need ? `يحتاج موافقة (Liscence ${need.liscence})` : 'ما يحتاج'} · ${privacyBrief(tx)}`);
     } catch (e: any) { diag(`[huawei] بيان الخصوصية: ما قرينا (${String(e?.message ?? e).slice(0, 40)})`); return false; }
     if (!need) return false;
     try {
@@ -572,6 +575,29 @@ export class HuaweiDriver implements RouterDriver {
       diag(`[huawei] بيان الخصوصية: وافقنا → ${ok ? 'OK' : tx.replace(/\s+/g, ' ').slice(0, 60)}`);
       return ok;
     } catch (e: any) { diag(`[huawei] بيان الخصوصية: الموافقة ما مشت (${String(e?.message ?? e).slice(0, 40)})`); return false; }
+  }
+  /** فحص «الجلسة شغالة بس محدودة» — مرة لكل دخول */
+  private limitedTried = false;
+  /**
+   * القراءة المحمية ترد 100003 والراوتر مو على المعالج وبيان الخصوصية ما يحتاج: هل جلستنا حية؟
+   * device/information تقرا بس بجلسة داخلة (تقارير H155-381 ١٦ نوفمبر: تقرا و device/signal ترد 100003).
+   * حية ← الراوتر يمنع هالجلسة لسبب في صفحته (تغيير كلمة المرور الإجباري / حساب ثاني بصلاحيات أقل…) —
+   * تبديل الكوكي وإعادة الدخول ما تفيد (كانت تنتهي بسيل 125003 و«يطلّع التطبيق»). نسجّل أعلام state-login للتشخيص.
+   */
+  private async sessionAliveButLimited(): Promise<boolean> {
+    if (this.limitedTried) return false;
+    this.limitedTried = true;
+    let alive = false;
+    try {
+      const r = await this.http(this.url('device/information'), { headers: this.headers() }, 4000);
+      const x = await r.text();
+      alive = !x.includes('<error>') && /<DeviceName>/i.test(x);
+    } catch {}
+    try {
+      const r = await this.http(this.url('user/state-login'), { headers: this.headers() }, 4000);
+      diag(`[huawei] جلسة محدودة؟ device/information ${alive ? '✓' : '✗'} · ${stateFlags(await r.text())}`);
+    } catch { diag(`[huawei] جلسة محدودة؟ device/information ${alive ? '✓' : '✗'}`); }
+    return alive;
   }
   private async get(p: string, retry = true, again = true): Promise<string> {
     // إعادة دخول وضع المطوّر شغالة (خروج ← دخول): قراءة بينهم تنرفض وتنحسب «طرد» — ننتظرها تخلص
@@ -602,6 +628,7 @@ export class HuaweiDriver implements RouterDriver {
           await new Promise(res => setTimeout(res, 800));
           return this.get(p, false, false);
         }
+        if (this.setupState === false && await this.sessionAliveButLimited()) { await this.leaveQuietly(); throw limitedError(this.host); }
       }
       throw new HuaweiError(code);
     }
@@ -821,6 +848,8 @@ export class HuaweiDriver implements RouterDriver {
         try { await this.get('net/net-mode', false); } catch (e) {
           // إعدادات المصنع: تبديل طريقة الكوكي ما يفيد (ينتهي بـ 125003) — نطلع ونقول للعضو يكمّل الإعداد (أو نكمّله لو طلب)
           if (e instanceof HuaweiError && e.code === 'SETUP') await this.onSetup(e);
+          // الجلسة حية بس محدودة: تبديل الكوكي ما يفيد (كان ينتهي بسيل 125003 — تشخيص آيفون ١٦ نوفمبر ٩:٥٨ م)
+          else if (e instanceof HuaweiError && e.code === 'LIMITED') throw e;
           else if (e instanceof HuaweiError && /^(100003|125002|125003)$/.test(e.code)) dead = e.code;
         }
         if (dead) {
@@ -842,6 +871,7 @@ export class HuaweiDriver implements RouterDriver {
         const was = this.stale;
         try { await this.get('net/net-mode', false); } catch (e) {
           if (e instanceof HuaweiError && e.code === 'SETUP') await this.onSetup(e);
+          else if (e instanceof HuaweiError && e.code === 'LIMITED') throw e;
           else this.stale = was;
         }
       }
@@ -900,6 +930,7 @@ export class HuaweiDriver implements RouterDriver {
     this.guardedOk = false;
     this.setupState = null;
     this.privacyTried = false;
+    this.limitedTried = false;
     await this.updateCookie();
     if (this.manualCookie) { try { await this.sesTok(); } catch { this.manualCookie = false; } }
     // صفحة الراوتر الجديدة (H158/H155…) تسجّل دخول بـ SCRAM (challenge_login) — والدخول القديم (user/login)

@@ -191,13 +191,38 @@ for (const os of ['ios', 'android']) {
   });
 }
 
-test('هواوي: راوتر مو على إعدادات المصنع والقراءة ترد 100003 ← نفس السلوك القديم (ما نقول «كمّل الإعداد»)', async () => {
+for (const os of ['ios', 'android']) {
+  test(`هواوي (${os}): الجلسة حية (device/information تقرا) والإشارة 100003 لسبب ثاني ← رسالة «كمّل الطلب في صفحة الراوتر» بدون تبديل كوكي ولا سيل 125003`, async () => {
+    OS = os;
+    const r = router({ rds: '0', guide: true });   // يمنع القراءة لسبب ثاني (مو معالج ولا بيان)
+    const d = await driver();
+    await assert.rejects(d.login('192.168.8.1', 'admin', PW, { fresh: true }), (e: any) => {
+      assert.match(e.message, /يمنع قراءة الإشارة/, e.message + '\n' + r.log.join('\n'));
+      assert.ok(!SETUP.test(e.message) && !/100003|125003|رمز الجلسة|ما عندك صلاحية/.test(e.message), e.message);
+      return true;
+    });
+    assert.equal(r.count('POST user/authentication_login'), 1, 'دخول واحد — ما نبدّل طريقة الكوكي: ' + r.log.join(', '));
+    assert.equal(r.count('GET device/basic_information'), 1, 'فحص واحد لكل دخول');
+    assert.equal(r.anyLogged(), false, 'طلعنا — العضو يقدر يدخل من المتصفح\n' + r.log.join('\n'));
+  });
+}
+
+test('هواوي: جلسة ميتة (device/information كمان 100003) ← نفس السلوك القديم: 100003 (طرد)', async () => {
   OS = 'android';
-  const r = router({ rds: '0', guide: true });   // يمنع القراءة لسبب ثاني
+  const r = router({ rds: '0', guide: false });
   const d = await driver();
   await d.login('192.168.8.1', 'admin', PW, { fresh: true });
-  await assert.rejects(d.getSignal(), (e: any) => { assert.match(e.message, /100003/); assert.ok(!SETUP.test(e.message), e.message); return true; });
-  assert.equal(r.count('GET device/basic_information'), 1, 'فحص واحد لكل دخول');
+  assert.equal((await d.getSignal()).pci, '134');
+  r.kick();
+  await assert.rejects(d.getSignal(), (e: any) => { assert.match(e.message, /100003/); assert.ok(!/يمنع قراءة/.test(e.message)); return true; });
+});
+
+test('هواوي: stateFlags / privacyBrief للتشخيص', () => {
+  const { stateFlags, privacyBrief } = require('../src/drivers/huawei/session');
+  assert.equal(stateFlags('<response><State>0</State><Username>admin</Username><firstlogin>0</firstlogin><guidemodifypwdpageflag>1</guidemodifypwdpageflag><accounts_number>2</accounts_number></response>'),
+    'State=0 firstlogin=0 guidemodifypwdpageflag=1 accounts_number=2');
+  assert.equal(privacyBrief('{"change_status":0,"privacyApproveVersion":"2024-02-26","SimpleEULA":"' + 'x'.repeat(200) + '","IsEULAUpdate":0}'),
+    'change_status=0 privacyApproveVersion=2024-02-26 IsEULAUpdate=0');
 });
 
 for (const os of ['ios', 'android']) {
@@ -231,12 +256,11 @@ test('هواوي: كمّل الإعداد عنّي ← المعالج ثم بي�
   assert.equal(r.st.privacy, false);
 });
 
-test('هواوي: راوتر ما عنده بيان خصوصية (رد مو JSON) ← نفس السلوك القديم، بدون POST', async () => {
+test('هواوي: راوتر ما عنده بيان خصوصية (رد مو JSON) ← بدون POST، ورسالة «الجلسة محدودة»', async () => {
   OS = 'android';
   const r = router({ rds: '0', guide: true, privacyBroken: true });
   const d = await driver();
-  await d.login('192.168.8.1', 'admin', PW, { fresh: true });
-  await assert.rejects(d.getSignal(), /100003/);
+  await assert.rejects(d.login('192.168.8.1', 'admin', PW, { fresh: true }), /يمنع قراءة الإشارة/);
   assert.equal(r.count('POST app/privacypolicy'), 0);
 });
 
