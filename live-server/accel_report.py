@@ -18,6 +18,10 @@ DATA = Path(__file__).resolve().parent / "data"
 DB = DATA / "community.db"
 RIYADH = timezone(timedelta(hours=3))
 GAIN_MIN = 10
+# بنق مباشر فوق كذا = قياس مو موثوق (الجوال يصحى/الشبكة مزحومة لحظتها) — تقرير ١٦ نوفمبر: «1983 ← 968» انحسب أكبر فايدة
+NOISE_MS = 600
+# سيرفرنا ← سيرفر اللعبة فوق كذا = طريق مكسور من سيرفرنا (١٦ نوفمبر: الرياض ← الدمام 886ms) — مو حكم على المسرّع
+ROUTE_BAD_MS = 300
 REGION = {
     "ae": "الإمارات", "sa": "الدمام", "sa-ruh": "الرياض", "sa-jed": "جدة", "qa": "قطر", "tr": "تركيا",
     "eg": "مصر", "in": "الهند", "it": "إيطاليا", "eu": "ألمانيا", "fr": "فرنسا", "uk": "بريطانيا",
@@ -46,11 +50,21 @@ def per_user(rows):
         g.setdefault((dev, region), []).append((op, city or "—", direct, via, gain, kind, to_s))
     out = []
     for (dev, region), lst in g.items():
-        out.append(dict(dev=dev, region=region, op=lst[-1][0], city=lst[-1][1],
-                        direct=med([x[2] for x in lst]), via=med([x[3] for x in lst]),
-                        gain=med([x[4] for x in lst]), to_s=med([x[6] for x in lst]),
-                        helps=sum(1 for x in lst if x[5] == "helps") * 2 > len(lst)))
+        d = dict(dev=dev, region=region, op=lst[-1][0], city=lst[-1][1],
+                 direct=med([x[2] for x in lst]), via=med([x[3] for x in lst]),
+                 gain=med([x[4] for x in lst]), to_s=med([x[6] for x in lst]),
+                 helps=sum(1 for x in lst if x[5] == "helps") * 2 > len(lst))
+        d["noisy"] = (d["direct"] or 0) > NOISE_MS
+        if d["noisy"]:
+            d["helps"] = False
+        out.append(d)
     return out
+
+
+def net(users):
+    """صافي الوسيط (مباشر − عبرنا) للقياسات الموثوقة — موجب = المسرّع أسرع للعضو العادي"""
+    return med([u["direct"] - u["via"] for u in users
+                if not u["noisy"] and u["direct"] is not None and u["via"] is not None])
 
 
 def block(title, users, key, top=6, name=lambda k: k):
@@ -81,11 +95,15 @@ def servers_now():
                 d = json.load(r)
             reg = d.get("regions", {})
             age = int((time.time() - d.get("at", 0)) / 60)
-            parts = [f"{REGION.get(k, k)} {reg[k]['median']}" + (f"(فقد {reg[k]['lossPct']}%)" if reg[k].get("lossPct") else "")
+            parts = [f"{REGION.get(k, k)} {reg[k]['median']}" + (" ⚠️" if (reg[k].get("median") or 0) > ROUTE_BAD_MS else "")
+                     + (f"(فقد {reg[k]['lossPct']}%)" if reg[k].get("lossPct") else "")
                      for k in MAIN if k in reg and reg[k].get("samples")]
             dead = [REGION.get(k, k) for k in MAIN if k in reg and not reg[k].get("samples")]
             out.append(f"• {s.get('name', s.get('id'))} ✅ (قبل {age} د): " + " · ".join(parts)
                        + (f" · ما رد: {'، '.join(dead)}" if dead else ""))
+            bad = [REGION.get(k, k) for k in MAIN if k in reg and (reg[k].get("median") or 0) > ROUTE_BAD_MS]
+            if bad:
+                out.append(f"  ⚠️ طريق سيرفرنا لـ {'، '.join(bad)} مكسور (فوق {ROUTE_BAD_MS}ms) — نتايج هالمنطقة ما تحكم على المسرّع")
         except Exception as e:
             out.append(f"• {s.get('name', s.get('id'))} ❌ ما يرد ({str(e)[:60]})")
     return out
@@ -98,8 +116,12 @@ def verdict(users):
     if len(devs) < 10:
         return f"⏳ لسا البيانات قليلة ({len(devs)} جهاز) — نحتاج ١٠ على الأقل قبل نحكم"
     pct = round(100 * len(hdev) / len(devs))
-    if pct >= 30 and (gm or 0) >= 15:
+    n = net(users)
+    if pct >= 30 and (gm or 0) >= 15 and (n or 0) >= 0:
         return f"👍 مؤشر قوي للمرحلة ٢: {pct}% يستفيدون بوسيط {gm}ms"
+    if pct >= 30 and (n or 0) < 0:
+        return (f"🤔 مختلط: {pct}% يستفيدون (−{gm}ms) بس للعضو العادي المسرّع أبطأ بـ {-n}ms — "
+                "الفايدة عند فئة بس (شوف الشركة/المنطقة)، وصلّح الطرق ⚠️ قبل تحكم")
     if pct >= 15:
         return f"🤔 متوسط: {pct}% يستفيدون — شوف أي شركة/منطقة بالضبط قبل تقرر"
     return f"👎 ضعيف: {pct}% بس يستفيدون — المسرّع بهالسيرفر ما يستاهل"
@@ -121,7 +143,7 @@ def build(days=14):
     gm = med([u["gain"] for u in users if u["helps"]])
     kinds = {}
     for u in users:
-        k = "يفيد" if u["helps"] else ("فرق بسيط" if (u["gain"] or 0) >= 4 else "ما يفيد")
+        k = "قياس مو موثوق" if u["noisy"] else "يفيد" if u["helps"] else ("فرق بسيط" if (u["gain"] or 0) >= 4 else "ما يفيد")
         kinds[k] = kinds.get(k, 0) + 1
 
     L = [f"🚀 تقرير المسرّع — {now.strftime('%Y-%m-%d')}"]
@@ -134,6 +156,10 @@ def build(days=14):
                  + (f" · وسيط النقص {gm}ms" if gm else ""))
         L.append("📊 النتايج (جهاز×منطقة): " + " · ".join(f"{k} {v}" for k, v in kinds.items()))
         L.append(f"📶 بنق الأعضاء لسيرفرنا (وسيط): {med([u['to_s'] for u in users])}ms")
+        n = net(users)
+        if n is not None:
+            L.append(f"⚖️ للعضو العادي (وسيط مباشر − عبرنا): {'أسرع ' + str(n) if n > 0 else 'أبطأ ' + str(-n) if n < 0 else 'نفس'}ms"
+                     + (f" · استبعدنا {sum(1 for u in users if u['noisy'])} قياس فوق {NOISE_MS}ms" if any(u['noisy'] for u in users) else ""))
         L += block("🎮 حسب سيرفر اللعبة:", users, lambda u: u["region"], name=lambda k: REGION.get(k, k))
         L += block("📡 حسب الشركة:", users, lambda u: u["op"])
         L += block("🏙️ حسب المدينة:", users, lambda u: u["city"])
