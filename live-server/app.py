@@ -907,6 +907,12 @@ def _owner() -> int:
     return int(config().get("owner_id") or 0)
 
 
+def _router_tg() -> bool:
+    """تقارير الراوترات (أخطاء الأعضاء، تقارير الدعم، ملفات «مو مدعوم؟») تتحفظ في الرسيفر بس (قرار حسن ١٦ نوفمبر).
+    ترجع لتليجرام لو: touch /root/bandly-live/data/tg_router_on"""
+    return (DATA / "tg_router_on").exists()
+
+
 def _esc(t: str) -> str:
     return str(t).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
@@ -1157,7 +1163,7 @@ async def app_error(req: Request):
     feat_ar = FEATURE_AR.get(feat) or FEATURE_AR.get(base, feat)
     if feat.endswith("-revert"):
         feat_ar = f"⚠️ فشل إرجاع الإعداد — {feat_ar} ({feat})"
-    owner = _owner()
+    owner = _owner() if _router_tg() else 0
     if owner:
         _tg("sendMessage", {"chat_id": owner, "parse_mode": "HTML", "text":
             "⚠️ <b>خطأ عند مستخدم</b>\n"
@@ -1189,9 +1195,6 @@ async def app_report(req: Request):
     feat, rtr = _cl(b.get("feature"), 30), _cl(b.get("router"), 60)
     if not text.strip():
         raise HTTPException(400, "empty")
-    owner = _owner()
-    if not owner:
-        raise HTTPException(503, "no owner")
     cap = (f"📎 تقرير دعم من مستخدم\n• الميزة: {FEATURE_AR.get(feat, feat) or '—'}\n• الراوتر: {rtr or '—'}"
            f"\n• {_cl(b.get('os'), 12) or '?'} · نسخة {_cl(b.get('ver'), 20) or '?'}")
     name = f"bandly-{feat or 'report'}-{time.strftime('%m%d-%H%M%S')}.txt"
@@ -1204,9 +1207,9 @@ async def app_report(req: Request):
             old.unlink()
     except Exception:
         pass
-    r = _tg("sendDocument", {"chat_id": owner, "caption": cap}, files={"document": (name, text.encode("utf-8"))})
-    if not r.get("ok"):
-        raise HTTPException(502, "ما وصل للبوت")
+    owner = _owner() if _router_tg() else 0
+    if owner:
+        _tg("sendDocument", {"chat_id": owner, "caption": cap}, files={"document": (name, text.encode("utf-8"))})
     return {"ok": True}
 
 
@@ -1280,7 +1283,7 @@ async def app_dump(req: Request):
     shutil.rmtree(d, ignore_errors=True)
     for old in sorted(DUMPS.glob("*.zip"))[:-40]:
         old.unlink()
-    owner = _owner()
+    owner = _owner() if _router_tg() else 0
     if owner:
         cap = f"📦 ملفات صفحة راوتر جديد\n• الموديل: {model or '—'}\n• {len(files)} ملف · {zpath.stat().st_size // 1024} KB"
         _tg("sendDocument", {"chat_id": owner, "caption": cap}, files={"document": (zpath.name, zpath.read_bytes())})

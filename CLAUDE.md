@@ -83,6 +83,7 @@ grep -aE "BUILD (SUCCESSFUL|FAILED)" /root/bandly-build.log | tail -1; ls -l --t
   cd /root/router-manager/mobile && git pull -q --ff-only origin main && cp live-server/app.py live-server/community.py live-server/stats.py /root/bandly-live/ && systemctl restart bandly-live
   ```
 - بوت التطبيق: `@NetGuide1_bot` — ملفاته في `/root/netguide/`.
+- **تقارير الراوترات ما تنرسل لتليجرام** (قرار حسن ١٦ نوفمبر): أخطاء الأعضاء (`/app/error` ← `data/errors.jsonl`)، تقارير الدعم (`/app/report` ← `data/reports/`)، ملفات «مو مدعوم؟» (`/app/dump` ← `data/dumps/`) — كلها تنحفظ في الرسيفر بس. ترجع للبوت لو `touch /root/bandly-live/data/tg_router_on` (`_router_tg()` في app.py). طلبات النماذج (فني/إعلان/ملاحظة/جهاز) والإحصائيات اليومية باقية في البوت.
 
 ## نسخة الويندوز (desktop/)
 - برنامج Electron يلف نسخة الويب من نفس الكود (`BANDLY_DESKTOP=1` في app.config.js ← web output = single).
