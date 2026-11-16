@@ -15,7 +15,7 @@ import { diag } from '../../services/diag';
 import { isLanHost } from '../../utils/host';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import type { ModelProfile } from '../models';
-import { isOntLoginPage, tokenFromPage, tokenFromReply, productName, loginLanguage, lockInfo, loginBody, pageSendsLanguage, cookieFrom, deviceInfo, userDevices, uplinkState, opticInfo, pageUsesSha256, parseRandInfo, sha256LoginPassword } from './parse';
+import { isOntLoginPage, tokenFromPage, tokenFromReply, productName, loginLanguage, lockInfo, loginBody, pageSendsLanguage, cookieFrom, deviceInfo, userDevices, uplinkState, opticInfo, pageUsesSha256, parseRandInfo, sha256LoginPassword, ontFailLocked } from './parse';
 
 export class HuaweiOntDriver implements RouterDriver {
   // ⚠️ المعرّف بدون كلمة «huawei»: قاعدة كرت FULL تعامل أي «huawei» كراوتر شريحة (ما يطلع إلا لموديل مجهول)
@@ -118,6 +118,11 @@ export class HuaweiOntDriver implements RouterDriver {
     const p = productName(page); if (p) this.setModel(p);
     const lk = lockInfo(page);
     if (lk.leftSecs > 0) throw new Error(`الراوتر قافل الدخول بعد محاولات غلط — انتظر ${lk.leftSecs} ثانية وجرّب`);
+    // FailStat=1 (HG8145X6 STC ١٦ نوفمبر): الصفحة نفسها تقفل الخانات «تم إجراء المحاولة مرات عديدة» — أي محاولة ثانية ما تفيد وتطوّل القفل
+    if (ontFailLocked(page)) {
+      diag('[ont] FailStat=1 — الراوتر قافل الدخول (محاولات كثيرة) — ما نرسل شي');
+      throw new Error('الراوتر قافل الدخول من كثر المحاولات الغلط. طفّه من الكهرب ٣٠ ثانية وشغّله، وبعدها ادخل مرة وحدة بالاسم والكلمة اللي على ملصق الفايبر.');
+    }
     // الفيرموير الجديد: الرمز والملح والتكرارات من GetRandInfo.asp والكلمة PBKDF2-SHA256 (loginWithSha256 في الصفحة)
     let sha: [string, string, number] | null = null;
     if (pageUsesSha256(page)) {
@@ -170,15 +175,22 @@ export class HuaweiOntDriver implements RouterDriver {
       try {
         const h = await this.get('/index.asp', 10000);
         diag(`[ont] /index.asp بعد الدخول → ${h.status} · ${h.text.length}B · ${isOntLoginPage(h.text) ? 'فورم دخول ⚠️' : 'الرئيسية ✓'}`);
-        // HG8145V5 (١٥ نوفمبر): login.cgi ما رجّع فورم الدخول بس كل الصفحات 403 ← ما دخلنا فعلياً (الفيرموير يشفّر الكلمة PBKDF2)
-        if (h.status === 403) { ok = false; fakeOk = true; }
+        // HG8145V5/X6 (١٥–١٦ نوفمبر): login.cgi ما رجّع فورم الدخول بس بدون كوكي وكل الصفحات 403 ← ما دخلنا.
+        // كنا نقول «فيرموير جديد يشفّر الكلمة» — بس صفحاتهم (COMMON4 / STC2) تدخل بنفس طريقتنا (GetRandCount + base64)،
+        // والراوتر يعدّ المحاولة (يقفل بعدها) ← الرفض من اسم المستخدم/الكلمة. نعلّمها غلط عشان الخلفية ما تحرق محاولات.
+        if (h.status === 403 && !res.setCookie) { ok = false; fakeOk = true; }
       } catch {}
     }
     const lk2 = lockInfo(after);
     diag(`[ont] login.cgi → ${res.status} · ${res.text.length}B · ${ok ? 'دخلنا ✓' : `رفض${lk2.times !== undefined ? ` (محاولات ${lk2.times})` : ''}${lk2.leftSecs ? ` · قفل ${lk2.leftSecs}ث` : ''}`}`);
-    if (fakeOk) {
-      // ما نعلّم الكلمة غلط — المشكلة في طريقة الدخول مو الكلمة
+    if (fakeOk && pageUsesSha256(page) && !sha) {
+      // صفحة sha256 فعلاً (DVODACOM2WIFI) وما قدرنا نجيب الملح — هنا بس المشكلة في طريقة الدخول
       throw new Error('راوترك بفيرموير جديد يشفّر الكلمة بطريقة ثانية — نضيفها قريب. اضغط «أرسل الخطأ للمطوّر».');
+    }
+    if (fakeOk) diag('[ont] login.cgi بدون كوكي والصفحات 403 ← الراوتر رفض الاسم/الكلمة');
+    if (ontFailLocked(after)) {
+      await markBadPassword(key, fp);
+      throw new Error('الراوتر قافل الدخول من كثر المحاولات الغلط. طفّه من الكهرب ٣٠ ثانية وشغّله، وبعدها ادخل مرة وحدة بالاسم والكلمة اللي على ملصق الفايبر.');
     }
     if (!ok) {
       await markBadPassword(key, fp);

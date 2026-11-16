@@ -163,6 +163,10 @@ test('موبايلي فايبر: الإشارة الضوئية من opticinfo.as
 test('HG8145V5 الفيرموير الجديد: GetRandInfo + كلمة PBKDF2-SHA256 مثل CryptoJS', async () => {
   const page = 'function loginWithSha256(Username, Password) { $.ajax({ url: \'/asp/GetRandInfo.asp?&1=1\' }); }';
   assert.ok(P.pageUsesSha256(page));
+  assert.ok(P.pageUsesSha256("var CfgMode = 'DVODACOM2WIFI'.toUpperCase();" + page));
+  // ملفات HG8145V5 (COMMON4) و LG8245X6 (DMOBILY2WIFI) ١٦ نوفمبر: الدالة موجودة بس LoginSubmit يدخل بالطريقة العادية
+  assert.ok(!P.pageUsesSha256("var CfgMode = 'COMMON4'.toUpperCase();" + page));
+  assert.ok(!P.pageUsesSha256(fx('lg8245x6.html')));
   assert.ok(!P.pageUsesSha256(fx('dg8245v.html')));
   assert.deepEqual(P.parseRandInfo('["a1b2c3d4e5f6a7b8","s4lTxyz","1000"]'), ['a1b2c3d4e5f6a7b8', 's4lTxyz', 1000]);
   assert.deepEqual(P.parseRandInfo("function(){return function(){return ['a1b2c3d4e5f6a7b8','s4lTxyz','5000'];}}"), ['a1b2c3d4e5f6a7b8', 's4lTxyz', 5000]);
@@ -172,4 +176,47 @@ test('HG8145V5 الفيرموير الجديد: GetRandInfo + كلمة PBKDF2-SH
   const dk = c.pbkdf2Sync('Pa$$w0rd', 's4lTxyz', 1000, 32, 'sha256').toString('hex');
   const want = Buffer.from(c.createHash('sha256').update(dk, 'utf8').digest('hex'), 'utf8').toString('base64');
   assert.equal(await P.sha256LoginPassword('Pa$$w0rd', 's4lTxyz', 1000), want);
+});
+
+
+/** HG8145V5 / HG8145X6 STC (١٦ نوفمبر): login.cgi يرد صفحة 602B بدون كوكي وكل الصفحات 403 */
+function ont403(page: string) {
+  const log: string[] = [];
+  (globalThis as any).fetch = async (url: string, init?: any) => {
+    const u = new URL(url);
+    const m = (init?.method ?? 'GET').toUpperCase();
+    log.push(`${m} ${u.pathname}`);
+    const res = (text: string, status = 200) => ({ ok: status < 400, status, url, headers: { get: () => null }, text: async () => text } as any);
+    if (u.pathname === '/') return res(page);
+    if (u.pathname === '/asp/GetRandCount.asp') return res('0123456789abcdef0123456789abcdef');
+    if (u.pathname === '/login.cgi') return res('<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"><html><body></body></html>');
+    return res('<!DOCTYPE html><html>403</html>', 403);
+  };
+  return log;
+}
+const page8145 = (mode: string, failStat = '0') =>
+  `<script>var FailStat = '${failStat}'; var CfgMode = '${mode}'.toUpperCase(); var LoginTimes = '0'; var errloginlockNum = '3'; var LockLeftTime = '0'; var ProductName = 'HG8145V5';
+   function loginWithSha256(U,P){ $.ajax({url:'/asp/GetRandInfo.asp?&1=1'}); }</script>
+   <form action="/login.cgi"><input id="txt_Username"><input id="txt_Password" type="password"><input name="x.X_HW_Token"></form>`;
+
+test('HG8145V5 (COMMON4): login.cgi بدون كوكي + 403 ← «الراوتر رفض الاسم/الكلمة» (مو «فيرموير جديد»)، بدون GetRandInfo، والخلفية ما تعيد', async () => {
+  const log = ont403(page8145('COMMON4'));
+  const d = new HuaweiOntDriver();
+  await assert.rejects(d.login('192.168.100.1', 'user', 'AAaaAaaA', { fresh: true }), (e: any) => {
+    assert.match(e.message, /رفض اسم المستخدم أو الكلمة/, e.message);
+    assert.ok(!/فيرموير جديد/.test(e.message));
+    return true;
+  });
+  assert.ok(!log.some(l => l.includes('GetRandInfo')), log.join(', '));
+  assert.equal(log.filter(l => l === 'POST /login.cgi').length, 1);
+  // دخول الخلفية بنفس الكلمة ← ما يحرق محاولة
+  await assert.rejects(d.login('192.168.100.1', 'user', 'AAaaAaaA'), /رفضها الراوتر قبل/);
+  assert.equal(log.filter(l => l === 'POST /login.cgi').length, 1);
+});
+
+test('HG8145X6 STC (FailStat=1): الراوتر قافل الدخول ← رسالة «طفّه وشغّله» بدون أي محاولة', async () => {
+  const log = ont403(page8145('STC2', '1'));
+  const d = new HuaweiOntDriver();
+  await assert.rejects(d.login('192.168.100.1', 'admin', 'AAA999999@', { fresh: true }), /قافل الدخول من كثر المحاولات/);
+  assert.ok(!log.some(l => l.startsWith('POST')), log.join(', '));
 });

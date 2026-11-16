@@ -184,7 +184,16 @@ export function opticLevel(rx?: number): 'excellent' | 'good' | 'fair' | 'poor' 
 
 /** الفيرموير الجديد (HG8145V5 ١٥ نوفمبر): صفحة الدخول فيها loginWithSha256 + /asp/GetRandInfo.asp */
 export function pageUsesSha256(html: string): boolean {
-  return /function\s+loginWithSha256/.test(html) && /GetRandInfo\.asp/.test(html);
+  // الصفحة فيها الدالة دايماً، بس LoginSubmit ما يناديها إلا لـ CfgMode «DVODACOM2WIFI» — غيره (COMMON4 · STC2 · DSAZAIN2WIFI · DMOBILY2WIFI)
+  // يدخل بالطريقة العادية (GetRandCount + base64). ملفات HG8145V5/X6 ١٦ نوفمبر: كنا نطلب GetRandInfo (403) ونحسبه «فيرموير جديد»
+  if (!(/function\s+loginWithSha256/.test(html) && /GetRandInfo\.asp/.test(html))) return false;
+  const mode = html.match(/var\s+CfgMode\s*=\s*['"]([^'"]*)['"]/)?.[1];
+  return mode === undefined || mode.toUpperCase() === 'DVODACOM2WIFI';
+}
+
+/** الراوتر قافل الدخول من كثر المحاولات (FailStat=1 — الصفحة تعطّل الخانات وتكتب «تم إجراء المحاولة مرات عديدة») */
+export function ontFailLocked(html: string): boolean {
+  return /var\s+FailStat\s*=\s*['"]1['"]/.test(html);
 }
 
 /**
