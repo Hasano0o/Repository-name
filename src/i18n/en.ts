@@ -1029,6 +1029,8 @@ export const EN: Record<string, string> = {
   'كل ما يخص راوترك': 'Everything about your router',
   'ملفاتك بسهولة': 'Your profiles, made easy',
   'المزيد': 'More',
+  'أداء أفضل وأقل بنق': 'Better performance, lower ping',
+  'اختر أقرب سيرفر للعبتك عشان تاخذ أقل بنق': 'Pick the server closest to your game for the lowest ping',
   'أدوات أكثر': 'More tools',
   'اضغط للإخفاء': 'Tap to hide',
   'الأنتنا · الأماكن · ملفاتي · الإعدادات…': 'Antenna · Places · My profiles · Settings…',

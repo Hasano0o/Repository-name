@@ -75,13 +75,20 @@ export function GamePrepCard({ info, reg, disabled }: { info: SavedRouter; reg: 
     <View style={s.card}>
       {!state ? (
         <Pressable onPress={go} disabled={busy || disabled} style={({ pressed }) => [pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] }, (busy || disabled) && { opacity: 0.6 }]}>
-          <LinearGradient colors={['#2f6bff', '#7655F5']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={s.hero}>
-            <View style={s.heroIcon}>
-              {busy ? <ActivityIndicator color="#fff" /> : <Icon name="game" size={24} color="#fff" stroke={2.2} />}
-            </View>
-            <View style={{ flex: 1, alignItems: 'flex-end' }}>
-              <Text style={s.heroTitle}>جهّزني للعب</Text>
+          <LinearGradient colors={['#7c3aed', '#4f46e5', '#2f6bff']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={s.hero}>
+            <LinearGradient colors={['rgba(255,255,255,0.22)', 'rgba(255,255,255,0)']} style={s.gloss} pointerEvents="none" />
+            <View style={{ flex: 1, alignItems: 'flex-end', gap: 3 }}>
+              <View style={s.heroTitleRow}>
+                <Icon name="game" size={22} color="#fff" stroke={2.2} />
+                <Text style={s.heroTitle}>جهّزني للعب</Text>
+              </View>
               <Text style={s.heroSub} numberOfLines={2}>{busy ? step || 'لحظات...' : 'ضغطة وحدة قبل المباراة — نطبّق اللي يثبّت البنق عندك أنت'}</Text>
+            </View>
+            <View style={s.goBtn}>
+              {busy ? <ActivityIndicator color="#4f46e5" /> : <>
+                <Icon name="spark" size={15} color="#4f46e5" stroke={2.4} />
+                <Text style={s.goTxt}>ابدأ</Text>
+              </>}
             </View>
           </LinearGradient>
         </Pressable>
@@ -126,12 +133,19 @@ export function GamePrepCard({ info, reg, disabled }: { info: SavedRouter; reg: 
 const s = sheet({
   card: { gap: 10 },
   hero: {
-    flexDirection: 'row-reverse', alignItems: 'center', gap: 12, borderRadius: 20, padding: 14,
-    shadowColor: '#7655F5', shadowOpacity: isDark ? 0 : 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: isDark ? 0 : 5,
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 12, borderRadius: 22, paddingVertical: 16, paddingHorizontal: 14, overflow: 'hidden',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
+    shadowColor: '#7c3aed', shadowOpacity: isDark ? 0.5 : 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 5,
   },
-  heroIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
-  heroTitle: { color: '#fff', fontSize: 18, fontWeight: '900' },
-  heroSub: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '600', textAlign: 'right', marginTop: 2 },
+  gloss: { position: 'absolute', top: 0, left: 0, right: 0, height: '55%' },
+  heroTitleRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
+  heroTitle: { color: '#fff', fontSize: 20, fontWeight: '900' },
+  heroSub: { color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: '600', textAlign: 'right' },
+  goBtn: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 5, backgroundColor: '#fff', borderRadius: 18,
+    paddingVertical: 9, paddingHorizontal: 14, minWidth: 74, justifyContent: 'center',
+  },
+  goTxt: { color: '#4f46e5', fontSize: 14, fontWeight: '900' },
   readyRow: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 12, borderRadius: 18, padding: 14,
     backgroundColor: C.greenSoft, borderWidth: 1, borderColor: tBg('#34ce8355'),

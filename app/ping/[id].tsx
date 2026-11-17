@@ -555,6 +555,8 @@ export default function GameScreen() {
           </View>
         )}
 
+        {!loading && <Text style={s.intro}>اختر أقرب سيرفر للعبتك عشان تاخذ أقل بنق</Text>}
+
         {!loading && (
           <RegionGrid value={region} onPick={pickRegion} disabled={running || busy} />
         )}
@@ -958,6 +960,7 @@ const s = sheet({
   lagSub: { color: C.sub, fontSize: 12, textAlign: 'right', marginTop: 2 },
   note: { color: C.muted, fontSize: 11, textAlign: 'center', paddingHorizontal: 20, marginTop: 4, lineHeight: 17 },
   page: { padding: 16, gap: 14 },
+  intro: { color: C.sub, fontSize: 13.5, fontWeight: '700', textAlign: 'center', marginBottom: -4 },
   center: { alignItems: 'center', paddingVertical: 40 },
   hint: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 19 },
   errBox: { backgroundColor: C.redSoft, borderColor: C.cardBorder, borderWidth: 1.5, borderRadius: 14, padding: 12 },
