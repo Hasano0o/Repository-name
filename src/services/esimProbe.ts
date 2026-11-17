@@ -29,7 +29,8 @@ export async function probeEsimOnce(r: SavedRouter): Promise<void> {
       `eSIM: ${res.enabled === true ? 'مفعّلة في الصفحة ✓' : res.enabled === false ? 'مو مدعومة' : 'ما عرفنا'}`,
       `driver: ${r.driverName ?? ''}`,
       '',
-      ...Object.entries(res.raw).map(([p, t]) => `── ${p}\n${maskLongDigits(t)}`),
+      // كود الصفحة يمر كما هو (ما فيه بيانات العضو) — الردود بس تنخفى أرقامها
+      ...Object.entries(res.raw).map(([p, t]) => `── ${p}\n${p.startsWith('page:') ? t : maskLongDigits(t)}`),
     ];
     if (await sendSupportReport(res.enabled ? 'esim-yes' : 'esim-probe', lines.join('\n'), r)) {
       await AsyncStorage.setItem(k(r.id), res.enabled === true ? 'yes' : res.enabled === false ? 'no' : '?');

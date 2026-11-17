@@ -2087,6 +2087,15 @@ export class HuaweiDriver implements RouterDriver {
       await read('sim/esim-profiles');
       await read('sim/sim-mode');
       await read('sim/esim-auto-download');
+      // كود صفحة «إدارة eSIM» نفسها (رابطها من main.js: o.p+"js/"+اسم+".js" — بدون بصمة).
+      // بدون دخول يرد 100003 (هذا اللي وصلنا في zip العضو) ← نسحبه بجلستنا عشان نشوف أوامر التحميل بالضبط
+      try {
+        const r = await this.http(`${this.base()}/js/esimmanagement-esimmanagement-vue.js`, { headers: this.headers() }, 10000);
+        const t = await r.text();
+        raw['page:esimmanagement'] = t.length > 150 ? t.slice(0, 180000) : `(${t.length}) ${t}`;
+      } catch (e: any) {
+        raw['page:esimmanagement'] = `ERR ${String(e?.message ?? e).slice(0, 80)}`;
+      }
     }
     return { enabled, raw };
   }
