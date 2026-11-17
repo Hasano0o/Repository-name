@@ -128,7 +128,7 @@ def main():
             # اقتراح عضو (١٧ نوفمبر): راوترات فيها eSIM ← نقدر نضيف «أضف شريحة بالباركود»
             try:
                 from esim import zip_hits
-                if zip_hits(z, 1):
+                if zip_hits(z, 1, strong_only=True):
                     esim[m] = esim.get(m, 0) + 1
             except Exception as e:
                 print(f"esim: {e}", file=sys.stderr)
@@ -154,7 +154,7 @@ def main():
         for i, (m, n) in enumerate(sorted(top.items(), key=lambda x: -x[1])[:10], 1):
             lines.append(f"{i}. {m} — {n}")
     if esim:
-        lines.append("\n📶 فيها eSIM (نقدر نضيف «أضف شريحة بالباركود»): " + " · ".join(f"{m} ({n})" for m, n in esim.items()))
+        lines.append("\n📶 فيها eSIM فعلية (نقدر نضيف «أضف شريحة بالباركود»): " + " · ".join(f"{m} ({n})" for m, n in esim.items()))
         lines.append("   التفاصيل: python3 /root/bandly-live/esim.py")
     if errs:
         lines.append(f"\n⚠️ أخطاء إضافة راوتر (٣٠ يوم): {errs} — في data/reports/bandly-add-login-*")
