@@ -33,6 +33,17 @@
     "ios-store": {
       "extends": "production",
       "channel": "preview"
+    },
+    "play": {
+      "extends": "preview",
+      "distribution": "store",
+      "credentialsSource": "local",
+      "env": {
+        "BANDLY_PLAY": "1"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
     }
   },
   "submit": {
