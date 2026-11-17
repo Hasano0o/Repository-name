@@ -61,6 +61,7 @@ import { WelcomeTour } from '../../src/ui/WelcomeTour';
 
 import { sheet, tr } from '../../src/i18n';import { LabelCard } from '../../src/ui/LabelCard';
 import { rememberBands } from '../../src/store/bandsAvail';
+import { probeEsimOnce } from '../../src/services/esimProbe';
 
 interface Features {
   bands: boolean; sms: boolean; ussd: boolean; block: boolean; reboot: boolean; devices: boolean; cells: boolean; details: boolean; plan: boolean; network: boolean; carriers: boolean; antenna: boolean;
@@ -287,6 +288,14 @@ export default function RouterDashboard() {
 
   // ═══ فحص الإنترنت: الإشارة زينة بس النت واقف؟ (كل ٤٥ ثانية والشاشة مفتوحة) ═══
   const hasSignalNow = !!signal && (signal.rsrp !== undefined || signal.nrRsrp !== undefined);
+  // ═══ eSIM: فحص قراءة مرة وحدة لكل راوتر بعد ما تبان الإشارة (اقتراح عضو — المرحلة ١) ═══
+  useEffect(() => {
+    if (!hasSignalNow || !info) return;
+    const t = setTimeout(() => { probeEsimOnce(info).catch(() => {}); }, 8000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasSignalNow, info?.id]);
+
   useEffect(() => {
     if (!hasSignalNow) return;
     let alive = true;

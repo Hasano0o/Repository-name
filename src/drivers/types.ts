@@ -418,6 +418,11 @@ export interface RouterDriver {
   setWifiChannel?(band: '2.4' | '5', channel: string): Promise<void>;
   /** نص خام للدعم لو الراوتر ما قبل التغيير */
   wifiDebug?(): Promise<string>;
+  /**
+   * فحص eSIM (قراءة بس — ١٧ نوفمبر، اقتراح عضو «أضف شريحة بالباركود»): هل الراوتر فيه شريحة إلكترونية؟
+   * enabled: من مفاتيح الصفحة (هواوي: esim_enable في global/module-switch) · raw: ردود القراءة كما هي (للسيرفر)
+   */
+  getEsimRaw?(): Promise<{ enabled: boolean | null; raw: Record<string, string> }>;
   /** مركز التحكم */
   getExtras?(): Promise<RouterExtras>;
   setNat?(t: 'cone' | 'symmetric'): Promise<void>;

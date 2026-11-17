@@ -2060,6 +2060,36 @@ export class HuaweiDriver implements RouterDriver {
   updateTimeRule(r: TimeRule, action: 'update' | 'delete', on?: boolean) { return extras.updateTimeRule(this.io(), r, action, on); }
   setUrlBlocks(list: { url: string; macs: string[] }[]) { return extras.setUrlBlocks(this.io(), list); }
   setDns(cfg: DnsConfig) { return setDns(this.io(), cfg); }
+  /**
+   * eSIM (قراءة بس): نفس اللي تسويه صفحة هواوي (main.js في H155-381/382/383):
+   *   global/module-switch ← esim_enable = "1" ← قائمة «إدارة eSIM» تطلع
+   *   sim/sim-info (sim_slot_num = esim؟) · sim/esim-profiles · sim/sim-mode · sim/esim-auto-download
+   * ما نرسل أي أمر تغيير (down-profile / operate-profile / sim-mode-reboot) — المرحلة ٢ بعد ما نشوف الردود.
+   */
+  async getEsimRaw(): Promise<{ enabled: boolean | null; raw: Record<string, string> }> {
+    const raw: Record<string, string> = {};
+    const read = async (p: string) => {
+      try {
+        const r = await this.http(this.url(p), { headers: this.headers() }, 6000);
+        const t = (await r.text()).slice(0, 4000);
+        raw[p] = t;
+        return t;
+      } catch (e: any) {
+        raw[p] = `ERR ${String(e?.message ?? e).slice(0, 80)}`;
+        return '';
+      }
+    };
+    const ms = await read('global/module-switch');
+    const m = ms.match(/<esim_enable>\s*(\d)\s*<\/esim_enable>/i) ?? ms.match(/"esim_enable"\s*:\s*"?(\d)/i);
+    const enabled = m ? m[1] === '1' : null;
+    await read('sim/sim-info');
+    if (enabled !== false) {
+      await read('sim/esim-profiles');
+      await read('sim/sim-mode');
+      await read('sim/esim-auto-download');
+    }
+    return { enabled, raw };
+  }
   async getDeviceDetails(): Promise<DeviceDetails> {
     const out: DeviceDetails = {};
     try {

@@ -135,6 +135,7 @@ const files = [
   // الترجمة: المحرك الصافي + القاموس (والفاحص tests/i18nScan.cjs ينادى من مجلد المشروع)
   // «وش بتلعب؟» — الألعاب ومناطقها
   'src/utils/games.ts',
+  'src/utils/esimMask.ts',
   'src/i18n/lookup.ts',
   'src/i18n/en.ts',
   ...fs.readdirSync(path.join(root, 'tests')).filter(f => f.endsWith('.test.ts')).map(f => `tests/${f}`),
