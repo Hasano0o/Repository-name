@@ -5,7 +5,7 @@ import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect, router, Href, Stack } from 'expo-router';
 import { useAutoStart } from '../../src/assistant/auto';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
@@ -31,6 +31,7 @@ import { GamePrepCard } from '../../src/ui/GamePrepCard';
 import { AccelCheckCard } from '../../src/ui/AccelCheckCard';
 import { ModeChips } from '../../src/ui/ModeChips';
 import { ServerMap, ExtraServer } from '../../src/ui/ServerMap';
+import { GameIntro } from '../../src/ui/GameIntro';
 import { accelServers } from '../../src/services/accel';
 
 import { sheet, LOCALE } from '../../src/i18n';
@@ -117,6 +118,8 @@ export default function GameScreen() {
   const scanRegRef = useRef(REGIONS[0]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  // الدخولية (موسيقى + حركة) — تختفي لحالها بعد ثانيتين تقريباً
+  const [intro, setIntro] = useState(true);
   const cancel = useRef(false);
   // خروج وقت الفحص ← تأكيد (كان يكمل بالخلفية ويطلع «الراوتر مشغول» لو رجع)
   useLeaveGuard(running, { what: 'مُحسّن الألعاب', onStop: () => { cancel.current = true; } });
@@ -552,6 +555,7 @@ export default function GameScreen() {
 
   return (
     <LinearGradient colors={[C.bgTop, C.bgBottom]} style={{ flex: 1 }}>
+      <Stack.Screen options={{ headerShown: !intro }} />
       <ScrollView contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 40 }]}>
         {loading && <View style={s.center}><ActivityIndicator size="large" color={C.blue} /></View>}
 
@@ -922,6 +926,7 @@ export default function GameScreen() {
           القياس يمر عبر الواي فاي والراوتر، فالرقم أعلى شوي من اللي داخل اللعبة، لكنه دقيق للمقارنة. ما نرسل أي بيانات شخصية.
         </Text>
       </ScrollView>
+      {intro && <GameIntro onDone={() => setIntro(false)} />}
     </LinearGradient>
   );
 }

@@ -2215,6 +2215,10 @@ export const EN: Record<string, string> = {
   'أمريكا الشمالية': 'North America',
   'كوريا واليابان': 'Korea & Japan',
   'أمريكا الجنوبية': 'South America',
+  'نجهّز لك أقل بنق…': 'Getting you the lowest ping…',
+  'اضغط للتخطي': 'Tap to skip',
+  'اكتم الصوت': 'Mute sound',
+  'شغّل الصوت': 'Turn sound on',
 };
 
 export const EN_PATTERNS: Record<string, string> = {

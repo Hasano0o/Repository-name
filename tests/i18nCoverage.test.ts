@@ -35,6 +35,7 @@ const DONE = [
   'app/features/[id].tsx',
   'src/ui/AccelCheckCard.tsx',
   'src/ui/ServerMap.tsx',
+  'src/ui/GameIntro.tsx',
 ];
 
 // ═══ القاموس نفسه ═══
