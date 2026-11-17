@@ -26,10 +26,12 @@ import { RushCard } from '../../src/ui/RushCard';
 import { bandLabel, freqLabel } from '../../src/utils/bands';
 import { C, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
-import { RegionGrid, flagOf } from '../../src/ui/RegionGrid';
+import { RegionGrid } from '../../src/ui/RegionGrid';
 import { GamePrepCard } from '../../src/ui/GamePrepCard';
 import { AccelCheckCard } from '../../src/ui/AccelCheckCard';
 import { ModeChips } from '../../src/ui/ModeChips';
+import { ServerMap, ExtraServer } from '../../src/ui/ServerMap';
+import { accelServers } from '../../src/services/accel';
 
 import { sheet, LOCALE } from '../../src/i18n';
 type Tech = 'LTE' | 'NR';
@@ -79,7 +81,7 @@ const TEAL = '#0f8fa8';
 const tileColor = (t: Target) => (t.kind === 'base' ? C.blue : t.kind === 'lteOnly' ? TEAL : t.tech === 'NR' ? C.violet : GREEN_DEEP);
 const tileIcon = (t: Target) => (t.kind === 'base' ? '⚙️' : t.kind === 'lteOnly' ? '📡' : '📶');
 
-type Panel = 'region' | 'time' | 'tips' | 'week';
+type Panel = 'time' | 'tips' | 'week';
 
 export default function GameScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -96,6 +98,8 @@ export default function GameScreen() {
   const [regionWarn, setRegionWarn] = useState('');
   const [regionAt, setRegionAt] = useState<number | null>(null);
   const [regionNow, setRegionNow] = useState('');
+  // سيرفر Bandly (المسرّع) — يطلع في «أي سيرفر أقرب لك؟» للمقارنة
+  const [bandlyRes, setBandlyRes] = useState<ExtraServer[]>([]);
   const [check, setCheck] = useState<{ game: LatencyResult; wifi: LatencyResult | null; dx: Diagnosis; note?: string } | null>(null);
   const [periods, setPeriods] = useState<PeriodStat[]>([]);
   const [weekly, setWeekly] = useState<string[]>([]);
@@ -128,7 +132,7 @@ export default function GameScreen() {
       if (!v || !mounted.current) return;
       try {
         const j = JSON.parse(v);
-        if (j?.res && Date.now() - j.at < 7 * 86400000) { setRegionRes(j.res); setRegionAt(j.at); setRegionWarn(j.warn ?? ''); }
+        if (j?.res && Date.now() - j.at < 7 * 86400000) { setRegionRes(j.res); setRegionAt(j.at); setRegionWarn(j.warn ?? ''); if (Array.isArray(j.extra)) setBandlyRes(j.extra); }
       } catch {}
     }).catch(() => {});
     return () => { mounted.current = false; cancel.current = true; };
@@ -279,6 +283,7 @@ export default function GameScreen() {
   const compareRegions = async () => {
     setBusy(true);
     setRegionRes({});
+    setBandlyRes([]);
     setRegionWarn('');
     setRegionAt(null);
     // قراءة الراوتر بمهلة — ما نخلي القياس يعلق لو الراوتر مشغول
@@ -295,7 +300,6 @@ export default function GameScreen() {
     try {
       for (const r of REGIONS) {
         if (!mounted.current) return;
-        setStatus(`نقيس ${r.name}...`);
         setRegionNow(r.name);
         const [res, dn] = await Promise.all([measureUrl(regionUrls(r), 8), readDown()]);
         if (typeof dn === 'number') downs.push(dn);
@@ -303,6 +307,17 @@ export default function GameScreen() {
         all[r.id] = res;
         if (mounted.current) setRegionRes(p => ({ ...p, [r.id]: res }));
       }
+      // سيرفر Bandly (من accel.json على الرسيفر) — يمر من نفس الطريق، فالمقارنة عادلة
+      const extra: ExtraServer[] = [];
+      try {
+        for (const sv of await accelServers()) {
+          if (!mounted.current) return;
+          setRegionNow('سيرفر Bandly');
+          const res = await measureUrl(`${sv.url.replace(/\/+$/, '')}/ping`, 8);
+          extra.push({ id: sv.id, name: sv.name, res });
+        }
+      } catch {}
+      if (mounted.current) setBandlyRes(extra);
       // تحقق من صحة القياس: تحميل شغال، أو أرقام متساوية بشكل غير منطقي
       const heavy = downs.length ? Math.max(...downs) : 0;
       const meds = got.map(g => g.median);
@@ -313,9 +328,9 @@ export default function GameScreen() {
       }
       const at = Date.now();
       if (mounted.current) { setRegionWarn(warn); setRegionAt(at); }
-      AsyncStorage.setItem('bandly.regionCompare', JSON.stringify({ at, res: all, warn })).catch(() => {});
+      AsyncStorage.setItem('bandly.regionCompare', JSON.stringify({ at, res: all, warn, extra })).catch(() => {});
     } finally {
-      if (mounted.current) { setBusy(false); setStatus(''); setRegionNow(''); }
+      if (mounted.current) { setBusy(false); setRegionNow(''); }
     }
   };
 
@@ -531,12 +546,6 @@ export default function GameScreen() {
     `بقيس البنق لسيرفرات ${reg.name} على إعدادك الحالي${changing ? ` و${changing} إعدادات ثانية` : ''} (تقريباً ${mins} دقيقة).${changing ? ' النت بينقطع شوي مع كل تغيير، وبعدها نرجّع إعدادك.' : ''}`,
     [{ text: 'لا', style: 'cancel' }, { text: 'ابدأ', onPress: () => { run(); } }],
   ));
-  const sortedRegions = REGIONS.filter(r => regionRes[r.id]).sort((a, b) => {
-    const x = regionRes[a.id], y = regionRes[b.id];
-    if (!x.samples) return 1;
-    if (!y.samples) return -1;
-    return x.median - y.median;
-  });
   const hasHistory = periods.some(p => p.count > 0);
   const bestPeriod = [...periods].filter(p => p.count >= 2 && p.avgScore !== undefined).sort((a, b) => b.avgScore! - a.avgScore!)[0];
   const worstPeriod = [...periods].filter(p => p.count >= 2 && p.avgScore !== undefined).sort((a, b) => a.avgScore! - b.avgScore!)[0];
@@ -555,18 +564,41 @@ export default function GameScreen() {
           </View>
         )}
 
-        {!loading && <Text style={s.intro}>اختر أقرب سيرفر للعبتك عشان تاخذ أقل بنق</Text>}
+        {!loading && (
+          <View style={s.guide}>
+            {([['١', 'اختار سيرفر لعبتك'], ['٢', 'افحص قبل ما تلعب'], ['٣', 'حسّن لو فيه لاق']] as const).map(([n, t], i) => (
+              <View key={n} style={s.guideStep}>
+                <View style={[s.guideNum, { backgroundColor: ['#2f6bff', '#22c55e', '#8448f5'][i] }]}><Text style={s.guideNumTxt}>{n}</Text></View>
+                <Text style={s.guideTxt} numberOfLines={2}>{t}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {!loading && <Section n="١" title="سيرفر لعبتك" sub="اختار نفس المنطقة اللي تلعب عليها، أو خلّنا نقيس ونقولك الأقرب" />}
 
         {!loading && (
           <RegionGrid value={region} onPick={pickRegion} disabled={running || busy} />
         )}
 
+        {!loading && (
+          <ServerMap
+            res={regionRes}
+            extra={bandlyRes}
+            at={regionAt}
+            warn={regionWarn}
+            now={regionNow}
+            total={REGIONS.length}
+            current={region}
+            busy={busy || running}
+            onMeasure={compareRegions}
+            onPick={pickRegion}
+          />
+        )}
+
+        {!loading && <Section n="٢" title="قبل ما تلعب" sub="جهّز الراوتر وافحص خطك قبل المباراة" />}
+
         {!loading && info && <GamePrepCard info={info} reg={reg} disabled={running || busy} />}
-
-        {!loading && info && <AccelCheckCard info={info} reg={reg} disabled={running || busy} />}
-
-        {/* الأوضاع بضغطة (ألعاب / مشاهدة / اجتماعات) — انتقلت هنا من صفحة الراوتر */}
-        {!loading && info && !wired && <ModeChips r={info} />}
 
         {!loading && (
           <GlassCard title="جاهز للعب؟" icon="🎮" tint={C.greenSoft} collapsible={false}>
@@ -610,25 +642,10 @@ export default function GameScreen() {
           </GlassCard>
         )}
 
-        {!loading && info && (
-          <Pressable style={[s.lagLink, { borderColor: C.cyan }]} onPress={() => router.push(`/gameboost/${info.id}` as Href)} disabled={running}>
-            <Text style={[s.lagArrow, { color: C.cyan }]}>‹</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={s.lagTitle}>🚀 تعزيز اللعب</Text>
-              <Text style={s.lagSub}>هل التحميل يخرّب لعبك؟ · NAT مفتوح؟ · وضع المباراة</Text>
-            </View>
-          </Pressable>
-        )}
+        {/* الأوضاع بضغطة (ألعاب / مشاهدة / اجتماعات) — انتقلت هنا من صفحة الراوتر */}
+        {!loading && info && !wired && <ModeChips r={info} />}
 
-        {!loading && info && (
-          <Pressable style={s.lagLink} onPress={() => router.push(`/lag/${info.id}` as Href)} disabled={running}>
-            <Text style={s.lagArrow}>‹</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={s.lagTitle}>🕵️ كاشف اللاق</Text>
-              <Text style={s.lagSub}>شغّله وأنت تلعب، ويقولك بعد الجيم متى صار اللاق وليش</Text>
-            </View>
-          </Pressable>
-        )}
+        {!loading && !!info && <Section n="٣" title="لو فيه لاق" sub="أدوات تدوّر لك أقل بنق وتكشف سبب التقطيع" />}
 
         {!loading && avail.length > 1 && !cfg && !wired && (
           <Text style={s.hint}>راوترك ما يدعم قفل الترددات — مُحسّن اللعبة غير متاح</Text>
@@ -743,6 +760,30 @@ export default function GameScreen() {
           </GlassCard>
         )}
 
+        {!loading && info && <AccelCheckCard info={info} reg={reg} disabled={running || busy} />}
+
+        {!loading && info && (
+          <Pressable style={[s.lagLink, { borderColor: C.cyan }]} onPress={() => router.push(`/gameboost/${info.id}` as Href)} disabled={running}>
+            <Text style={[s.lagArrow, { color: C.cyan }]}>‹</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.lagTitle}>🚀 تعزيز اللعب</Text>
+              <Text style={s.lagSub}>هل التحميل يخرّب لعبك؟ · NAT مفتوح؟ · وضع المباراة</Text>
+            </View>
+          </Pressable>
+        )}
+
+        {!loading && info && (
+          <Pressable style={s.lagLink} onPress={() => router.push(`/lag/${info.id}` as Href)} disabled={running}>
+            <Text style={s.lagArrow}>‹</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.lagTitle}>🕵️ كاشف اللاق</Text>
+              <Text style={s.lagSub}>شغّله وأنت تلعب، ويقولك بعد الجيم متى صار اللاق وليش</Text>
+            </View>
+          </Pressable>
+        )}
+
+        {!loading && !!info && <Section n="٤" title="من الأعضاء حولك" sub="وش نجح عند غيرك على نفس برجك وحيّك" />}
+
         {!loading && info && (
           <GlassCard title="على برجك" icon="👥" tint={C.cyanSoft} collapsible={false}>
             {consent === null && (
@@ -796,15 +837,11 @@ export default function GameScreen() {
 
         {!loading && info && <AreaCompare consent={consent} region={reg.id} regionName={reg.name} refresh={areaTick} />}
 
+        {!loading && <Section n="٥" title="نصايح ومتابعة" sub="أفضل وقت للعب، ووش يهم في البنق" />}
+
         {!loading && (
           <View style={s.tiles}>
             {([
-              {
-                id: 'region', icon: '🌍', tint: C.blueSoft, title: 'أي سيرفر أقرب؟',
-                sub: sortedRegions[0] && regionRes[sortedRegions[0].id].samples
-                  ? `${flagOf(sortedRegions[0].id)} ${sortedRegions[0].name} · ${regionRes[sortedRegions[0].id].median}ms`
-                  : 'قِس كل المناطق',
-              },
               { id: 'time', icon: '🕒', tint: C.violetSoft, title: 'أفضل وقت', sub: bestPeriod ? bestPeriod.name : 'يتعلّم من فحوصاتك' },
               { id: 'tips', icon: '💡', tint: C.amberSoft, title: 'وش يهم', sub: 'البنق والتذبذب والفقد' },
               ...(weekly.length ? [{ id: 'week', icon: '📅', tint: C.mintSoft, title: 'أسبوعك', sub: 'ملخص آخر ٧ أيام' }] : []),
@@ -824,42 +861,6 @@ export default function GameScreen() {
               );
             })}
           </View>
-        )}
-
-        {!loading && panel === 'region' && (
-          <GlassCard title="أي سيرفر أقرب لك؟" icon="🌍" tint={C.blueSoft} collapsible={false}>
-            <Text style={s.hint}>نقيس البنق لكل منطقة — اختار داخل اللعبة السيرفر الأقل بنق</Text>
-            {!!regionWarn && <Text style={s.fallbackNote}>{regionWarn}</Text>}
-            {sortedRegions.map((r, i) => {
-              const res = regionRes[r.id];
-              const sc = gameScore(res);
-              return (
-                <Pressable key={r.id} onPress={() => pickRegion(r.id)} style={[s.row, i === 0 && res.samples > 0 && s.rowBest]}>
-                  <View style={s.rowHead}>
-                    <Text style={[s.rowScore, { color: res.samples ? scoreColor(sc) : C.red, fontSize: 16 }]}>
-                      {res.samples ? `${res.median}ms` : 'ما رد'}
-                    </Text>
-                    <Text style={s.rowName}>{i === 0 && res.samples ? '⭐ ' : ''}{r.name} {flagOf(r.id)}</Text>
-                  </View>
-                  {res.samples > 0
-                    ? <Text style={s.rowVals}>تذبذب {res.jitter}ms · فقد {res.lossPct}% · {r.hint}{res.via ? ` · عبر خادم بديل` : ''}</Text>
-                    : <Text style={[s.rowVals, { color: C.red }]}>{res.error ?? 'الخادم ما رد'}</Text>}
-                </Pressable>
-              );
-            })}
-            {!!regionNow && (
-              <View style={s.inlineStatus}>
-                <ActivityIndicator color={C.blue} />
-                <Text style={s.inlineStatusTxt}>نقيس {regionNow}... ({Object.keys(regionRes).length}/{REGIONS.length})</Text>
-              </View>
-            )}
-            {!regionNow && !!regionAt && (
-              <Text style={s.hint}>آخر قياس: {new Date(regionAt).toLocaleString(LOCALE, { weekday: 'long', hour: 'numeric', minute: '2-digit' })}</Text>
-            )}
-            <Pressable style={[s.btnGhost, { borderColor: C.blue }, (busy || running) && s.dim]} onPress={compareRegions} disabled={busy || running}>
-              <Text style={[s.btnGhostText, { color: C.blue }]}>{regionNow ? 'نقيس...' : sortedRegions.length ? 'قِس مرة ثانية' : 'قِس كل المناطق (30 ثانية تقريباً)'}</Text>
-            </Pressable>
-          </GlassCard>
         )}
 
         {!loading && panel === 'week' && weekly.length > 0 && (
@@ -925,6 +926,18 @@ export default function GameScreen() {
   );
 }
 
+function Section({ n, title, sub }: { n: string; title: string; sub?: string }) {
+  return (
+    <View style={s.secHead}>
+      <View style={s.secNum}><Text style={s.secNumTxt}>{n}</Text></View>
+      <View style={{ flex: 1 }}>
+        <Text style={s.secTitle}>{title}</Text>
+        {!!sub && <Text style={s.secSub}>{sub}</Text>}
+      </View>
+    </View>
+  );
+}
+
 function GradBtn({ label, icon, onPress, disabled }: { label: string; icon?: string; onPress: () => void; disabled?: boolean }) {
   return (
     <Pressable onPress={onPress} disabled={disabled} style={({ pressed }) => [s.gradWrap, disabled && s.dim, pressed && { opacity: 0.85 }]}>
@@ -960,6 +973,19 @@ const s = sheet({
   lagSub: { color: C.sub, fontSize: 12, textAlign: 'right', marginTop: 2 },
   note: { color: C.muted, fontSize: 11, textAlign: 'center', paddingHorizontal: 20, marginTop: 4, lineHeight: 17 },
   page: { padding: 16, gap: 14 },
+  guide: { flexDirection: 'row-reverse', gap: 8 },
+  guideStep: {
+    flex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: 7, paddingVertical: 9, paddingHorizontal: 8,
+    backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.cardBorder,
+  },
+  guideNum: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  guideNumTxt: { color: '#fff', fontWeight: '900', fontSize: 12 },
+  guideTxt: { flex: 1, color: C.text, fontWeight: '700', fontSize: 11.5, textAlign: 'right' },
+  secHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, marginTop: 12, marginBottom: -2, paddingHorizontal: 2 },
+  secNum: { width: 30, height: 30, borderRadius: 10, backgroundColor: C.blue, alignItems: 'center', justifyContent: 'center' },
+  secNumTxt: { color: '#fff', fontWeight: '900', fontSize: 15 },
+  secTitle: { color: C.text, fontWeight: '900', fontSize: 17, textAlign: 'right' },
+  secSub: { color: C.sub, fontSize: 12, textAlign: 'right', marginTop: 1 },
   intro: { color: C.sub, fontSize: 13.5, fontWeight: '700', textAlign: 'center', marginBottom: -4 },
   center: { alignItems: 'center', paddingVertical: 40 },
   hint: { color: C.muted, fontSize: 12, textAlign: 'right', lineHeight: 19 },

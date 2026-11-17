@@ -34,6 +34,7 @@ const DONE = [
   'src/ui/FiberHero.tsx',
   'app/features/[id].tsx',
   'src/ui/AccelCheckCard.tsx',
+  'src/ui/ServerMap.tsx',
 ];
 
 // ═══ القاموس نفسه ═══
