@@ -76,14 +76,14 @@ def collect():
             if z.name in seen:  # نفس الملف في dumps والأرشيف
                 continue
             seen.add(z.name)
-            out.append((z.stat().st_mtime, norm(model_of(z)), kind_of(z.name)))
+            out.append((z.stat().st_mtime, norm(model_of(z)), kind_of(z.name), z))
     # نفس الجهاز بكتابات مختلفة ← اسم واحد (الأكثر تكرار)
     names: dict[str, dict[str, int]] = {}
-    for _, m, _k in out:
+    for _, m, _k, _z in out:
         names.setdefault(key_of(m), {}).setdefault(m, 0)
         names[key_of(m)][m] += 1
     best = {k: max(v.items(), key=lambda x: x[1])[0] for k, v in names.items()}
-    return [(t, best[key_of(m)], k) for t, m, k in out]
+    return [(t, best[key_of(m)], k, z) for t, m, k, z in out]
 
 
 def send(text: str) -> bool:
@@ -120,13 +120,21 @@ def main():
     items = collect()
 
     new: dict[str, dict[str, int]] = {}
-    for t, m, k in items:
+    esim: dict[str, int] = {}
+    for t, m, k, z in items:
         if t > since:
             new.setdefault(m, {}).setdefault(k, 0)
             new[m][k] += 1
+            # اقتراح عضو (١٧ نوفمبر): راوترات فيها eSIM ← نقدر نضيف «أضف شريحة بالباركود»
+            try:
+                from esim import zip_hits
+                if zip_hits(z, 1):
+                    esim[m] = esim.get(m, 0) + 1
+            except Exception as e:
+                print(f"esim: {e}", file=sys.stderr)
     top: dict[str, int] = {}
     errs = 0
-    for t, m, k in items:
+    for t, m, k, _z in items:
         if t <= now - 30 * DAY:
             continue
         if k in ("جهاز جديد", "FULL"):  # طلبات أجهزة — أخطاء الإضافة غالباً راوترات مدعومة (كلمة غلط…) فنعدّها لحالها
@@ -145,6 +153,9 @@ def main():
         lines.append("\n🔝 الأكثر طلباً (٣٠ يوم):")
         for i, (m, n) in enumerate(sorted(top.items(), key=lambda x: -x[1])[:10], 1):
             lines.append(f"{i}. {m} — {n}")
+    if esim:
+        lines.append("\n📶 فيها eSIM (نقدر نضيف «أضف شريحة بالباركود»): " + " · ".join(f"{m} ({n})" for m, n in esim.items()))
+        lines.append("   التفاصيل: python3 /root/bandly-live/esim.py")
     if errs:
         lines.append(f"\n⚠️ أخطاء إضافة راوتر (٣٠ يوم): {errs} — في data/reports/bandly-add-login-*")
     # «برمج لي جهازي»: وش تبرمج لحاله ووش يحتاج المبرمج (autoprog.py — لو الملف مو موجود نكمّل بدونه)
