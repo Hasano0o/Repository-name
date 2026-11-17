@@ -70,16 +70,16 @@ export function RegionGrid({ value, onPick, disabled, title = 'سيرفر لعب
           const [nm, city] = splitName(r.name);
           const body = (
             <>
-              <Text style={s.flag}>{flagOf(r.id)}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={[s.name, on && s.nameOn]} numberOfLines={1}>{nm}</Text>
-                {!!city && <Text style={[s.city, on && s.cityOn]} numberOfLines={1}>{city}</Text>}
+              <View style={s.tileTop}>
+                <Text style={s.flag}>{flagOf(r.id)}</Text>
+                {on ? (
+                  <View style={s.check}><Icon name="check" size={12} color={BLUE} stroke={3.2} /></View>
+                ) : (
+                  <View style={{ transform: [{ scaleX: -1 }] }}><Icon name="chevron" size={14} color={C.muted} stroke={2.4} /></View>
+                )}
               </View>
-              {on ? (
-                <View style={s.check}><Icon name="check" size={13} color={BLUE} stroke={3.2} /></View>
-              ) : (
-                <View style={{ transform: [{ scaleX: -1 }] }}><Icon name="chevron" size={15} color={C.muted} stroke={2.4} /></View>
-              )}
+              <Text style={[s.name, on && s.nameOn]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>{nm}</Text>
+              {!!city && <Text style={[s.city, on && s.cityOn]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{city}</Text>}
             </>
           );
           return (
@@ -132,18 +132,19 @@ const s = sheet({
   grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', rowGap: 9 },
   cell: { width: '33.333%', paddingHorizontal: 4 },
   tile: {
-    flexDirection: 'row-reverse', alignItems: 'center', gap: 6, minHeight: 50,
-    paddingVertical: 10, paddingHorizontal: 9, borderRadius: 16,
+    minHeight: 72, gap: 4,
+    paddingVertical: 9, paddingHorizontal: 10, borderRadius: 16,
     backgroundColor: C.rowBg, borderWidth: 1.2, borderColor: C.cardBorder,
   },
+  tileTop: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
   tileOn: { borderColor: 'rgba(255,255,255,0.35)' },
   glow: {
     borderRadius: 16, shadowColor: BLUE, shadowOpacity: 0.55, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 6,
   },
   dim: { opacity: 0.5 },
   pressed: { opacity: 0.75, transform: [{ scale: 0.97 }] },
-  flag: { fontSize: 24 },
-  name: { color: C.text, fontWeight: '800', fontSize: 13.5, textAlign: 'right' },
+  flag: { fontSize: 23 },
+  name: { color: C.text, fontWeight: '800', fontSize: 14, textAlign: 'right' },
   nameOn: { color: '#fff', fontSize: 14 },
   city: { color: C.sub, fontWeight: '700', fontSize: 12, textAlign: 'right', marginTop: 1 },
   cityOn: { color: '#dbe6ff' },
@@ -152,7 +153,7 @@ const s = sheet({
     borderWidth: 1, borderColor: isDark ? '#2f6bff66' : C.cardBorder, backgroundColor: C.rowBg,
   },
   allTxt: { color: C.blue, fontWeight: '800', fontSize: 13.5 },
-  check: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  check: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   info: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 9, marginHorizontal: 4,
     backgroundColor: C.rowBg, borderRadius: 16, paddingVertical: 9, paddingHorizontal: 11, borderWidth: 1, borderColor: C.cardBorder,
