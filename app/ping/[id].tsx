@@ -32,6 +32,7 @@ import { AccelCheckCard } from '../../src/ui/AccelCheckCard';
 import { ModeChips } from '../../src/ui/ModeChips';
 import { ServerMap, ExtraServer } from '../../src/ui/ServerMap';
 import { GameIntro } from '../../src/ui/GameIntro';
+import { rankedIds } from '../../src/utils/serverRank';
 import { accelServers } from '../../src/services/accel';
 
 import { sheet, LOCALE } from '../../src/i18n';
@@ -582,7 +583,7 @@ export default function GameScreen() {
         {!loading && <Section n="١" title="سيرفر لعبتك" sub="اختار نفس المنطقة اللي تلعب عليها، أو خلّنا نقيس ونقولك الأقرب" />}
 
         {!loading && (
-          <RegionGrid value={region} onPick={pickRegion} disabled={running || busy} />
+          <RegionGrid value={region} onPick={pickRegion} disabled={running || busy} title="المنطقة اللي تلعب عليها" ranked={rankedIds(regionRes)} />
         )}
 
         {!loading && (

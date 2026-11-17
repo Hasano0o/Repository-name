@@ -3,7 +3,7 @@
  * وبعدها تختفي وتبان إعدادات الألعاب.
  * - الموسيقى أصلية من تأليفنا (assets/sounds/game-intro.m4a) — تحترم زر الصامت في الآيفون وما توقف موسيقى العضو.
  * - ضغطة على الشاشة = تخطي. زر 🔊/🔇 يحفظ اختيار الصوت (bandly.gameIntroSound).
- * - الحركة متزامنة مع الموسيقى: صعود (0–0.75ث) ← نغمات (0.6–1.1ث) ← الضربة (1.16ث) ← تختفي.
+ * - الحركة متزامنة مع الموسيقى (٤ ثواني): صعود (0–1.3ث) ← نغمات (0.6–1.95ث) ← الضربة (2ث) ← «يلّا نلعب» ← تختفي (3.5ث).
  */
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet } from 'react-native';
@@ -16,12 +16,13 @@ import { sheet } from '../i18n';
 
 const SOUND_KEY = 'bandly.gameIntroSound';
 const MUSIC = require('../../assets/sounds/game-intro.m4a');
-const HIT_MS = 1160;
-const OUT_AT = 1900;
+const HIT_MS = 2000;
+const OUT_AT = 3500;
 
 export function GameIntro({ onDone }: { onDone: () => void }) {
   const insets = useSafeAreaInsets();
   const [sound, setSound] = useState(true);
+  const [ready, setReady] = useState(false);
   const player = useRef<AudioPlayer | null>(null);
   const finished = useRef(false);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -60,17 +61,17 @@ export function GameIntro({ onDone }: { onDone: () => void }) {
 
     Animated.parallel([
       // الأيقونة تكبر مع الصعود
-      Animated.timing(icon, { toValue: 1, duration: 750, easing: Easing.out(Easing.back(1.6)), useNativeDriver: true }),
+      Animated.timing(icon, { toValue: 1, duration: 1300, easing: Easing.out(Easing.back(1.6)), useNativeDriver: true }),
       Animated.loop(Animated.sequence([
         Animated.timing(glow, { toValue: 1, duration: 420, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
         Animated.timing(glow, { toValue: 0, duration: 420, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
       ])),
       // العنوان مع النغمات
       Animated.sequence([
-        Animated.delay(500),
-        Animated.timing(title, { toValue: 1, duration: 450, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.delay(800),
+        Animated.timing(title, { toValue: 1, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
       ]),
-      Animated.timing(bar, { toValue: 1, duration: HIT_MS + 500, easing: Easing.inOut(Easing.cubic), useNativeDriver: false }),
+      Animated.timing(bar, { toValue: 1, duration: HIT_MS, easing: Easing.inOut(Easing.cubic), useNativeDriver: false }),
       // الضربة: وميض + موجة تطلع من الأيقونة
       Animated.sequence([
         Animated.delay(HIT_MS),
@@ -79,11 +80,12 @@ export function GameIntro({ onDone }: { onDone: () => void }) {
             Animated.timing(flash, { toValue: 1, duration: 70, useNativeDriver: true }),
             Animated.timing(flash, { toValue: 0, duration: 380, useNativeDriver: true }),
           ]),
-          Animated.timing(ring, { toValue: 1, duration: 650, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+          Animated.timing(ring, { toValue: 1, duration: 900, easing: Easing.out(Easing.quad), useNativeDriver: true }),
         ]),
       ]),
     ]).start();
 
+    timers.current.push(setTimeout(() => setReady(true), HIT_MS));
     timers.current.push(setTimeout(() => finish(false), OUT_AT));
     return () => {
       alive = false;
@@ -125,7 +127,7 @@ export function GameIntro({ onDone }: { onDone: () => void }) {
 
             <Animated.View style={{ alignItems: 'center', gap: 6, opacity: title, transform: [{ translateY: titleY }] }}>
               <Text style={s.title}>مُحسّن الألعاب</Text>
-              <Text style={s.sub}>نجهّز لك أقل بنق…</Text>
+              <Text style={[s.sub, ready && s.subReady]}>{ready ? 'يلّا نلعب 🔥' : 'نجهّز لك أقل بنق…'}</Text>
             </Animated.View>
 
             <View style={s.track}>
@@ -159,6 +161,7 @@ const s = sheet({
   iconTxt: { fontSize: 62 },
   title: { color: '#fff', fontWeight: '900', fontSize: 30, textAlign: 'center' },
   sub: { color: '#c4b5fd', fontWeight: '700', fontSize: 15, textAlign: 'center' },
+  subReady: { color: '#67e8f9', fontWeight: '900', fontSize: 17 },
   track: { width: '70%', height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.12)', overflow: 'hidden', flexDirection: 'row-reverse' },
   fill: { height: 6, borderRadius: 3, overflow: 'hidden' },
   skip: { position: 'absolute', color: 'rgba(255,255,255,0.45)', fontSize: 12.5, fontWeight: '700' },

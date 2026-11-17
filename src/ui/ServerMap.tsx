@@ -10,7 +10,7 @@ import { ActivityIndicator } from 'react-native';
 import { View, Text, Pressable } from '../i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { REGIONS } from '../utils/latency';
-import { PingRes, Quality, QUALITY_WORD, quality, bestRegion, groupResults, barPct, inGameName, shaky, Q_GREAT, Q_GOOD, Q_OK } from '../utils/serverRank';
+import { PingRes, Quality, QUALITY_WORD, quality, bestRegion, rankedIds, groupResults, barPct, inGameName, shaky, Q_GREAT, Q_GOOD, Q_OK } from '../utils/serverRank';
 import { flagOf } from './RegionGrid';
 import { C, isDark } from './theme';
 import { sheet, LOCALE } from '../i18n';
@@ -48,10 +48,42 @@ export function ServerMap({ res, extra, at, warn, now, total, current, busy, onM
   const groups = groupResults(res);
   const okMeds = Object.values(res).filter(r => r.samples > 0).map(r => r.median);
   const minMs = okMeds.length ? Math.min(...okMeds) : 1;
-  // المجموعة الأولى مفتوحة دايماً، والباقي ورا الزر (وقت القياس كله مفتوح عشان يشوف التقدّم)
-  const shown = measuring || more ? groups : groups.slice(0, 1);
-  const hidden = groups.slice(1).reduce((n, g) => n + g.ids.length, 0);
+  // بعد القياس: أفضل دولتين بس، والباقي (مجمّع حسب المنطقة) ورا الزر. وقت القياس كله مفتوح عشان يشوف التقدّم
+  const top2 = rankedIds(res).slice(0, 2);
+  const showAll = measuring || more;
+  const hidden = done;
   const bestRes = best ? res[best] : undefined;
+
+  const row = (id: string, ref = false) => {
+    const r = res[id];
+    const q = quality(r);
+    const on = id === current;
+    const note = q === 'drops' ? `⚠️ يفقد ${r.lossPct}% من البيانات` : shaky(r) ? '⚠️ متذبذب' : '';
+    return (
+      <Pressable
+        key={id}
+        onPress={() => !ref && onPick(id)}
+        disabled={busy || ref}
+        style={({ pressed }) => [s.row, on && s.rowOn, pressed && { opacity: 0.8 }]}
+      >
+        <View style={s.rowMain}>
+          <Text style={s.rowFlag}>{flagOf(id)}</Text>
+          <View style={{ flex: 1, gap: 5 }}>
+            <Text style={s.rowName} numberOfLines={1}>{nameOf(id)}{on ? '  ✓' : ''}</Text>
+            <View style={s.barTrack}>
+              <View style={[s.barFill, { width: `${barPct(r, minMs)}%`, backgroundColor: QC[q] }]} />
+            </View>
+            {!!note && <Text style={[s.note, { color: QC[q === 'drops' ? 'drops' : 'ok'] }]}>{note}</Text>}
+            {q === 'none' && <Text style={[s.note, { color: QC.none }]}>{r.error ?? 'الخادم ما رد'}</Text>}
+          </View>
+          <View style={s.msBox}>
+            <Text style={[s.ms, { color: QC[q] }]}>{r.samples ? r.median : '—'}</Text>
+            <Text style={[s.qWord, { color: QC[q] }]}>{QUALITY_WORD[q]}</Text>
+          </View>
+        </View>
+      </Pressable>
+    );
+  };
 
   return (
     <View style={s.card}>
@@ -132,48 +164,26 @@ export function ServerMap({ res, extra, at, warn, now, total, current, busy, onM
         );
       })}
 
-      {shown.map(g => (
+      {!showAll && top2.length > 0 && (
+        <View style={s.group}>
+          <View style={s.groupHead}><Text style={s.groupName}>الأقل بنق عندك</Text></View>
+          {top2.map(id => row(id))}
+        </View>
+      )}
+
+      {showAll && groups.map(g => (
         <View key={g.id} style={s.group}>
           <View style={s.groupHead}>
             <Text style={s.groupName}>{g.name}</Text>
             {g.best !== undefined && <Text style={s.groupBest}>الأقل {g.best}ms</Text>}
           </View>
-          {g.ids.map(id => {
-            const r = res[id];
-            const q = quality(r);
-            const on = id === current;
-            const note = q === 'drops' ? `⚠️ يفقد ${r.lossPct}% من البيانات` : shaky(r) ? '⚠️ متذبذب' : '';
-            return (
-              <Pressable
-                key={id}
-                onPress={() => g.id !== 'ref' && onPick(id)}
-                disabled={busy || g.id === 'ref'}
-                style={({ pressed }) => [s.row, on && s.rowOn, pressed && { opacity: 0.8 }]}
-              >
-                <View style={s.rowMain}>
-                  <Text style={s.rowFlag}>{flagOf(id)}</Text>
-                  <View style={{ flex: 1, gap: 5 }}>
-                    <Text style={s.rowName} numberOfLines={1}>{nameOf(id)}{on ? '  ✓' : ''}</Text>
-                    <View style={s.barTrack}>
-                      <View style={[s.barFill, { width: `${barPct(r, minMs)}%`, backgroundColor: QC[q] }]} />
-                    </View>
-                    {!!note && <Text style={[s.note, { color: QC[q === 'drops' ? 'drops' : 'ok'] }]}>{note}</Text>}
-                    {q === 'none' && <Text style={[s.note, { color: QC.none }]}>{r.error ?? 'الخادم ما رد'}</Text>}
-                  </View>
-                  <View style={s.msBox}>
-                    <Text style={[s.ms, { color: QC[q] }]}>{r.samples ? r.median : '—'}</Text>
-                    <Text style={[s.qWord, { color: QC[q] }]}>{QUALITY_WORD[q]}</Text>
-                  </View>
-                </View>
-              </Pressable>
-            );
-          })}
+          {g.ids.map(id => row(id, g.id === 'ref'))}
         </View>
       ))}
 
       {!measuring && hidden > 0 && (
         <Pressable style={s.moreBtn} onPress={() => setMore(m => !m)}>
-          <Text style={s.moreTxt}>{more ? 'اخفِ باقي المناطق ▲' : `اعرض باقي المناطق (${hidden}) ▼`}</Text>
+          <Text style={s.moreTxt}>{more ? 'اعرض أقل ▲' : `اعرض كل الدول (${hidden}) ▼`}</Text>
         </Pressable>
       )}
 
@@ -257,7 +267,10 @@ const s = sheet({
   ms: { fontWeight: '900', fontSize: 19 },
   qWord: { fontWeight: '800', fontSize: 11 },
 
-  moreBtn: { alignItems: 'center', paddingVertical: 8 },
+  moreBtn: {
+    alignItems: 'center', paddingVertical: 10, borderRadius: 14,
+    borderWidth: 1, borderColor: isDark ? '#2f6bff66' : C.cardBorder, backgroundColor: C.rowBg,
+  },
   moreTxt: { color: C.blue, fontWeight: '800', fontSize: 13 },
   warn: { color: '#e0a100', fontSize: 12.5, lineHeight: 19, textAlign: 'right', fontWeight: '700' },
   foot: { color: C.sub, fontSize: 11.5, lineHeight: 18, textAlign: 'right' },

@@ -2219,6 +2219,17 @@ export const EN: Record<string, string> = {
   'اضغط للتخطي': 'Tap to skip',
   'اكتم الصوت': 'Mute sound',
   'شغّل الصوت': 'Turn sound on',
+  'يلّا نلعب 🔥': 'Let\'s play 🔥',
+  'الأقل بنق عندك': 'Your lowest ping',
+  'اعرض أقل ▲': 'Show less ▲',
+  'المنطقة اللي تلعب عليها': 'The region you play on',
+  'السعودية': 'Saudi Arabia',
+  'تركيا': 'Turkey',
+  'إسطنبول': 'Istanbul',
+  'قطر': 'Qatar',
+  'الدوحة': 'Doha',
+  'مصر': 'Egypt',
+  'القاهرة': 'Cairo',
 };
 
 export const EN_PATTERNS: Record<string, string> = {
@@ -2760,4 +2771,5 @@ export const EN_PATTERNS: Record<string, string> = {
   'الأقل {0}ms': 'Lowest {0}ms',
   '⚠️ يفقد {0}% من البيانات': '⚠️ Losing {0}% of data',
   'اعرض باقي المناطق ({0}) ▼': 'Show other regions ({0}) ▼',
+  'اعرض كل الدول ({0}) ▼': 'Show all countries ({0}) ▼',
 };

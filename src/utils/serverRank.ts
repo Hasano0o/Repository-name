@@ -75,6 +75,11 @@ const better = (a?: PingRes, b?: PingRes) => {
   return a!.median - b!.median;
 };
 
+/** مناطق اللعب اللي ردت، من الأنسب للأبعد */
+export function rankedIds(res: Record<string, PingRes>): string[] {
+  return Object.keys(res).filter(id => isGameRegion(id) && res[id].samples > 0).sort((a, b) => better(res[a], res[b]));
+}
+
 /** أنسب منطقة للعب: أقل بنق بدون تقطيع */
 export function bestRegion(res: Record<string, PingRes>): string | null {
   const ids = Object.keys(res).filter(id => isGameRegion(id) && res[id].samples > 0);

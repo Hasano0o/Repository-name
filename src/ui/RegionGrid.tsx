@@ -3,6 +3,7 @@
  * «أقرب سيرفر» ما له دولة فيطلع بأيقونة الموقع. تحت: وصف المنطقة المختارة.
  * نفس المكوّن في مُحسّن الألعاب وكاشف اللاق. (تصميم ١٧ نوفمبر — من صورة حسن)
  */
+import { useState } from 'react';
 import { View, Text, Pressable } from '../i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { REGIONS, regionById } from '../utils/latency';
@@ -18,13 +19,37 @@ export const flagOf = (id: string) => FLAG[id] ?? '🌐';
 
 const BLUE = '#2f6bff';
 
-export function RegionGrid({ value, onPick, disabled, title = 'سيرفر لعبتك' }: {
+/** «السعودية (جدة)» ← الاسم «السعودية» + المدينة «جدة» في سطر ثاني (كانت الأسماء الطويلة تصغر لين ما تنقرى) */
+export function splitName(name: string): [string, string] {
+  const m = name.match(/^(.*?)\s*\((.+)\)\s*$/);
+  return m ? [m[1], m[2]] : [name, ''];
+}
+
+const DEFAULT_TOP = ['sa-jed', 'sa-ruh', 'ae'];
+
+/** أول ٣ بلاطات: المختار دايماً + الأقرب من آخر قياس (لو فيه) وإلا السعودية والإمارات */
+export function topThree(value: string, ranked?: string[]): string[] {
+  const pool = [...(ranked ?? []), ...DEFAULT_TOP, ...REGIONS.map(r => r.id)];
+  const out = [value];
+  for (const id of pool) {
+    if (out.length >= 3) break;
+    if (!out.includes(id) && REGIONS.some(r => r.id === id)) out.push(id);
+  }
+  return out;
+}
+
+export function RegionGrid({ value, onPick, disabled, title = 'سيرفر لعبتك', ranked }: {
   value: string;
   onPick: (id: string) => void;
   disabled?: boolean;
   title?: string;
+  /** المناطق من الأقرب للأبعد (من «أي سيرفر أقرب لك؟») — تحدد أول ٣ بلاطات */
+  ranked?: string[];
 }) {
   const reg = regionById(value);
+  const [all, setAll] = useState(false);
+  const top = topThree(value, ranked);
+  const list = all ? REGIONS : top.map(id => regionById(id));
   return (
     <View style={s.card}>
       <View style={s.head}>
@@ -40,12 +65,16 @@ export function RegionGrid({ value, onPick, disabled, title = 'سيرفر لعب
         </View>
       </View>
       <View style={s.grid}>
-        {REGIONS.map(r => {
+        {list.map(r => {
           const on = r.id === value;
+          const [nm, city] = splitName(r.name);
           const body = (
             <>
               <Text style={s.flag}>{flagOf(r.id)}</Text>
-              <Text style={[s.name, on && s.nameOn]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{r.name}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.name, on && s.nameOn]} numberOfLines={1}>{nm}</Text>
+                {!!city && <Text style={[s.city, on && s.cityOn]} numberOfLines={1}>{city}</Text>}
+              </View>
               {on ? (
                 <View style={s.check}><Icon name="check" size={13} color={BLUE} stroke={3.2} /></View>
               ) : (
@@ -56,7 +85,7 @@ export function RegionGrid({ value, onPick, disabled, title = 'سيرفر لعب
           return (
             <View key={r.id} style={s.cell}>
               <Pressable
-                onPress={() => onPick(r.id)}
+                onPress={() => { onPick(r.id); setAll(false); }}
                 disabled={disabled && !on}
                 accessibilityRole="button"
                 accessibilityState={{ selected: on }}
@@ -74,6 +103,9 @@ export function RegionGrid({ value, onPick, disabled, title = 'سيرفر لعب
           );
         })}
       </View>
+      <Pressable style={({ pressed }) => [s.allBtn, pressed && { opacity: 0.75 }]} onPress={() => setAll(a => !a)}>
+        <Text style={s.allTxt}>{all ? 'اعرض أقل ▲' : `اعرض كل الدول (${REGIONS.length}) ▼`}</Text>
+      </Pressable>
       <View style={s.info}>
         <View style={s.infoIcon}><Text style={s.infoI}>i</Text></View>
         <Text style={s.infoTxt} numberOfLines={2}>{reg.hint}</Text>
@@ -111,8 +143,15 @@ const s = sheet({
   dim: { opacity: 0.5 },
   pressed: { opacity: 0.75, transform: [{ scale: 0.97 }] },
   flag: { fontSize: 24 },
-  name: { flex: 1, color: C.text, fontWeight: '800', fontSize: 13, textAlign: 'right' },
-  nameOn: { color: '#fff', fontSize: 14.5 },
+  name: { color: C.text, fontWeight: '800', fontSize: 13.5, textAlign: 'right' },
+  nameOn: { color: '#fff', fontSize: 14 },
+  city: { color: C.sub, fontWeight: '700', fontSize: 12, textAlign: 'right', marginTop: 1 },
+  cityOn: { color: '#dbe6ff' },
+  allBtn: {
+    alignItems: 'center', paddingVertical: 10, marginHorizontal: 4, borderRadius: 14,
+    borderWidth: 1, borderColor: isDark ? '#2f6bff66' : C.cardBorder, backgroundColor: C.rowBg,
+  },
+  allTxt: { color: C.blue, fontWeight: '800', fontSize: 13.5 },
   check: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   info: {
     flexDirection: 'row-reverse', alignItems: 'center', gap: 9, marginHorizontal: 4,
