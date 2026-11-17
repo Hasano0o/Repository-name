@@ -32,6 +32,8 @@ import { AccelCheckCard } from '../../src/ui/AccelCheckCard';
 import { ModeChips } from '../../src/ui/ModeChips';
 import { ServerMap, ExtraServer } from '../../src/ui/ServerMap';
 import { GameIntro } from '../../src/ui/GameIntro';
+import { GameBadge } from '../../src/ui/GameBadge';
+import { GAME_KEY, gameById, regionForGame, preferOrder } from '../../src/utils/games';
 import { rankedIds } from '../../src/utils/serverRank';
 import { accelServers } from '../../src/services/accel';
 
@@ -120,17 +122,21 @@ export default function GameScreen() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   // الدخولية (موسيقى + حركة) — تختفي لحالها بعد ثانيتين تقريباً
-  const [intro, setIntro] = useState(true);
+  // 'intro' = أول ما تنفتح (موسيقى ← «وش بتلعب؟») · 'pick' = من زر «غيّر» · null = مقفولة
+  const [intro, setIntro] = useState<'intro' | 'pick' | null>('intro');
+  const [gameId, setGameId] = useState<string | null>(null);
   const cancel = useRef(false);
   // خروج وقت الفحص ← تأكيد (كان يكمل بالخلفية ويطلع «الراوتر مشغول» لو رجع)
   useLeaveGuard(running, { what: 'مُحسّن الألعاب', onStop: () => { cancel.current = true; } });
   const mounted = useRef(true);
 
   const reg = regionById(region);
+  const game = gameById(gameId);
 
   useEffect(() => {
     mounted.current = true;
     AsyncStorage.getItem(REGION_KEY).then(v => { if (v && mounted.current) setRegion(regionById(v).id); }).catch(() => {});
+    AsyncStorage.getItem(GAME_KEY).then(v => { if (v && gameById(v) && mounted.current) setGameId(v); }).catch(() => {});
     // آخر نتيجة «أي سيرفر أقرب لك؟» — تظهر لحالها بدل ما تختفي كل ما تفتح الشاشة
     AsyncStorage.getItem('bandly.regionCompare').then(v => {
       if (!v || !mounted.current) return;
@@ -147,6 +153,17 @@ export default function GameScreen() {
     setRegion(rid);
     setCheck(null);
     AsyncStorage.setItem(REGION_KEY, rid).catch(() => {});
+  };
+
+  /** اختار لعبة من «وش بتلعب؟» ← نحفظها، ونقرّب المنطقة لو منطقته الحالية مو من مناطق اللعبة */
+  const onIntroDone = (gid?: string) => {
+    setIntro(null);
+    const g = gameById(gid);
+    if (!g) return;
+    setGameId(g.id);
+    AsyncStorage.setItem(GAME_KEY, g.id).catch(() => {});
+    const rid = regionForGame(g, region);
+    if (rid !== region) pickRegion(rid);
   };
 
   const refreshPeriods = useCallback(async (r: SavedRouter, rid: string) => {
@@ -570,6 +587,17 @@ export default function GameScreen() {
         )}
 
         {!loading && (
+          <GameBadge
+            game={game}
+            pingMs={regionRes[region]?.samples ? regionRes[region].median : undefined}
+            regionName={reg.name}
+            onChange={() => setIntro('pick')}
+            onNat={info ? () => router.push(`/gameboost/${info.id}` as Href) : undefined}
+            disabled={running || busy}
+          />
+        )}
+
+        {!loading && (
           <View style={s.guide}>
             {([['١', 'اختار سيرفر لعبتك'], ['٢', 'افحص قبل ما تلعب'], ['٣', 'حسّن لو فيه لاق']] as const).map(([n, t], i) => (
               <View key={n} style={s.guideStep}>
@@ -583,7 +611,7 @@ export default function GameScreen() {
         {!loading && <Section n="١" title="سيرفر لعبتك" sub="اختار نفس المنطقة اللي تلعب عليها، أو خلّنا نقيس ونقولك الأقرب" />}
 
         {!loading && (
-          <RegionGrid value={region} onPick={pickRegion} disabled={running || busy} title="المنطقة اللي تلعب عليها" ranked={rankedIds(regionRes)} />
+          <RegionGrid value={region} onPick={pickRegion} disabled={running || busy} title="المنطقة اللي تلعب عليها" ranked={preferOrder(game, rankedIds(regionRes))} />
         )}
 
         {!loading && (
@@ -927,7 +955,7 @@ export default function GameScreen() {
           القياس يمر عبر الواي فاي والراوتر، فالرقم أعلى شوي من اللي داخل اللعبة، لكنه دقيق للمقارنة. ما نرسل أي بيانات شخصية.
         </Text>
       </ScrollView>
-      {intro && <GameIntro onDone={() => setIntro(false)} />}
+      {intro && <GameIntro key={intro} current={gameId} pickOnly={intro === 'pick'} onDone={onIntroDone} />}
     </LinearGradient>
   );
 }

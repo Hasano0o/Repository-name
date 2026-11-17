@@ -36,6 +36,7 @@ const DONE = [
   'src/ui/AccelCheckCard.tsx',
   'src/ui/ServerMap.tsx',
   'src/ui/GameIntro.tsx',
+  'src/ui/GameBadge.tsx',
 ];
 
 // ═══ القاموس نفسه ═══

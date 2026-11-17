@@ -43,6 +43,9 @@ export default function GameBoost() {
   // NAT
   const [nat, setNat] = useState<NatReport | null>(null);
   const [natRun, setNatRun] = useState(false);
+  // UPnP بضغطة (للكونسول): null = الراوتر ما يدعم التغيير من التطبيق
+  const [upnp, setUpnp] = useState<boolean | null>(null);
+  const [upnpBusy, setUpnpBusy] = useState(false);
 
   // وضع المباراة
   const [canBlock, setCanBlock] = useState<boolean | null>(null);
@@ -94,6 +97,31 @@ export default function GameBoost() {
   }, [selfManual]);
 
   useEffect(() => { if (info && !match) loadDevices(info); }, [info, match]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const readUpnp = useCallback(async (r: SavedRouter) => {
+    const v = await withSession(r, async d => (d.setUpnp && d.getExtras ? (await d.getExtras()).upnp ?? null : null), false).catch(() => null);
+    setUpnp(typeof v === 'boolean' ? v : null);
+    return v;
+  }, []);
+
+  useEffect(() => { if (info) readUpnp(info); }, [info]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** نشغّل UPnP ونقرأ بعده نتأكد إنه انحفظ */
+  const enableUpnp = async () => {
+    if (!info || upnpBusy) return;
+    setUpnpBusy(true);
+    try {
+      await withSession(info, async d => { if (d.setUpnp) await d.setUpnp(true); }, false);
+      await new Promise(r => setTimeout(r, 1200));
+      const v = await readUpnp(info);
+      if (v === true) Alert.alert('✓ انفتح UPnP', 'الحين البلايستيشن والإكسبوكس والألعاب تقدر تفتح منافذها لحالها. أعد تشغيل اللعبة أو افحص الاتصال من الجهاز.');
+      else Alert.alert('ما انحفظ', 'الراوتر رد بموافقة بس الإعداد ما تغيّر. جرّب من مركز التحكم.');
+    } catch (e) {
+      Alert.alert('ما قدرنا نفتح UPnP', errMsg(e));
+    } finally {
+      setUpnpBusy(false);
+    }
+  };
 
   /* ── Bufferbloat ── */
   const runBloat = async () => {
@@ -217,6 +245,19 @@ export default function GameBoost() {
       {/* ═══ NAT ═══ */}
       <GlassCard title="NAT مفتوح؟" icon="🔓" tint={C.violetSoft} collapsible={false}>
         <Text style={s.hint}>نشوف هل شركتك تعطيك آي بي عام ولا مشترك (CGNAT)، وهل IPv6 شغال — عشان تعرف هل فتح المنافذ بيفيدك أصلاً.</Text>
+        {upnp !== null && (
+          <View style={[s.upnpRow, upnp && { borderColor: C.green }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.upnpTitle}>🕹️ UPnP {upnp ? 'شغّال ✓' : 'مطفي'}</Text>
+              <Text style={s.hint}>{upnp ? 'البلايستيشن والإكسبوكس والألعاب يفتحون منافذهم لحالهم.' : 'أكثر سبب لـ «NAT Type 3» بالكونسول — شغّله بضغطة.'}</Text>
+            </View>
+            {!upnp && (
+              <Pressable style={[s.upnpBtn, upnpBusy && s.dim]} onPress={enableUpnp} disabled={upnpBusy}>
+                {upnpBusy ? <ActivityIndicator color={C.onAccent} /> : <Text style={s.btnTxt}>شغّله</Text>}
+              </Pressable>
+            )}
+          </View>
+        )}
         <Pressable style={s.btn} onPress={runNat} disabled={natRun}>
           {natRun ? <ActivityIndicator color={C.onAccent} /> : <Text style={s.btnTxt}>{nat ? 'أعد الفحص' : 'افحص'}</Text>}
         </Pressable>
@@ -337,5 +378,8 @@ const s = sheet({
   chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: C.rowBg, borderWidth: 1.5, borderColor: C.cardBorder },
   chipOn: { backgroundColor: C.blue, borderColor: C.blue },
   chipTxt: { color: C.text, fontWeight: '700', fontSize: 13 },
+  upnpRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, backgroundColor: C.rowBg, borderRadius: 14, borderWidth: 1.5, borderColor: C.cardBorder, padding: 11 },
+  upnpTitle: { color: C.text, fontWeight: '900', fontSize: 14, textAlign: 'right' },
+  upnpBtn: { backgroundColor: C.violetBright, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 18, alignItems: 'center' },
   note: { color: C.muted, fontSize: 11, textAlign: 'center', paddingHorizontal: 20, lineHeight: 17 },
 });
