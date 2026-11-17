@@ -135,6 +135,9 @@ export default function LagScreen() {
         pollRouter(info).then(s => { lastSample = s; }).catch(() => {}).finally(() => { routerBusy = false; });
       }
 
+      // قياس صحيان قبل القياس الحقيقي: بعد ثانية سكون واي فاي الجوال يدخل توفير الطاقة (أندرويد أكثر)،
+      // فأول طلب ياخذ تأخير ما يصير وقت اللعب (اللعبة ترسل باستمرار) ← كان يطلع «لاق» وهمي
+      await pingOnce(target, 700);
       const ms = await pingOnce(target, 2000);
       pings.current.push({ t: t0, ms });
       if (pings.current.length > 7200) pings.current.shift();

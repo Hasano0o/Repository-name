@@ -29,8 +29,11 @@ function startLoad(kind: 'down' | 'up'): LoadHandle {
       try {
         if (kind === 'down') {
           const r = await fetch(`${CF}/__down?bytes=10000000&${nocache()}`, { signal: ctrl.signal });
-          const b = await r.arrayBuffer();
-          bytes += b.byteLength;
+          // blob يبقى في الذاكرة الأصلية (ما ينقل للـ JS) — arrayBuffer كان ينسخ ١٠ ميقا لخيط الـ JS
+          // ويجمّده، فقياسات البنق اللي تمشي معه تتأخر وتطلع أعلى من الحقيقة (أوضح في أندرويد)
+          const b = await r.blob();
+          bytes += b.size;
+          try { (b as any).close?.(); } catch {}
         } else {
           const r = await fetch(`${CF}/__up?${nocache()}`, { method: 'POST', body, signal: ctrl.signal });
           await r.text();
@@ -75,6 +78,10 @@ export async function runBloatTest(
     now: () => Date.now(),
     cancelled: o.cancelled,
     onStep: o.onStep,
+  }, {
+    // فاصل قصير: بـ ٢٥٠ms قياسات «الخط فاضي» كانت تاخذ تأخير صحيان الواي فاي (وضع توفير الطاقة)
+    // وقياسات «وقت التحميل» لا (الواي فاي صاحي من التحميل) — فالمقارنة تطلع غلط، أكثر في أندرويد
+    gapMs: 60,
   });
 }
 

@@ -70,16 +70,19 @@ function reason(e: any, timeoutMs: number): string {
   return msg ? `خطأ: ${msg.slice(0, 80)}` : 'خطأ غير معروف';
 }
 
+/** ساعة دقيقة (performance.now أدق من Date.now ولا تتأثر بتعديل وقت الجوال) */
+const clock = (): number => (typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now());
+
 async function hit(url: string, timeoutMs: number, method: 'GET' | 'HEAD'): Promise<Hit> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const sep = url.includes('?') ? '&' : '?';
     const target = method === 'GET' ? `${url}${sep}r=${Math.random().toString(36).slice(2, 8)}` : url;
-    const start = Date.now();
+    const start = clock();
     const r = await fetch(target, { method, signal: ctrl.signal, headers: { 'Cache-Control': 'no-cache' } });
     // نحسب الوقت لحد وصول رأس الرد — قراءة الجسم ما تدخل في البنق
-    const ms = Date.now() - start;
+    const ms = Math.round(clock() - start);
     // الجسم بمهلة: الآيفون تحت ضغط التحميل ممكن ما يكمل الجسم ولا يرجع بعد الإلغاء (الفحص علق ٧ نوفمبر)
     if (method === 'GET') {
       try {
@@ -116,7 +119,9 @@ export async function measureUrl(
   n = 12,
   timeoutMs = 3000,
   method: 'GET' | 'HEAD' = 'GET',
-  gapMs = 120,
+  // ٤٠ms مثل اللعبة (ترسل باستمرار): الفاصل الطويل (كان ١٢٠) يخلّي واي فاي الجوال يدخل وضع توفير الطاقة
+  // بين القياسات فكل قياس ياخذ تأخير «صحيان» ما يصير وقت اللعب — أوضح بكثير في أندرويد
+  gapMs = 40,
 ): Promise<LatencyResult> {
   const list = Array.isArray(urls) ? urls : [urls];
   let url = '';
@@ -177,7 +182,7 @@ export async function measureLatency(n = 12, timeoutMs = 3000): Promise<LatencyR
 /** بين الجوال والراوتر فقط — يكشف هل المشكلة من الواي فاي */
 export function measureWifi(host: string, n = 10): Promise<LatencyResult> {
   const base = /^https?:\/\//.test(host) ? host : `http://${host}`;
-  return measureUrl(base.replace(/\/+$/, '') + '/', n, 1500, 'HEAD', 80);
+  return measureUrl(base.replace(/\/+$/, '') + '/', n, 1500, 'HEAD', 40);
 }
 
 export function gamingGrade(r: LatencyResult): { label: string; score: number } {
