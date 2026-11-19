@@ -4,7 +4,7 @@
  * التصميم بهوية Bandly (أزرق للتنزيل، بنفسجي للرفع) — مو نسخة من أي تطبيق ثاني.
  */
 import { useCallback, useEffect, useRef, useState, ReactNode } from 'react';
-import { Animated, Easing, ScrollView } from 'react-native';
+import { Animated, Easing, Linking, ScrollView } from 'react-native';
 import { View, Text, Pressable } from '../../src/i18n/rn';
 import { useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -274,6 +274,11 @@ export default function SpeedScreen() {
         <View style={[s.note2, { borderColor: tBd('#3b82f655'), backgroundColor: tBg('#3b82f610') }]}>
           <Text style={[s.note2Txt, { fontWeight: '800' }]}>ليش يختلف عن Speedtest؟</Text>
           <Text style={s.note2Txt}>Bandly يقيس على Cloudflare — يعني الإنترنت الحقيقي برا شبكة شركتك، مثل التحميل والألعاب. Speedtest يختار غالباً سيرفر داخل شبكة شركتك نفسها، فرقمه يطلع أعلى عادةً. الاثنين صح، بس كل واحد يقيس شي.</Text>
+          <Pressable onPress={openOokla} accessibilityRole="button"
+            style={({ pressed }) => [s.cmpBtn, pressed && { opacity: 0.8 }]}>
+            <Icon name="globe" size={15} color={C.blue} />
+            <Text style={s.cmpTxt}>قارن مع Speedtest</Text>
+          </Pressable>
         </View>
       )}
 
@@ -313,7 +318,15 @@ export default function SpeedScreen() {
   );
 }
 
+/** «قارن مع Speedtest»: تطبيقهم لو مثبّت، وإلا موقعهم — ما نستخدم سيرفراتهم من داخل Bandly (يحتاج ترخيص) */
+async function openOokla() {
+  try { await Linking.openURL('speedtest://'); return; } catch {}
+  Linking.openURL('https://www.speedtest.net').catch(() => {});
+}
+
 const s = sheet({
+  cmpBtn: { alignSelf: 'center', flexDirection: 'row-reverse', alignItems: 'center', gap: 6, marginTop: 6, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 999, borderWidth: 1, borderColor: C.blue },
+  cmpTxt: { color: C.blue, fontWeight: '800', fontSize: 13.5 },
   wrap: { padding: S.lg, gap: S.md, alignItems: 'stretch', paddingBottom: 40 },
   boxes: { flexDirection: 'row-reverse', gap: 10 },
   box: { flex: 1, borderWidth: 1.5, borderRadius: R.md, paddingVertical: 12, paddingHorizontal: 14, alignItems: 'center', gap: 2 },
