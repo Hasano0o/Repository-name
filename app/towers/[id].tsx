@@ -7,7 +7,7 @@ import { useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router'
 import { useAutoStart } from '../../src/assistant/auto';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession, routerWrite } from '../../src/store/sessions';
-import { CellTower, CellLockState, BandConfig } from '../../src/drivers/types';
+import { CellTower, CellLockState, BandConfig, Signal } from '../../src/drivers/types';
 import { LEVEL_COLOR, LEVEL_LABEL, LEVEL_SOFT, overallLevel } from '../../src/utils/signal';
 import { towerKey, towerTitle } from '../../src/utils/cells';
 import {
@@ -16,6 +16,7 @@ import {
 } from '../../src/utils/towers';
 import { C, tBd, tBg, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
+import { CongestionCard } from '../../src/ui/Congestion';
 import { trafficBurst, collectNr, mb } from '../../src/utils/nrprobe';
 import { safeApply, lastTrial, trialNote, trialMessage, loadTrials } from '../../src/utils/safeLock';
 import { driverById } from '../../src/drivers/registry';
@@ -193,6 +194,7 @@ export default function TowersScreen() {
   const [cells, setCells] = useState<CellTower[]>([]);
   const [confirmed, setConfirmed] = useState<Set<string>>(new Set());
   const [nrAvail, setNrAvail] = useState<number | undefined>();
+  const [sigNow, setSigNow] = useState<Signal | null>(null);
   const [nrFound, setNrFound] = useState<CellTower[] | null>(null);
   const [nrScan, setNrScan] = useState<{ left: number } | null>(null);
   const nrStop = useRef(false);
@@ -243,6 +245,7 @@ export default function TowersScreen() {
       setSeen(await rememberSeen(r.id, list));
       setPings(await loadTowerPings(r.id));
       setNrAvail(sig?.nrAvailable);
+      setSigNow(sig);
       setLocks(lock);
       setCanLock(supports);
       // قفل القناة: بس لو الراوتر يدعم الأدوار (lock-freq شغال) — وإلا ما نعرضه
@@ -657,6 +660,11 @@ export default function TowersScreen() {
           <Pressable style={s.carrLink} onPress={() => router.push(`/carriers/${info.id}` as Href)}>
             <Text style={s.carrLinkText}>📶 النواقل المدموجة بالتفصيل (عرض كل ناقل وجودته) ‹</Text>
           </Pressable>
+        )}
+
+        {/* زحمة البرج الحالي + أوقات الزحمة عبر اليوم (كانت مدفونة في التفاصيل) — وقت الفحص/التثبيت ما نسجّل */}
+        {!loading && info && !!sigNow && (
+          <CongestionCard routerId={info.id} signal={sigNow} downBps={busy ? 1e9 : undefined} />
         )}
 
         {!loading && info && trialCount > 0 && (
