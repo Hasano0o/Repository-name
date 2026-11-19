@@ -3,6 +3,7 @@
  * لنشرة جديدة: غيّر WN_ID والعناصر. اللي ثبّت التطبيق لأول مرة ما تطلع له (يشوف كل شي جديد أصلاً).
  */
 import { useEffect, useState } from 'react';
+import { SAUDI_INTRO_ON } from './SaudiIntro';
 import { Modal, } from 'react-native';
 import { Pressable, Text, View } from '../i18n/rn';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -58,6 +59,8 @@ export function WhatsNew() {
         if (seen === WN_ID) return;
         const real = rs.find(r => r.driverId !== DEMO_DRIVER_ID && ['huawei-lte', 'zte', 'zte-ng'].includes(r.driverId));
         setRid(real?.id ?? rs.find(r => r.driverId === DEMO_DRIVER_ID)?.id ?? null);
+        // شاشة «وطننا عزنا» تغطي أول ٣ ثواني — ننتظرها تخلص قبل النافذة
+        if (SAUDI_INTRO_ON) await new Promise(r => setTimeout(r, 3500));
         setShow(true);
       } catch {}
     })();

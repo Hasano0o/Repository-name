@@ -24,6 +24,7 @@ import { applyGlobalFont, FONT } from '../src/ui/fonts';
 import { C, isDark } from '../src/ui/theme';
 import { UpdateBanner } from '../src/ui/UpdateBanner';
 import { NavBarScrim } from '../src/ui/NavBarScrim';
+import { SaudiIntro } from '../src/ui/SaudiIntro';
 import { initNotificationHandler } from '../src/utils/notify';
 import '../src/tasks/monitor'; // يسجّل تعريف مهمة المراقبة الخلفية عند الإقلاع
 import { setLanTlsFlag } from '../src/drivers/http';
@@ -178,6 +179,7 @@ export default function RootLayout() {
       <UpdateBanner />
       <OpPill />
       <ProgressHost />
+      <SaudiIntro />
     </>
   );
 }
