@@ -23,6 +23,7 @@ import { Rubik_800ExtraBold } from '@expo-google-fonts/rubik/800ExtraBold';
 import { applyGlobalFont, FONT } from '../src/ui/fonts';
 import { C, isDark } from '../src/ui/theme';
 import { UpdateBanner } from '../src/ui/UpdateBanner';
+import { NavBarScrim } from '../src/ui/NavBarScrim';
 import { initNotificationHandler } from '../src/utils/notify';
 import '../src/tasks/monitor'; // يسجّل تعريف مهمة المراقبة الخلفية عند الإقلاع
 import { setLanTlsFlag } from '../src/drivers/http';
@@ -173,6 +174,7 @@ export default function RootLayout() {
           );
         })}
       </Stack>
+      <NavBarScrim />
       <UpdateBanner />
       <OpPill />
       <ProgressHost />
