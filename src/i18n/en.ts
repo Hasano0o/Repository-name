@@ -1529,6 +1529,8 @@ export const EN: Record<string, string> = {
   'يستهلك تقريباً ٥٠–٣٠٠ ميقا حسب سرعتك.': 'Uses roughly 50–300 MB depending on your speed.',
   'بنفتح جلسة مباشرة ونرسل رابطها في واتساب. الفني يشوف قراءات إشارتك لحظة بلحظة ويوجّهك وأنت تحرك الأنتينا، ويقدر يكلمك صوت.': 'We\'ll open a live session and send its link on WhatsApp.\n\nThe technician sees your signal readings moment by moment and guides you while you move the antenna, and can talk to you by voice.',
   'فحص Bufferbloat: كم يرتفع البنق لما أحد في البيت ينزّل أو يرفع. هذا أكثر سبب للاق «فجأة».': 'Bufferbloat test: how much ping rises when someone at home downloads or uploads. This is the most common cause of "sudden" lag.',
+  'ليش يختلف عن Speedtest؟': 'Why is it different from Speedtest?',
+  'Bandly يقيس على Cloudflare — يعني الإنترنت الحقيقي برا شبكة شركتك، مثل التحميل والألعاب. Speedtest يختار غالباً سيرفر داخل شبكة شركتك نفسها، فرقمه يطلع أعلى عادةً. الاثنين صح، بس كل واحد يقيس شي.': 'Bandly measures to Cloudflare — the real internet outside your carrier\'s network, like downloads and games. Speedtest usually picks a server inside your carrier\'s own network, so its number is usually higher. Both are right — they just measure different things.',
   'الرقم سرعة جوالك عبر الراوتر — لو الجوال على واي فاي بعيد أو 2.4، يشمل سرعة الواي فاي. خادم القياس: speed.cloudflare.com — ما نرسل أي بيانات شخصية.': 'The number is your phone\'s speed through the router — if the phone is on far or 2.4 GHz Wi-Fi, it includes the Wi-Fi speed.\nTest server: speed.cloudflare.com — we send no personal data.',
   // ═══ الدفعة ٣: البنق ومُحسّن الألعاب · صيد الإشارة ═══
   'النتيجة قريبة من قبل — الفرق بسيط الحين': 'The result is close to before — the difference is small right now',

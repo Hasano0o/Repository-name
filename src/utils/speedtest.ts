@@ -3,9 +3,9 @@
  * ─────────────────────────────────────────────
  * ليش كان يطلع أقل من الحقيقة: اتصال واحد + حجم ثابت صغير (٢٥ ميقا) — على 5G يخلص قبل ما يوصل سرعته.
  * الحين مثل الاختبارات المعروفة:
- *  • ٤ اتصالات مع بعض (التنزيل والرفع)
+ *  • ٤ اتصالات مع بعض، وتزيد لين ٨ (٦ للرفع) لو الخط سريع — 5G ما يمتلي بأربع
  *  • بالوقت مو بالحجم: كل اتجاه ~٨ ثواني، والقطع تكبر لحالها حسب سرعتك
- *  • نتجاهل أول ثانية (بداية الاتصال) ونحسب من نافذة متحركة ← رقم ثابت ومباشر للعدّاد
+ *  • نتجاهل أول ثانية (بداية الاتصال)، والنتيجة الشريحة ٩٠٪ من نوافذ ١ ثانية (مثل Ookla) — speedCore.ts
  *  • البنق: ١٠ قياسات ← أقل قيمة + التذبذب، و«البنق تحت الضغط» وقت التنزيل
  * ما يرسل أي بيانات شخصية — بس طلبات تحميل ورفع لخادم القياس.
  */
@@ -39,6 +39,8 @@ export interface SpeedProgress {
   server?: string;
   isp?: string;
 }
+
+import { Chunk, finalMbps, wantStreams, windowMbps } from './speedCore';
 
 const BASE = 'https://speed.cloudflare.com';
 const STREAMS = 4;
@@ -103,8 +105,9 @@ function pingStats(list: number[]): { min: number; jitter: number } {
 }
 
 /**
- * يشغّل STREAMS عمّال يحمّلون/يرفعون قطع لين يخلص الوقت. كل قطعة تخلص ← نضيف حجمها للعداد.
+ * يشغّل عمّال يحمّلون/يرفعون قطع لين يخلص الوقت. نبدأ بـ STREAMS، ولو الخط سريع نزيد لين ٨ (٦ للرفع).
  * القطعة تكبر لحالها عشان كل طلب ياخذ ~٠٫٧ ثانية (أقل تأخير بين الطلبات = رقم أدق).
+ * الحساب في speedCore: حجم كل قطعة يتوزّع على مدتها، والنتيجة الشريحة ٩٠٪ بعد الإحماء.
  */
 async function transfer(
   kind: 'down' | 'up',
@@ -113,7 +116,7 @@ async function transfer(
 ): Promise<{ mbps: number; bytes: number }> {
   const start = Date.now();
   const end = start + DUR_MS;
-  const samples: { t: number; bytes: number }[] = []; // تراكمي
+  const chunks: Chunk[] = [];
   let total = 0;
   let failures = 0;
   const ctrl = new AbortController();
@@ -129,16 +132,17 @@ async function transfer(
     while (Date.now() < end && !isCancelled()) {
       const t0 = Date.now();
       try {
+        let got: number;
         if (kind === 'down') {
           const r = await timed(`${BASE}/__down?bytes=${size}&${nocache()}`, {}, 15000, ctrl.signal);
-          const buf = await r.arrayBuffer();
-          total += buf.byteLength;
+          got = (await r.arrayBuffer()).byteLength;
         } else {
           const r = await timed(`${BASE}/__up?${nocache()}`, { method: 'POST', body: payload(size) }, 15000, ctrl.signal);
           await r.text();
-          total += size;
+          got = size;
         }
-        samples.push({ t: Date.now(), bytes: total });
+        total += got;
+        chunks.push({ t0, t1: Date.now(), bytes: got });
         const took = Math.max(1, Date.now() - t0);
         // القطعة الجاية تاخذ ~٧٠٠ms (بين ٢٥٠ ألف و٥٠ ميقا تنزيل / ١٠ ميقا رفع)
         const max = kind === 'down' ? 50_000_000 : 10_000_000;
@@ -151,43 +155,35 @@ async function transfer(
     }
   };
 
-  // العدّاد: كل ٢٥٠ms نحسب السرعة من آخر ٢ ثانية (بعد الإحماء)
-  const rate = (now: number) => {
-    const from = Math.max(start + WARMUP_MS, now - 2500);
-    const pts = samples.filter(p => p.t >= from);
-    const before = [...samples].reverse().find(p => p.t < from);
-    const b0 = before?.bytes ?? (pts[0] ? 0 : 0);
-    const t0 = before?.t ?? start;
-    const last = pts[pts.length - 1] ?? before;
-    if (!last || last.t <= t0) return 0;
-    return ((last.bytes - b0) * 8) / ((last.t - t0) / 1000) / 1e6;
-  };
+  // العدّاد: كل ٢٥٠ms السرعة من آخر ٢ ثانية (بعد الإحماء) · وكل ثانية نشيك نزيد اتصالات؟
+  const running: Promise<void>[] = [];
+  let lastGrow = start + 1500;
   const tick = setInterval(() => {
     const now = Date.now();
-    onTick(rate(now), Math.min(1, (now - start) / DUR_MS));
+    // القطع اللي لسا ما خلصت ما تنحسب ← النافذة تنتهي عند آخر قطعة خلصت
+    let lastT = start;
+    for (const c of chunks) if (c.t1 > lastT) lastT = c.t1;
+    const from = Math.max(start + WARMUP_MS, lastT - 2000);
+    const cur = lastT > from ? windowMbps(chunks, from, lastT) : 0;
+    onTick(cur, Math.min(1, (now - start) / DUR_MS));
+    if (now >= lastGrow + 1000 && now < end - 2500) {
+      lastGrow = now;
+      const want = wantStreams(running.length, cur, kind);
+      while (running.length < want) running.push(worker());
+    }
   }, 250);
 
   try {
-    await Promise.all(Array.from({ length: STREAMS }, worker));
+    for (let i = 0; i < STREAMS; i++) running.push(worker());
+    // العمّال الجدد ينضافون للمصفوفة وقت الشغل — ننتظر لين ما يبقى أحد
+    for (let n = 0; n < running.length; n++) await running[n];
   } finally {
     clearInterval(tick);
     ctrl.abort();
   }
   if (isCancelled()) throw new Error('cancelled');
-  if (!samples.length) throw new Error(kind === 'down' ? 'ما قدرنا نحمّل من خادم القياس' : 'ما قدرنا نرفع لخادم القياس');
-
-  // النتيجة: كل اللي بعد الإحماء (أو كل شي لو الاختبار كان قصير جداً)
-  const afterWarm = samples.filter(p => p.t >= start + WARMUP_MS);
-  const base = [...samples].reverse().find(p => p.t < start + WARMUP_MS);
-  let mbps: number;
-  if (afterWarm.length && base) {
-    const last = afterWarm[afterWarm.length - 1];
-    mbps = ((last.bytes - base.bytes) * 8) / ((last.t - base.t) / 1000) / 1e6;
-  } else {
-    const last = samples[samples.length - 1];
-    mbps = (last.bytes * 8) / ((last.t - start) / 1000) / 1e6;
-  }
-  return { mbps: Math.max(0, mbps), bytes: total };
+  if (!chunks.length) throw new Error(kind === 'down' ? 'ما قدرنا نحمّل من خادم القياس' : 'ما قدرنا نرفع لخادم القياس');
+  return { mbps: finalMbps(chunks, start, { warmupMs: WARMUP_MS }), bytes: total };
 }
 
 export async function runSpeedTest(

@@ -269,6 +269,14 @@ export default function SpeedScreen() {
         </View>
       )}
 
+      {/* ليش يختلف عن Speedtest؟ — أكثر شكوى من الأعضاء (١٩ نوفمبر) */}
+      {!!res && (
+        <View style={[s.note2, { borderColor: tBd('#3b82f655'), backgroundColor: tBg('#3b82f610') }]}>
+          <Text style={[s.note2Txt, { fontWeight: '800' }]}>ليش يختلف عن Speedtest؟</Text>
+          <Text style={s.note2Txt}>Bandly يقيس على Cloudflare — يعني الإنترنت الحقيقي برا شبكة شركتك، مثل التحميل والألعاب. Speedtest يختار غالباً سيرفر داخل شبكة شركتك نفسها، فرقمه يطلع أعلى عادةً. الاثنين صح، بس كل واحد يقيس شي.</Text>
+        </View>
+      )}
+
       {/* ═══ الخادم والشركة ═══ */}
       <View style={s.meta}>
         <View style={s.metaItem}>
