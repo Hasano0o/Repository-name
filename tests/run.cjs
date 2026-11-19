@@ -16,6 +16,7 @@ const files = [
   'src/utils/fiberAdvice.ts',
   'src/utils/pciTarget.ts',
   'src/utils/fiberBar.ts',
+  'src/utils/speedCore.ts',
   'src/utils/accelCore.ts',
   'src/utils/serverRank.ts',
   'src/drivers/huawei/cellLock.ts',
