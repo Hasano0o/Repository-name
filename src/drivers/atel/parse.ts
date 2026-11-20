@@ -42,23 +42,23 @@ export function techOf(h: any): '5G' | '4G' | undefined {
 }
 
 /**
- * الإشارة من WebHeader: RSRP/RSRQ/SINR/RSSI. الصفحة نفسها ما تعرض الأرقام إذا كلها صفر (RSSI و RSRP = 0) —
- * نفس القاعدة: صفر = ما فيه قراءة (مو -0 dBm). وإذا Technology 5G نحطها في خانات NR.
+ * الإشارة من WebHeader: رقم واحد لكل قيمة (RSRP/RSRQ/SINR/RSSI) بدون ما يقول هي 4G ولا 5G.
+ * • الصفحة نفسها ما تعرض الأرقام إذا كلها صفر (RSSI و RSRP = 0) — نفس القاعدة: صفر = ما فيه قراءة.
+ * • قراءة وحدة ← بطاقة وحدة (أول تجربة ٢١ نوفمبر: كنا نعبّي 4G و5G بنفس الأرقام فطلعت بطاقتين متطابقة).
+ *   تنحط في الخانات الأساسية (كل الشاشات تقراها)، و Technology «5G» ← nrActiveFromStatus بس.
+ * • SINR = 0 بالضبط مع RSRP قوي = الراوتر ما يعبّيه (أول تجربة: RSRP -61 و SINR 0 ← «اتصالك ضعيف» غلط) — نخليه فاضي.
  */
 export function signalFrom(h: any): Signal {
   const rsrp = num(h?.RSRP), rssi = num(h?.RSSI);
   const empty = (rsrp === undefined || rsrp === 0) && (rssi === undefined || rssi === 0);
   const tech = techOf(h);
   const s: Signal = { network: tech };
+  if (tech === '5G') s.nrActiveFromStatus = true;
   if (empty) return s;
   const rsrq = num(h?.RSRQ), sinr = num(h?.SINR);
-  if (tech === '5G' && !/LTE/i.test(String(h?.Technology ?? ''))) {
-    s.nrRsrp = rsrp; s.nrRsrq = rsrq; s.nrSinr = sinr; s.nrActiveFromStatus = true;
-    // ما فيه قراءة 4G منفصلة — نخلي الأساسية نفسها عشان الشاشات اللي تقرا rsrp
-    s.rsrp = rsrp; s.rsrq = rsrq; s.sinr = sinr;
-  } else {
-    s.rsrp = rsrp; s.rsrq = rsrq; s.sinr = sinr;
-  }
+  if (rsrp !== undefined && rsrp !== 0) s.rsrp = rsrp;
+  if (rsrq !== undefined && rsrq !== 0) s.rsrq = rsrq;
+  if (sinr !== undefined && !(sinr === 0 && rsrp !== undefined && rsrp > -100)) s.sinr = sinr;
   if (rssi !== undefined && rssi !== 0) s.rssi = rssi;
   return s;
 }

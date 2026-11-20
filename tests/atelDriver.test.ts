@@ -74,12 +74,17 @@ test('schd: sha1 مثل sha.min.js (hex صغير ٤٠ خانة)', () => {
   assert.match(schdSha('x', 'y'), /^[0-9a-f]{40}$/);
 });
 
-test('schd: الإشارة — الأصفار = ما فيه قراءة، و5G ينحط في خانات NR', () => {
+test('schd: الإشارة — بطاقة وحدة، الأصفار = ما فيه قراءة، SINR صفر مع إشارة قوية = فاضي', () => {
   assert.deepEqual(P.signalFrom({ RSRP: 0, RSSI: 0, RSRQ: 0, SINR: 0, Technology: 'LTE' }), { network: '4G' });
-  const s = P.signalFrom({ RSRP: -95, RSRQ: '-12', SINR: '9', RSSI: -66, Technology: '5G' });
-  assert.equal(s.network, '5G'); assert.equal(s.nrRsrp, -95); assert.equal(s.nrSinr, 9); assert.equal(s.rsrp, -95);
+  // أول تجربة ميدانية (٢١ نوفمبر): RSRP -61 · RSRQ -15 · SINR 0 · 5G
+  const s = P.signalFrom({ RSRP: -61, RSRQ: -15, SINR: 0, RSSI: -40, Technology: '5G' });
+  assert.equal(s.network, '5G'); assert.equal(s.nrActiveFromStatus, true);
+  assert.equal(s.rsrp, -61); assert.equal(s.rsrq, -15); assert.equal(s.sinr, undefined);
+  assert.equal(s.nrRsrp, undefined, 'ما نكرر نفس الأرقام في بطاقة 5G');
   const l = P.signalFrom({ RSRP: -101, RSRQ: -13, SINR: 3, RSSI: 'UnKnown', Technology: 'LTE+' });
-  assert.equal(l.network, '4G'); assert.equal(l.rsrp, -101); assert.equal(l.nrRsrp, undefined); assert.equal(l.rssi, undefined);
+  assert.equal(l.network, '4G'); assert.equal(l.rsrp, -101); assert.equal(l.sinr, 3); assert.equal(l.rssi, undefined);
+  // SINR صفر مع إشارة ضعيفة ممكن يكون حقيقي
+  assert.equal(P.signalFrom({ RSRP: -112, SINR: 0, Technology: 'LTE' }).sinr, 0);
 });
 
 test('schd: الدخول ← الجلسة تنرسل ← القراءة والشركة والموديل', async () => {
@@ -89,7 +94,7 @@ test('schd: الدخول ← الجلسة تنرسل ← القراءة والش
   await d.login('192.168.100.1', '', '482913');
   assert.equal(st.posts, 1);
   const s = await d.getSignal();
-  assert.equal(s.rsrp, -92); assert.equal(s.nrSinr, 14);
+  assert.equal(s.rsrp, -92); assert.equal(s.sinr, 14); assert.equal(s.nrRsrp, undefined);
   assert.equal(st.seenSid.at(-1), '057ae666-1dd2-11b2-9a7a-dfa46553cc1b');
   const n = await d.getNetworkInfo();
   assert.equal(n.operator, 'Salam'); assert.equal(n.connected, true); assert.equal(n.mode, '5G');

@@ -42,6 +42,7 @@ export class AtelSchdDriver implements RouterDriver {
   private creds: { user: string; password: string } | null = null;
   private reloginAt = 0;
   private info: { model?: string; imei?: string; fw?: string } | null = null;
+  private loggedKeys = false;
 
   private base(host = this.host) { return 'http://' + host.replace(/^https?:\/\//, '').replace(/\/+$/, ''); }
 
@@ -66,6 +67,11 @@ export class AtelSchdDriver implements RouterDriver {
   private async header(): Promise<any | null> {
     const { status, j } = await this.json(`/rest/1.0/WebHeader/?random=${Date.now()}`);
     if (status !== 200 || !isWebHeader(j)) return null;
+    // مرة وحدة: كل حقول WebHeader بقيمها (ما فيها أسرار) — نعرف منها لو فيه تردد/برج بأسماء ما نعرفها
+    if (!this.loggedKeys && j.Login === true) {
+      this.loggedKeys = true;
+      diag(`[atel] WebHeader: ${Object.entries(j).map(([k, v]) => `${k}=${String(v).slice(0, 24)}`).join(' · ').slice(0, 900)}`);
+    }
     return j;
   }
 
@@ -227,5 +233,5 @@ export class AtelSchdDriver implements RouterDriver {
 
 function cellsOf(s: Signal): CellTower[] {
   if (s.rsrp === undefined) return [];
-  return [{ kind: 'serving', tech: s.network === '5G' && s.nrRsrp !== undefined ? 'NR' : 'LTE', rsrp: s.rsrp, rsrq: s.rsrq, sinr: s.sinr, rssi: s.rssi }];
+  return [{ kind: 'serving', tech: 'LTE', rsrp: s.rsrp, rsrq: s.rsrq, sinr: s.sinr, rssi: s.rssi }];
 }
