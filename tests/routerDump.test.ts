@@ -453,3 +453,18 @@ test('TP-Link NX200: صفحة http «روح لـ https» ← الجامع ينت
   assert.ok(asked.includes('S/js/lib.js'));
   assert.ok(!files.some(f => f.p === '/index.html' && /go-https-modal/.test(f.t)));
 });
+
+test('LuCI بعد الدخول: نلحق روابط القائمة (عرض) ونترك الأوامر · اسم luci_username ما ينمسح', () => {
+  const { findRefs, scrub, LUCI_ACTION } = require('../src/services/routerDump');
+  const menu = ['status/overview', 'network/modem', 'modem/signal', 'network/iface_reconnect/wan', 'network/wireless_join', 'system/reboot', 'system/led_toggle', 'status/nr']
+    .map(x => `<a href="/cgi-bin/luci/;stok=0123456789abcdef/admin/${x}">x</a>`).join('');
+  const refs: string[] = findRefs(menu);
+  for (const ok of ['status/overview', 'network/modem', 'modem/signal', 'status/nr']) assert.ok(refs.includes(`/cgi-bin/luci/;stok=0123456789abcdef/admin/${ok}`), ok);
+  for (const bad of ['iface_reconnect', 'wireless_join', 'reboot', 'led_toggle']) assert.ok(!refs.some(r => r.includes(bad)), bad);
+  // صفحات الجامع الحالية (Pro7/WIS) ما تنحجب
+  for (const p of ['status/nr', 'modem/band', 'modem/cell', 'modem/network', 'modem/connect', 'lte/at_command', 'lte_sms/lte_inbox', 'network/setting', 'system/system'])
+    assert.ok(!LUCI_ACTION.test(`/cgi-bin/luci/;stok=0123456789abcdef/admin/${p}`), p);
+  const s = scrub('<input type="text" name="luci_username" value="root" /><input name="x" value="secret" />');
+  assert.ok(s.includes('value="root"'));
+  assert.ok(!s.includes('secret'));
+});

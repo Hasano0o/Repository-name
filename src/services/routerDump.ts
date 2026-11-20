@@ -17,6 +17,11 @@ import { fhBody, fhDecrypt, fhKey } from '../drivers/fiberhome/crypto';
 // مكتبات كبيرة ما تنعدّل — أسماؤها تكفي. ما نتخطى polyfill/vue-i18n/vue-router/axios/bootstrap بعد:
 // FiberHome يخبّي فيها RequireJS ودوال الاتصال ($post) وأسماء الإعدادات (تقرير ٢٦ أكتوبر) — صغيرة ونحتاجها
 const LUCI_DANGER = /\/cgi-bin\/luci.*\/(logout|reboot|reset|factory|flash\w*|sysupgrade|upgrade|restore|backup|poweroff|shutdown|apply|commit|save|call|exec|remove|delete)\b/i;
+/**
+ * روابط قائمة LuCI اللي نلحقها بعد الدخول (سلام OpenWrt — ٢٠ نوفمبر): القائمة فيها روابط تسوي شي بمجرد GET في LuCI القديم
+ * (iface_reconnect · wireless_join · led_toggle …) — أي جزء من المسار فيه كلمة من هذي ما نفتحه.
+ */
+export const LUCI_ACTION = /\/cgi-bin\/luci\/.*(logout|reboot|reset|factory|flash|upgrade|restore|backup|poweroff|shutdown|apply|commit|save|call|exec|remove|delete|del_|_del|reconnect|disconnect|connect_|restart|start|stop|toggle|enable|disable|join|wps|ping|trace|lookup|clear|flush|kill|unlock|lock_|_lock|send|run|submit|switch|set_|_set|scan)/i;
 // libjquery.js (هواوي وأشباهها — Soyealink…) مو jQuery بس: فيه CryptoJS و SCRAM و RSA حقة الدخول — لازم ينجمع
 // (Soyealink SNT151/SLT869 ٧ نوفمبر: 108006 بكلمة صحيحة، والملف اللي يشرح ليش كان متخطّى)
 const SKIP = /(copyrightPage|opensource|privatePolicy|\/faq[\w-]*\.html|chunk-vendors|(?:^|[^b])jquery(?!\.tp)|element-plus|elementui|chunk-libs|echarts|tinymce|lottie|jtopo|topo\.min|\/element(\.min)?\.js|font-?awesome|moment|lodash|highcharts|chart\.min|swiper|\.min\.js.*(forge|elliptic))/i;
@@ -102,6 +107,11 @@ export function findRefs(text: string): string[] {
   // (جيب M2A-77، ٨ نوفمبر — ~٤٠ صفحة: الترددات وقفل البرج ومعلومات الشبكة ما تبان كروابط عادية)
   if (/\.load\(/.test(text) && /substring\(2\)[^;]{0,40}\.html/.test(text)) {
     for (const m of text.matchAll(/href=["']#\/([\w-]{2,40})["']/g)) refs.add(`${m[1]}.html`);
+  }
+  // قائمة LuCI بعد الدخول (سلام OpenWrt — ٢٠ نوفمبر): <a href="/cgi-bin/luci/;stok=…/admin/…"> صفحات عرض بدون امتداد —
+  // صفحات المودم والإشارة بأسماء تختلف من راوتر لراوتر، فنلحق القائمة نفسها بدل التخمين. أي رابط فيه أمر (LUCI_ACTION) ما ينفتح.
+  for (const m of text.matchAll(/href=["'](\/cgi-bin\/luci\/(?:;stok=[0-9a-f]{8,64}\/)?admin\/[\w\/-]{2,80})["']/gi)) {
+    if (!LUCI_ACTION.test(m[1])) refs.add(m[1]);
   }
   // Webpack: {"chunk-xxx":"hash"} + static/js/
   if (/static\/js\//.test(text)) {
@@ -203,7 +213,8 @@ export function angularChunks(text: string): string[] {
 export function scrub(text: string): string {
   return text
     .replace(/(<meta[^>]+name=["']?csrf[\w-]*["']?[^>]*content=)["'][^"']*["']/gi, '$1"«محذوف»"')
-    .replace(/(<input[^>]*\svalue=)["'][^"']*["']/gi, '$1"«محذوف»"');
+    // اسم مستخدم LuCI المعبّى بالصفحة (root/admin) مو سر — نخليه عشان نعرف وش الراوتر يبي (سلام OpenWrt — ٢٠ نوفمبر)
+    .replace(/<input[^>]*>/gi, tag => /name=["']?luci_username\b/i.test(tag) ? tag : tag.replace(/(\svalue=)["'][^"']*["']/i, '$1"«محذوف»"'));
 }
 
 /** أصل الرابط (http://host) — للـ Referer */
@@ -306,7 +317,7 @@ export async function collectRouterFiles(host: string, onStep?: (n: number) => v
     seen.add(p);
     if (SKIP.test(p)) { skipped.push(p); continue; }
     // LuCI بعد الدخول: روابط القائمة فيها خروج/إعادة تشغيل/ضبط مصنع… — ما نفتحها (الخروج يقتل الجلسة ونخسر الباقي)
-    if (LUCI_DANGER.test(p)) { skipped.push(`${p} (ما نفتحه — أمر)`); continue; }
+    if (LUCI_DANGER.test(p) || (/\/admin\//.test(p) && LUCI_ACTION.test(p))) { skipped.push(`${p} (ما نفتحه — أمر)`); continue; }
     if (ES5_TWIN.test(p) && (seen.has(p.replace(/-es5\./i, '-es2015.')) || queue.includes(p.replace(/-es5\./i, '-es2015.')))) { skipped.push(p); continue; }
     let r = await get(base + p);
     // انقطع الطلب (مو مهلة) ← مرة ثانية: الآيفون يعيد استخدام اتصال قفله الراوتر (Inseego MiFi 8000 — FULL ٧ نوفمبر: ١٢ صفحة «ما رد»)

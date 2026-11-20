@@ -98,3 +98,36 @@ test('Pro7: الدمج «60+270+60+60» ← PCI الأساسي 60 والقناة
   assert.equal(sig.pci, '60'); assert.equal(sig.earfcn, '1850'); assert.equal(sig.caCount, 4); assert.equal(sig.band, 'B3');
   assert.equal(sig.nrPci, '86'); assert.equal(sig.nrArfcn, '647424');
 });
+
+/** سلام OpenWrt (ثيم atmaterial_red، «Salam - LuCI» — ملف ١١ نوفمبر): العضو يكتب admin والراوتر يبي اسمه المعبّى بالصفحة */
+test('LuCI سلام: admin رُفض ← نجرّب الاسم المعبّى (root) وننجح', async () => {
+  const SALAM = '<html><head><title>Salam - LuCI</title></head><body><form method="post" action="/cgi-bin/luci"><input class="cbi-input-user" type="text" name="luci_username" value="root" /><input class="cbi-input-password" type="password" name="luci_password" /></form></body></html>';
+  const tried: string[] = [];
+  (globalThis as any).fetch = async (url: string, init?: any) => {
+    const u = new URL(url);
+    const res = (status: number, body: string, finalUrl = url) => ({ ok: status < 400, status, url: finalUrl, headers: { get: () => 'text/html' }, text: async () => body } as any);
+    if (u.pathname === '/cgi-bin/luci' && init?.method === 'POST') {
+      const b = new URLSearchParams(String(init.body));
+      tried.push(b.get('luci_username') ?? '');
+      if (b.get('luci_username') === 'root' && b.get('luci_password') === 'admin') return res(200, '<html><head><title>Salam - Overview</title></head><body>ok</body></html>', `http://${u.host}/cgi-bin/luci/;stok=00aa11bb22cc33dd/`);
+      return res(403, SALAM);
+    }
+    if (u.pathname.startsWith('/cgi-bin/luci')) return res(403, SALAM);
+    return res(404, '');
+  };
+  const d = new LuciDriver();
+  assert.equal(await d.detect('192.168.1.1'), true);
+  assert.equal(d.name, 'Salam (OpenWrt)');
+  await d.login('192.168.1.1', 'admin', 'admin');
+  assert.deepEqual(tried, ['admin', 'root']);
+  assert.ok(d.afterLoginPages()[0].includes(';stok=00aa11bb22cc33dd'));
+});
+
+test('LuCI: ترتيب الأسماء بدون تكرار و٣ بالكثير · قراءة الاسم المعبّى', () => {
+  assert.deepEqual(LuciDriver.userCandidates('admin', 'root'), ['admin', 'root']);
+  assert.deepEqual(LuciDriver.userCandidates('', ''), ['root', 'admin']);
+  assert.deepEqual(LuciDriver.userCandidates('user', 'super'), ['user', 'super', 'root']);
+  assert.equal(LuciDriver.prefilledUser('<input type="text" name="luci_username" value="root" />'), 'root');
+  assert.equal(LuciDriver.prefilledUser('<input value="admin" name="luci_username">'), 'admin');
+  assert.equal(LuciDriver.prefilledUser('<input name="luci_username" value="«محذوف»" />'), '');
+});

@@ -63,29 +63,54 @@ export class LuciDriver implements RouterDriver {
     }
   }
 
+  /** اسم المستخدم المعبّى في فورم الدخول (value="root" في Pro7) — '' لو ما فيه */
+  static prefilledUser(html: string): string {
+    const tag = html.match(/<input[^>]*name=["']?luci_username\b[^>]*>/i)?.[0] ?? '';
+    const v = tag.match(/\svalue=["']([^"']{1,32})["']/i)?.[1]?.trim() ?? '';
+    return /^[\w.@-]{1,32}$/.test(v) ? v : '';
+  }
+
+  /**
+   * الأسماء اللي نجرّبها بالترتيب: اللي كتبه العضو ← المعبّى بالصفحة ← root ← admin (بدون تكرار، ٣ بالكثير).
+   * سلام OpenWrt (١١ نوفمبر): العضو كتب admin والراوتر ردّ الفورم — OpenWrt الأصلي اسمه root، وصفحتهم فيها اسم معبّى.
+   */
+  static userCandidates(entered: string, prefilled: string): string[] {
+    const out: string[] = [];
+    for (const u of [entered.trim(), prefilled, 'root', 'admin']) if (u && !out.includes(u)) out.push(u);
+    return out.slice(0, 3);
+  }
+
   async login(host: string, username: string, password: string): Promise<void> {
     if (!isLanHost(host)) throw new Error('العنوان لازم يكون محلي (192.168 / 10 / 172)');
     this.host = host;
     this.stok = '';
-    const body = `luci_username=${encodeURIComponent(username || 'admin')}&luci_password=${encodeURIComponent(password)}`;
-    // الفورم يرسل لنفس الرابط — نجاح = 302 لصفحة الإدارة (fetch يلحقه) + كوكي sysauth في الجرة
-    const r = await http(`${this.base()}/cgi-bin/luci`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Referer: `${this.base()}/cgi-bin/luci` },
-      body,
-    }, 12000);
-    const t = await r.text();
-    const st = (r.url || '').match(/;stok=([0-9a-f]{8,64})/i)?.[1] ?? t.match(/;stok=([0-9a-f]{8,64})/i)?.[1] ?? '';
-    // رجع لنا فورم الدخول نفسه = الكلمة غلط (LuCI ما يعطي رمز خطأ، يعيد الصفحة)
-    if (/name=["']?luci_password/i.test(t) && !st) {
-      throw new Error('اسم المستخدم أو كلمة المرور غلط — جرّب اللي على الملصق تحت الراوتر (admin / admin)');
+    let pre = '';
+    try {
+      const pg = await http(`${this.base()}/cgi-bin/luci`, {}, 6000);
+      pre = LuciDriver.prefilledUser(await pg.text());
+    } catch {}
+    const users = LuciDriver.userCandidates(username || '', pre);
+    for (const user of users) {
+      const body = `luci_username=${encodeURIComponent(user)}&luci_password=${encodeURIComponent(password)}`;
+      // الفورم يرسل لنفس الرابط — نجاح = 302 لصفحة الإدارة (fetch يلحقه) + كوكي sysauth في الجرة
+      const r = await http(`${this.base()}/cgi-bin/luci`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Referer: `${this.base()}/cgi-bin/luci` },
+        body,
+      }, 12000);
+      const t = await r.text();
+      const st = (r.url || '').match(/;stok=([0-9a-f]{8,64})/i)?.[1] ?? t.match(/;stok=([0-9a-f]{8,64})/i)?.[1] ?? '';
+      // رجع لنا فورم الدخول نفسه = الاسم/الكلمة غلط (LuCI ما يعطي رمز خطأ، يعيد الصفحة) ← نجرّب الاسم اللي بعده
+      if (/name=["']?luci_password/i.test(t) && !st) continue;
+      this.stok = st;
+      this.nameFrom(t);
+      if (isWisPage(t)) {
+        this.wis = true;
+        if (/wisnetworks/i.test(t) || this.name === 'OpenWrt (LuCI)') this.name = 'WIS 5G CPE (OpenWrt)';
+      }
+      return;
     }
-    this.stok = st;
-    this.nameFrom(t);
-    if (isWisPage(t)) {
-      this.wis = true;
-      if (/wisnetworks/i.test(t) || this.name === 'OpenWrt (LuCI)') this.name = 'WIS 5G CPE (OpenWrt)';
-    }
+    throw new Error(`اسم المستخدم أو كلمة المرور غلط — جرّبنا (${users.join(' / ')}). جرّب الكلمة اللي على الملصق تحت الراوتر`);
   }
 
   async logout(): Promise<void> {
@@ -124,10 +149,10 @@ export class LuciDriver implements RouterDriver {
 
   /**
    * software = رقم «نسخة الصفحات اللي نطلبها» — ملفات FULL تنرسل مرة لكل بصمة (الموديل|software)،
-   * فلما نضيف صفحات جديدة للجامع نرفع الرقم ويرجع الكرت مرة وحدة. (2 = صفحات المودم بالاسم، 3 = بعد إصلاح تصادم الأسماء — ١ نوفمبر)
+   * فلما نضيف صفحات جديدة للجامع نرفع الرقم ويرجع الكرت مرة وحدة. (2 = صفحات المودم بالاسم، 3 = بعد إصلاح تصادم الأسماء — ١ نوفمبر، 5 = نلحق قائمة LuCI كلها — ٢٠ نوفمبر)
    */
   async getDeviceDetails(): Promise<DeviceDetails> {
-    return { model: this.name.replace(/ \(OpenWrt\)$/, ''), software: 'luci-pages-4' };
+    return { model: this.name.replace(/ \(OpenWrt\)$/, ''), software: 'luci-pages-5' };
   }
 
   /**
