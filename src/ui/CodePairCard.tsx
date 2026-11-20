@@ -12,7 +12,8 @@ import { C, tBg, tFg } from './theme';
 import { FONT } from './fonts';
 import { sheet } from '../i18n';
 
-const toLatin = (s: string) => s.replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/\D/g, '');
+/** الأرقام العربية ← إنجليزية، ونشيل المسافات — الحروف تبقى (بعض الأجهزة رمزها حروف وأرقام) */
+const toLatin = (s: string) => s.replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[^A-Za-z0-9]/g, '');
 
 export function CodePairCard({ r, title, hint, onDone }: { r: SavedRouter; title: string; hint: string; onDone: () => void }) {
   const [code, setCode] = useState('');
@@ -22,7 +23,7 @@ export function CodePairCard({ r, title, hint, onDone }: { r: SavedRouter; title
 
   const submit = async () => {
     const c = toLatin(code);
-    if (c.length !== 8) { setMsg('الرمز ٨ أرقام'); return; }
+    if (c.length < 4) { setMsg('اكتب الرمز اللي على شاشة الجهاز'); return; }
     setBusy(true); setMsg('');
     try {
       await withSession(r, async d => {
@@ -43,11 +44,12 @@ export function CodePairCard({ r, title, hint, onDone }: { r: SavedRouter; title
       <View style={s.row}>
         <TextInput
           value={code}
-          onChangeText={t => { setCode(toLatin(t).slice(0, 8)); setMsg(''); }}
-          placeholder="12345678"
+          onChangeText={t => { setCode(toLatin(t).slice(0, 12)); setMsg(''); }}
+          placeholder="الرمز"
           placeholderTextColor={C.sub}
-          keyboardType="number-pad"
-          maxLength={8}
+          autoCapitalize="none"
+          autoCorrect={false}
+          maxLength={12}
           style={s.input}
           editable={!busy && !ok}
           onSubmitEditing={submit}

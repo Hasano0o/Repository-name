@@ -100,7 +100,7 @@ test('MONDO: العميل — رمز ← جلسة ← الأمر يبدّل c/n 
   const post = async (f: any) => { posts.push(f); const r = await (globalThis as any).fetch('http://192.168.1.1/cgi/mapi.cgi', { method: 'POST', body: M.mondoForm(f) }); return JSON.parse(await r.text()); };
   const c = new M.MondoClient(post);
   await assert.rejects(c.call('status'), (e: any) => M.isMondoCodeError(e));
-  await assert.rejects(c.pair('123'), /٨ أرقام/);
+  await assert.rejects(c.pair('12'), /كما هو/);
   await assert.rejects(c.pair('87654321'), /غلط/);
   await c.pair('12345678');
   const r1 = await c.call('status');

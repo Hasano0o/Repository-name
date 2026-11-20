@@ -72,8 +72,9 @@ export class MondoClient {
   }
 
   async pair(code: string): Promise<void> {
-    const p = String(code ?? '').replace(/\D/g, '');
-    if (p.length !== 8) throw new Error('الرمز ٨ أرقام — تلقاه على شاشة الجهاز: القائمة ← MONDO ← رمز الويب');
+    // صفحة v216 تطلب ٨ أرقام، بس جهاز عضو (٢١ نوفمبر) طلّع رمز ٦ خانات — نرسل اللي كتبه كما هو والجهاز يحكم
+    const p = String(code ?? '').replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/\s+/g, '');
+    if (!/^[A-Za-z0-9]{4,12}$/.test(p)) throw new Error('اكتب الرمز اللي على شاشة الجهاز كما هو (القائمة ← MONDO ← رمز الويب)');
     const r = await this.post({ a: 'l', p });
     const s = mondoAccept(r);
     if (!s) throw new Error(r?.e === 'pair_expired'

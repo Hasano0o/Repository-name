@@ -264,7 +264,7 @@ export class InseegoDriver implements RouterDriver {
     const host = this.host;
     this.codePair = {
       title: 'رمز MONDO',
-      hint: 'جهازك عليه أداة MONDO للتثبيت. من شاشة الجهاز: القائمة ← MONDO ← رمز الويب، واكتب الرقم (٨ أرقام). الجلسة تبقى ١٥ دقيقة من آخر استخدام.',
+      hint: 'جهازك عليه أداة MONDO للتثبيت. من شاشة الجهاز: القائمة ← MONDO ← رمز الويب، واكتب الرمز كما هو. الجلسة تبقى ١٥ دقيقة من آخر استخدام.',
       needed: async () => {
         if (!this.mondo) return false;
         if (this.mondo.paired) return false;
