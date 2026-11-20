@@ -83,21 +83,35 @@ export function scrubRest(text: string): string {
 }
 
 /**
- * التردد ورقم الخلية من CellularServiceStatus (FULL ٢١ نوفمبر — الصفحة الرئيسية في script.js):
- *   curBand = currentPrimaryCarrierComponent ← «B»+رقم أو «N»+رقم حسب التقنية · CurrentGlobalCellId (hex مثل "1A2D101").
- * في NSA الناقل الأساسي 4G (المرساة) ← B. في SA ← N. نقبل القيمة رقم أو «B3» أو «LTE BAND 3» أو «n78».
+ * CellularServiceStatus (AUTH ٢١ نوفمبر ١:٠١ — عضو جدة، NR5G-NSA): في NSA القيم «4G / 5G» بخانة وحدة:
+ *   currentPrimaryCarrierComponent "B1 / n78" · CurrentSignalStrengthInRSRP "-61 / -52" · …InRSRQ "-16 / -11" · …InSNR "3 / 24"
+ *   CurrentPCI "31" · CurrentGlobalCellId "3756C0B" (hex) · currentSecondaryCarrierComponent "UnKnown" (الثانوي — ما يعرضه)
+ * في 4G بس أو SA: قيمة وحدة.
  */
-export function bandFrom(raw: unknown, technology: unknown): { band?: string; nrBand?: string } {
-  const r = str(raw);
-  if (!r) return {};
-  const m = /(\d{1,3})/.exec(r);
-  if (!m) return {};
-  const t = String(technology ?? '').toUpperCase();
-  const nr = /^\s*n(?!\/a)|\bNR\b|NR\s*BAND/i.test(r) || (/SA\b/.test(t) && !/NSA/.test(t) && /5G|NR/.test(t));
-  return nr ? { nrBand: 'n' + m[1] } : { band: 'B' + m[1] };
+export function splitDual(v: unknown): string[] {
+  const s = str(v);
+  if (!s) return [];
+  return s.split('/').map(x => x.trim()).filter(Boolean);
 }
 
-/** يدمج CellularServiceStatus مع قراءة WebHeader — بس الخانات الناقصة (WebHeader هو الأساس) */
+/** التردد: "B1 / n78" ← {band:B1, nrBand:n78} · "3" ← B3 (أو n3 في SA) · "n41" ← n41 */
+export function bandFrom(raw: unknown, technology: unknown): { band?: string; nrBand?: string } {
+  const parts = splitDual(raw);
+  if (!parts.length) return {};
+  const t = String(technology ?? '').toUpperCase();
+  const sa = /SA\b/.test(t) && !/NSA/.test(t) && /5G|NR/.test(t);
+  const out: { band?: string; nrBand?: string } = {};
+  parts.forEach((p, i) => {
+    const m = /(\d{1,3})/.exec(p);
+    if (!m) return;
+    const nr = /^\s*n(?!\/a)|\bNR\b|NR\s*BAND/i.test(p) || (parts.length > 1 ? i === 1 && !/^\s*b/i.test(p) : sa);
+    if (nr) { if (!out.nrBand) out.nrBand = 'n' + m[1]; }
+    else if (!out.band) out.band = 'B' + m[1];
+  });
+  return out;
+}
+
+/** يدمج CellularServiceStatus مع قراءة WebHeader: الخانات الناقصة + قراءة 5G (الجزء الثاني) لو NSA */
 export function mergeService(s: Signal, svc: any): Signal {
   if (!svc || typeof svc !== 'object') return s;
   const tech = svc.CurrentWirelessTechnology ?? '';
@@ -111,9 +125,34 @@ export function mergeService(s: Signal, svc: any): Signal {
     const n = parseInt(cid, 16);
     if (Number.isFinite(n) && cid.length >= 5) out.enodebId = String(Math.floor(n / 256));
   }
-  if (out.rsrp === undefined) { const v = num(svc.CurrentSignalStrengthInRSRP); if (v !== undefined && v !== 0) out.rsrp = v; }
-  if (out.rssi === undefined) { const v = num(svc.CurrentSignalStrengthInRSSI); if (v !== undefined && v !== 0) out.rssi = v; }
+  const pci = str(svc.CurrentPCI);
+  if (pci && /^\d+$/.test(pci) && !out.pci) out.pci = pci;
+  const rsrp = splitDual(svc.CurrentSignalStrengthInRSRP).map(num);
+  const rsrq = splitDual(svc.CurrentSignalStrengthInRSRQ).map(num);
+  const snr = splitDual(svc.CurrentSignalToNoiseLevelInSNR).map(num);
+  const ok = (v?: number) => v !== undefined && v !== 0;
+  // الجزء الأول = 4G (الأساسي)
+  if (out.rsrp === undefined && ok(rsrp[0])) out.rsrp = rsrp[0];
+  if (out.rsrq === undefined && ok(rsrq[0])) out.rsrq = rsrq[0];
+  if (out.sinr === undefined && snr[0] !== undefined && out.rsrp !== undefined) out.sinr = snr[0];
+  // الجزء الثاني = 5G (NSA) ← بطاقة 5G بأرقامها الحقيقية
+  const dual = rsrp.length > 1 || !!b.nrBand && !!b.band;
+  if (dual && ok(rsrp[1])) {
+    out.nrRsrp = rsrp[1];
+    if (ok(rsrq[1])) out.nrRsrq = rsrq[1];
+    if (snr[1] !== undefined) out.nrSinr = snr[1];
+    out.nrActiveFromStatus = true;
+    out.network = '5G';
+  }
+  if (out.rssi === undefined) { const v = num(svc.CurrentSignalStrengthInRSSI); if (ok(v)) out.rssi = v; }
   return out;
+}
+
+/** الاستهلاك من DataUsageStatisticsGetAll (من بداية الدورة) */
+export function usageFrom(j: any): { downloadBytes: number; uploadBytes: number } | null {
+  const d = Number(j?.TotalBytesReceived), u = Number(j?.TotalBytesTransmitted);
+  if (!Number.isFinite(d) || !Number.isFinite(u) || d < 0 || u < 0) return null;
+  return { downloadBytes: d, uploadBytes: u };
 }
 
 /** متصل؟ — ConnectStatus «CONNECTED» (الصفحة تقارن بالحروف الكبيرة) */

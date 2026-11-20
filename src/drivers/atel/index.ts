@@ -13,7 +13,7 @@
  *    DeviceInfo ← DeviceInfoModelNumber · DeviceInfoIMEI · DeviceInfoModemFwVersion
  *  • ما شفنا في صفحاته لا ترددات ولا برج (ملفات bengalSettings/*.js فاضية ~١٣٠ بايت) — ننتظر FULL بعد الدخول.
  */
-import { RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, DeviceDetails } from '../types';
+import { RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, DeviceDetails, Usage } from '../types';
 import { sha1 } from '@noble/hashes/legacy';
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
@@ -23,7 +23,7 @@ import { isLanHost } from '../../utils/host';
 import { buildSnapshot } from '../../utils/snapshot';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import type { ModelProfile } from '../models';
-import { isSchdPage, isWebHeader, schdLoginBody, signalFrom, mergeService, connectedOf, techOf, str, scrubRest } from './parse';
+import { isSchdPage, isWebHeader, schdLoginBody, signalFrom, mergeService, usageFrom, connectedOf, techOf, str, scrubRest } from './parse';
 
 export const schdSha = (pw: string, token: string) => bytesToHex(sha1(utf8ToBytes(pw + token)));
 
@@ -35,7 +35,7 @@ type Res = { status: number; text: string };
 export class AtelSchdDriver implements RouterDriver {
   readonly id = 'atel';
   name = 'سلام HomeFi Max (JW515)';
-  readonly capabilities: Capability[] = ['signal'];
+  readonly capabilities: Capability[] = ['signal', 'usage'];
 
   private host = '';
   private sid = '';
@@ -198,6 +198,14 @@ export class AtelSchdDriver implements RouterDriver {
     return { operator: str(h.PLMN), connected: connectedOf(h), mode: techOf(h), supports5g: true };
   }
 
+  /** الاستهلاك من بداية دورة الراوتر (DataUsageStatisticsGetAll — AUTH ٢١ نوفمبر) */
+  async getUsage(): Promise<Usage> {
+    const { status, j } = await this.json(`/rest/1.0/DataUsageStatisticsGetAll/?random=${Date.now()}`);
+    const u = status === 200 ? usageFrom(j) : null;
+    if (!u) throw new Error('الراوتر ما أعطى عدّاد الاستهلاك');
+    return u;
+  }
+
   async getSnapshot(): Promise<SignalSnapshot> {
     const sig = await this.getSignal();
     return buildSnapshot(sig, [], cellsOf(sig), { driverId: this.id, driverName: this.name });
@@ -217,7 +225,9 @@ export class AtelSchdDriver implements RouterDriver {
     let op: string | undefined;
     try { op = str((await this.header())?.PLMN); } catch {}
     const model = this.info?.model ? `سلام ${this.info.model}` : this.name;
-    return { model, imei: this.info?.imei, operator: op, software: `${this.info?.fw ?? 'schd'}|atel-pages-2` };
+    let wanIp: string | undefined;
+    try { const { j } = await this.json(`/rest/1.0/CellularDataConnectionStatus/?random=${Date.now()}`); wanIp = str(j?.CurrentExternalIPv4Address); } catch {}
+    return { model, imei: this.info?.imei, operator: op, wanIp, software: `${this.info?.fw ?? 'schd'}|atel-pages-2` };
   }
 
   /** الجامع (FULL/AUTH): صفحة بالجلسة — GET بس، والخطرة ما تنفتح */
@@ -256,5 +266,10 @@ export class AtelSchdDriver implements RouterDriver {
 function cellsOf(s: Signal): CellTower[] {
   if (s.rsrp === undefined) return [];
   const b = s.band ? Number(String(s.band).replace(/\D/g, '')) : undefined;
-  return [{ kind: 'serving', tech: 'LTE', band: b || undefined, cellId: s.cellId, pci: s.pci, rsrp: s.rsrp, rsrq: s.rsrq, sinr: s.sinr, rssi: s.rssi }];
+  const out: CellTower[] = [{ kind: 'serving', tech: 'LTE', band: b || undefined, cellId: s.cellId, pci: s.pci, rsrp: s.rsrp, rsrq: s.rsrq, sinr: s.sinr, rssi: s.rssi }];
+  if (s.nrRsrp !== undefined) {
+    const nb = s.nrBand ? Number(String(s.nrBand).replace(/\D/g, '')) : undefined;
+    out.push({ kind: 'serving', tech: 'NR', band: nb || undefined, rsrp: s.nrRsrp, rsrq: s.nrRsrq, sinr: s.nrSinr });
+  }
+  return out;
 }

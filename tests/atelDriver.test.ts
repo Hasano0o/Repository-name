@@ -110,6 +110,21 @@ test('schd: التردد ورقم الخلية من CellularServiceStatus', () =
   assert.deepEqual(P.mergeService({ rsrp: -70 }, null), { rsrp: -70 });
 });
 
+test('schd: NSA — «B1 / n78» و «-61 / -52» ← بطاقة 4G وبطاقة 5G بأرقامها (AUTH ٢١ نوفمبر)', () => {
+  const svc = { CurrentPCI: '31', CurrentGlobalCellId: '3756C0B', CurrentSignalStrengthInRSRP: '-61 / -52', CurrentSignalStrengthInRSRQ: '-16 / -11',
+    CurrentSignalToNoiseLevelInSNR: '3 / 24', CurrentWirelessTechnology: 'NR5G-NSA', currentPrimaryCarrierComponent: 'B1 / n78', currentSecondaryCarrierComponent: 'UnKnown', CurrentSignalStrengthInRSSI: -27 };
+  assert.deepEqual(P.bandFrom('B1 / n78', 'NR5G-NSA'), { band: 'B1', nrBand: 'n78' });
+  const base = P.signalFrom({ RSRP: -61, RSRQ: -16, SINR: 3, RSSI: -27, PCI: '31', Technology: 'NR5G-NSA', Login: true });
+  const m = P.mergeService(base, svc);
+  assert.equal(m.band, 'B1'); assert.equal(m.nrBand, 'n78');
+  assert.equal(m.rsrp, -61); assert.equal(m.nrRsrp, -52); assert.equal(m.nrRsrq, -11); assert.equal(m.nrSinr, 24);
+  assert.equal(m.cellId, '3756C0B'); assert.equal(m.pci, '31');
+  // 4G بس: ما فيه بطاقة 5G
+  const l = P.mergeService({ rsrp: -90 }, { currentPrimaryCarrierComponent: 'B3', CurrentSignalStrengthInRSRP: '-90', CurrentWirelessTechnology: 'LTE' });
+  assert.equal(l.band, 'B3'); assert.equal(l.nrRsrp, undefined);
+  assert.deepEqual(P.usageFrom({ TotalBytesTransmitted: 60466375062, TotalBytesReceived: 669638085474 }), { downloadBytes: 669638085474, uploadBytes: 60466375062 });
+});
+
 test('schd: الدخول ← الجلسة تنرسل ← القراءة والشركة والموديل', async () => {
   const st = router();
   const d = new AtelSchdDriver();
