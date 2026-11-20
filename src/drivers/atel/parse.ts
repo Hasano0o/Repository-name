@@ -70,7 +70,8 @@ export function signalFrom(h: any): Signal {
  * ردود REST في ملف FULL: الأسرار تنحذف قبل ما تطلع من الجوال (FULL ٢١ نوفمبر وصل فيه WiFiKey و IMEI و SessionIdentifier).
  * المفتاح كامل (مو كلمة لحالها) لأن أسماءهم ملصوقة: WiFiKey · DeviceInfoIMEI · ConnectedDeviceMacAddress.
  */
-const REST_SECRET = /(key|passw|psk|secret|token|session|imei|imsi|iccid|esn|meid|serial|mac|ssid|msisdn|mobilenumber|phone|ipv6|answer)/i;
+// MDN = رقم جوال الشريحة (AccountInfoMDN — AUTH ٢١ نوفمبر ١:٥١ طلع فيه رقم العضو)
+const REST_SECRET = /(key|passw|psk|secret|token|session|imei|imsi|iccid|esn|meid|serial|mac|ssid|msisdn|mobilenumber|phone|ipv6|answer|mdn|accountinfomin|number)/i;
 export function scrubRest(text: string): string {
   const walk = (v: any, k = ''): any => {
     if (Array.isArray(v)) return v.map(x => walk(x));

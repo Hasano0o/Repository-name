@@ -94,6 +94,7 @@ test('schd: FULL ٢١ نوفمبر — PCI و NR5G-NSA من WebHeader، والأ
   const out = P.scrubRest(JSON.stringify({ WiFiSSID: 'JW515_1', WiFiKey: 'abcd1234', WiFiChannel: 0, DeviceInfoIMEI: '860000000000001', DeviceInfoSwVersion: 'QC50Q', SessionIdentifier: 'x-y', SecureToken: 'AB', ok: true }));
   for (const bad of ['abcd1234', '860000000000001', 'JW515_1', 'x-y', '"AB"']) assert.equal(out.includes(bad), false, bad);
   assert.ok(out.includes('QC50Q')); assert.ok(out.includes('"WiFiChannel": 0'));
+  assert.equal(P.scrubRest(JSON.stringify({ AccountInfoMDN: '966500000000' })).includes('966500000000'), false, 'رقم الجوال');
   const arr = P.scrubRest(JSON.stringify([{ ConnectedDeviceMacAddress: '34:ba:9a:00:00:01', ConnectedDeviceIPv4Address: '192.168.100.112' }]));
   assert.equal(arr.includes('34:ba'), false); assert.ok(arr.includes('192.168.100.112'));
 });
