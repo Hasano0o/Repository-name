@@ -227,7 +227,7 @@ export class AtelSchdDriver implements RouterDriver {
     const model = this.info?.model ? `سلام ${this.info.model}` : this.name;
     let wanIp: string | undefined;
     try { const { j } = await this.json(`/rest/1.0/CellularDataConnectionStatus/?random=${Date.now()}`); wanIp = str(j?.CurrentExternalIPv4Address); } catch {}
-    return { model, imei: this.info?.imei, operator: op, wanIp, software: `${this.info?.fw ?? 'schd'}|atel-pages-2` };
+    return { model, imei: this.info?.imei, operator: op, wanIp, software: `${this.info?.fw ?? 'schd'}|atel-pages-3` };
   }
 
   /** الجامع (FULL/AUTH): صفحة بالجلسة — GET بس، والخطرة ما تنفتح */
@@ -248,11 +248,19 @@ export class AtelSchdDriver implements RouterDriver {
       'DataUsageStatisticsGetAll', 'ConnectedDevicesStatus', 'AccountInfo', 'Notification', 'DisplayFormatSettings',
       'WebHeader', 'AccessControl', 'DeviceInfo', 'BoardInfo', 'SMSStatus', 'NetworkInfo', 'WWANStatus', 'WANStatus', 'WANInfo',
       'ModemInfo', 'ModemStatus', 'SignalInfo', 'RadioInfo', 'CellInfo', 'LTEInfo', 'NRInfo', 'BandInfo', 'BandLock', 'CellLock', 'NetworkMode',
-      'NetworkSettings', 'SIMInfo', 'SIMStatus', 'ConnectedDevices', 'DataUsage', 'DeviceStatus', 'SystemInfo', 'APNSettings', 'WiFiSettings', 'LabTestInfo']
+      'NetworkSettings', 'SIMInfo', 'SIMStatus', 'ConnectedDevices', 'DataUsage', 'DeviceStatus', 'SystemInfo', 'APNSettings', 'WiFiSettings', 'LabTestInfo',
+      // ٢١ نوفمبر: دوّرنا على تحكم بالترددات مخفي (الصفحة ما تعرضه) — أسماء بنفس أسلوب «Cellular*» وثوابت mifienums
+      // (PREFERRED_TECHNOLOGY_* · MNSSTATUS_*). GET بس = قراءة؛ اللي ما يرد يتسجّل «ما وصل».
+      'CellularNetworkSettings', 'CellularNetworkSelection', 'CellularTechnologySettings', 'CellularBandSettings', 'CellularBandSelection',
+      'CellularBandLock', 'CellularCellLock', 'CellularRadioSettings', 'CellularProfiles', 'CellularProfileSettings', 'CellularServiceInfo',
+      'NetworkSelection', 'ManualNetworkSelection', 'MNSStatus', 'MNSList', 'PreferredTechnology', 'TechnologySettings', 'TechnologyPreference',
+      'BandSelection', 'BandSettings', 'LTEBandSettings', 'NRBandSettings', 'LTEBands', 'RFSettings', 'RadioSettings', 'EngineeringMode',
+      'EngineeringInfo', 'DebugInfo', 'DiagInfo', 'Diagnostics', 'ModemSettings', 'CarrierAggregation', 'CAInfo', 'NeighborCells', 'CellScan']
       .map(n => `/rest/1.0/${n}/`);
     const html = ['home', 'apps_home', 'LabTestInfo', 'InvalidSIM', 'error', 'messages/messages', 'connectedDevices/connected_devices',
       'bengalSettings/bengal_settings', 'bengalSettings/advanced_settings', 'bengalSettings/adv_firewall_set', 'bengalSettings/vpn_settings',
       'bengalSettings/bengal_admin_mobile', 'bengalSettings/network_settings', 'bengalSettings/apn_settings', 'bengalSettings/band_settings',
+      'bengalSettings/network_selection', 'bengalSettings/band_lock', 'bengalSettings/cell_lock', 'bengalSettings/lte_settings', 'engineering', 'engineer', 'debug', 'diag', 'labtest',
       'about/about_bengal', 'about/about']
       .map(n => `/schd/html/${n}.html`);
     const js = ['apps_home', 'bengalSettings/bengal_settings', 'bengalSettings/advanced_settings', 'bengalSettings/adv_firewall_set',

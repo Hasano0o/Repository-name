@@ -138,7 +138,7 @@ test('schd: الدخول ← الجلسة تنرسل ← القراءة والش
   const n = await d.getNetworkInfo();
   assert.equal(n.operator, 'Salam'); assert.equal(n.connected, true); assert.equal(n.mode, '5G');
   const dd = await d.getDeviceDetails();
-  assert.equal(dd.model, 'سلام JW515'); assert.match(String(dd.software), /atel-pages-2$/);
+  assert.equal(dd.model, 'سلام JW515'); assert.match(String(dd.software), /atel-pages-3$/);
 });
 
 test('schd: كلمة غلط ← ما نعيدها بالخلفية · 403 = قفل', async () => {
