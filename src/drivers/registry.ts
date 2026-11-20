@@ -18,6 +18,7 @@ import { ZteOntDriver } from './ztont';
 import { Fg360Driver } from './fg360';
 import { M2aDriver } from './m2a';
 import { TplinkDriver } from './tplink';
+import { TplinkMrDriver } from './tpmr';
 import { JrdDriver } from './jrd';
 import { HuaweiGwDriver } from './hwgw';
 import { SrtDriver } from './srt';
@@ -74,6 +75,8 @@ const factories: (() => RouterDriver)[] = [
   // جيب M2A-77 (٨ نوفمبر): بصمته ipaddr.js بمنفذ الأوامر — قبل Unknown
   () => new M2aDriver(),
   // TP-Link 4G/5G نسخة GDPR (Archer NX200 — ١٥ نوفمبر): http «ترحيب» والواجهة https، /cgi/getGDPRParm + AES/RSA. الدخول + قراءة أولية + FULL
+  // TP-Link 4G القديمة (TL-MR100 — ٢١ نوفمبر): oid_str.js + encrypt.js بدون gdprProxy، دخول /cgi/login?data&sign والأوامر بالصيغة القديمة — قبل NX200
+  () => new TplinkMrDriver(),
   () => new TplinkDriver(),
   // عائلة فيرموير JRD/webapi (HH10E وغيره — واجهة Vue، /jrd/webapi JSON-RPC، دخول scramble authType2) — من ملفات صفحة عضو (١٦ نوفمبر). دخول + قراءة، لسا ما انجرّب ميداني
   () => new JrdDriver(),
