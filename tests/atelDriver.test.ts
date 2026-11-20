@@ -1,0 +1,121 @@
+/**
+ * سلام HomeFi Max الخارجي (Asiatelco JW515، /schd/) — راوتر محاكى بنفس ردود الصفحة (ملفات «مو مدعوم؟» ٢٠ نوفمبر، جدة):
+ * «/» تسأل WebHeader · GET AccessControl ← SecureToken · POST {Action:Invoke, Username, Password: sha1(كلمة+رمز)} · 403 = قفل.
+ * sha1 هنا من node:crypto (مستقل عن الدرايفر).
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import * as ncrypto from 'node:crypto';
+
+declare const require: any;
+declare const process: any;
+const Module = require('module');
+const origLoad = Module._load;
+Module._load = function (req: string, ...rest: unknown[]) {
+  if (req === 'react-native') return { Platform: { OS: 'android', select: (o: any) => o.android ?? o.default } };
+  if (req === '@react-native-async-storage/async-storage') {
+    const m = new Map<string, string>();
+    return { __esModule: true, default: { getItem: async (k: string) => m.get(k) ?? null, setItem: async (k: string, v: string) => { m.set(k, v); }, removeItem: async (k: string) => { m.delete(k); } } };
+  }
+  if (/^@noble\//.test(req)) return origLoad.call(this, require.resolve(req, { paths: [process.cwd()] }), ...rest);
+  return origLoad.call(this, req, ...rest);
+};
+(globalThis as any).__DEV__ = false;
+
+const sha1 = (s: string) => (ncrypto as any).createHash('sha1').update(s, 'utf8').digest('hex');
+const P = require('../src/drivers/atel/parse');
+const { AtelSchdDriver, schdSha } = require('../src/drivers/atel/index');
+
+// «/» الحقيقية (مقتطعة) من الملف
+const INDEX = `<html><head><script type="text/javascript" src="jquery-1.8.3.min.js"></script><script>
+$.ajax({ url : "/rest/1.0/WebHeader/", type : "GET", success : function(data){ top.location.href = '/schd/html/login-admin.html?random='; } });
+</script></head></html>`;
+
+function router(o: { password?: string; tech?: string; rsrp?: number; lockAfter?: number } = {}) {
+  const st = { token: 'C47A0D76857B6277B628D5328A31E11F', sid: '', fails: 0, posts: 0, seenSid: [] as string[] };
+  const res = (status: number, text: string) => ({ ok: status < 400, status, url: 'http://192.168.100.1/', headers: { get: () => null }, text: async () => text } as any);
+  (globalThis as any).fetch = async (url: string, init?: any) => {
+    const u = new URL(url);
+    const m = (init?.method ?? 'GET').toUpperCase();
+    const sid = u.searchParams.get('mifisess') || (/mifisess=([^;]+)/.exec(init?.headers?.Cookie ?? '')?.[1] ?? '');
+    const logged = !!st.sid && sid === st.sid;
+    if (u.pathname === '/') return res(200, INDEX);
+    if (u.pathname === '/rest/1.0/WebHeader/') {
+      st.seenSid.push(sid);
+      return res(200, JSON.stringify({ Language: 'en', RSRP: logged ? (o.rsrp ?? -92) : 0, RSRQ: logged ? -11 : 0, SINR: logged ? 14 : 0, RSSI: logged ? -63 : 0,
+        Login: logged, ConnectStatus: 'CONNECTED', UsimStatus: 'Ready', SignalLevel: '4', Technology: o.tech ?? '5G', PLMN: 'Salam', ActivityStatus: 'updown' }));
+    }
+    if (u.pathname === '/rest/1.0/AccessControl/') {
+      if (m === 'GET') return res(200, JSON.stringify({ SessionIdentifier: '', SecureToken: st.token }));
+      st.posts++;
+      if (st.fails >= (o.lockAfter ?? 5)) return res(403, '');
+      const b = JSON.parse(init.body);
+      assert.equal(b.Action, 'Invoke');
+      if (b.Username !== 'admin' || b.Password !== sha1((o.password ?? '482913') + st.token)) { st.fails++; return res(401, '{}'); }
+      st.sid = '057ae666-1dd2-11b2-9a7a-dfa46553cc1b';
+      st.token = 'A1B2C3D4E5F60718293A4B5C6D7E8F90';
+      return res(200, JSON.stringify({ SessionIdentifier: st.sid, SecureToken: st.token }));
+    }
+    if (u.pathname === '/rest/1.0/DeviceInfo/') return res(200, JSON.stringify({ DeviceInfoModelNumber: 'JW515', DeviceInfoIMEI: '860000000000001', DeviceInfoModemFwVersion: 'QC50Q_V1.0.4' }));
+    return res(404, '');
+  };
+  return st;
+}
+
+test('schd: التعرّف من «/» و WebHeader', () => {
+  assert.ok(P.isSchdPage(INDEX));
+  assert.equal(P.isSchdPage('<html>/goform/goform_get_cmd_process</html>'), false);
+  assert.ok(P.isWebHeader({ Login: false, SignalLevel: '0' }));
+  assert.equal(P.isWebHeader({ statusData: {} }), false);
+});
+
+test('schd: sha1 مثل sha.min.js (hex صغير ٤٠ خانة)', () => {
+  assert.equal(schdSha('admin', 'C47A0D76857B6277B628D5328A31E11F'), sha1('adminC47A0D76857B6277B628D5328A31E11F'));
+  assert.match(schdSha('x', 'y'), /^[0-9a-f]{40}$/);
+});
+
+test('schd: الإشارة — الأصفار = ما فيه قراءة، و5G ينحط في خانات NR', () => {
+  assert.deepEqual(P.signalFrom({ RSRP: 0, RSSI: 0, RSRQ: 0, SINR: 0, Technology: 'LTE' }), { network: '4G' });
+  const s = P.signalFrom({ RSRP: -95, RSRQ: '-12', SINR: '9', RSSI: -66, Technology: '5G' });
+  assert.equal(s.network, '5G'); assert.equal(s.nrRsrp, -95); assert.equal(s.nrSinr, 9); assert.equal(s.rsrp, -95);
+  const l = P.signalFrom({ RSRP: -101, RSRQ: -13, SINR: 3, RSSI: 'UnKnown', Technology: 'LTE+' });
+  assert.equal(l.network, '4G'); assert.equal(l.rsrp, -101); assert.equal(l.nrRsrp, undefined); assert.equal(l.rssi, undefined);
+});
+
+test('schd: الدخول ← الجلسة تنرسل ← القراءة والشركة والموديل', async () => {
+  const st = router();
+  const d = new AtelSchdDriver();
+  assert.equal(await d.detect('192.168.100.1'), true);
+  await d.login('192.168.100.1', '', '482913');
+  assert.equal(st.posts, 1);
+  const s = await d.getSignal();
+  assert.equal(s.rsrp, -92); assert.equal(s.nrSinr, 14);
+  assert.equal(st.seenSid.at(-1), '057ae666-1dd2-11b2-9a7a-dfa46553cc1b');
+  const n = await d.getNetworkInfo();
+  assert.equal(n.operator, 'Salam'); assert.equal(n.connected, true); assert.equal(n.mode, '5G');
+  const dd = await d.getDeviceDetails();
+  assert.equal(dd.model, 'سلام JW515'); assert.match(String(dd.software), /atel-pages-1$/);
+});
+
+test('schd: كلمة غلط ← ما نعيدها بالخلفية · 403 = قفل', async () => {
+  router({ password: '111111' });
+  const d = new AtelSchdDriver();
+  await assert.rejects(d.login('192.168.100.1', 'admin', '222222'), /غلط/);
+  // الخلفية (بدون fresh) ما تصرف محاولة ثانية بنفس الكلمة المرفوضة
+  await assert.rejects(d.login('192.168.100.1', 'admin', '222222'), /رفضها الراوتر قبل/);
+  router({ lockAfter: 0 });
+  await assert.rejects(new AtelSchdDriver().login('192.168.100.1', 'admin', '482913', { fresh: true }), /قفل/);
+});
+
+test('schd: الجامع ما يفتح الصفحات الخطرة', async () => {
+  router();
+  const d = new AtelSchdDriver();
+  await d.detect('192.168.100.1');
+  for (const p of d.afterLoginPages()) assert.equal(/reboot|reset|restore|factory|upload|upgrade|logout|update/i.test(p), false, p);
+  assert.equal((await d.fetchAuthPage('/schd/html/updates.html')).ok, false);
+});
+
+test('schd: راوتر ZTE goform ما يتعرّف عليه', async () => {
+  (globalThis as any).fetch = async () => ({ ok: true, status: 200, url: 'http://192.168.0.1/', headers: { get: () => null }, text: async () => '<html><script src="js/service.js"></script></html>' });
+  assert.equal(await new AtelSchdDriver().detect('192.168.0.1'), false);
+});
