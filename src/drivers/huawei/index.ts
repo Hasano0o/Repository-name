@@ -2081,7 +2081,8 @@ export class HuaweiDriver implements RouterDriver {
     };
     const ms = await read('global/module-switch');
     const m = ms.match(/<esim_enable>\s*(\d)\s*<\/esim_enable>/i) ?? ms.match(/"esim_enable"\s*:\s*"?(\d)/i);
-    const enabled = m ? m[1] === '1' : null;
+    // واجهة هواوي نفسها (main.js): esim_enable:"esimmanagement" — الخانة غايبة = القائمة ما تطلع = ما فيه eSIM
+    const enabled = m ? m[1] === '1' : (ms.includes('<response>') ? false : null);
     await read('sim/sim-info');
     if (enabled !== false) {
       await read('sim/esim-profiles');
