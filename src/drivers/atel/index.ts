@@ -23,7 +23,7 @@ import { isLanHost } from '../../utils/host';
 import { buildSnapshot } from '../../utils/snapshot';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import type { ModelProfile } from '../models';
-import { isSchdPage, isWebHeader, schdLoginBody, signalFrom, connectedOf, techOf, str, scrubRest } from './parse';
+import { isSchdPage, isWebHeader, schdLoginBody, signalFrom, mergeService, connectedOf, techOf, str, scrubRest } from './parse';
 
 export const schdSha = (pw: string, token: string) => bytesToHex(sha1(utf8ToBytes(pw + token)));
 
@@ -170,8 +170,27 @@ export class AtelSchdDriver implements RouterDriver {
     try { return !!(await this.header()); } catch { return false; }
   }
 
+  /** CellularServiceStatus (التردد ورقم الخلية) — مرة كل ٤ ثواني بالكثير، وفشله ما يوقف القراءة */
+  private svc: { at: number; v: any } | null = null;
+  private svcLogged = false;
+  private async service(): Promise<any | null> {
+    if (this.svc && Date.now() - this.svc.at < 4000) return this.svc.v;
+    let v: any = null;
+    try {
+      const { status, j } = await this.json(`/rest/1.0/CellularServiceStatus/?random=${Date.now()}`);
+      if (status === 200 && j && typeof j === 'object' && !Array.isArray(j)) v = j;
+      if (!this.svcLogged) {
+        this.svcLogged = true;
+        diag(`[atel] CellularServiceStatus → ${status}${v ? ' · ' + Object.entries(v).map(([k, x]) => `${k}=${String(x).slice(0, 20)}`).join(' · ').slice(0, 900) : ''}`);
+      }
+    } catch {}
+    this.svc = { at: Date.now(), v };
+    return v;
+  }
+
   async getSignal(): Promise<Signal> {
-    return signalFrom(await this.ensure());
+    const s = signalFrom(await this.ensure());
+    return mergeService(s, await this.service());
   }
 
   async getNetworkInfo(): Promise<NetworkInfo> {
@@ -198,7 +217,7 @@ export class AtelSchdDriver implements RouterDriver {
     let op: string | undefined;
     try { op = str((await this.header())?.PLMN); } catch {}
     const model = this.info?.model ? `سلام ${this.info.model}` : this.name;
-    return { model, imei: this.info?.imei, operator: op, software: `${this.info?.fw ?? 'schd'}|atel-pages-1` };
+    return { model, imei: this.info?.imei, operator: op, software: `${this.info?.fw ?? 'schd'}|atel-pages-2` };
   }
 
   /** الجامع (FULL/AUTH): صفحة بالجلسة — GET بس، والخطرة ما تنفتح */
@@ -214,7 +233,10 @@ export class AtelSchdDriver implements RouterDriver {
    * اللي ما يرد يتسجّل «ما وصل» — ما يضر.
    */
   afterLoginPages(): string[] {
-    const rest = ['WebHeader', 'AccessControl', 'DeviceInfo', 'BoardInfo', 'SMSStatus', 'NetworkInfo', 'WWANStatus', 'WANStatus', 'WANInfo',
+    // أوامر الصفحة الحقيقية (addRequest في script.js — FULL ٢١ نوفمبر) أول، وبعدها المحتملة
+    const rest = ['CellularServiceStatus', 'CellularServiceSettings', 'CellularDataConnectionStatus', 'SimStatus', 'RouterSettings',
+      'DataUsageStatisticsGetAll', 'ConnectedDevicesStatus', 'AccountInfo', 'Notification', 'DisplayFormatSettings',
+      'WebHeader', 'AccessControl', 'DeviceInfo', 'BoardInfo', 'SMSStatus', 'NetworkInfo', 'WWANStatus', 'WANStatus', 'WANInfo',
       'ModemInfo', 'ModemStatus', 'SignalInfo', 'RadioInfo', 'CellInfo', 'LTEInfo', 'NRInfo', 'BandInfo', 'BandLock', 'CellLock', 'NetworkMode',
       'NetworkSettings', 'SIMInfo', 'SIMStatus', 'ConnectedDevices', 'DataUsage', 'DeviceStatus', 'SystemInfo', 'APNSettings', 'WiFiSettings', 'LabTestInfo']
       .map(n => `/rest/1.0/${n}/`);
@@ -233,5 +255,6 @@ export class AtelSchdDriver implements RouterDriver {
 
 function cellsOf(s: Signal): CellTower[] {
   if (s.rsrp === undefined) return [];
-  return [{ kind: 'serving', tech: 'LTE', pci: s.pci, rsrp: s.rsrp, rsrq: s.rsrq, sinr: s.sinr, rssi: s.rssi }];
+  const b = s.band ? Number(String(s.band).replace(/\D/g, '')) : undefined;
+  return [{ kind: 'serving', tech: 'LTE', band: b || undefined, cellId: s.cellId, pci: s.pci, rsrp: s.rsrp, rsrq: s.rsrq, sinr: s.sinr, rssi: s.rssi }];
 }

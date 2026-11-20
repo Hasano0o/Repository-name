@@ -82,6 +82,40 @@ export function scrubRest(text: string): string {
   catch { return text.replace(/"([\w.-]{1,60})"\s*:\s*"([^"]*)"/g, (all, k, v) => (REST_SECRET.test(k) && v ? `"${k}":"«محذوف»"` : all)); }
 }
 
+/**
+ * التردد ورقم الخلية من CellularServiceStatus (FULL ٢١ نوفمبر — الصفحة الرئيسية في script.js):
+ *   curBand = currentPrimaryCarrierComponent ← «B»+رقم أو «N»+رقم حسب التقنية · CurrentGlobalCellId (hex مثل "1A2D101").
+ * في NSA الناقل الأساسي 4G (المرساة) ← B. في SA ← N. نقبل القيمة رقم أو «B3» أو «LTE BAND 3» أو «n78».
+ */
+export function bandFrom(raw: unknown, technology: unknown): { band?: string; nrBand?: string } {
+  const r = str(raw);
+  if (!r) return {};
+  const m = /(\d{1,3})/.exec(r);
+  if (!m) return {};
+  const t = String(technology ?? '').toUpperCase();
+  const nr = /^\s*n(?!\/a)|\bNR\b|NR\s*BAND/i.test(r) || (/SA\b/.test(t) && !/NSA/.test(t) && /5G|NR/.test(t));
+  return nr ? { nrBand: 'n' + m[1] } : { band: 'B' + m[1] };
+}
+
+/** يدمج CellularServiceStatus مع قراءة WebHeader — بس الخانات الناقصة (WebHeader هو الأساس) */
+export function mergeService(s: Signal, svc: any): Signal {
+  if (!svc || typeof svc !== 'object') return s;
+  const tech = svc.CurrentWirelessTechnology ?? '';
+  const b = bandFrom(svc.currentPrimaryCarrierComponent ?? svc.CurrentPrimaryCarrierComponent, tech);
+  const out: Signal = { ...s };
+  if (b.band && !out.band) out.band = b.band;
+  if (b.nrBand && !out.nrBand) out.nrBand = b.nrBand;
+  const cid = str(svc.CurrentGlobalCellId);
+  if (cid && /^[0-9a-f]+$/i.test(cid) && !out.cellId) {
+    out.cellId = cid.toUpperCase();
+    const n = parseInt(cid, 16);
+    if (Number.isFinite(n) && cid.length >= 5) out.enodebId = String(Math.floor(n / 256));
+  }
+  if (out.rsrp === undefined) { const v = num(svc.CurrentSignalStrengthInRSRP); if (v !== undefined && v !== 0) out.rsrp = v; }
+  if (out.rssi === undefined) { const v = num(svc.CurrentSignalStrengthInRSSI); if (v !== undefined && v !== 0) out.rssi = v; }
+  return out;
+}
+
 /** متصل؟ — ConnectStatus «CONNECTED» (الصفحة تقارن بالحروف الكبيرة) */
 export function connectedOf(h: any): boolean | undefined {
   const c = String(h?.ConnectStatus ?? '').toUpperCase();

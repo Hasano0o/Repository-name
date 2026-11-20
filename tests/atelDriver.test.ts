@@ -56,6 +56,7 @@ function router(o: { password?: string; tech?: string; rsrp?: number; lockAfter?
       st.token = 'A1B2C3D4E5F60718293A4B5C6D7E8F90';
       return res(200, JSON.stringify({ SessionIdentifier: st.sid, SecureToken: st.token }));
     }
+    if (u.pathname === '/rest/1.0/CellularServiceStatus/') return res(200, JSON.stringify({ currentPrimaryCarrierComponent: '1', CurrentGlobalCellId: 'ABC123', CurrentWirelessTechnology: o.tech ?? '5G' }));
     if (u.pathname === '/rest/1.0/DeviceInfo/') return res(200, JSON.stringify({ DeviceInfoModelNumber: 'JW515', DeviceInfoIMEI: '860000000000001', DeviceInfoModemFwVersion: 'QC50Q_V1.0.4' }));
     return res(404, '');
   };
@@ -97,6 +98,18 @@ test('schd: FULL ٢١ نوفمبر — PCI و NR5G-NSA من WebHeader، والأ
   assert.equal(arr.includes('34:ba'), false); assert.ok(arr.includes('192.168.100.112'));
 });
 
+test('schd: التردد ورقم الخلية من CellularServiceStatus', () => {
+  assert.deepEqual(P.bandFrom('3', 'NR5G-NSA'), { band: 'B3' });
+  assert.deepEqual(P.bandFrom('LTE BAND 1', 'LTE'), { band: 'B1' });
+  assert.deepEqual(P.bandFrom('78', 'NR5G-SA'), { nrBand: 'n78' });
+  assert.deepEqual(P.bandFrom('n41', 'NR5G-NSA'), { nrBand: 'n41' });
+  assert.deepEqual(P.bandFrom('UnKnown', 'LTE'), {});
+  const m = P.mergeService({ network: '5G', rsrp: -61, pci: '31' }, { currentPrimaryCarrierComponent: '3', CurrentGlobalCellId: '1A2D101', CurrentWirelessTechnology: 'NR5G-NSA', CurrentSignalStrengthInRSRP: -94 });
+  assert.equal(m.band, 'B3'); assert.equal(m.cellId, '1A2D101'); assert.equal(m.enodebId, String(Math.floor(0x1A2D101 / 256)));
+  assert.equal(m.rsrp, -61, 'WebHeader هو الأساس');
+  assert.deepEqual(P.mergeService({ rsrp: -70 }, null), { rsrp: -70 });
+});
+
 test('schd: الدخول ← الجلسة تنرسل ← القراءة والشركة والموديل', async () => {
   const st = router();
   const d = new AtelSchdDriver();
@@ -105,11 +118,12 @@ test('schd: الدخول ← الجلسة تنرسل ← القراءة والش
   assert.equal(st.posts, 1);
   const s = await d.getSignal();
   assert.equal(s.rsrp, -92); assert.equal(s.sinr, 14); assert.equal(s.nrRsrp, undefined);
-  assert.equal(st.seenSid.at(-1), '057ae666-1dd2-11b2-9a7a-dfa46553cc1b');
+  assert.equal(s.band, 'B1'); assert.equal(s.cellId, 'ABC123');
+  assert.equal(st.seenSid.filter(Boolean).at(-1), '057ae666-1dd2-11b2-9a7a-dfa46553cc1b');
   const n = await d.getNetworkInfo();
   assert.equal(n.operator, 'Salam'); assert.equal(n.connected, true); assert.equal(n.mode, '5G');
   const dd = await d.getDeviceDetails();
-  assert.equal(dd.model, 'سلام JW515'); assert.match(String(dd.software), /atel-pages-1$/);
+  assert.equal(dd.model, 'سلام JW515'); assert.match(String(dd.software), /atel-pages-2$/);
 });
 
 test('schd: كلمة غلط ← ما نعيدها بالخلفية · 403 = قفل', async () => {
