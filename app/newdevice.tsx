@@ -12,7 +12,8 @@ import { ROUTER_HOSTS } from '../src/utils/routerHosts';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, Switch } from 'react-native';
 import { View, Text, TextInput, Pressable } from '../src/i18n/rn';
-import { router, Href } from 'expo-router';
+import { router, Href, useLocalSearchParams } from 'expo-router';
+import { isLanHost } from '../src/utils/host';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { runProbe, reportText, fingerprint, fingerprintText } from '../src/utils/probe';
 import { readMeta } from '../src/utils/speedtest';
@@ -55,6 +56,10 @@ async function answers(host: string, ms = 2000): Promise<boolean> {
 
 export default function NewDeviceScreen() {
   const insets = useSafeAreaInsets();
+  // العنوان اللي كتبه العضو في «إضافة راوتر» (سلام HomeFi Max ٢٠ نوفمبر: JW515 على 192.168.100.1 ورا راوتر داخلي
+  // على 192.168.1.1 — الفحص كان ياخذ أول عنوان يرد في القائمة، فتوصلنا ملفات الداخلي مرتين بدل JW515)
+  const { host: hostParam } = useLocalSearchParams<{ host?: string }>();
+  const wanted = typeof hostParam === 'string' && isLanHost(hostParam) ? hostParam : '';
   const [model, setModel] = useState('');
   const [op, setOp] = useState('');
   const [city, setCity] = useState('');
@@ -135,7 +140,8 @@ export default function NewDeviceScreen() {
     let found: string | undefined;
     if (scan) {
       setBusy('أدوّر على راوترك…');
-      found = (await Promise.all(HOSTS.map(async h => ((await answers(h)) ? h : null)))).find(Boolean) as string | undefined;
+      found = wanted && (await answers(wanted)) ? wanted
+        : (await Promise.all(HOSTS.map(async h => ((await answers(h)) ? h : null)))).find(Boolean) as string | undefined;
       if (found) {
         // الراوتر مدعوم أصلاً؟ (المستخدم ما عرف يضيفه) — نقوله بدل ما يرسل طلب على الفاضي
         setBusy('أتعرّف على راوترك…');

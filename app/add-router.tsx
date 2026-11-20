@@ -458,7 +458,7 @@ export default function AddRouterScreen() {
         if (answered) {
           Alert.alert('راوترك مو مدعوم للحين',
             `لقينا راوتر على ${h}، بس نوعه للحين ما يشتغل مع Bandly.\n\nأرسل لنا تفاصيله (دقيقة وحدة) والمبرمج يتواصل معك ويضيفه.`,
-            [{ text: 'رجوع', style: 'cancel' }, { text: 'نضيفه لك', onPress: () => nav.push('/newdevice') }]);
+            [{ text: 'رجوع', style: 'cancel' }, { text: 'نضيفه لك', onPress: () => nav.push({ pathname: '/newdevice', params: { host: h } } as any) }]);
         } else {
           // العنوان ما رد ← يمكن جوالك على راوتر ثاني: نعطيه عنوانه الصح بضغطة
           setStep('ندوّر على راوترك…');
