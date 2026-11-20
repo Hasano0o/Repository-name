@@ -1203,7 +1203,7 @@ async def app_report(req: Request):
         rd = DATA / "reports"
         rd.mkdir(exist_ok=True)
         (rd / name).write_text(f"{cap}\n\n{text}", encoding="utf-8")
-        for old in sorted(rd.glob("*.txt"))[:-300]:
+        for old in sorted(rd.glob("*.txt"), key=lambda x: x.stat().st_mtime)[:-300]:
             old.unlink()
     except Exception:
         pass
@@ -1281,8 +1281,16 @@ async def app_dump(req: Request):
         for f in files:
             z.write(f, str(f.relative_to(d)))
     shutil.rmtree(d, ignore_errors=True)
-    for old in sorted(DUMPS.glob("*.zip"))[:-40]:
-        old.unlink()
+    # آخر ٤٠ **بالتاريخ** تبقى هنا، والأقدم تنتقل للأرشيف (ما تنمسح). قبل (٢٠ نوفمبر): الترتيب كان بالاسم ←
+    # أي ملف اسمه قبل «router-ZTE-…» أبجدياً (JW515 · Salam · Asiatelco …) ينمسح لحظة ما ينحفظ.
+    arch = Path("/root/bandly-archive/dumps")
+    for old in sorted(DUMPS.glob("*.zip"), key=lambda x: x.stat().st_mtime)[:-40]:
+        try:
+            arch.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(old), str(arch / old.name))
+        except Exception as e:
+            print(f"[dump] archive fail {old.name}: {e}", flush=True)
+    print(f"[dump] saved {zpath.name} files={len(files)} ip={ip}", flush=True)
     owner = _owner() if _router_tg() else 0
     if owner:
         cap = f"📦 ملفات صفحة راوتر جديد\n• الموديل: {model or '—'}\n• {len(files)} ملف · {zpath.stat().st_size // 1024} KB"
