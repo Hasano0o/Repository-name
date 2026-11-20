@@ -126,6 +126,12 @@ test('schd: NSA — «B1 / n78» و «-61 / -52» ← بطاقة 4G وبطاقة
   assert.deepEqual(P.usageFrom({ TotalBytesTransmitted: 60466375062, TotalBytesReceived: 669638085474 }), { downloadBytes: 669638085474, uploadBytes: 60466375062 });
 });
 
+test('schd: الأجهزة المتصلة (ConnectedDevices) — الاسم «*» غير معروف', () => {
+  const d = P.devicesFrom([{ ConnectedDeviceMacAddress: '34:ba:9a:c3:cf:81', ConnectedDeviceIPv4Address: '192.168.100.112', ConnectedDeviceFriendlyName: '*', ConnectedDeviceConnectionType: 'Ethernet' }]);
+  assert.equal(d.length, 1); assert.equal(d[0].mac, '34:BA:9A:C3:CF:81'); assert.equal(d[0].ip, '192.168.100.112'); assert.equal(d[0].name, undefined);
+  assert.deepEqual(P.devicesFrom({}), []);
+});
+
 test('schd: الدخول ← الجلسة تنرسل ← القراءة والشركة والموديل', async () => {
   const st = router();
   const d = new AtelSchdDriver();
@@ -139,7 +145,7 @@ test('schd: الدخول ← الجلسة تنرسل ← القراءة والش
   const n = await d.getNetworkInfo();
   assert.equal(n.operator, 'Salam'); assert.equal(n.connected, true); assert.equal(n.mode, '5G');
   const dd = await d.getDeviceDetails();
-  assert.equal(dd.model, 'سلام JW515'); assert.match(String(dd.software), /atel-pages-3$/);
+  assert.equal(dd.model, 'سلام JW515'); assert.match(String(dd.software), /atel-pages-4$/);
 });
 
 test('schd: كلمة غلط ← ما نعيدها بالخلفية · 403 = قفل', async () => {

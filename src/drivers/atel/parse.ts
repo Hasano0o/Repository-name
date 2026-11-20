@@ -149,6 +149,19 @@ export function mergeService(s: Signal, svc: any): Signal {
   return out;
 }
 
+/** الأجهزة المتصلة من ConnectedDevices (مصفوفة — AUTH ٢١ نوفمبر): الاسم «*» = غير معروف */
+export function devicesFrom(j: any): { mac: string; ip?: string; name?: string }[] {
+  if (!Array.isArray(j)) return [];
+  const out: { mac: string; ip?: string; name?: string }[] = [];
+  for (const d of j) {
+    const mac = str(d?.ConnectedDeviceMacAddress);
+    if (!mac) continue;
+    const name = str(d?.ConnectedDeviceFriendlyName) ?? str(d?.ConnectedDeviceHostName);
+    out.push({ mac: mac.toUpperCase(), ip: str(d?.ConnectedDeviceIPv4Address), name: name && name !== '*' ? name : undefined });
+  }
+  return out;
+}
+
 /** الاستهلاك من DataUsageStatisticsGetAll (من بداية الدورة) */
 export function usageFrom(j: any): { downloadBytes: number; uploadBytes: number } | null {
   const d = Number(j?.TotalBytesReceived), u = Number(j?.TotalBytesTransmitted);
