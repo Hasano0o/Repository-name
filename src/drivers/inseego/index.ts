@@ -208,6 +208,9 @@ export class InseegoDriver implements RouterDriver {
       '/connecteddevices/', '/datausage/', '/advanced/', '/wifi/', '/wifisettings/', '/lan/', '/manualdns/',
       '/preferences/', '/softwareupdate/', '/sessions/', '/logs/', '/firewall/', '/macfilter/', '/portforwarding/', '/gps/',
       '/bandlock.html', '/celllock.html', '/realcelllock.html', '/band_manager.html',
+      // تعديل «MONDO DEBO» (AUTH ٢١ نوفمبر — 8800L عضو): bandlock.html و celllock.html يطلبون كل شي من MondoAPI.call
+      // في mondo-secure-client.js (الطلبات غالباً موقّعة) ← نحتاج كوده قبل أي قراءة/كتابة. cellscan.cgi?action=status قراءة بس.
+      '/assets/js/mondo-secure-client.js?v=216', '/assets/js/mondo-secure-client.js', '/cgi/cellscan.cgi?action=status',
     ];
   }
 
@@ -253,7 +256,7 @@ export class InseegoDriver implements RouterDriver {
   async getDeviceDetails(): Promise<DeviceDetails> {
     await this.readModel();
     const st = await this.status().catch(() => null);
-    return { model: this.name, operator: String(st?.statusBarNetwork ?? '').trim() || undefined, software: 'inseego-pages-3' };
+    return { model: this.name, operator: String(st?.statusBarNetwork ?? '').trim() || undefined, software: 'inseego-pages-4' };
   }
 
   async getSignal(): Promise<Signal> {
