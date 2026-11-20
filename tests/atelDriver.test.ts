@@ -87,6 +87,16 @@ test('schd: الإشارة — بطاقة وحدة، الأصفار = ما في�
   assert.equal(P.signalFrom({ RSRP: -112, SINR: 0, Technology: 'LTE' }).sinr, 0);
 });
 
+test('schd: FULL ٢١ نوفمبر — PCI و NR5G-NSA من WebHeader، والأسرار تنحذف من ردود REST', () => {
+  const s = P.signalFrom({ RSRP: -61, RSRQ: -16, SINR: 1, RSSI: -25, PCI: '31', Technology: 'NR5G-NSA', Login: true });
+  assert.equal(s.network, '5G'); assert.equal(s.pci, '31'); assert.equal(s.sinr, 1);
+  const out = P.scrubRest(JSON.stringify({ WiFiSSID: 'JW515_1', WiFiKey: 'abcd1234', WiFiChannel: 0, DeviceInfoIMEI: '860000000000001', DeviceInfoSwVersion: 'QC50Q', SessionIdentifier: 'x-y', SecureToken: 'AB', ok: true }));
+  for (const bad of ['abcd1234', '860000000000001', 'JW515_1', 'x-y', '"AB"']) assert.equal(out.includes(bad), false, bad);
+  assert.ok(out.includes('QC50Q')); assert.ok(out.includes('"WiFiChannel": 0'));
+  const arr = P.scrubRest(JSON.stringify([{ ConnectedDeviceMacAddress: '34:ba:9a:00:00:01', ConnectedDeviceIPv4Address: '192.168.100.112' }]));
+  assert.equal(arr.includes('34:ba'), false); assert.ok(arr.includes('192.168.100.112'));
+});
+
 test('schd: الدخول ← الجلسة تنرسل ← القراءة والشركة والموديل', async () => {
   const st = router();
   const d = new AtelSchdDriver();

@@ -23,7 +23,7 @@ import { isLanHost } from '../../utils/host';
 import { buildSnapshot } from '../../utils/snapshot';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import type { ModelProfile } from '../models';
-import { isSchdPage, isWebHeader, schdLoginBody, signalFrom, connectedOf, techOf, str } from './parse';
+import { isSchdPage, isWebHeader, schdLoginBody, signalFrom, connectedOf, techOf, str, scrubRest } from './parse';
 
 export const schdSha = (pw: string, token: string) => bytesToHex(sha1(utf8ToBytes(pw + token)));
 
@@ -206,7 +206,7 @@ export class AtelSchdDriver implements RouterDriver {
     if (SCHD_DANGER.test(path)) return { ok: false, status: 0, text: '', type: '' };
     const r = await this.req(path, { method: 'GET' }, 10000).catch(() => ({ status: 0, text: '' }));
     const type = /^\/rest\//.test(path) ? 'application/json' : /\.js(\?|$)/i.test(path) ? 'application/javascript' : /\.css(\?|$)/i.test(path) ? 'text/css' : 'text/html';
-    return { ok: r.status >= 200 && r.status < 400, status: r.status, text: r.text, type };
+    return { ok: r.status >= 200 && r.status < 400, status: r.status, text: type === 'application/json' ? scrubRest(r.text) : r.text, type };
   }
 
   /**
@@ -233,5 +233,5 @@ export class AtelSchdDriver implements RouterDriver {
 
 function cellsOf(s: Signal): CellTower[] {
   if (s.rsrp === undefined) return [];
-  return [{ kind: 'serving', tech: 'LTE', rsrp: s.rsrp, rsrq: s.rsrq, sinr: s.sinr, rssi: s.rssi }];
+  return [{ kind: 'serving', tech: 'LTE', pci: s.pci, rsrp: s.rsrp, rsrq: s.rsrq, sinr: s.sinr, rssi: s.rssi }];
 }

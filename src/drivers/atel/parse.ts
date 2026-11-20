@@ -60,7 +60,26 @@ export function signalFrom(h: any): Signal {
   if (rsrq !== undefined && rsrq !== 0) s.rsrq = rsrq;
   if (sinr !== undefined && !(sinr === 0 && rsrp !== undefined && rsrp > -100)) s.sinr = sinr;
   if (rssi !== undefined && rssi !== 0) s.rssi = rssi;
+  // FULL ٢١ نوفمبر: WebHeader فيه "PCI": "31" (و Technology "NR5G-NSA")
+  const pci = str(h?.PCI);
+  if (pci && /^\d+$/.test(pci)) s.pci = pci;
   return s;
+}
+
+/**
+ * ردود REST في ملف FULL: الأسرار تنحذف قبل ما تطلع من الجوال (FULL ٢١ نوفمبر وصل فيه WiFiKey و IMEI و SessionIdentifier).
+ * المفتاح كامل (مو كلمة لحالها) لأن أسماءهم ملصوقة: WiFiKey · DeviceInfoIMEI · ConnectedDeviceMacAddress.
+ */
+const REST_SECRET = /(key|passw|psk|secret|token|session|imei|imsi|iccid|esn|meid|serial|mac|ssid|msisdn|mobilenumber|phone|ipv6|answer)/i;
+export function scrubRest(text: string): string {
+  const walk = (v: any, k = ''): any => {
+    if (Array.isArray(v)) return v.map(x => walk(x));
+    if (v && typeof v === 'object') { const o: any = {}; for (const [kk, vv] of Object.entries(v)) o[kk] = walk(vv, kk); return o; }
+    if (k && REST_SECRET.test(k) && v !== '' && v !== null && v !== undefined && typeof v !== 'boolean') return '«محذوف»';
+    return v;
+  };
+  try { return JSON.stringify(walk(JSON.parse(text)), null, 1); }
+  catch { return text.replace(/"([\w.-]{1,60})"\s*:\s*"([^"]*)"/g, (all, k, v) => (REST_SECRET.test(k) && v ? `"${k}":"«محذوف»"` : all)); }
 }
 
 /** متصل؟ — ConnectStatus «CONNECTED» (الصفحة تقارن بالحروف الكبيرة) */
