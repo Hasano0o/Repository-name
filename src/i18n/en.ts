@@ -4,6 +4,12 @@
  * نص ما له ترجمة يطلع عربي — فزيد هنا بأي وقت.
  */
 export const EN: Record<string, string> = {
+  'دخول': 'Sign in',
+  'الرمز ٨ أرقام': 'The code is 8 digits',
+  'الراوتر ما يطلب رمز': "The router isn't asking for a code",
+  '✓ تم — الأدوات صارت شغالة': '✓ Done — the tools are active now',
+  'رمز MONDO': 'MONDO code',
+  'جهازك عليه أداة MONDO للتثبيت. من شاشة الجهاز: القائمة ← MONDO ← رمز الويب، واكتب الرقم (٨ أرقام). الجلسة تبقى ١٥ دقيقة من آخر استخدام.': 'Your device has the MONDO lock tool. On the device screen: Menu → MONDO → Web code, then type the 8-digit number. The session stays active for 15 minutes after last use.',
   'أسبوع': 'Week',
   'شهر': 'Month',
   '٣ شهور': '3 months',

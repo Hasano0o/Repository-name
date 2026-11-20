@@ -102,6 +102,7 @@ const files = [
   'src/drivers/dlink/parse.ts',
   'src/drivers/dlink/index.ts',
   'src/drivers/inseego/parse.ts',
+  'src/drivers/inseego/mondo.ts',
   'src/drivers/inseego/index.ts',
   'src/drivers/hgont/parse.ts',
   'src/drivers/ztont/parse.ts',

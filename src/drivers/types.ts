@@ -411,6 +411,11 @@ export interface RouterDriver {
   getDns?(): Promise<DnsConfig>;
   setDns?(cfg: DnsConfig): Promise<void>;
   getCarriers?(): Promise<Carrier[]>;
+  /**
+   * دخول برمز من شاشة الجهاز (أداة MONDO على Inseego 8800L — ٢١ نوفمبر): needed() = true ← صفحة الراوتر تعرض خانة الرمز.
+   * submit يرمي برسالة واضحة لو الرمز غلط/انتهى.
+   */
+  codePair?: { title: string; hint: string; needed(): Promise<boolean>; submit(code: string): Promise<void> };
   /** قنوات الواي فاي */
   getWifiRadios?(): Promise<WifiRadio[]>;
   /** اتجاه الراوتر بالدرجات من بوصلته الداخلية (زيكسل FWA505 الخارجي — oid=azimuth). accuracy 0–3 */

@@ -43,6 +43,7 @@ import { FONT } from '../../src/ui/fonts';
 import { StoreAd } from '../../src/ui/StoreAd';
 import { TechStrip } from '../../src/ui/TechStrip';
 import { ComboCard } from '../../src/ui/ComboCard';
+import { CodePairCard } from '../../src/ui/CodePairCard';
 import { BandChips } from '../../src/ui/BandChips';
 import { OperatorBadge } from '../../src/ui/OperatorBadge';
 import { bandChips } from '../../src/utils/bandChips';
@@ -193,6 +194,8 @@ export default function RouterDashboard() {
   const [featNote, setFeatNote] = useState('');
   const fullChecked = useRef(false);
   const [feat, setFeat] = useState<Features>(NO_FEATURES);
+  /** دخول برمز من شاشة الجهاز (MONDO) — null = ما يحتاج */
+  const [pair, setPair] = useState<{ title: string; hint: string } | null>(null);
   const [signal, setSignal] = useState<Signal | null>(null);
   const [history, setHistory] = useState<RadarPoint[]>([]);
   const [usage, setUsage] = useState<Usage | null>(null);
@@ -352,6 +355,7 @@ export default function RouterDashboard() {
           cellular: !!d.getSignal, optic: !!d.getOptic,
         });
         rememberBands(r.id, !!d.getBandConfig);
+        if (d.codePair) { const cp = d.codePair; cp.needed().then(n => setPair(n ? { title: cp.title, hint: cp.hint } : null)).catch(() => {}); } else setPair(null);
         setAuthPages(!!d.afterLoginPages?.().length);
         // بعد القراءة الأساسية — طلب أو طلبين (الموديل والفيرموير) بنفس الجلسة
         if (!fullChecked.current) {
@@ -1093,6 +1097,7 @@ export default function RouterDashboard() {
 
         {!loading && info && (
           <>
+            {pair && info && <CodePairCard r={info} title={pair.title} hint={pair.hint} onDone={() => { setPair(null); loadAll(info); }} />}
             {feat.bands && <ComboCard r={info} />}
             <ModemsCard r={info} />
             <TempCard r={info} />

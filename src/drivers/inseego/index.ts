@@ -14,7 +14,9 @@
  * ⚠️ الكتابة (ترددات/برج/وضع) مقفولة: Verizon تقفلها في الفيرموير الأصلي، والموجود عند الأعضاء تعديلات خارجية
  *    («MONDO» على /cgi/mapi.cgi برمز من شاشة الجهاز · «Band Manager» على /cgi/bandset.cgi) — تنفتح ميزة ميزة بعد الدليل.
  */
-import { RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, DeviceDetails, RouterExtras, Usage } from '../types';
+import { RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, DeviceDetails, RouterExtras, Usage, Carrier, BandConfig, CellLockTarget, CellLockState } from '../types';
+import { noChange } from '../noChange';
+import { MondoClient, MondoSession, mondoForm, mondoSignal, mondoCarriers, mondoCells, mondoLock, mondoMessage, mondoRestored, isMondoCodeError, MONDO_BANDS, MONDO_MODES } from './mondo';
 import { sha1 } from '@noble/hashes/legacy';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import { http } from '../http';
@@ -28,10 +30,28 @@ import {
 
 export const inseegoSha = (pw: string, secToken: string) => bytesToHex(sha1(utf8ToBytes(pw + secToken)));
 
+/** جلسة MONDO لكل عنوان — تعيش بين نسخ الدرايفر (الجلسات تنشأ من جديد) */
+const MONDO_SESS = new Map<string, MondoSession | null>();
+/** آخر ترددات طبّقناها لكل عنوان — الأداة ما تعطي قراءة للاختيار الحالي */
+const MONDO_BANDS_SET = new Map<string, number[]>();
+
 export class InseegoDriver implements RouterDriver {
   readonly id = 'inseego';
   name = 'Inseego MiFi';
   readonly capabilities: Capability[] = ['signal', 'usage'];
+
+  // ═══ أداة MONDO (لو الجهاز معدّل) — تنضاف بعد الدخول لو لقينا mondo-secure-client.js ═══
+  private mondo: MondoClient | null = null;
+  private mondoChecked = false;
+  private mst: { at: number; v: any } | null = null;
+  getCarriers?: () => Promise<Carrier[]>;
+  getBandConfig?: () => Promise<BandConfig>;
+  setBand?: (bands: number[] | 'keep', nrBands?: number[]) => Promise<void>;
+  lockCell?: (t: CellLockTarget) => Promise<void>;
+  unlockCell?: (tech?: 'LTE' | 'NR') => Promise<void>;
+  getCellLock?: () => Promise<CellLockState | null>;
+  setNetworkMode?: (mode: string) => Promise<void>;
+  codePair?: RouterDriver['codePair'];
 
   private host = '';
   private model = '';
@@ -191,6 +211,101 @@ export class InseegoDriver implements RouterDriver {
     this.reloginFailed = false;
     this.dg = null;
     await this.readModel();
+    await this.detectMondo();
+  }
+
+  /** الجهاز عليه أداة MONDO؟ (mondo-secure-client.js يرد وفيه mapi.cgi) — مرة وحدة لكل نسخة */
+  private async detectMondo() {
+    if (this.mondoChecked) return;
+    this.mondoChecked = true;
+    try {
+      const r = await this.req('/assets/js/mondo-secure-client.js', {}, 8000);
+      if (r.status !== 200 || !/mapi\.cgi/.test(r.text) || !/MondoAPI/.test(r.text)) return;
+    } catch { return; }
+    const host = this.host;
+    this.mondo = new MondoClient(async form => {
+      const r = await this.req('/cgi/mapi.cgi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8', Accept: 'application/json, */*', Referer: this.base() + '/celllock.html' },
+        body: mondoForm(form),
+      }, 20000);
+      try { return JSON.parse(r.text); } catch { return { ok: false, e: 'bad_response', http: r.status }; }
+    }, MONDO_SESS.get(host) ?? null, ss => MONDO_SESS.set(host, ss));
+    diag(`[inseego] أداة MONDO موجودة — جلسة ${this.mondo.paired ? 'محفوظة' : 'ما فيه (تحتاج رمز الشاشة)'}`);
+    this.attachMondo();
+  }
+
+  /** status من MONDO (كاش ٣ ثواني) — null لو ما فيه جلسة */
+  private async mondoStatus(force = false): Promise<any | null> {
+    if (!this.mondo) return null;
+    if (!force && this.mst && Date.now() - this.mst.at < 3000) return this.mst.v;
+    const r = await this.mondo.call('status', {});
+    if (!r?.ok) { diag(`[inseego] MONDO status ✗ ${String(r?.e ?? r?.error ?? '').slice(0, 60)}`); return null; }
+    if (!this.mst) diag(`[inseego] MONDO status: band ${r.current?.band ?? '—'} · ca ${r.current?.ca ?? '—'} · scells ${(r.ca_detail?.scells ?? []).length} · lock ${r.lock?.pci ?? '—'}/${r.lock?.earfcn ?? '—'} · mode ${r.radio_mode ?? '—'}`);
+    this.mst = { at: Date.now(), v: r };
+    return r;
+  }
+
+  /** أوامر التغيير: مهمة MONDO ← نتيجتها. فشل بدون تغيير (رفض/مشغول) = noChange · «restored» = رجع السابق */
+  private async mondoJob(name: string, data: Record<string, unknown>, what: string): Promise<void> {
+    if (!this.mondo) throw noChange('جهازك ما عليه أداة التثبيت');
+    let r: any;
+    try { r = await this.mondo.job(name, data, 150); }
+    catch (e) { if (isMondoCodeError(e)) throw noChange((e as Error).message); throw e; }
+    this.mst = null;
+    diag(`[inseego] MONDO ${name} ${JSON.stringify(data)} → ok=${r?.ok} · ${String(r?.message ?? r?.e ?? '').slice(0, 80)}`);
+    if (r?.ok === true || r?.ok === 1 || r?.ok === '1') return;
+    const msg = `${what}: ${mondoMessage(r)}`;
+    if (mondoRestored(r) || /Another_|request_rejected|bad_request|Unlock_cell_before/.test(String(r?.message ?? r?.e ?? ''))) throw noChange(msg);
+    throw new Error(msg);
+  }
+
+  private attachMondo() {
+    const host = this.host;
+    this.codePair = {
+      title: 'رمز MONDO',
+      hint: 'جهازك عليه أداة MONDO للتثبيت. من شاشة الجهاز: القائمة ← MONDO ← رمز الويب، واكتب الرقم (٨ أرقام). الجلسة تبقى ١٥ دقيقة من آخر استخدام.',
+      needed: async () => {
+        if (!this.mondo) return false;
+        if (this.mondo.paired) return false;
+        try { return !(await this.mondo.resume()); } catch { return true; }
+      },
+      submit: async (code: string) => { await this.mondo!.pair(code); this.mst = null; await this.mondoStatus(true); },
+    };
+    this.getCarriers = async () => {
+      const st = await this.mondoStatus().catch(() => null);
+      return st ? mondoCarriers(st) : [];
+    };
+    this.getBandConfig = async () => {
+      const st = await this.mondoStatus();
+      if (!st) throw noChange('أدوات MONDO تحتاج رمز من شاشة الجهاز — اكتبه في صفحة الراوتر');
+      const locked = MONDO_BANDS_SET.get(host) ?? MONDO_BANDS;
+      return { supported: MONDO_BANDS, locked, nrSupported: [], nrLocked: [], mode: String(st.radio_mode ?? '0'), modes: MONDO_MODES };
+    };
+    this.setBand = async (bands: number[] | 'keep') => {
+      if (bands === 'keep') return;
+      const list = [...new Set(bands)].filter(b => MONDO_BANDS.includes(b)).sort((a, b) => a - b);
+      if (!list.length) throw noChange('اختر تردد واحد على الأقل من ترددات جهازك');
+      await this.mondoJob('band_apply', { b: list.join(',') }, 'تثبيت الترددات');
+      MONDO_BANDS_SET.set(host, list.length === MONDO_BANDS.length ? MONDO_BANDS : list);
+    };
+    this.lockCell = async (t: CellLockTarget) => {
+      if (t.tech !== 'LTE') throw noChange('جهازك 4G بس');
+      if (!/^\d+$/.test(String(t.pci ?? ''))) throw noChange('رقم البرج (PCI) ناقص');
+      let e = String(t.arfcn ?? '');
+      if (!/^\d+$/.test(e)) {
+        const st = await this.mondoStatus();
+        if (st && String(st.current?.pci) === String(t.pci)) { await this.mondoJob('lock_current', {}, 'تثبيت البرج'); return; }
+        throw noChange('رقم القناة (EARFCN) ناقص — اختار البرج من قائمة الأبراج');
+      }
+      await this.mondoJob('lock_manual', { p: t.pci, e }, 'تثبيت البرج');
+    };
+    this.unlockCell = async () => { await this.mondoJob('unlock', {}, 'فك تثبيت البرج'); };
+    this.getCellLock = async () => { const st = await this.mondoStatus().catch(() => null); return st ? mondoLock(st) : null; };
+    this.setNetworkMode = async (mode: string) => {
+      if (!MONDO_MODES.some(m => m.value === mode)) throw noChange('وضع شبكة مو مدعوم');
+      await this.mondoJob('radio_mode', { b: mode }, 'وضع الشبكة');
+    };
   }
 
   async logout(): Promise<void> {
@@ -260,6 +375,11 @@ export class InseegoDriver implements RouterDriver {
   }
 
   async getSignal(): Promise<Signal> {
+    // أداة MONDO بجلسة ← قراءتها أدق (الأساسي والثانوي و PCI و EARFCN) — والقراءة تحافظ على الجلسة حية
+    if (this.mondo?.paired) {
+      const m = await this.mondoStatus().catch(() => null);
+      if (m) { const s = mondoSignal(m); if (s.rsrp !== undefined) return s; }
+    }
     const { st, ss, dg } = await this.readAll();
     if (!st && !ss && !dg) throw new Error('الراوتر ما رد (/srv/status)');
     return signalFrom(st, ss, dg);
@@ -276,6 +396,10 @@ export class InseegoDriver implements RouterDriver {
   }
 
   async getCells(): Promise<CellTower[]> {
+    if (this.mondo?.paired) {
+      const m = await this.mondoStatus().catch(() => null);
+      if (m) { const c = mondoCells(m); if (c.length) return c; }
+    }
     return cellsOf(await this.getSignal());
   }
 
