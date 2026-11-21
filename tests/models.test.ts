@@ -56,3 +56,11 @@ test('ZTE U30 Air: نفس أوامر U30 Pro (LTE_BAND_LOCK/NR_BAND_LOCK) — م
   assert.equal(identifyZte('MC801A1_Elisa1_B06').verified, true);
   assert.equal(identifyZte('U30Pro_GEN_MEASV1.0.0B07').id, 'u30-pro');
 });
+
+test('MU5001: خيارات وضع الشبكة نفس شاشة الجهاز — بدون 5G SA، وباقي ZTE القائمة العامة', () => {
+  const m = identifyZte('BD_STCMU5001V1.0.2B04');
+  const v = (m.netModes ?? []).map(x => x.value);
+  assert.deepEqual(v, ['00', '0803', 'WCDMA_AND_LTE', '03']);
+  assert.ok(!v.includes('08'));
+  assert.equal(identifyZte('MC801A1_Elisa1_B06').netModes, undefined);
+});

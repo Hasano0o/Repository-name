@@ -1552,6 +1552,8 @@ export const EN: Record<string, string> = {
   'إعدادك الحالي': 'Your current settings',
   'للمقارنة': 'For comparison',
   '4G فقط': '4G only',
+  'تلقائي (5G/4G/3G)': 'Auto (5G/4G/3G)',
+  '5G NSA (4G + 5G)': '5G NSA (4G + 5G)',
   'بدون 5G': 'Without 5G',
   'نفحص الواي فاي...': 'Checking the Wi-Fi...',
   'انتهت المهلة': 'Timed out',

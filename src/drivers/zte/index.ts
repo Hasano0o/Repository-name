@@ -1072,7 +1072,8 @@ export class ZteDriver implements RouterDriver {
       const raw = (r.net_select || '').trim();
       if (raw) {
         mode = ZTE_TO_CODE[raw] ?? raw;
-        modes = [
+        // الموديل يعرف خياراته (MU5001: بدون 5G SA) — غيره القائمة العامة
+        modes = (await this.identify())?.netModes ?? [
           { value: '00', label: 'تلقائي' },
           { value: '0803', label: '4G + 5G' },
           { value: '03', label: '4G فقط' },

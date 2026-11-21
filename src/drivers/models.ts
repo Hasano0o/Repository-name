@@ -35,6 +35,8 @@ export interface ModelProfile {
    * أي إصلاح لموديل ثاني ما يمر على هذا الموديل أبداً.
    */
   pinned?: { ad: string; lteMask: 'short' | 'padded'; nrCmd: 'classic' | 'sansa' };
+  /** ZTE: خيارات وضع الشبكة اللي يعرضها الجهاز نفسه (شاشته/صفحته) — بدلها نعرض القائمة العامة (فيها 5G SA) */
+  netModes?: { value: string; label: string }[];
 }
 
 import { U30_WRITES } from './zte/u30';
@@ -44,7 +46,15 @@ const P = (p: ModelProfile) => p;
 export const MODELS = {
   mu5001: P({ id: 'mu5001', label: 'ZTE MU5001', brand: 'zte', tech: '5G', write: 'goform', nrLock: true, verified: true,
     // مجرّب على جهاز حسن (STC، BD_STCMU5001V1.0.2B04): توقيع MD5 · القناع القصير · أمر 5G القديم
-    pinned: { ad: 'wa+cr', lteMask: 'short', nrCmd: 'classic' } }),
+    pinned: { ad: 'wa+cr', lteMask: 'short', nrCmd: 'classic' },
+    // نفس قائمة «Network Selection» في شاشة الجهاز (صور حسن ٢١ نوفمبر): 5G/4G/3G · 5G NSA · 4G/3G · 4G only · 3G only
+    // — ما فيها 5G SA (Only_5G) فما نعرضها. 3G only ما نعرضه (الـ 3G شبه متوقف عندنا ويعلق على LIMITED_SERVICE).
+    netModes: [
+      { value: '00', label: 'تلقائي (5G/4G/3G)' },
+      { value: '0803', label: '5G NSA (4G + 5G)' },
+      { value: 'WCDMA_AND_LTE', label: '4G/3G' },
+      { value: '03', label: '4G فقط' },
+    ] }),
   // MC801A Pro (BD_XCBZHKMC801A ProV1.0.0B03 · WEB_XCBZHKG5BV1.0.0B03، زين) — جهاز حسن ٣٠ أكتوبر:
   // صفحة G5 بس كل التغييرات goform (service.js بدون ubus، و /ubus/ = 404). SET_BEARER_PREFERENCE رد success
   // بتوقيع sha:wa+cr = SHA256↑(SHA256↑(wa+cr)+RD). قبل كان مصنّف ubus فكل تغيير يوقف برسالة G5.

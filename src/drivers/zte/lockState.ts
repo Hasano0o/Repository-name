@@ -73,7 +73,7 @@ export const ZTE_PART_LABEL: Record<ZtePart, string> = {
 };
 
 const MODE_TEXT: Record<string, string> = {
-  Only_LTE: '4G فقط', Only_5G: '5G فقط', LTE_AND_5G: '4G + 5G', WL_AND_5G: 'تلقائي',
+  Only_LTE: '4G فقط', Only_5G: '5G فقط', LTE_AND_5G: '4G + 5G', WL_AND_5G: 'تلقائي', WCDMA_AND_LTE: '4G/3G',
 };
 
 export function zteSummary(d: ZteLockData): string {
