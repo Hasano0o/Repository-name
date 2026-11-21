@@ -10,6 +10,7 @@ import { useAutoStart } from '../../src/assistant/auto';
 import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession } from '../../src/store/sessions';
 import { runRouterOp } from '../../src/utils/routerOp';
+import { estimateLoad } from '../../src/utils/congestion';
 import { safeApply, trialMessage } from '../../src/utils/safeLock';
 import { BandConfig, CellTower, RouterDriver } from '../../src/drivers/types';
 import {
@@ -267,6 +268,7 @@ export default function GameScreen() {
         if (used !== reg) note = `خوادم ${reg.name} ما ترد من شبكتك الحين (${game.error ?? 'انتهت المهلة'}) — قسنا على ${used.name} بدالها`;
       }
       let sinr: number | undefined;
+      let towerLoad: number | undefined;
       let down2: number | undefined;
       try {
         const [sig, tr] = await withSession(info, async d => Promise.all([
@@ -274,11 +276,12 @@ export default function GameScreen() {
           d.getTraffic ? d.getTraffic().catch(() => null) : Promise.resolve(null),
         ]));
         sinr = sig?.sinr ?? sig?.nrSinr;
+        towerLoad = sig ? estimateLoad(sig.rsrq, sig.sinr) : undefined;
         down2 = tr?.downBytesPerSec;
       } catch {}
       const downs = [down1, down2].filter((x): x is number => typeof x === 'number');
       const down = downs.length ? Math.max(...downs) : undefined;
-      const dx = diagnose(game, wifi, sinr, down, wired);
+      const dx = diagnose(game, wifi, sinr, down, wired, towerLoad);
       if (!mounted.current) return;
       setCheck({ game, wifi, dx, note });
       if (game.samples) {

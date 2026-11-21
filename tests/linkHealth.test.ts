@@ -15,6 +15,8 @@ test('starved: يحتاج CQI عالي + MCS منخفض + تحميل فعلي', 
   assert.equal(starved(15, 3, 0), false);        // بدون تحميل: MCS منخفض طبيعي
   assert.equal(starved(8, 3, 7_000_000), false); // الاستقبال نفسه ضعيف — مو زحمة
   assert.equal(starved(15, 21, 7_000_000), false);
+  assert.equal(starved(15, 8, 7_000_000), false);  // فرق بسيط — ما نجزم
+  assert.equal(starved(11, 3, 7_000_000), false);
   assert.equal(starved(undefined, 3, 7_000_000), false);
 });
 
@@ -22,7 +24,8 @@ test('5G: الكفاءة «متوسط» وقت التحميل، والإرسال
   const nr = linkHealth(sig, 'NR', 7_273_361);
   const eff = nr.find(h => h.key === 'efficiency')!;
   assert.equal(eff.level, 'fair');
-  assert.match(eff.note, /مزحوم/);
+  assert.match(eff.note, /أقل من المتوقع/);
+  assert.ok(!/مزحوم/.test(eff.note)); // ما نجزم بالزحمة من الترميز
   assert.equal(nr.find(h => h.key === 'uplink')!.level, 'fair');
   // بدون تحميل يرجع على CQI
   assert.equal(linkHealth(sig, 'NR').find(h => h.key === 'efficiency')!.level, 'excellent');

@@ -2,12 +2,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
  * تقدير زحمة البرج من RSRQ:
- * البرج الفاضي يعطي RSRQ قريب من ‎-3، والمليان تماماً ينزل لحوالي ‎-11 (مع إشارة نظيفة).
- * يصلح فقط لما SINR كويس — لو فيه تشويش، RSRQ ينزل بسبب التشويش مو الزحمة.
+ * أبراجنا (STC/زين/موبايلي) ترسل من هوائيين أو أكثر — البرج الفاضي تماماً يعطي RSRQ حوالي ‎-6
+ * (‎-3 بس لبرج بهوائي واحد)، والمليان تماماً ينزل لحوالي ‎-11. أي شي تحت ‎-11 سببه تشويش الجيران مو الزحمة.
+ * يصلح فقط لما SINR نظيف (١٠+) — تحته التشويش نفسه ينزّل RSRQ فينحسب زحمة غلط.
  */
+export const LOAD_MIN_SINR = 10;
 export function estimateLoad(rsrq?: number, sinr?: number): number | undefined {
-  if (rsrq === undefined || sinr === undefined || sinr < 3) return undefined;
-  const EMPTY = -3.5;
+  if (rsrq === undefined || sinr === undefined || !Number.isFinite(rsrq) || sinr < LOAD_MIN_SINR) return undefined;
+  if (rsrq >= 0 || rsrq < -30) return undefined; // قيمة مو منطقية
+  const EMPTY = -6;
   const FULL = -11;
   const x = (EMPTY - rsrq) / (EMPTY - FULL);
   return Math.max(0, Math.min(1, x));
@@ -16,12 +19,20 @@ export function estimateLoad(rsrq?: number, sinr?: number): number | undefined {
 export type LoadLevel = 'free' | 'normal' | 'busy' | 'packed';
 export const LOAD_LABEL: Record<LoadLevel, string> = { free: 'فاضي', normal: 'طبيعي', busy: 'مزحوم', packed: 'مزحوم جداً' };
 export const LOAD_COLOR: Record<LoadLevel, string> = { free: '#12b76a', normal: '#5ba644', busy: '#f79009', packed: '#e5484d' };
+/** وسيط آخر القراءات — قراءة وحدة شاذة ما تقلب الحكم */
+export function smoothLoad(recent: number[]): number | undefined {
+  if (!recent.length) return undefined;
+  const v = [...recent].sort((a, b) => a - b);
+  const m = Math.floor(v.length / 2);
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+}
+
 export const loadLevel = (x: number): LoadLevel => (x < 0.35 ? 'free' : x < 0.6 ? 'normal' : x < 0.85 ? 'busy' : 'packed');
 
 // ─── السجل حسب الساعة ───
 
 export interface LoadSample { t: number; load: number; pci?: string }
-const key = (id: string) => `load:${id}`;
+const key = (id: string) => `load2:${id}`;
 const EVERY = 4 * 60 * 1000; // عينة كل ٤ دقائق كحد أقصى
 const KEEP_DAYS = 14;
 

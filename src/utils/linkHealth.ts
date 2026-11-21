@@ -27,7 +27,8 @@ export const BUSY_BPS = 250_000;
 
 /** الاستقبال نظيف (CQI عالي) بس البرج يرسل بترميز منخفض وقت التحميل ← زحمة/تقييد من البرج */
 export function starved(cqi?: number, mcs?: number, downBps?: number): boolean {
-  return cqi !== undefined && cqi >= 11 && mcs !== undefined && mcs >= 0 && mcs <= 9 && (downBps ?? 0) >= BUSY_BPS;
+  // الزحمة الحقيقية تقلل نصيبك من وقت البرج، مو الترميز — فالتنبيه بس للفرق الكبير الواضح
+  return cqi !== undefined && cqi >= 12 && mcs !== undefined && mcs >= 0 && mcs <= 6 && (downBps ?? 0) >= BUSY_BPS;
 }
 
 function efficiency(cqi?: number, mcs?: number, downBps?: number): HealthItem | null {
@@ -44,7 +45,7 @@ function efficiency(cqi?: number, mcs?: number, downBps?: number): HealthItem | 
   if (starved(cqi, mcs, downBps)) {
     return {
       key: 'efficiency', title: 'كفاءة الوصلة', bar: Math.min(1, (mcs ?? 0) / 27), value: `MCS ${mcs} · CQI ${cqi}`, level: 'fair',
-      note: 'استقبالك نظيف بس البرج يعطيك ترميز منخفض وقت التحميل — غالباً البرج مزحوم. جرّب برج أو تردد ثاني.',
+      note: 'استقبالك نظيف بس البرج يعطيك ترميز أقل من المتوقع وقت التحميل. لو السرعة ضعيفة فعلاً جرّب برج أو تردد ثاني.',
     };
   }
   const pct = Math.round(ratio * 100);

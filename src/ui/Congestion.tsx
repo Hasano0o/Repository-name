@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { View, Text } from '../i18n/rn';
 import { Signal } from '../drivers/types';
 import {
-  estimateLoad, loadLevel, LOAD_LABEL, LOAD_COLOR, LoadSample,
+  estimateLoad, smoothLoad, loadLevel, LOAD_LABEL, LOAD_COLOR, LoadSample,
   loadSamples, recordLoad, hourlyProfile, peakSentence,
 } from '../utils/congestion';
 import { C, R, S } from './theme';
@@ -27,7 +27,15 @@ export function useLoadHistory(routerId: string, signal: Signal | null, downBps?
   }, [routerId]);
 
   const own = (downBps ?? 0) > 150_000; // تحميلك أنت يرفع الرقم — ما نقيس وقتها
-  const load = signal ? estimateLoad(signal.rsrq, signal.sinr) : undefined;
+  const raw = signal && !own ? estimateLoad(signal.rsrq, signal.sinr) : undefined;
+  // وسيط آخر ٥ قراءات لنفس البرج (يتصفّر لو تغيّر البرج)
+  const recent = useRef<{ pci?: string; v: number[] }>({ v: [] });
+  if (raw !== undefined) {
+    if (recent.current.pci !== signal?.pci) recent.current = { pci: signal?.pci, v: [] };
+    const last = recent.current.v;
+    if (last[last.length - 1] !== raw || last.length < 2) recent.current.v = [...last, raw].slice(-5);
+  }
+  const load = raw === undefined ? undefined : smoothLoad(recent.current.v);
 
   useEffect(() => {
     if (load === undefined || own || !listRef.current) return;

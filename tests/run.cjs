@@ -141,6 +141,9 @@ const files = [
   // الترجمة: المحرك الصافي + القاموس (والفاحص tests/i18nScan.cjs ينادى من مجلد المشروع)
   // «وش بتلعب؟» — الألعاب ومناطقها
   'src/utils/games.ts',
+  // زحمة البرج + حكم «جاهز للعب؟» (AsyncStorage يتبدّل داخل الاختبار)
+  'src/utils/congestion.ts',
+  'src/utils/latency.ts',
   'src/utils/esimMask.ts',
   'src/i18n/lookup.ts',
   'src/i18n/en.ts',

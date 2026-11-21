@@ -234,7 +234,7 @@ export interface Diagnosis {
  * «جاهز للعب؟» — يجمع قياس الواي فاي وقياس السيرفر والإشارة ويطلع السبب.
  * wifi = بين الجوال والراوتر، game = للسيرفر، sinr = نقاء إشارة الراوتر (إن توفر)
  */
-export function diagnose(game: LatencyResult, wifi: LatencyResult | null, sinr?: number, downBps?: number, wired = false): Diagnosis {
+export function diagnose(game: LatencyResult, wifi: LatencyResult | null, sinr?: number, downBps?: number, wired = false, towerLoad?: number): Diagnosis {
   const score = gameScore(game);
   const light = scoreLight(score);
 
@@ -303,10 +303,18 @@ export function diagnose(game: LatencyResult, wifi: LatencyResult | null, sinr?:
   }
 
   if (game.jitter > 20 || game.lossPct > 1) {
+    // «البرج زحمة» بس لو قراءة الإشارة نفسها تقول إن البرج محمّل — غير كذا ما نقدر نجزم
+    if (towerLoad !== undefined && towerLoad >= 0.6) {
+      return {
+        light, score, title: 'البرج زحمة الحين',
+        cause: `الإشارة نظيفة، بس البرج محمّل والتذبذب ${game.jitter}ms${game.lossPct ? ` والفقد ${game.lossPct}%` : ''}`,
+        fix: 'جرّب مُحسّن اللعبة يدور لك تردد أهدى، أو العب وقت أخف',
+      };
+    }
     return {
-      light, score, title: 'البرج زحمة الحين',
-      cause: `الإشارة زينة، بس التذبذب ${game.jitter}ms${game.lossPct ? ` والفقد ${game.lossPct}%` : ''} — غالباً ضغط على البرج`,
-      fix: 'جرّب مُحسّن اللعبة يدور لك تردد أهدى، أو العب وقت أخف',
+      light, score, title: 'الاتصال متذبذب الحين',
+      cause: `التذبذب ${game.jitter}ms${game.lossPct ? ` والفقد ${game.lossPct}%` : ''} — ممكن من الواي فاي بالبيت أو من الشبكة`,
+      fix: 'قرّب من الراوتر أو اتصل بـ 5GHz أو كيبل وأعد الفحص — ولو استمر جرّب مُحسّن اللعبة يدور لك تردد أهدى',
     };
   }
 

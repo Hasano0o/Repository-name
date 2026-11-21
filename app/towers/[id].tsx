@@ -195,6 +195,7 @@ export default function TowersScreen() {
   const [confirmed, setConfirmed] = useState<Set<string>>(new Set());
   const [nrAvail, setNrAvail] = useState<number | undefined>();
   const [sigNow, setSigNow] = useState<Signal | null>(null);
+  const [downNow, setDownNow] = useState<number | undefined>();
   const [nrFound, setNrFound] = useState<CellTower[] | null>(null);
   const [nrScan, setNrScan] = useState<{ left: number } | null>(null);
   const nrStop = useRef(false);
@@ -228,7 +229,7 @@ export default function TowersScreen() {
     setError('');
     try {
       // بالتسلسل: بعض الراوترات (ZTE) ما تحب الطلبات المتوازية
-      const [list, lock, supports, sig, cfg, chan] = await withSession(r, async d => [
+      const [list, lock, supports, sig, cfg, chan, tr] = await withSession(r, async d => [
         d.getCells ? await d.getCells() : ([] as CellTower[]),
         d.getCellLocks
           ? await d.getCellLocks().catch(() => [] as CellLockState[])
@@ -237,6 +238,7 @@ export default function TowersScreen() {
         d.getSignal ? await d.getSignal().catch(() => null) : null,
         d.getBandConfig && d.setBand ? await d.getBandConfig().catch(() => null) : null,
         typeof d.lockChannel === 'function' && !d.cellLockRisk,
+        d.getTraffic ? await d.getTraffic().catch(() => null) : null,
       ] as const);
       const known = await loadConfirmed(r.id);
       const next = await rememberActive(r.id, list, known);
@@ -246,6 +248,7 @@ export default function TowersScreen() {
       setPings(await loadTowerPings(r.id));
       setNrAvail(sig?.nrAvailable);
       setSigNow(sig);
+      setDownNow(tr?.downBytesPerSec);
       setLocks(lock);
       setCanLock(supports);
       // قفل القناة: بس لو الراوتر يدعم الأدوار (lock-freq شغال) — وإلا ما نعرضه
@@ -664,7 +667,7 @@ export default function TowersScreen() {
 
         {/* زحمة البرج الحالي + أوقات الزحمة عبر اليوم (كانت مدفونة في التفاصيل) — وقت الفحص/التثبيت ما نسجّل */}
         {!loading && info && !!sigNow && (
-          <CongestionCard routerId={info.id} signal={sigNow} downBps={busy ? 1e9 : undefined} />
+          <CongestionCard routerId={info.id} signal={sigNow} downBps={busy ? 1e9 : downNow} />
         )}
 
         {!loading && info && trialCount > 0 && (
