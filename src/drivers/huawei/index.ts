@@ -576,6 +576,28 @@ export class HuaweiDriver implements RouterDriver {
       return ok;
     } catch (e: any) { diag(`[huawei] بيان الخصوصية: الموافقة ما مشت (${String(e?.message ?? e).slice(0, 40)})`); return false; }
   }
+  /**
+   * الآيفون (كوكي يدوي) + H155 / 5G CPE 5: الدخول ينجح والكوكي يتبدّل بعد التحقق، بس القراءات المحمية ترد 100003
+   * (و device/information تنقرأ). تقارير ١٤ يوم: «يمنع القراءة» ٤٧ آيفون مقابل ٢ أندرويد — والفرق إن الأندرويد يطلب
+   * monitoring/status مع «Update-Cookie: UpdateCookie» (صفحة الراوتر ترسلها مع كل monitoring/status، main.js) والآيفون
+   * كان يتخطاها. نطلبها مرة بعد الدخول، ناخذ الكوكي الجديد (takeCookie) ونعيد القراءة. قراءة بس — مرة لكل دخول.
+   */
+  private renewTried = false;
+  private async renewCookieAfterLogin(): Promise<boolean> {
+    if (this.renewTried || !this.manualCookie) return false;
+    this.renewTried = true;
+    const before = this.cookie;
+    try {
+      const r = await this.http(this.url('monitoring/status'), { headers: this.headers({ 'Update-Cookie': 'UpdateCookie' }) }, 5000);
+      await r.text();
+      this.queue = [];
+    } catch (e: any) {
+      diag(`[huawei] تجديد الكوكي بعد الدخول ما مشى (${String(e?.message ?? e).slice(0, 40)})`);
+      return false;
+    }
+    diag(`[huawei] تجديد الكوكي بعد الدخول (Update-Cookie): ${this.cookie !== before ? 'تغيّر' : 'نفسه'} — نعيد القراءة`);
+    return true;
+  }
   /** فحص «الجلسة شغالة بس محدودة» — مرة لكل دخول */
   private limitedTried = false;
   /**
@@ -626,6 +648,10 @@ export class HuaweiDriver implements RouterDriver {
         // مو على المعالج: يمكن بيان الخصوصية ما انقبل (فيرموير Vue بعد ضبط المصنع) — نوافق مثل الصفحة ونعيد القراءة مرة
         if (again && await this.acceptPrivacyIfNeeded()) {
           await new Promise(res => setTimeout(res, 800));
+          return this.get(p, false, false);
+        }
+        if (again && await this.renewCookieAfterLogin()) {
+          await new Promise(res => setTimeout(res, 500));
           return this.get(p, false, false);
         }
         if (this.setupState === false && await this.sessionAliveButLimited()) { await this.leaveQuietly(); throw limitedError(this.host); }
@@ -931,6 +957,7 @@ export class HuaweiDriver implements RouterDriver {
     this.setupState = null;
     this.privacyTried = false;
     this.limitedTried = false;
+    this.renewTried = false;
     await this.updateCookie();
     if (this.manualCookie) { try { await this.sesTok(); } catch { this.manualCookie = false; } }
     // صفحة الراوتر الجديدة (H158/H155…) تسجّل دخول بـ SCRAM (challenge_login) — والدخول القديم (user/login)
