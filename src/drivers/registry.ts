@@ -41,6 +41,10 @@ const factories: (() => RouterDriver)[] = [
   // لوحة FG360 (AW1000 — 5G CPE، :8088/cgi-bin/api.cgi) — قبل الكل: على المنفذ 80 فيه LuCI تعلق وتضيّع وقت الباقين.
   // يدق على :8088 بس (مهلة 2.5ث) — راوتر ما فيه هالمنفذ يرفض فوراً
   () => new Fg360Driver(),
+  // ZLT / SIMCom «war» (X10 · X21 · X28 Pro · VN007+ · X300A، /cgi-bin/http.cgi JSON، دخول sha256(token+كلمة)) — من ملفات «مو مدعوم؟» لـ ٤ أعضاء (٢١ نوفمبر).
+  // مبكر (مثل FG360): طلب واحد «/» بمهلة ٣ث يكفي يعرفه. X300A عند عضو علق على «نتعرّف على نوع الراوتر» — كان آخر القائمة
+  // وكل درايفر قبله يدق مساراته على راوتر ZLT وينتظر المهلة.
+  () => new ZltDriver(),
   () => new HuaweiDriver(),
   () => new ZteDriver(),
   // ZTE الجيل الجديد (U60 Pro / MU5250 …) — ubus بدل goform. قراءة بس للحين
@@ -63,8 +67,6 @@ const factories: (() => RouterDriver)[] = [
   () => new StcAxDriver(),
   // سلام HomeFi Max الخارجي (Asiatelco JW515، 192.168.100.1، واجهة /schd/ + REST /rest/1.0/، دخول sha1) — من ملفات «مو مدعوم؟» (٢٠ نوفمبر). دخول + قراءة + FULL
   () => new AtelSchdDriver(),
-  // ZLT / SIMCom «war» (X10 · X21 · X28 Pro · VN007+ · X300A، /cgi-bin/http.cgi JSON، دخول sha256(token+كلمة)) — من ملفات «مو مدعوم؟» لـ ٤ أعضاء (٢١ نوفمبر). دخول + إشارة + FULL
-  () => new ZltDriver(),
   // OpenWrt / LuCI القديم (5G CPE Pro 7 — ١ نوفمبر): الدخول + ملفات FULL، والإشارة بعد ما نشوف صفحاتها
   () => new LuciDriver(),
   // D-Link DWR-2000M / DWR-3000M (React «cpe-webui»، JSON على /acfun/، دخول HMAC-MD5) — من ملفات صفحة ٣ أعضاء (٣١ أكتوبر). قراءة بس للحين

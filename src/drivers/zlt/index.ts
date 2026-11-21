@@ -56,7 +56,7 @@ export class ZltDriver implements RouterDriver {
     if (!isLanHost(host)) return false;
     this.host = host;
     try {
-      const r = await http(this.base() + '/', { method: 'GET' }, 4000);
+      const r = await http(this.base() + '/', { method: 'GET' }, 3000);
       return isZltPage(await r.text());
     } catch { return false; }
   }
