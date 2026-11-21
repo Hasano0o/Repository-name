@@ -72,6 +72,11 @@ export const MODELS = {
     note: 'الترددات ووضع الشبكة وإعادة التشغيل — من كود صفحة الراوتر (لسا ما انجرّبت ميداني)' }),
   u10sPro: P({ id: 'u10s-pro', label: 'ZTE U10S Pro', brand: 'zte', tech: '4G', write: 'goform', nrLock: false, note: 'راوتر جيب 4G — ما فيه 5G' }),
   zteG5: P({ id: 'zte-g5', label: 'ZTE (G5)', brand: 'zte', tech: '5G', write: 'ubus', nrLock: true }),
+  // VORTEX-3 موديل M49 (Shenzhen WeWins، جيب 4G على 192.168.8.1) — ملف عضو ٢١ نوفمبر (dumps/mwqpc8524zk9yg):
+  // صفحة ZTE goform (config.js: MODEL MF295N · DEVICE cpe/MF283U · نسخة النظام V3.Mobile.R…) — الدخول LD + WEB_ATTR_IF_SUPPORT_SHA256 مثل باقي ZTE.
+  // service.js ما فيه BAND_SELECT ولا قفل برج ولا SET_BEARER_PREFERENCE ← قراءة بس لين تنجرّب الكتابة ميداني.
+  vortexM49: P({ id: 'vortex-m49', label: 'VORTEX-3 (M49)', brand: 'zte', tech: '4G', write: 'goform', nrLock: false, writeUnverified: true,
+    note: 'جيب 4G — ما يدعم تثبيت الترددات ولا البرج' }),
   zte: P({ id: 'zte', label: 'ZTE', brand: 'zte', tech: '5G', write: 'goform' }),
   // MU5250 (zwrt): نفس درايفر U60 Pro بس فيرمويره يرفض gwl_bandlock (مو في ACL «web») — لسا ما تأكد ← كرت FULL يطلع
   mu5250: P({ id: 'mu5250', label: 'ZTE MU5250', brand: 'zte', tech: '5G', write: 'ubus', nrLock: true, note: 'تثبيت 5G يسري على وضع SA بس' }),
@@ -94,6 +99,7 @@ export function identifyZte(wa?: string, web?: string, hw?: string): ModelProfil
   if (/U30\s*Air/i.test(s)) return MODELS.u30Air;
   if (/U30\s*Pro|MU5358|MU3351/i.test(s)) return MODELS.u30Pro;
   if (/U10S\s*Pro/i.test(s)) return MODELS.u10sPro;
+  if (/VORTEX|MF295N|V3\.Mobile/i.test(s)) return MODELS.vortexM49;
   if (/MC801A\s*Pro/i.test(s)) return MODELS.mc801aPro;
   // صفحة G5 (WEB_…G5…) = عائلة جديدة: تقرا goform وتكتب ubus
   if (/(^|_)WEB_\w*G5/i.test(web ?? '') || /G5[A-Z]?V\d/i.test(web ?? '')) {
