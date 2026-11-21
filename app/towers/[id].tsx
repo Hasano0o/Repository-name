@@ -667,7 +667,7 @@ export default function TowersScreen() {
 
         {/* زحمة البرج الحالي + أوقات الزحمة عبر اليوم (كانت مدفونة في التفاصيل) — وقت الفحص/التثبيت ما نسجّل */}
         {!loading && info && !!sigNow && (
-          <CongestionCard routerId={info.id} signal={sigNow} downBps={busy ? 1e9 : downNow} />
+          <CongestionCard routerId={info.id} signal={sigNow} downBps={busy ? 1e9 : downNow} router={busy ? undefined : info} />
         )}
 
         {!loading && info && trialCount > 0 && (

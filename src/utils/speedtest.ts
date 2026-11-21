@@ -113,9 +113,10 @@ async function transfer(
   kind: 'down' | 'up',
   onTick: (mbps: number, frac: number) => void,
   isCancelled: () => boolean,
+  durMs: number = DUR_MS,
 ): Promise<{ mbps: number; bytes: number }> {
   const start = Date.now();
-  const end = start + DUR_MS;
+  const end = start + durMs;
   const chunks: Chunk[] = [];
   let total = 0;
   let failures = 0;
@@ -165,7 +166,7 @@ async function transfer(
     for (const c of chunks) if (c.t1 > lastT) lastT = c.t1;
     const from = Math.max(start + WARMUP_MS, lastT - 2000);
     const cur = lastT > from ? windowMbps(chunks, from, lastT) : 0;
-    onTick(cur, Math.min(1, (now - start) / DUR_MS));
+    onTick(cur, Math.min(1, (now - start) / durMs));
     if (now >= lastGrow + 1000 && now < end - 2500) {
       lastGrow = now;
       const want = wantStreams(running.length, cur, kind);
@@ -184,6 +185,15 @@ async function transfer(
   if (isCancelled()) throw new Error('cancelled');
   if (!chunks.length) throw new Error(kind === 'down' ? 'ما قدرنا نحمّل من خادم القياس' : 'ما قدرنا نرفع لخادم القياس');
   return { mbps: finalMbps(chunks, start, { warmupMs: WARMUP_MS }), bytes: total };
+}
+
+/** تنزيل قصير بس (بدون بنق ولا رفع) — لـ«قِس الزحمة الحين» */
+export async function quickDownload(
+  durMs = 6000,
+  onTick: (mbps: number, frac: number) => void = () => {},
+  isCancelled: () => boolean = () => false,
+): Promise<{ mbps: number; bytes: number }> {
+  return transfer('down', onTick, isCancelled, durMs);
 }
 
 export async function runSpeedTest(

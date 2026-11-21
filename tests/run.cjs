@@ -143,6 +143,7 @@ const files = [
   'src/utils/games.ts',
   // زحمة البرج + حكم «جاهز للعب؟» (AsyncStorage يتبدّل داخل الاختبار)
   'src/utils/congestion.ts',
+  'src/utils/loadProbe.ts',
   'src/utils/latency.ts',
   'src/utils/esimMask.ts',
   'src/i18n/lookup.ts',
