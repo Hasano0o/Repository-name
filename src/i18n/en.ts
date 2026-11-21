@@ -2116,6 +2116,12 @@ export const EN: Record<string, string> = {
   'تعرف فني شاطر؟ خلّه يسجّل من الزر تحت.': 'Know a good technician? Have them register from the button below.',
   'مدن ثانية': 'Other cities',
   'أنت فني أنتينا؟': 'Are you an antenna technician?',
+  'وين برجي؟': 'Where is my tower?',
+  'انسخ الرقم': 'Copy the number',
+  'افتح الخريطة': 'Open the map',
+  'وش شركة الشريحة؟': 'What\'s your SIM carrier?',
+  'عشان نفتح خريطة أبراجها.': 'So we can open its tower map.',
+  '📍 وين برجي على الخريطة؟': '📍 Where is my tower on the map?',
   'نقيس سرعة التحميل...': 'Measuring download speed...',
   'أفضل برج للألعاب وللتحميل': 'Best tower for gaming and downloads',
   'البنق بس': 'Ping only',
@@ -2365,6 +2371,8 @@ export const EN: Record<string, string> = {
 };
 
 export const EN_PATTERNS: Record<string, string> = {
+  'رقم موقع برجك (eNB): {0}\n\nبنفتح خريطة {1} في CellMapper على {2}. عشان يطلع برجك بالضبط: Menu ← Search ← Tower Search واكتب الرقم.\n\nالخريطة يعبّيها مستخدمين، فممكن برجك ما يكون مسجّل فيها.': 'Your tower site number (eNB): {0}\n\nWe\'ll open the {1} map on CellMapper at {2}. To find your exact tower: Menu ← Search ← Tower Search and enter the number.\n\nThe map is filled by users, so your tower may not be listed.',
+  'eNB {0}': 'eNB {0}',
   'برجك الحالي: ⬇️ {0} ميقا': 'Your current tower: ⬇️ {0} Mbps',
   'بنجرب {0} أبراج، كل برج دقيقة إلى دقيقتين. النت بينقطع أثناءها، وممكن الراوتر يعيد التشغيل. وبعدها نرجّع إعدادك.\n\n«البنق والسرعة» يقيس كمان سرعة التحميل ٥ ثواني لكل برج (يستهلك تقريباً ٢٠–٣٠٠ ميقا).': 'We\'ll try {0} towers, 1–2 minutes each. Internet drops during the test and the router may restart. Then we restore your settings.\n\n“Ping and speed” also measures download speed for 5 seconds per tower (uses about 20–300 MB).',
   'قيس الأبراج ({0})': 'Test towers ({0})',

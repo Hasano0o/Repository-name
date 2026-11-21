@@ -20,6 +20,7 @@ import { tBg, tFg } from '../../src/ui/theme';
 import { hostLabel } from '../../src/drivers/device';
 import { sheet } from '../../src/i18n';import { HubLinks } from '../../src/ui/HubLinks';
 import { DiagnosisCard } from '../../src/ui/Diagnosis';
+import { TowerMapLink } from '../../src/ui/TowerMapLink';
 
 type Info = { label: string; value?: string; accent?: string };
 
@@ -176,6 +177,7 @@ export default function DetailsScreen() {
                   { label: 'MCS تنزيل / رفع', value: [signal.dlMcs, signal.ulMcs].filter(v => v !== undefined).join(' / ') || undefined },
                   { label: 'قوة الإرسال', value: signal.txPower !== undefined ? `${signal.txPower} dBm` : undefined },
                 ]} />
+                {!!info && <TowerMapLink router={info} signal={signal} />}
               </View>
             </Section>
 

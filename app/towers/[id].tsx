@@ -17,6 +17,7 @@ import {
 import { C, tBd, tBg, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { CongestionCard } from '../../src/ui/Congestion';
+import { TowerMapLink } from '../../src/ui/TowerMapLink';
 import { trafficBurst, collectNr, mb } from '../../src/utils/nrprobe';
 import { safeApply, lastTrial, trialNote, trialMessage, loadTrials } from '../../src/utils/safeLock';
 import { driverById } from '../../src/drivers/registry';
@@ -691,6 +692,8 @@ export default function TowersScreen() {
         {!loading && info && !!sigNow && (
           <CongestionCard routerId={info.id} signal={sigNow} downBps={busy ? 1e9 : downNow} router={busy ? undefined : info} />
         )}
+
+        {!loading && info && !!sigNow && <TowerMapLink router={info} signal={sigNow} />}
 
         {!loading && info && trialCount > 0 && (
           <Pressable style={[s.carrLink, { backgroundColor: C.goldSoft }]} onPress={() => router.push(`/trials/${info.id}` as Href)}>
