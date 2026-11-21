@@ -45,6 +45,11 @@ import { Chunk, finalMbps, wantStreams, windowMbps } from './speedCore';
 const BASE = 'https://speed.cloudflare.com';
 const STREAMS = 4;
 const DUR_MS = 8000;
+/**
+ * سقف قطعة التنزيل: كانت ٥٠ ميقا × لين ٨ اتصالات = مئات الميقا في ذاكرة الجوال مع الخطوط السريعة (٣٠٠+ ميقابت)
+ * ← أندرويد يقفل التطبيق (فيديو حسن ٢١ نوفمبر، «قِس الزحمة الحين» عند ٣٦٠ ميقا). ٢٠ ميقا = ~١٦٠ms على خط ١ جيجا.
+ */
+const MAX_DOWN = 20_000_000;
 const WARMUP_MS = 1000;
 
 const nocache = () => `r=${Math.random().toString(36).slice(2)}`;
@@ -114,6 +119,8 @@ async function transfer(
   onTick: (mbps: number, frac: number) => void,
   isCancelled: () => boolean,
   durMs: number = DUR_MS,
+  /** أكبر قطعة تنزيل — كل قطعة تنحمّل كاملة في الذاكرة قبل ما نحسبها */
+  maxDown: number = MAX_DOWN,
 ): Promise<{ mbps: number; bytes: number }> {
   const start = Date.now();
   const end = start + durMs;
@@ -136,7 +143,10 @@ async function transfer(
         let got: number;
         if (kind === 'down') {
           const r = await timed(`${BASE}/__down?bytes=${size}&${nocache()}`, {}, 15000, ctrl.signal);
-          got = (await r.arrayBuffer()).byteLength;
+          // Blob بدل arrayBuffer: البيانات تبقى خارج ذاكرة JS (arrayBuffer بأندرويد يمر بـ base64 = ٣ أضعاف الحجم)
+          const blob = await r.blob();
+          got = blob.size;
+          try { (blob as any).close?.(); } catch {}
         } else {
           const r = await timed(`${BASE}/__up?${nocache()}`, { method: 'POST', body: payload(size) }, 15000, ctrl.signal);
           await r.text();
@@ -146,7 +156,7 @@ async function transfer(
         chunks.push({ t0, t1: Date.now(), bytes: got });
         const took = Math.max(1, Date.now() - t0);
         // القطعة الجاية تاخذ ~٧٠٠ms (بين ٢٥٠ ألف و٥٠ ميقا تنزيل / ١٠ ميقا رفع)
-        const max = kind === 'down' ? 50_000_000 : 10_000_000;
+        const max = kind === 'down' ? maxDown : 10_000_000;
         size = Math.round(Math.min(max, Math.max(250_000, (size * 700) / took)));
       } catch {
         if (Date.now() >= end || isCancelled()) break;
@@ -193,7 +203,8 @@ export async function quickDownload(
   onTick: (mbps: number, frac: number) => void = () => {},
   isCancelled: () => boolean = () => false,
 ): Promise<{ mbps: number; bytes: number }> {
-  return transfer('down', onTick, isCancelled, durMs);
+  // القياس القصير يكفيه قطع أصغر — أخف على الذاكرة (٨ اتصالات × ٨ ميقا بالكثير)
+  return transfer('down', onTick, isCancelled, durMs, 8_000_000);
 }
 
 export async function runSpeedTest(
