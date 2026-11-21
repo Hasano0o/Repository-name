@@ -8,6 +8,9 @@ export interface TowerPing {
   score: number;
   region: string;
   at: number;
+  /** سرعة التحميل على البرج (ميقابت) — من فحص «البنق والسرعة» */
+  mbps?: number;
+  mbpsAt?: number;
 }
 
 const KEY = (id: string) => `bandly.towerping.${id}`;
@@ -25,7 +28,9 @@ export async function loadTowerPings(routerId: string): Promise<Record<string, T
 
 export async function saveTowerPing(routerId: string, key: string, p: TowerPing): Promise<Record<string, TowerPing>> {
   const all = await loadTowerPings(routerId);
-  all[key] = p;
+  // قياس بنق بس ما يمسح سرعة مقاسة قبل على نفس البرج
+  const prev = all[key];
+  all[key] = p.mbps === undefined && prev?.mbps !== undefined ? { ...p, mbps: prev.mbps, mbpsAt: prev.mbpsAt } : p;
   // نخلي آخر ٤٠ برج بس
   const trimmed = Object.fromEntries(Object.entries(all).sort((a, b) => b[1].at - a[1].at).slice(0, 40));
   try { await AsyncStorage.setItem(KEY(routerId), JSON.stringify(trimmed)); } catch {}

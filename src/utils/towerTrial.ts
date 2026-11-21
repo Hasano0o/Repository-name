@@ -18,6 +18,7 @@ import type { LockSnapshot } from '../drivers/lockSnapshot';
 import { settleMsFor } from '../drivers/lockSnapshot';
 import { measureUrl, regionUrls, selectedRegion, gameScore } from './latency';
 import { TowerPing, saveTowerPing, towerPingKey } from '../store/towerPing';
+import { quickDownload } from './speedtest';
 import { diag } from '../services/diag';
 
 export interface TrialTarget {
@@ -67,6 +68,8 @@ export async function runTowerTrials(r: SavedRouter, targets: TrialTarget[], pre
   samples?: number;
   /** عملية شغالة على الراوتر (لو الفحص جزء من عملية أكبر) */
   op?: RouterOp;
+  /** نقيس كمان سرعة التحميل (٥ ثواني) على كل برج — لـ«أفضل برج للتحميل» */
+  speed?: boolean;
 } = {}): Promise<TrialRun> {
   const cancelled = o.isCancelled ?? (() => false);
   const step = o.onStep ?? (() => {});
@@ -165,8 +168,16 @@ export async function runTowerTrials(r: SavedRouter, targets: TrialTarget[], pre
           continue;
         }
         const ping: TowerPing = { ping: res.median, jitter: res.jitter, loss: res.lossPct, score: gameScore(res), region: region.id, at: Date.now() };
+        if (o.speed && !cancelled()) {
+          step({ i: i + 1, n, name: t.name, step: 'نقيس سرعة التحميل...' });
+          try {
+            const d = await quickDownload(5000, () => {}, cancelled);
+            ping.mbps = Math.round(d.mbps * 10) / 10;
+            ping.mbpsAt = Date.now();
+          } catch {}
+        }
         await saveTowerPing(r.id, towerPingKey(t.tech, t.pci), ping);
-        push({ t, outcome: 'measured', ping, ...base, note: `${res.median}ms` });
+        push({ t, outcome: 'measured', ping, ...base, note: `${res.median}ms${ping.mbps !== undefined ? ` · ⬇️ ${Math.round(ping.mbps)} ميقا` : ''}` });
       }
     } finally {
       // نرجّع التثبيت اللي كان — حتى لو انلغى أو صار خطأ في النص

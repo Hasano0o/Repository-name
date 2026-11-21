@@ -2116,6 +2116,15 @@ export const EN: Record<string, string> = {
   'تعرف فني شاطر؟ خلّه يسجّل من الزر تحت.': 'Know a good technician? Have them register from the button below.',
   'مدن ثانية': 'Other cities',
   'أنت فني أنتينا؟': 'Are you an antenna technician?',
+  'نقيس سرعة التحميل...': 'Measuring download speed...',
+  'أفضل برج للألعاب وللتحميل': 'Best tower for gaming and downloads',
+  'البنق بس': 'Ping only',
+  'البنق والسرعة': 'Ping and speed',
+  'نثبّت على كل برج بالدور، ونقيس البنق لسيرفر لعبتك (وسرعة التحميل لو اخترتها)، وبعدها نرجّع إعدادك. النتيجة تظهر جنب كل برج تحت، ونقول لك أفضل واحد لكل استخدام وتثبّت عليه بضغطة.': 'We lock onto each tower in turn and measure ping to your game server (and download speed if you choose it), then restore your settings. Results show next to each tower below, with the best one for each use and a one-tap lock.',
+  'نفس أفضل برج للألعاب — تثبيت واحد يكفي 👆': 'Same as the best gaming tower — one lock covers both 👆',
+  '📌 ثبّت عليه للتحميل': '📌 Lock it for downloads',
+  '📌 ثبّت عليه للألعاب': '📌 Lock it for gaming',
+  '💡 عشان نعرف أفضل برج للتحميل، اختر «البنق والسرعة» وقت الفحص.': '💡 To find the best tower for downloads, choose “Ping and speed” when scanning.',
   '📶 ما لقينا راوترك من جوالك': '📶 We couldn\'t find your router from your phone',
   '١. افتح إعدادات الواي فاي في جوالك واتصل بشبكة الراوتر — اسمها مكتوب على الملصق تحت الراوتر (WiFi Name / SSID).': '1. Open your phone\'s Wi-Fi settings and join the router\'s network — its name is on the label under the router (WiFi Name / SSID).',
   '٢. لو الراوتر ما فيه إنترنت الحين، جوالك ممكن يطلع منه لحاله — اختر «البقاء متصل» وطفّ بيانات الجوال.': '2. If the router has no internet right now, your phone may drop it on its own — choose “Stay connected” and turn off mobile data.',
@@ -2356,6 +2365,12 @@ export const EN: Record<string, string> = {
 };
 
 export const EN_PATTERNS: Record<string, string> = {
+  'برجك الحالي: ⬇️ {0} ميقا': 'Your current tower: ⬇️ {0} Mbps',
+  'بنجرب {0} أبراج، كل برج دقيقة إلى دقيقتين. النت بينقطع أثناءها، وممكن الراوتر يعيد التشغيل. وبعدها نرجّع إعدادك.\n\n«البنق والسرعة» يقيس كمان سرعة التحميل ٥ ثواني لكل برج (يستهلك تقريباً ٢٠–٣٠٠ ميقا).': 'We\'ll try {0} towers, 1–2 minutes each. Internet drops during the test and the router may restart. Then we restore your settings.\n\n“Ping and speed” also measures download speed for 5 seconds per tower (uses about 20–300 MB).',
+  'قيس الأبراج ({0})': 'Test towers ({0})',
+  '🎮 أفضل للألعاب: برج {0} · {1} — {2}ms': '🎮 Best for gaming: tower {0} · {1} — {2}ms',
+  '⬇️ أفضل للتحميل: برج {0} · {1} — {2} ميقا': '⬇️ Best for downloads: tower {0} · {1} — {2} Mbps',
+  '⬇️ {0} ميقا': '⬇️ {0} Mbps',
   'نقيس… {0}': 'Measuring… {0}',
   'وصلك {0} ميقا من حوالي {1} تسمح فيها إشارتك': 'You got {0} Mbps of about {1} your signal allows',
   'وصلنا تسجيل {0}. أول ما ينقبل يطلع اسمك للعملاء ويوصلك «مفتاح الفني» هنا — اسحب الصفحة لتحت عشان تحدّث.': 'We got {0}\'s registration. Once approved your name shows to customers and your tech key appears here — pull down to refresh.',

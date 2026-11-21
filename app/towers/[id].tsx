@@ -26,6 +26,7 @@ import { bandLabel } from '../../src/utils/bands';
 import { TowerPing, loadTowerPings, saveTowerPing, towerPingKey, pingAgo } from '../../src/store/towerPing';
 import { measureUrl, regionUrls, selectedRegion, gameScore } from '../../src/utils/latency';
 import { runTowerTrials, TrialTarget } from '../../src/utils/towerTrial';
+import { quickDownload } from '../../src/utils/speedtest';
 
 import { sheet } from '../../src/i18n';
 const BADGE_BG: Record<TowerGroup['badge'], string> = {
@@ -114,6 +115,12 @@ function TowerGroupCard({ g, rank, lockedHere, canPin, busy, onLock, onCopy, not
             <View style={[s.pingChip, { borderColor: pingCol(ping) }]}>
               <Text style={[s.pingVal, { color: pingCol(ping) }]}>⚡ {ping.ping}ms</Text>
               <Text style={s.pingAgo}>{pingAgo(ping.at)}</Text>
+            </View>
+          )}
+          {ping?.mbps !== undefined && (
+            <View style={[s.pingChip, { borderColor: C.blue }]}>
+              <Text style={[s.pingVal, { color: C.blue }]}>⬇️ {Math.round(ping.mbps)} ميقا</Text>
+              <Text style={s.pingAgo}>{pingAgo(ping.mbpsAt ?? ping.at)}</Text>
             </View>
           )}
           <Chip label="SINR" value={g.best.sinr} />
@@ -296,13 +303,27 @@ export default function TowersScreen() {
   };
 
   /** يقفل على كل برج بالدور ويقيس البنق، وبعدها يرجّع التثبيت اللي كان (المحرك في towerTrial) */
-  const scanPings = async (cands: TowerGroup[]) => {
+  const scanPings = async (cands: TowerGroup[], speed = false) => {
     if (!info) return;
     const r = info;
     scanCancel.current = false;
     setScanDone([]);
     setBusy(true);
     setError('');
+    if (speed && sigNow) {
+      // البرج الحالي ينقاس بدون تثبيت — عشان نقارن الأبراج الثانية فيه
+      setScan({ i: 0, n: 0, name: 'برجك الحالي', step: 'نقيس سرعة التحميل...' });
+      try {
+        const d = await quickDownload(5000, () => {}, () => scanCancel.current || !alive.current);
+        const mbps = Math.round(d.mbps * 10) / 10;
+        const cur = await loadTowerPings(r.id);
+        for (const k of [sigNow.pci ? towerPingKey('LTE', String(sigNow.pci)) : '', sigNow.nrPci ? towerPingKey('NR', String(sigNow.nrPci)) : ''].filter(Boolean)) {
+          const prev = cur[k];
+          if (prev) await saveTowerPing(r.id, k, { ...prev, mbps, mbpsAt: Date.now() });
+        }
+        if (alive.current) { setScanDone([`برجك الحالي: ⬇️ ${Math.round(mbps)} ميقا`]); setPings(await loadTowerPings(r.id)); }
+      } catch {}
+    }
     const targets: TrialTarget[] = [];
     for (const g of cands) {
       const cell = g.cells.find(c => c === g.best && c.arfcn) ?? g.cells.find(c => c.arfcn);
@@ -319,6 +340,7 @@ export default function TowersScreen() {
         },
         isCancelled: () => scanCancel.current || !alive.current,
         samples: 1,
+        speed,
       });
       if (run.freed && alive.current) setScanDone(x => [...x, 'وقّفنا الفحص وفكّينا التثبيتات عشان يلقط أقوى برج']);
       else if (run.notRestored?.length && alive.current) setScanDone(x => [...x, `⚠️ رجع جزء من إعدادك — هذي ما رجعت كما كانت: ${run.notRestored!.join('، ')}`]);
@@ -805,10 +827,19 @@ export default function TowersScreen() {
           const tested = groups.filter(g => pingOf(g)).sort((a, b) => pingOf(b)!.score - pingOf(a)!.score);
           const best = tested[0];
           const bestIsCurrent = !!best && (best.inUse || !!lockOf(best));
+          // أفضل للتحميل: أعلى سرعة مقاسة (لازم برجين مقاسين عشان تكون مقارنة)
+          const speedTested = groups.filter(g => pingOf(g)?.mbps !== undefined).sort((a, b) => pingOf(b)!.mbps! - pingOf(a)!.mbps!);
+          const bestDown = speedTested.length >= 2 ? speedTested[0] : undefined;
+          const downIsCurrent = !!bestDown && (bestDown.inUse || !!lockOf(bestDown));
+          const startScan = () => Alert.alert('أفضل برج للألعاب وللتحميل', `بنجرب ${cands.length} أبراج، كل برج دقيقة إلى دقيقتين. النت بينقطع أثناءها، وممكن الراوتر يعيد التشغيل. وبعدها نرجّع إعدادك.\n\n«البنق والسرعة» يقيس كمان سرعة التحميل ٥ ثواني لكل برج (يستهلك تقريباً ٢٠–٣٠٠ ميقا).`, [
+            { text: 'إلغاء', style: 'cancel' },
+            { text: 'البنق بس', onPress: () => scanPings(cands, false) },
+            { text: 'البنق والسرعة', onPress: () => scanPings(cands, true) },
+          ]);
           return (
-            <GlassCard title="بنق كل برج" icon="⚡" tint={C.pinkSoft} collapsible={false}>
+            <GlassCard title="أفضل برج للألعاب وللتحميل" icon="⚡" tint={C.pinkSoft} collapsible={false}>
               <Text style={s.muted}>
-                نثبّت على كل برج بالدور، ونقيس البنق لسيرفر لعبتك، وبعدها نرجّع إعدادك. يظهر البنق جنب كل برج تحت. النت بينقطع أثناء الفحص، وكل برج ياخذ دقيقة إلى دقيقتين.
+                نثبّت على كل برج بالدور، ونقيس البنق لسيرفر لعبتك (وسرعة التحميل لو اخترتها)، وبعدها نرجّع إعدادك. النتيجة تظهر جنب كل برج تحت، ونقول لك أفضل واحد لكل استخدام وتثبّت عليه بضغطة.
               </Text>
               {scan ? (
                 <>
@@ -827,28 +858,44 @@ export default function TowersScreen() {
                 <Pressable
                   style={[s.scanBtn, busy && { opacity: 0.5 }]}
                   disabled={busy}
-                  onPress={() => Alert.alert('بنق كل برج', `بنجرب ${cands.length} أبراج، تقريباً ${cands.length * 2} دقائق. النت بينقطع أثناءها، وممكن الراوتر يعيد التشغيل. وبعدها نرجّع إعدادك.`, [
-                    { text: 'إلغاء', style: 'cancel' },
-                    { text: 'ابدأ', onPress: () => scanPings(cands) },
-                  ])}
+                  onPress={startScan}
                 >
-                  <Text style={s.scanBtnTxt}>قيس بنق الأبراج ({cands.length})</Text>
+                  <Text style={s.scanBtnTxt}>قيس الأبراج ({cands.length})</Text>
                 </Pressable>
               )}
               {scanDone.map(t => <Text key={t} style={s.scanLine}>• {t}</Text>)}
               {!scan && best && pingOf(best) && (
                 <View style={s.scanBest}>
                   <Text style={s.scanBestTxt}>
-                    ⭐ أقل بنق: برج {best.pci} · {bandName(best.best)} — {pingOf(best)!.ping}ms
+                    🎮 أفضل للألعاب: برج {best.pci} · {bandName(best.best)} — {pingOf(best)!.ping}ms
                   </Text>
                   {bestIsCurrent ? (
                     <Text style={s.muted}>وهو البرج اللي أنت عليه الحين 👌</Text>
                   ) : (
                     <Pressable style={[s.scanBtn, busy && { opacity: 0.5 }]} disabled={busy} onPress={() => onLock(best)}>
-                      <Text style={s.scanBtnTxt}>📌 ثبّت عليه</Text>
+                      <Text style={s.scanBtnTxt}>📌 ثبّت عليه للألعاب</Text>
                     </Pressable>
                   )}
                 </View>
+              )}
+              {!scan && bestDown && (
+                <View style={s.scanBest}>
+                  <Text style={s.scanBestTxt}>
+                    ⬇️ أفضل للتحميل: برج {bestDown.pci} · {bandName(bestDown.best)} — {Math.round(pingOf(bestDown)!.mbps!)} ميقا
+                  </Text>
+                  {downIsCurrent ? (
+                    <Text style={s.muted}>وهو البرج اللي أنت عليه الحين 👌</Text>
+                  ) : bestDown === best ? (
+                    <Text style={s.muted}>نفس أفضل برج للألعاب — تثبيت واحد يكفي 👆</Text>
+                  ) : (
+                    <Pressable style={[s.scanBtn, busy && { opacity: 0.5 }]} disabled={busy} onPress={() => onLock(bestDown)}>
+                      <Text style={s.scanBtnTxt}>📌 ثبّت عليه للتحميل</Text>
+                    </Pressable>
+                  )}
+                </View>
+              )}
+              {!scan && !!best && !bestDown && speedTested.length < 2 && (
+                <Text style={s.hint}>💡 عشان نعرف أفضل برج للتحميل، اختر «البنق والسرعة» وقت الفحص.</Text>
               )}
             </GlassCard>
           );
