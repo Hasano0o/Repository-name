@@ -2116,6 +2116,7 @@ export const EN: Record<string, string> = {
   'تعرف فني شاطر؟ خلّه يسجّل من الزر تحت.': 'Know a good technician? Have them register from the button below.',
   'مدن ثانية': 'Other cities',
   'أنت فني أنتينا؟': 'Are you an antenna technician?',
+  '🗼 على الحلقة = اتجاه البرج التقريبي (أقوى إشارة) — لفّ لين السهم يخضرّ': '🗼 on the ring = approximate tower direction (strongest signal) — turn until the arrow goes green',
   'وين برجي؟': 'Where is my tower?',
   'انسخ الرقم': 'Copy the number',
   'افتح الخريطة': 'Open the map',

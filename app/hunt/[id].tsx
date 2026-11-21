@@ -35,6 +35,11 @@ const STEP = 360 / BINS;
 const R = 120;
 const CIRC = 2 * Math.PI * R;
 const SEG = (CIRC / BINS) * 0.87;
+/** لون السهم: كل ما قرّب من اتجاه البرج يخضرّ */
+const arrowColor = (delta: number) => {
+  const a = Math.abs(delta);
+  return a <= 12 ? '#47e08a' : a <= 30 ? '#9df0b4' : a <= 60 ? '#ffd166' : '#ffffff';
+};
 const HEAT = ['#8cc4ff', '#5fc3f5', '#4fd1e8', '#5be0b0', '#7ce98f', '#c9e86a', '#ffc54d', '#ffa63d'];
 const UNSCANNED = 'rgba(170,205,255,0.38)';
 const DIRS = ['شمال', 'شمال شرق', 'شرق', 'جنوب شرق', 'جنوب', 'جنوب غرب', 'غرب', 'شمال غرب'];
@@ -389,6 +394,19 @@ export default function HuntScreen() {
                     const a = ((saved.deg - heading - 90) * Math.PI) / 180;
                     return <Circle cx={150 + Math.cos(a) * 138} cy={150 + Math.sin(a) * 138} r={5} fill="#ffffff" stroke="#1f47c9" strokeWidth={2} />;
                   })()}
+                  {calc.ready && calc.bestDeg !== undefined && (() => {
+                    // 🗼 اتجاه البرج التقريبي = أقوى إشارة مسحناها — يلف مع الجوال وما يتحرك عن مكانه الحقيقي
+                    const a = ((calc.bestDeg - heading - 90) * Math.PI) / 180;
+                    const x = 150 + Math.cos(a) * R, y = 150 + Math.sin(a) * R;
+                    const near = calc.delta !== undefined && Math.abs(calc.delta) <= 12;
+                    return (
+                      <G transform={`translate(${x}, ${y})`}>
+                        <Circle r={15} fill={near ? '#47e08a' : '#0d2350'} stroke="#ffffff" strokeWidth={2.5} />
+                        <Path d="M0 -8 L-5 8 M0 -8 L5 8 M-3.4 2 L3.4 2 M-1.8 -3 L1.8 -3" stroke={near ? '#0d2350' : '#ffffff'} strokeWidth={1.8} strokeLinecap="round" fill="none" />
+                        <Path d="M-6 -9 Q-8 -6 -6 -3 M6 -9 Q8 -6 6 -3" stroke={near ? '#0d2350' : '#ffffff'} strokeWidth={1.4} strokeLinecap="round" fill="none" />
+                      </G>
+                    );
+                  })()}
                   <Path d="M150 4 L158 17 L142 17 Z" fill="#ffffff" />
                   <Circle cx={150} cy={150} r={98} fill="rgba(12,36,120,0.42)" stroke="rgba(255,255,255,0.14)" strokeWidth={1.5} />
                   {found ? (
@@ -402,7 +420,7 @@ export default function HuntScreen() {
                       <Circle cx={150} cy={150} r={78} fill="rgba(255,255,255,0.07)" />
                       {calc.delta !== undefined && (
                         <G transform={`translate(150, 104) rotate(${calc.delta})`}>
-                          <Path d="M0 -32 L24 28 L0 14 L-24 28 Z" fill="#ffffff" />
+                          <Path d="M0 -32 L24 28 L0 14 L-24 28 Z" fill={calc.ready ? arrowColor(calc.delta) : '#ffffff'} />
                         </G>
                       )}
                     </>
@@ -438,6 +456,9 @@ export default function HuntScreen() {
                     </View>
                     <Text style={s.pillTxt}>{instruction}</Text>
                   </View>
+                  {calc.ready && (
+                    <Text style={s.towerHint}>🗼 على الحلقة = اتجاه البرج التقريبي (أقوى إشارة) — لفّ لين السهم يخضرّ</Text>
+                  )}
                   <View style={s.heatBox}>
                     <View style={s.heatTrack}>
                       <LinearGradient colors={['#3fd0d8', '#47e08a', '#e8e35a', '#ffb648', '#ff6b6b']}
@@ -687,6 +708,7 @@ const s = sheet({
     backgroundColor: 'rgba(255,255,255,0.14)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.28)',
   },
   pillTxt: { fontSize: 17, fontWeight: '700', color: '#ffffff' },
+  towerHint: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '700', textAlign: 'center', paddingHorizontal: 12 },
   heatBox: {
     alignSelf: 'stretch', padding: 12, paddingBottom: 10, borderRadius: 18, gap: 8,
     backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
