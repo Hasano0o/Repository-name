@@ -4,6 +4,7 @@ import { patchAlert, tr } from '../src/i18n';
 import { useEffect } from 'react';
 import { Alert, AppState } from 'react-native';
 import { pingDaily, markScreen } from '../src/services/stats';
+import { installCrashCatcher, flushCrash, setCrashScreen } from '../src/services/crashCatch';
 import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -37,6 +38,9 @@ import { OpPill } from '../src/ui/OpPill';
 initNotificationHandler();
 patchAlert(); // بالإنجليزي: نوافذ التنبيه تنترجم
 import('../src/services/errors').then(m => setTimeout(m.flushErrors, 8000)).catch(() => {}); // تقارير ما وصلت وقت انقطاع النت
+// ماسك الانهيارات: يحفظ الخطأ القاتل لحظتها، ويرسله أول ما يفتح التطبيق المرة الجاية
+installCrashCatcher();
+setTimeout(() => { flushCrash(); }, 6000);
 
 const SCREENS: [string, string][] = [
   ['index', 'راوتراتي'],
@@ -113,6 +117,7 @@ export default function RootLayout() {
   const path = usePathname();
   useEffect(() => {
     const seg = (path || '/').split('/').filter(Boolean)[0] ?? 'index';
+    setCrashScreen(SCREEN_NAME[seg] ?? seg);
     if (seg !== 'index') markScreen(SCREEN_NAME[seg] ?? seg);
   }, [path]);
 
