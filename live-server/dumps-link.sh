@@ -1,6 +1,7 @@
 #!/bin/bash
 # يجمع ملفات أعضاء (zip أو مجلدات تقارير) في zip واحد برابط مؤقت — عشان جلسة Claude تاخذها (حسن يحمّلها ويرفقها بالمحادثة).
-# الاستخدام:  bash /root/router-manager/mobile/live-server/dumps-link.sh zlt x300        (كلمات من اسم الملف أو محتوى المجلد، بدون حساسية حروف)
+# الاستخدام:  bash /root/router-manager/mobile/live-server/dumps-link.sh zlt x300        (أو تاريخ اليوم بصيغة الاسم: 1122 = كل ملفات ٢٢ نوفمبر)
+#             bash /root/router-manager/mobile/live-server/dumps-link.sh zlt x300        (كلمات من اسم الملف أو محتوى المجلد، بدون حساسية حروف)
 #             bash /root/router-manager/mobile/live-server/dumps-link.sh mwqpc8524zk9yg  (اسم ملف/مجلد بالضبط)
 # الرابط ينحذف لحاله بعد ساعة، وأي رابط أقدم من ساعة ينحذف كل تشغيل.
 set -e
@@ -13,7 +14,9 @@ for d in /root/bandly-live/data/dumps /root/bandly-archive/dumps; do
   for f in "$d"/*; do
     n=$(basename "$f")
     for k in "$@"; do
-      if echo "$n" | grep -qi -- "$k" || { [ -d "$f" ] && grep -rlqi -- "$k" "$f" 2>/dev/null; }; then
+      # الاسم · محتوى المجلد · router.txt داخل الـ zip (اسم الملف ممكن ما فيه الموديل — مثل router-ZLT-FULL-…)
+      if echo "$n" | grep -qi -- "$k" || { [ -d "$f" ] && grep -rlqi -- "$k" "$f" 2>/dev/null; } \
+         || { [ "${f##*.}" = zip ] && unzip -p "$f" '*_bandly/router.txt' 2>/dev/null | grep -qi -- "$k"; }; then
         if [ -d "$f" ]; then (cd "$d" && zip -qr "$T/$n.zip" "$n"); else cp "$f" "$T/"; fi
         break
       fi
