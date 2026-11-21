@@ -117,3 +117,12 @@ test('ZLT X300A (du): https بس ← نتعرّف عليه وندخل على htt
   assert.equal((await d.getSignal()).rsrp, -97);
   assert.ok(!r.log.slice(1).some(x => x === 'http:'));
 });
+
+test('ZLT X300A: نسخة درايفر جديدة بدون detect (فتح صفحة الراوتر) ← تحوّل https لحالها', async () => {
+  zlt('Bpo', true);
+  const d = new ZltDriver();
+  await d.login('192.168.70.1', 'user', 'Bpo', { fresh: true }).catch(() => {});
+  const d2 = new ZltDriver();
+  await d2.login('192.168.70.1', 'admin', 'Bpo', { fresh: true });
+  assert.equal((await d2.getSignal()).rsrp, -97);
+});

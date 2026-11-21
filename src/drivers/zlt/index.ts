@@ -45,6 +45,18 @@ export class ZltDriver implements RouterDriver {
   private base(host = this.host) { return this.scheme + '://' + host.replace(/^https?:\/\//, '').replace(/\/+$/, ''); }
 
   private async cmd(cmd: number, method: 'GET' | 'POST' = 'GET', extra: Record<string, unknown> = {}, sid = this.sid, timeout = 8000): Promise<{ status: number; text: string; j: any }> {
+    try {
+      return await this.cmdOnce(cmd, method, extra, sid, timeout);
+    } catch (e) {
+      // نسخة جديدة من الدرايفر (فتح التطبيق/صفحة الراوتر) تبدأ http بدون detect — X300A (du) https بس:
+      // «تعذر الاتصال» على http ← نحوّل https مرة ونكمل عليه (٢١ نوفمبر: انضاف وبعدها كل قراءة «ما رد»)
+      if (this.scheme !== 'http') throw e;
+      this.scheme = 'https';
+      try { return await this.cmdOnce(cmd, method, extra, sid, timeout); }
+      catch (e2) { this.scheme = 'http'; throw e; }
+    }
+  }
+  private async cmdOnce(cmd: number, method: 'GET' | 'POST', extra: Record<string, unknown>, sid: string, timeout: number): Promise<{ status: number; text: string; j: any }> {
     const r = await http(this.base() + ZLT_CGI, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json; charset=UTF-8', Accept: 'text/plain, */*', 'X-Requested-With': 'XMLHttpRequest', Referer: this.base() + '/index.html' },
