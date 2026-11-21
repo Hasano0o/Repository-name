@@ -135,3 +135,13 @@ test('ZLT: الموديل في الـ id (كرت FULL لكل موديل)', async
   const p = await d.identify();
   assert.equal(p.id, 'zlt-x21'); assert.equal(p.label, 'ZLT X21');
 });
+
+test('ZLT X300A: الدمج بخانة وحدة «372+372+372» — الأساسي أول، والثانويات أبراج بترددها', () => {
+  const raw = { network_type_str: '5G SA', RSRP: '', RSRP_5G: '-65', RSRQ_5G: '-12', SINR_5G: '6', PCI_5G: '372+372+372', FREQ_5G: '647424+640704+501390', currentband_5g: 'n78', bandwidth_5g: '100MHz' };
+  const s = P.signalFrom(raw);
+  assert.equal(s.nrPci, '372'); assert.equal(s.nrArfcn, '647424'); assert.equal(s.nrRsrp, -65); assert.equal(s.caCount, 3);
+  const c = P.caCellsFrom(raw, s);
+  assert.equal(c.length, 3);
+  assert.deepEqual(c.map((x: any) => [x.kind, x.band]), [['serving', 78], ['secondary', 78], ['secondary', 41]]);
+  assert.equal(P.signalFrom({ RSRP: '-90', PCI: '55' }).caCount, undefined);
+});

@@ -21,7 +21,7 @@ import { isLanHost } from '../../utils/host';
 import { buildSnapshot } from '../../utils/snapshot';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import type { ModelProfile } from '../models';
-import { ZLT_CGI, ZCMD, isZltPage, parseZlt, isNoAuth, zltBody, signalFrom, loginFailMsg, str } from './parse';
+import { ZLT_CGI, ZCMD, isZltPage, parseZlt, isNoAuth, zltBody, signalFrom, caCellsFrom, loginFailMsg, str } from './parse';
 
 export const zltPass = (token: string, pw: string) => bytesToHex(sha256(utf8ToBytes(token + pw)));
 
@@ -174,8 +174,10 @@ export class ZltDriver implements RouterDriver {
       this.loggedKeys = true;
       diag(`[zlt] SYS_INFO_NETWORK: ${Object.entries(j).filter(([k]) => !/imei|imsi|iccid|mac|ssid|pass|key/i.test(k)).map(([k, v]) => `${k}=${String(v).slice(0, 20)}`).join(' · ').slice(0, 1200)}`);
     }
+    this.lastRaw = j;
     return signalFrom(j);
   }
+  private lastRaw: any = null;
 
   async getNetworkInfo(): Promise<NetworkInfo> {
     const j = await this.read(ZCMD.SYS_INFO_NETWORK);
@@ -185,11 +187,12 @@ export class ZltDriver implements RouterDriver {
 
   async getSnapshot(): Promise<SignalSnapshot> {
     const sig = await this.getSignal();
-    return buildSnapshot(sig, [], cellsOf(sig), { driverId: this.id, driverName: this.name });
+    return buildSnapshot(sig, [], caCellsFrom(this.lastRaw, sig), { driverId: this.id, driverName: this.name });
   }
 
   async getCells(): Promise<CellTower[]> {
-    return cellsOf(await this.getSignal());
+    const sig = await this.getSignal();
+    return caCellsFrom(this.lastRaw, sig);
   }
 
   async getDeviceDetails(): Promise<DeviceDetails> {
@@ -224,9 +227,3 @@ export class ZltDriver implements RouterDriver {
   }
 }
 
-function cellsOf(s: Signal): CellTower[] {
-  const out: CellTower[] = [];
-  if (s.rsrp !== undefined) out.push({ kind: 'serving', tech: 'LTE', band: s.band ? Number(s.band) : undefined, cellId: s.cellId, pci: s.pci, rsrp: s.rsrp, rsrq: s.rsrq, sinr: s.sinr, rssi: s.rssi });
-  if (s.nrRsrp !== undefined) out.push({ kind: 'serving', tech: 'NR', band: s.nrBand ? Number(s.nrBand) : undefined, pci: s.nrPci, rsrp: s.nrRsrp, rsrq: s.nrRsrq, sinr: s.nrSinr });
-  return out;
-}

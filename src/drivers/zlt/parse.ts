@@ -3,7 +3,8 @@
  * من ملفات «مو مدعوم؟» للأعضاء (٣١ أكتوبر – ٨ نوفمبر ٢٠٢٦): index.html + js/main.js + js/login.js + js/info/sysInfo.js.
  * كل الأوامر POST JSON على /cgi-bin/http.cgi: { cmd, method:"GET"|"POST", language, sessionId, … }.
  */
-import type { Signal } from '../types';
+import type { Signal, CellTower } from '../types';
+import { bandOfArfcn } from '../../utils/arfcn';
 
 export const ZLT_CGI = '/cgi-bin/http.cgi';
 /** أرقام الأوامر من RequestCmd في main.js */
@@ -55,9 +56,19 @@ export function bandNum(v: unknown): string | undefined {
   return m ? m[1] : undefined;
 }
 
+/** «372+372+372» / «647424+640704+501390» — الدمج يجي بخانة وحدة مفصولة بـ + (X300A du، ٢٢ نوفمبر). الأول = الأساسي */
+export function parts(v: unknown): string[] {
+  const t = str(v);
+  return t ? t.split(/\s*\+\s*/).map(x => x.trim()).filter(x => x && !/^(null|-+)$/i.test(x)) : [];
+}
+const first = (v: unknown) => parts(v)[0];
+
 /** رد SYS_INFO_NETWORK (205) ← قراءة الإشارة (نفس الحقول اللي تعرضها sysInfo.js) */
-export function signalFrom(s: any): Signal {
-  if (!s || typeof s !== 'object') return {};
+export function signalFrom(s0: any): Signal {
+  if (!s0 || typeof s0 !== 'object') return {};
+  // كل خانة فيها «+» نوخذ أولها (الأساسي) — الثانويات في caCellsFrom
+  const s: any = {};
+  for (const [k, v] of Object.entries(s0)) s[k] = typeof v === 'string' && v.includes('+') && !/^\+?\d+$/.test(v) ? (first(v) ?? '') : v;
   const out: Signal = {
     network: str(s.network_type_str),
     band: bandNum(s.currentband),
@@ -81,6 +92,10 @@ export function signalFrom(s: any): Signal {
     out.nrCqi = num(s.CQI_5G);
     out.nrDlMcs = num(s.dl_mcs_5g);
   }
+  const n4 = Math.max(parts(s0.PCI).length, parts(s0.FREQ).length);
+  const n5 = Math.max(parts(s0.PCI_5G).length, parts(s0.FREQ_5G).length);
+  const cc = (out.rsrp !== undefined && out.rsrp < 0 ? Math.max(n4, 1) : 0) + (out.nrRsrp !== undefined ? Math.max(n5, 1) : 0);
+  if (cc > 1) out.caCount = cc;
   // 4G صفر/فاضي (5G SA) ← ما نعبّي بطاقة 4G بأرقام غلط
   if (out.rsrp !== undefined && out.rsrp >= 0) { out.rsrp = undefined; out.rsrq = undefined; out.sinr = undefined; }
   return out;
@@ -92,4 +107,24 @@ export function loginFailMsg(times: unknown): string {
   if (Number.isFinite(n) && n < 1) return 'الراوتر قفل الدخول بعد محاولات غلط — انتظر ٣ دقايق وجرّب مرة وحدة.';
   const left = Number.isFinite(n) ? ` (باقي ${n} محاولات قبل ما ينقفل)` : '';
   return `اسم المستخدم أو الكلمة غلط${left}. الافتراضي غالباً admin / admin — أو اللي على ملصق الجهاز.`;
+}
+
+/** الأبراج: الأساسي + ثانويات الدمج (PCI/FREQ مفصولة بـ +، والتردد من رقم القناة) */
+export function caCellsFrom(s0: any, sig: Signal): CellTower[] {
+  const out: CellTower[] = [];
+  const add = (tech: 'LTE' | 'NR', pcis: string[], arfcns: string[], rsrp?: number, rsrq?: number, sinr?: number, band?: string) => {
+    const n = Math.max(pcis.length, arfcns.length, rsrp !== undefined ? 1 : 0);
+    for (let i = 0; i < n; i++) {
+      const a = arfcns[i];
+      const b = a ? bandOfArfcn(tech, Number(a)) : undefined;
+      out.push({
+        kind: i === 0 ? 'serving' : 'secondary', tech, pci: pcis[i], arfcn: a,
+        band: i === 0 && band ? Number(band) : b,
+        ...(i === 0 ? { rsrp, rsrq, sinr, cellId: tech === 'LTE' ? sig.cellId : undefined } : {}),
+      });
+    }
+  };
+  if (sig.rsrp !== undefined) add('LTE', parts(s0?.PCI), parts(s0?.FREQ), sig.rsrp, sig.rsrq, sig.sinr, sig.band);
+  if (sig.nrRsrp !== undefined) add('NR', parts(s0?.PCI_5G), parts(s0?.FREQ_5G), sig.nrRsrp, sig.nrRsrq, sig.nrSinr, sig.nrBand);
+  return out;
 }
