@@ -337,6 +337,65 @@ async def combos(tower: str, operator: str = "", device: str = ""):
     return {"tower": tw, "operator": op, **summarize(rows, me)}
 
 
+# ═══ أعضاء Bandly على برجك (٢١ نوفمبر) — عدد مستخدمي Bandly بس، مو كل المتصلين ═══
+MEMBERS_DAYS = 30
+
+
+def tower_key(v) -> str:
+    """الراوترات تعطي البرج بأشكال مختلفة: eNB (لين ٢٠ بت) أو رقم الخلية ECI (= eNB × ٢٥٦ + القطاع)، عشري أو هكس.
+    نوحّدها على eNB عشان أعضاء نفس البرج براوترات مختلفة ينعدّون مع بعض."""
+    t = str(v or "").strip().lower()
+    if not t:
+        return ""
+    try:
+        n = int(t, 16) if (t.startswith("0x") or re.search(r"[a-f]", t)) else int(t)
+    except ValueError:
+        return t
+    return str(n // 256 if n > 0xFFFFF else n)
+
+
+def members_summary(rows, me: str = "", now: float | None = None, min_users: int = MIN_USERS) -> dict:
+    """rows = [(dev, at, ping, hour)] من فحوصات «جاهز للعب؟» وقراءات مستشار البرج — كل جهاز ينحسب مرة (وسيط بنقه)."""
+    now = now or time.time()
+    per: dict[str, list] = {}
+    recent: set[str] = set()
+    night, day = [], []
+    for dev, at, ping, hour in rows:
+        per.setdefault(dev, [])
+        if ping is not None:
+            per[dev].append(ping)
+            (night if (hour is not None and (hour >= 20 or hour < 1)) else day).append(ping)
+        if at >= now - 7 * 86400:
+            recent.add(dev)
+    users = len(per)
+    enough = users >= min_users
+    pings = [_med(v) for v in per.values() if v]
+    return {
+        "users": users, "users7": len(recent), "mine": me in per, "enough": enough, "min_users": min_users,
+        "ping": _med(pings) if enough else None,
+        "night_ping": _med(night) if enough and len(night) >= 3 and len(day) >= 3 else None,
+        "day_ping": _med(day) if enough and len(night) >= 3 and len(day) >= 3 else None,
+    }
+
+
+@router.get("/members")
+async def members(tower: str, operator: str = "", device: str = ""):
+    key, op = tower_key(_clean(tower, 24)), _op(operator)
+    if not key:
+        raise HTTPException(400, "missing")
+    me = _dev(device) if device else ""
+    since = int(time.time()) - MEMBERS_DAYS * 86400
+    rows = []
+    with _db() as c:
+        for tw, o, dev, at, ping in c.execute("SELECT tower, op, dev, at, ping FROM tests WHERE at>=?", (since,)):
+            if tower_key(tw) == key and _op(o) == op:
+                rows.append((dev, at, ping, time.localtime(at).tm_hour))
+        for tw, o, dev, at, ping, hour in c.execute("SELECT tower, op, dev, at, ping, hour FROM obs WHERE at>=?", (since,)):
+            if tower_key(tw) == key and _op(o) == op:
+                rows.append((dev, at, ping, hour))
+    return {"tower": key, "operator": op, **members_summary(rows, me)}
+
+
 # ═══ أفضل شركة في منطقتك (٧ نوفمبر) — زي OpenSignal: من فحوصات الأعضاء الحقيقية ═══
 CARRIER_DAYS = 60
 

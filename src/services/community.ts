@@ -246,3 +246,25 @@ export async function fetchCarriers(city: string, area: string): Promise<Carrier
     clearTimeout(tm);
   }
 }
+
+/* ═══ أعضاء Bandly على برجك (٢١ نوفمبر) — عدد مستخدمي Bandly بس، مو كل المتصلين ═══ */
+export interface TowerMembers {
+  tower: string; operator: string; users: number; users7: number; mine: boolean; enough: boolean; min_users: number;
+  ping: number | null; night_ping: number | null; day_ping: number | null;
+}
+
+export async function fetchMembers(t: TowerRef): Promise<TowerMembers | null> {
+  if (!t.tower) return null;
+  const ctrl = new AbortController();
+  const tm = setTimeout(() => ctrl.abort(), 6000);
+  try {
+    const q = new URLSearchParams({ tower: t.tower, operator: t.operator, device: await deviceId() });
+    const r = await fetch(`${LIVE_BASE}/live-api/community/members?${q.toString()}`, { signal: ctrl.signal });
+    if (!r.ok) return null;
+    return (await r.json()) as TowerMembers;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(tm);
+  }
+}

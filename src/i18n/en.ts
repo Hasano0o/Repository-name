@@ -2116,6 +2116,11 @@ export const EN: Record<string, string> = {
   'تعرف فني شاطر؟ خلّه يسجّل من الزر تحت.': 'Know a good technician? Have them register from the button below.',
   'مدن ثانية': 'Other cities',
   'أنت فني أنتينا؟': 'Are you an antenna technician?',
+  '👥 أعضاء Bandly على برجك': '👥 Bandly members on your tower',
+  ' (أنت معهم)': ' (you\'re one of them)',
+  'للحين ما شفنا أعضاء غيرك على هالبرج.': 'We haven\'t seen other members on this tower yet.',
+  '🌙 بنق الأعضاء بالليل أعلى بوضوح — البرج يزحم وقت الذروة (٨م–١ص).': '🌙 Members\' ping is clearly higher at night — the tower gets busy at peak time (8pm–1am).',
+  'هذا عدد مستخدمي Bandly بس — جزء صغير من كل المتصلين على البرج.': 'This counts Bandly users only — a small share of everyone on the tower.',
   '🗼 على الحلقة = اتجاه البرج التقريبي (أقوى إشارة) — لفّ لين السهم يخضرّ': '🗼 on the ring = approximate tower direction (strongest signal) — turn until the arrow goes green',
   'وين برجي؟': 'Where is my tower?',
   'انسخ الرقم': 'Copy the number',
@@ -2372,6 +2377,11 @@ export const EN: Record<string, string> = {
 };
 
 export const EN_PATTERNS: Record<string, string> = {
+  'آخر ٣٠ يوم — منهم {0} هالأسبوع{1}': 'Last 30 days — {0} this week{1}',
+  'آخر ٣٠ يوم — منهم {0} هالأسبوع': 'Last 30 days — {0} this week',
+  'بنقهم: {0}ms': 'Their ping: {0}ms',
+  'الليل {0}ms · النهار {1}ms': 'Night {0}ms · Day {1}ms',
+  'الأرقام تطلع لما يصيرون {0} أعضاء أو أكثر.': 'Numbers appear once there are {0} or more members.',
   'رقم موقع برجك (eNB): {0}\n\nبنفتح خريطة {1} في CellMapper على {2}. عشان يطلع برجك بالضبط: Menu ← Search ← Tower Search واكتب الرقم.\n\nالخريطة يعبّيها مستخدمين، فممكن برجك ما يكون مسجّل فيها.': 'Your tower site number (eNB): {0}\n\nWe\'ll open the {1} map on CellMapper at {2}. To find your exact tower: Menu ← Search ← Tower Search and enter the number.\n\nThe map is filled by users, so your tower may not be listed.',
   'eNB {0}': 'eNB {0}',
   'برجك الحالي: ⬇️ {0} ميقا': 'Your current tower: ⬇️ {0} Mbps',
