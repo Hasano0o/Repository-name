@@ -336,6 +336,40 @@ export default function ComboScreen() {
   const hasSa = !!cfg?.modes.some(m => m.value === '08');
   const onSa = cfg?.mode === '08';
 
+  /** ZLT (X300A…): قائمة الأوضاع كاملة من صفحة الراوتر (تلقائي = SA+NSA) — بدل خيارين NSA/SA اللي تفترض «تلقائي = 4G + 5G» */
+  const fullModes = info?.driverId === 'zlt' && (cfg?.modes.length ?? 0) > 2;
+  const applyMode = (target: string, label: string) => {
+    if (!info || !cfg || target === cfg.mode) return;
+    const orig = cfg.mode;
+    Alert.alert(label, 'نقيس قبل وبعد، ولو ما اتصل أو صار أسوأ نرجّعك لوضعك.' + '\n\n' + 'النت بينقطع لحظات.', [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'جرّب', onPress: async () => {
+          setBusy(true);
+          setError('');
+          setVerdict(null);
+          try {
+            const res = await safeApply({
+              r: info,
+              key: `mode:${target}`,
+              label,
+              withNr: target !== '03',
+              onStatus: t => mounted.current && setStatus(t),
+              apply: d => d.setNetworkMode!(target),
+              revert: d => d.setNetworkMode!(orig),
+            });
+            const m = trialMessage(res, label);
+            Alert.alert(m.title, m.body);
+          } catch (e: any) {
+            if (mounted.current) setError(e?.message ?? String(e));
+          } finally {
+            if (mounted.current) { setBusy(false); setStatus(''); await load(info); }
+          }
+        },
+      },
+    ]);
+  };
+
   const applySa = (toSa: boolean) => {
     if (!info || !cfg) return;
     const orig = cfg;
@@ -403,18 +437,28 @@ export default function ComboScreen() {
 
         {!loading && cfg && (
           <>
-            {(hasSa || !!std) && (
+            {(hasSa || !!std || fullModes) && (
               <View style={[s.saCard, onSa && { borderColor: SA_COLOR }]}>
                 <View style={s.saHead}>
                   <View style={[s.saBadge, { backgroundColor: SA_COLOR }]}><Text style={s.saBadgeTxt}>جديد</Text></View>
                   <Text style={s.saTitle}>وضع الشبكة</Text>
                 </View>
                 <Text style={s.hint}>
-                  {std
+                  {fullModes
+                    ? `أنت الحين على: ${cfg.modes.find(m => m.value === cfg.mode)?.label ?? cfg.mode}. نفس خيارات صفحة راوترك.`
+                    : std
                     ? `أنت الحين على: ${STANDARD_LABEL[std].title} (${STANDARD_LABEL[std].sub}). نفس خيارات صفحة المطورين في راوترك.`
                     : onSa ? 'أنت الحين على 5G لحاله — الـ 5G هو الأساسي' : 'أنت على 4G + 5G: الأساسي 4G والـ 5G ثانوي. جرّب SA عشان يصير الـ 5G هو الأساسي'}
                 </Text>
-                {std ? (
+                {fullModes ? (
+                  <View style={s.grid}>
+                    {cfg.modes.map(m => (
+                      <Tile key={m.value} label={m.label} on={cfg.mode === m.value}
+                        color={/SA/.test(m.label) || m.value === '00' ? SA_COLOR : m.value === '03' ? C.sub : C.blue}
+                        onPress={() => !busy && applyMode(m.value, m.label)} />
+                    ))}
+                  </View>
+                ) : std ? (
                   <View style={s.grid}>
                     {NET_STANDARDS.map(x => (
                       <Tile key={x} label={STANDARD_LABEL[x].title} sub={STANDARD_LABEL[x].sub} on={std === x}
@@ -428,7 +472,7 @@ export default function ComboScreen() {
                   <Tile label="5G فقط" sub="SA — الـ 5G أساسي" on={onSa} color={SA_COLOR} onPress={() => !onSa && applySa(true)} />
                 </View>
                 )}
-                {!onSa && saTrial?.verdict === 'noconn' && Date.now() - saTrial.at < 14 * 86400000 && (
+                {!fullModes && !onSa && saTrial?.verdict === 'noconn' && Date.now() - saTrial.at < 14 * 86400000 && (
                   <Text style={[s.hint, { color: C.red }]}>
                     جرّبنا SA {Date.now() - saTrial.at < 86400000 ? 'اليوم' : 'قبل أيام'} وما اتصل — غالباً البرج عندك يدعم 5G بنظام NSA بس (فوق 4G)، أو شريحتك ما فيها SA.
                   </Text>

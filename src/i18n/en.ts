@@ -2790,6 +2790,8 @@ export const EN_PATTERNS: Record<string, string> = {
   '✓ دمج 4G: {0}': '✓ 4G CA: {0}',
   '✓ أساسي 5G {0}': '✓ 5G primary {0}',
   '• أساسي 5G {0} — البرج شغّل {1}': '• 5G primary {0} — the tower turned on {1}',
+  'نقيس قبل وبعد، ولو ما اتصل أو صار أسوأ نرجّعك لوضعك.': 'We measure before and after — if it doesn\'t connect or gets worse, we put you back.',
+  'أنت الحين على: {0}. نفس خيارات صفحة راوترك.': 'You\'re now on: {0}. The same options as your router\'s page.',
   '✓ صرت على 5G SA — الأساسي {0}': '✓ You\'re on 5G SA — primary {0}',
   'أنت الحين على: {0} ({1}). نفس خيارات صفحة المطورين في راوترك.': 'You\'re now on: {0} ({1}). The same options as your router\'s developer page.',
   'جرّبنا SA {0} وما اتصل — غالباً البرج عندك يدعم 5G بنظام NSA بس (فوق 4G)، أو شريحتك ما فيها SA.': 'We tried SA {0} and it didn\'t connect — most likely your tower supports 5G in NSA only (on top of 4G), or your SIM has no SA.',
