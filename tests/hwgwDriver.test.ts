@@ -44,8 +44,13 @@ test('E5172: MyRSAEncryptB64 = PKCS#1 v1.5 نوع 2 (ينفك بالمفتاح �
   const hex = (b64u: string) => Buffer.from(b64u, 'base64url').toString('hex');
   for (const pw of ['admin', 'Pa$$w0rd!', 'كلمة']) {
     const enc = P.gwRsaB64(pw, (n: number) => Uint8Array.from(crypto.randomBytes(n)), hex(jwk.n), hex(jwk.e));
-    const dec = crypto.privateDecrypt({ key: privateKey, padding: crypto.constants.RSA_PKCS1_PADDING }, Buffer.from(enc, 'base64'));
-    assert.equal(dec.toString('utf8'), pw);
+    // node ٢٠٫٢٠+ منع فك PKCS#1 v1.5 (CVE-2023-46809) ← نفك خام (NO_PADDING) ونتأكد من شكل الحشو نوع 2 بنفسنا
+    const raw: Buffer = crypto.privateDecrypt({ key: privateKey, padding: crypto.constants.RSA_NO_PADDING }, Buffer.from(enc, 'base64'));
+    assert.equal(raw[0], 0); assert.equal(raw[1], 2);
+    const sep = raw.indexOf(0, 2);
+    assert.ok(sep >= 10, 'الحشو ٨ بايت غير صفرية على الأقل');
+    assert.ok(raw.subarray(2, sep).every((b: number) => b !== 0));
+    assert.equal(raw.subarray(sep + 1).toString('utf8'), pw);
   }
   const fixed = P.gwRsaB64('admin', (n: number) => Uint8Array.from(crypto.randomBytes(n)));
   assert.ok(Buffer.from(fixed, 'base64').length <= 128 && Buffer.from(fixed, 'base64').length >= 120);
