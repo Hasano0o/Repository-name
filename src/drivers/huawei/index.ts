@@ -22,7 +22,7 @@ import { identifyHuawei, ModelProfile } from '../models';
 import { parseTxPower, parseDlMcs, parseUlMcs } from '../../utils/linkHealth';
 import { buildSnapshot } from '../../utils/snapshot';
 import { noChange } from '../noChange';
-import { NetStandard, standardOf, standardBody } from './netStandard';
+import { NetStandard, standardOf, standardBody, standardFullBody } from './netStandard';
 import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { HuaweiLockData, parseNetModeFields, netModeBody, netModeDiff, lockDiffForMode, lockRestoreBody, huaweiSummary } from './lockState';
 import { buildCellLockBody, buildUnlockBody, lockMatches, parseCellLocks, parseLockRaw, LockRaw, Tech as CellTech, bandLockSection, buildChannelLockBody, channelMatches, lockKindOf } from './cellLock';
@@ -2037,7 +2037,17 @@ export class HuaweiDriver implements RouterDriver {
     }
     if (cur === null) throw noChange('راوترك ما يدعم هالخيارات في وضع الشبكة');
     if (cur === s) return;
-    await this.post('net/net-mode', standardBody(s));
+    try {
+      await this.post('net/net-mode', standardBody(s));
+    } catch (e) {
+      // H155 (موبايلي) يرفض طلب الحقلين بـ -1 — نعيده مرة بكل حقول net/net-mode مثل writeNetMode
+      // (الترددات وباقي الحقول مثل ما رجّعها الراوتر). H158 اللي يقبل الحقلين ما يوصل هنا أبداً.
+      if (!(e instanceof HuaweiError) || e.code !== '-1') throw e;
+      const fields = await this.readNetModeFields();
+      const body = standardFullBody(s, fields);
+      this.log('net-standard: الحقلين انرفضت (-1) — نعيده بكل الحقول', body);
+      await this.post('net/net-mode', body);
+    }
     await new Promise(r => setTimeout(r, 2000));
     let after: NetStandard | null = null;
     try { after = standardOf(await this.get('net/net-mode')); } catch {}

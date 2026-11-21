@@ -43,3 +43,22 @@ export const STANDARD_LABEL: Record<NetStandard, { title: string; sub: string }>
   lte_fdd: { title: '4G FDD فقط', sub: 'B1 · B3 · B20 · B28…' },
   lte_tdd: { title: '4G TDD فقط', sub: 'B38 · B40 · B41…' },
 };
+
+/**
+ * نفس الوضع بكل حقول net/net-mode (اللي رجّعها الراوتر) — للموديلات اللي ترفض طلب الحقلين بـ -1
+ * (H155 موبايلي — ٢١ نوفمبر: «الراوتر رفض الطلب (-1)»). نغيّر بس حقول الوضع ونخلي الباقي (الترددات…) مثل ما هو.
+ */
+export function standardFullBody(s: NetStandard, fields: [string, string][]): string {
+  const want = [...standardBody(s).matchAll(/<(\w+)>([^<]*)<\/\1>/g)].map(m => [m[1], m[2]] as [string, string]);
+  const out = fields.map(([k, v]) => [k, v] as [string, string]);
+  for (const [k, v] of want) {
+    const x = out.find(f => f[0] === k);
+    if (x) x[1] = v; else out.push([k, v]);
+  }
+  // 4G فقط/FDD/TDD: networkOption يبقى مثل ما هو (الصفحة ما تلمسه) · 5G: LTEBandOption يرجع «كل 4G»
+  if (s === 'sa' || s === 'nsa' || s === 'sa_nsa') {
+    const b = out.find(f => f[0] === 'LTEBandOption');
+    if (b) b[1] = '0';
+  }
+  return out.map(([k, v]) => `<${k}>${v}</${k}>`).join('');
+}

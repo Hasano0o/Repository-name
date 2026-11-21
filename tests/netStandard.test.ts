@@ -1,7 +1,7 @@
 /** اختبارات «وضع الشبكة» الدقيق في هواوي — مطابقة لكود صفحة الراوتر وطلبها الفعلي */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { standardOf, standardBody, NET_STANDARDS } from '../src/drivers/huawei/netStandard';
+import { standardOf, standardBody, standardFullBody, NET_STANDARDS } from '../src/drivers/huawei/netStandard';
 
 const resp = (mode: string, opt?: string, lteOpt = '0') =>
   `<response><NetworkMode>${mode}</NetworkMode><NetworkBand>0</NetworkBand><LTEBand>7E28A0E00D5</LTEBand>` +
@@ -33,4 +33,16 @@ test('كل خيار: نكتبه ونقراه يرجع نفسه', () => {
     const lte = b.match(/<LTEBandOption>(\d)/)?.[1] ?? '0';
     assert.equal(standardOf(resp(mode, opt, lte)), s);
   }
+});
+
+test('H155 (يرفض الحقلين بـ -1): الطلب الكامل يغيّر حقول الوضع بس ويخلي الترددات', () => {
+  const fields: [string, string][] = [['NetworkMode', '03'], ['NetworkBand', '3FFFFFFF'], ['LTEBand', '7E28A0E00D5'], ['networkOption', '2'], ['LTEBandOption', '1'], ['NRBand', 'ABC']];
+  const b = standardFullBody('nsa', fields);
+  assert.equal(b, '<NetworkMode>00</NetworkMode><NetworkBand>3FFFFFFF</NetworkBand><LTEBand>7E28A0E00D5</LTEBand><networkOption>0</networkOption><LTEBandOption>0</LTEBandOption><NRBand>ABC</NRBand>');
+  for (const s of NET_STANDARDS) {
+    const full = standardFullBody(s, fields);
+    assert.equal(standardOf(`<response>${full}</response>`), s, s);
+  }
+  // 4G TDD: networkOption ما ينلمس
+  assert.match(standardFullBody('lte_tdd', fields), /<networkOption>2<\/networkOption><LTEBandOption>2<\/LTEBandOption>/);
 });
