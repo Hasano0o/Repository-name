@@ -2,12 +2,10 @@
  * شريط تحت البنر: «فنيين قريبين» + «فني أنتينا؟ سجّل معنا» (يفتح البوت على صفحة التسجيل)
  */
 import type { ReactNode } from 'react';
-import { Linking, } from 'react-native';
 import { Pressable, Text, View } from '../i18n/rn';
 import { router, Href } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { BOT_TECH_SIGNUP } from '../services/techs';
 import { FONT } from './fonts';
 import { C, tBd, tBg } from './theme';
 
@@ -65,10 +63,10 @@ function Tile({ title, sub, colors, tint, border, icon, onPress }: {
 export function TechStrip() {
   return (
     <View style={s.row}>
-      <Tile title="فنيين قريبين" sub="تركيب وتوجيه" colors={['#3b82f6', '#1d4ed8']}
+      <Tile title="فنيين قريبين" sub="أنتنا وصيانة" colors={['#3b82f6', '#1d4ed8']}
         tint={tBg('#e8efff')} border={tBd('#c7d7fe')} icon={<NearIcon />} onPress={() => router.push('/techs' as Href)} />
-      <Tile title="فني أنتينا؟" sub="سجّل معنا" colors={['#fb923c', '#ea580c']}
-        tint={tBg('#fff1e6')} border={tBd('#fed7aa')} icon={<JoinIcon />} onPress={() => Linking.openURL(BOT_TECH_SIGNUP).catch(() => {})} />
+      <Tile title="أنت فني؟" sub="سجّل معنا" colors={['#fb923c', '#ea580c']}
+        tint={tBg('#fff1e6')} border={tBd('#fed7aa')} icon={<JoinIcon />} onPress={() => router.push({ pathname: '/techs', params: { join: '1' } } as unknown as Href)} />
     </View>
   );
 }

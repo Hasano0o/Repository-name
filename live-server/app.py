@@ -375,12 +375,11 @@ async def list_techs(city: str | None = None):
     for key, t in techs().items():
         if not t.get("listed", True) or not t.get("active", True):
             continue
-        if t.get("expires") and t["expires"] < time.time():
-            continue
         if city and city not in (t.get("city") or ""):
             continue
         avg, n = rating_of(key)
-        out.append({**{k: t.get(k) for k in ("name", "city", "phone", "note", "areas", "years")}, "rating": avg, "rating_n": n})
+        out.append({**{k: t.get(k) for k in ("name", "city", "phone", "note", "areas", "years")},
+                    "kinds": tech_kinds(t), "rating": avg, "rating_n": n})
     out.sort(key=lambda x: (-(x["rating"] or 0) * min(x["rating_n"], 5), x["name"] or ""))
     return {"techs": out}
 
@@ -842,7 +841,15 @@ FIELD_AR = {
     "services": "الخدمات", "shop": "اسم المحل", "activity": "النشاط", "whatsapp": "واتساب", "location": "الموقع",
     "plan": "المدة", "kind": "النوع", "text": "التفاصيل", "brand": "الشركة", "model": "الموديل", "carrier": "شركة الاتصال",
     "address": "عنوان الراوتر", "firmware": "نسخة البرنامج", "tester": "مستعد يجرب", "contact": "التواصل", "notes": "ملاحظات",
+    "kinds": "التخصص",
 }
+# تخصصات الفنيين — اللي ما عنده تخصص (القدامى من البوت) = فني أنتنا
+TECH_KINDS = {"antenna": "فني أنتنا", "repair": "صيانة أجهزة"}
+
+
+def tech_kinds(t: dict) -> list[str]:
+    k = [x for x in (t.get("kinds") or []) if x in TECH_KINDS]
+    return k or ["antenna"]
 
 
 def _secret(name: str) -> str:
@@ -985,7 +992,7 @@ async def hub_submit(req: Request):
     u = rec["user"]
     who = f'<a href="tg://user?id={u["id"]}">{_esc(u["name"] or "مستخدم")}</a>' + (f' (@{_esc(u["username"])})' if u.get("username") else "")
     lines = [f"<b>{HUB_TYPES[kind]}</b>", f"من: {who}", ""]
-    lines += [f"• <b>{FIELD_AR[k]}:</b> {_esc(v)}" for k, v in fields.items()]
+    lines += [f"• <b>{FIELD_AR[k]}:</b> {_esc(v)}" for k, v in fields.items() if k != "kinds"]
     text = "\n".join(lines)[:3900]
     if kind in ("tech", "ad"):
         kb = [[{"text": "✅ قبول", "callback_data": f"hub:ok:{rid}"}, {"text": "❌ رفض", "callback_data": f"hub:no:{rid}"}]]
@@ -1040,29 +1047,41 @@ async def hub_decide(rid: str, req: Request):
     rec = json.loads(p.read_text("utf-8"))
     if rec["status"] not in ("new",) and action != "seen":
         return {"ok": False, "msg": f"الطلب {('مقبول' if rec['status'] == 'ok' else 'مرفوض')} من قبل", "rec": rec}
-    uid = rec["user"]["id"]
+    uid = rec["user"].get("id")
+    from_app = rec.get("source") == "app"
     out = {"ok": True, "rec": rec}
     if action == "no":
         rec["status"] = "no"
-        _tg("sendMessage", {"chat_id": uid, "text": "نعتذر، ما قدرنا نقبل طلبك الحين. تقدر تتواصل مع المبرمج للتفاصيل: @hasa_n20"})
+        if uid:
+            _tg("sendMessage", {"chat_id": uid, "text": "نعتذر، ما قدرنا نقبل طلبك الحين. تقدر تتواصل مع المبرمج للتفاصيل: @hasa_n20"})
+        if from_app:
+            out["msg"] = "انرفض — الفني يشوف النتيجة في التطبيق"
     elif action == "seen":
         rec["status"] = "seen"
-        _tg("sendMessage", {"chat_id": uid, "text": "شكراً لك 💙 وصلت رسالتك للمبرمج واطّلع عليها."})
+        if uid:
+            _tg("sendMessage", {"chat_id": uid, "text": "شكراً لك 💙 وصلت رسالتك للمبرمج واطّلع عليها."})
     elif action == "ok" and rec["type"] == "tech":
         f = rec["fields"]
         t = techs()
         key = "T" + secrets.token_hex(4).upper()
-        t[key] = {"name": f.get("name") or rec["user"]["name"], "phone": f.get("phone", ""), "city": f.get("city", ""),
-                  "note": f.get("services", ""), "areas": f.get("areas", ""), "years": f.get("years", ""), "expires": int(time.time() + int(body.get("days") or 30) * 86400),
-                  "active": True, "listed": True, "created": int(time.time()), "tg": uid}
+        kinds = [x for x in (f.get("kinds") or "").split(",") if x in TECH_KINDS] or ["antenna"]
+        # من التطبيق: سنة (التسجيل مجاني والمفتاح لوضع الفني)؛ من البوت: نفس السابق
+        days = int(body.get("days") or (365 if from_app else 30))
+        t[key] = {"name": f.get("name") or rec["user"].get("name") or "", "phone": f.get("phone", ""), "city": f.get("city", ""),
+                  "note": f.get("services", ""), "areas": f.get("areas", ""), "years": f.get("years", ""), "kinds": kinds,
+                  "expires": int(time.time() + days * 86400),
+                  "active": True, "listed": True, "created": int(time.time()), "tg": uid, "source": rec.get("source", "bot")}
         TECHS_FILE.write_text(json.dumps(t, ensure_ascii=False, indent=1), "utf-8")
         rec["status"] = "ok"; rec["tech_key"] = key
-        _tg("sendMessage", {"chat_id": uid, "parse_mode": "HTML", "text":
-            "🎉 <b>تم قبولك كفني معتمد في Bandly!</b>\n\n"
-            f"مفتاح الفني حقك: <code>{key}</code>\n\n"
-            "استخدمه في «وضع الفني» داخل التطبيق أو في صفحة الفني:\nhttps://has-host.com/live/\n\n"
-            "واسمك صار يطلع للعملاء في دليل الفنيين."})
-        out["msg"] = f"انضاف الفني وأُرسل له المفتاح {key}"
+        if from_app:
+            out["msg"] = f"انضاف الفني ({'، '.join(TECH_KINDS[k] for k in kinds)}) — يطلع له المفتاح {key} في التطبيق"
+        if uid:
+            _tg("sendMessage", {"chat_id": uid, "parse_mode": "HTML", "text":
+                "🎉 <b>تم قبولك كفني معتمد في Bandly!</b>\n\n"
+                f"مفتاح الفني حقك: <code>{key}</code>\n\n"
+                "استخدمه في «وضع الفني» داخل التطبيق أو في صفحة الفني:\nhttps://has-host.com/live/\n\n"
+                "واسمك صار يطلع للعملاء في دليل الفنيين."})
+            out["msg"] = f"انضاف الفني وأُرسل له المفتاح {key}"
     elif action == "ok" and rec["type"] == "ad":
         rec["status"] = "ok"
         # صورة الإعلان تنسخ لمجلد عام (مجلد hub صار مقفول)
@@ -1312,6 +1331,57 @@ def _norm_city(s: str) -> str:
 def _same_city(a: str, b: str) -> bool:
     a, b = _norm_city(a), _norm_city(b)
     return bool(a and b) and (a in b or b in a)
+
+
+# ═══ تسجيل فني من التطبيق (بدون تليجرام) — الموافقة للمالك في البوت بنفس أزرار hub ═══
+SIGNUP_HITS: dict[str, list[float]] = {}
+
+
+@app.post("/live-api/app/techsignup")
+async def app_tech_signup(req: Request):
+    ip = req.headers.get("x-real-ip") or (req.client.host if req.client else "?")
+    if not _limit(SIGNUP_HITS, ip, 3, 86400):
+        raise HTTPException(429, "أرسلت طلبات كثيرة — جرّب بكرة")
+    try:
+        b = await req.json()
+    except Exception:
+        raise HTTPException(400, "bad json")
+    name, phone, city = _cl(b.get("name"), 40), _cl(b.get("phone"), 20), _cl(b.get("city"), 30)
+    areas, services, years = _cl(b.get("areas"), 200), _cl(b.get("services"), 400), _cl(b.get("years"), 20)
+    kinds = [k for k in (b.get("kinds") or []) if k in TECH_KINDS][:2]
+    digits = re.sub(r"\D", "", phone)
+    if len(name) < 2 or not city or not re.fullmatch(r"(966|0)?5\d{8}", digits):
+        raise HTTPException(400, "الاسم والمدينة ورقم جوال صحيح مطلوبة")
+    if not kinds:
+        raise HTTPException(400, "اختر تخصصك")
+    rid = f"tech-{int(time.time())}-{secrets.token_hex(3)}"
+    token = secrets.token_urlsafe(16)
+    fields = {k: v for k, v in (("name", name), ("phone", phone), ("city", city), ("areas", areas),
+                                 ("services", services), ("years", years), ("kinds", ",".join(kinds))) if v}
+    rec = {"id": rid, "type": "tech", "at": int(time.time()), "status": "new", "fields": fields, "images": [],
+           "source": "app", "token": token, "user": {"id": None, "name": name, "username": None}}
+    (HUB / f"{rid}.json").write_text(json.dumps(rec, ensure_ascii=False, indent=1), "utf-8")
+    lines = ["<b>🛠️ طلب تسجيل فني — 📱 من التطبيق</b>", "",
+             f"• <b>التخصص:</b> {'، '.join(TECH_KINDS[k] for k in kinds)}"]
+    lines += [f"• <b>{FIELD_AR[k]}:</b> {_esc(v)}" for k, v in fields.items() if k != "kinds"]
+    owner = _owner()
+    if owner:
+        _tg("sendMessage", {"chat_id": owner, "text": "\n".join(lines)[:3900], "parse_mode": "HTML", "disable_web_page_preview": True,
+                            "reply_markup": {"inline_keyboard": [[{"text": "✅ قبول", "callback_data": f"hub:ok:{rid}"},
+                                                                  {"text": "❌ رفض", "callback_data": f"hub:no:{rid}"}]]}})
+    return {"ok": True, "id": rid, "token": token}
+
+
+@app.get("/live-api/app/techsignup/{rid}")
+async def app_tech_signup_status(rid: str, token: str = ""):
+    p = HUB / f"{Path(rid).name}.json"
+    if not p.exists():
+        raise HTTPException(404, "الطلب غير موجود")
+    rec = json.loads(p.read_text("utf-8"))
+    if rec.get("source") != "app" or not token or not secrets.compare_digest(str(rec.get("token", "")), token):
+        raise HTTPException(403, "غير مصرح")
+    st = rec.get("status", "new")
+    return {"status": st, **({"key": rec.get("tech_key")} if st == "ok" else {})}
 
 
 @app.post("/live-api/techreq")

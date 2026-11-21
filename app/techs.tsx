@@ -1,21 +1,32 @@
 /**
- * فنيين قريبين منك — دليل الفنيين المعتمدين (يسجّلون من البوت ويوافق عليهم المالك).
- * مدينة المستخدم أول، وبعدها باقي المدن. تواصل واتساب أو اتصال مباشر.
+ * فنيين قريبين منك — دليل الفنيين المعتمدين: فنيين أنتنا + صيانة أجهزة (فك وإضافة أسلاك وإصلاح).
+ * التسجيل من التطبيق مباشرة، والموافقة توصل المالك في البوت. مدينة المستخدم أول، وبعدها باقي المدن.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Linking, RefreshControl, Modal, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { ActivityIndicator, Linking, RefreshControl, Modal, Alert, KeyboardAvoidingView, Platform, Share } from 'react-native';
 import { ScrollView, View, Text, Pressable, TextInput } from '../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fetchTechs, sameCity, waNumber, BOT_TECH_SIGNUP, Tech, requestTech } from '../src/services/techs';
+import {
+  fetchTechs, sameCity, waNumber, Tech, requestTech, TechKind, KIND_LABEL, KIND_ICON, kindsOf,
+  TechSignup, loadSignup, signupTech, refreshSignup, clearSignup,
+} from '../src/services/techs';
 import { getCity } from '../src/services/stats';
 import { listRouters } from '../src/store/routers';
-import { router as nav, Href } from 'expo-router';
+import { router as nav, Href, useLocalSearchParams } from 'expo-router';
 import { P, shadow } from '../src/ui/Pro';
 import { C, tBd, tBg, tFg } from '../src/ui/theme';
 
 import { sheet } from '../src/i18n';
-const NEEDS = ['تركيب أنتينا', 'توجيه الأنتينا', 'تمديد كيبل', 'فحص الإشارة'];
+const NEEDS = ['تركيب أنتينا', 'توجيه الأنتينا', 'تمديد كيبل', 'فحص الإشارة', 'إضافة أسلاك أنتنا للراوتر', 'صيانة راوتر'];
+type Tab = 'near' | TechKind;
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'near', label: '📍 قريبين مني' },
+  { id: 'antenna', label: '📡 فني أنتنا' },
+  { id: 'repair', label: '🔧 صيانة أجهزة' },
+];
+const KINDS: TechKind[] = ['antenna', 'repair'];
+type SignupForm = { name: string; phone: string; city: string; areas: string; services: string; years: string; kinds: TechKind[] };
 
 const AV = [['#38bdf8', '#2563eb'], ['#a78bfa', '#6d28d9'], ['#34d399', '#047857'], ['#fb923c', '#c2410c'], ['#f472b6', '#be185d']] as const;
 
@@ -26,7 +37,10 @@ function Stars({ r, n }: { r: number | null; n: number }) {
 
 function TechCard({ t, i, rid }: { t: Tech; i: number; rid: string | null }) {
   const wa = waNumber(t.phone);
-  const msg = encodeURIComponent('السلام عليكم، تواصلت معك من تطبيق Bandly بخصوص تركيب/توجيه أنتينا');
+  const kinds = kindsOf(t);
+  const msg = encodeURIComponent(kinds.includes('antenna')
+    ? 'السلام عليكم، تواصلت معك من تطبيق Bandly بخصوص تركيب/توجيه أنتينا'
+    : 'السلام عليكم، تواصلت معك من تطبيق Bandly بخصوص صيانة الراوتر');
   return (
     <View style={[s.card, shadow]}>
       <View style={s.top}>
@@ -40,6 +54,11 @@ function TechCard({ t, i, rid }: { t: Tech; i: number; rid: string | null }) {
           </View>
           <Text style={s.city} numberOfLines={1}>📍 {t.city}{t.areas ? ` · ${t.areas}` : ''}</Text>
         </View>
+      </View>
+      <View style={s.kindRow}>
+        {kinds.map(k => (
+          <Text key={k} style={[s.kindTag, k === 'repair' && s.kindTagRepair]}>{KIND_ICON[k]} {KIND_LABEL[k]}</Text>
+        ))}
       </View>
       {!!t.note && <Text style={s.note} numberOfLines={3}>{t.note}</Text>}
       {!!t.years && <Text style={s.years}>🧰 خبرة {t.years}</Text>}
@@ -55,7 +74,7 @@ function TechCard({ t, i, rid }: { t: Tech; i: number; rid: string | null }) {
           </Pressable>
         )}
       </View>
-      {wa && rid && (
+      {wa && rid && kinds.includes('antenna') && (
         <Pressable style={({ pressed }) => [s.remoteBtn, pressed && { opacity: 0.85 }]}
           onPress={() => nav.push({ pathname: '/aim/[id]', params: { id: rid, share: '1', wa, tname: t.name } } as unknown as Href)}>
           <Text style={s.remoteTxt}>📹 ساعدني عن بُعد</Text>
@@ -76,6 +95,31 @@ export default function Techs() {
   const [rid, setRid] = useState<string | null>(null);
   const [form, setForm] = useState<{ city: string; phone: string; name: string; needs: string[]; note: string } | null>(null);
   const [sending, setSending] = useState(false);
+  const [tab, setTab] = useState<Tab>('near');
+  const [signup, setSignup] = useState<TechSignup | null>(null);
+  const [join, setJoin] = useState<SignupForm | null>(null);
+  const [joining, setJoining] = useState(false);
+  const { join: joinParam } = useLocalSearchParams<{ join?: string }>();
+
+  const sendJoin = async () => {
+    if (!join) return;
+    const phone = join.phone.replace(/[٠-٩]/g, c => String('٠١٢٣٤٥٦٧٨٩'.indexOf(c))).replace(/[^\d+]/g, '');
+    if (join.name.trim().length < 2) { Alert.alert('الاسم', 'اكتب اسمك اللي يطلع للعملاء.'); return; }
+    if (!/^(\+?966|0)?5\d{8}$/.test(phone)) { Alert.alert('رقم الجوال', 'اكتب رقم جوال صحيح — العملاء يتواصلون معك عليه.'); return; }
+    if (!join.city.trim()) { Alert.alert('المدينة', 'اكتب مدينتك.'); return; }
+    if (!join.kinds.length) { Alert.alert('التخصص', 'اختر تخصصك: فني أنتنا أو صيانة أجهزة أو الاثنين.'); return; }
+    setJoining(true);
+    try {
+      const v = await signupTech({ ...join, phone, name: join.name.trim(), city: join.city.trim(), areas: join.areas.trim(), services: join.services.trim(), years: join.years.trim() });
+      setSignup(v);
+      setJoin(null);
+      Alert.alert('✓ وصل تسجيلك', 'بنراجع بياناتك، وأول ما ننقبلك يطلع اسمك للعملاء هنا ويوصلك «مفتاح الفني» في نفس الصفحة.');
+    } catch (e: any) {
+      Alert.alert('ما انرسل', e?.message ?? 'جرّب بعد شوي');
+    } finally {
+      setJoining(false);
+    }
+  };
 
   const send = async () => {
     if (!form) return;
@@ -98,13 +142,21 @@ export default function Techs() {
 
   const load = useCallback(async () => {
     setErr(false);
+    loadSignup().then(v => (v ? refreshSignup(v) : null)).then(setSignup).catch(() => {});
     try { setList(await fetchTechs()); } catch { setErr(true); setList([]); }
   }, []);
 
   useEffect(() => {
     getCity().then(c => { const v = c && c !== '-' ? c : ''; setCityState(v); setFilter(v); });
+    // من زر «أنت فني؟» ← نفتح التسجيل مباشرة (لو ما سجّل قبل)
+    if (joinParam === '1') {
+      Promise.all([getCity(), loadSignup()]).then(([c, v]) => {
+        if (!v || v.status === 'no') setJoin({ name: '', phone: '', city: c && c !== '-' ? c : '', areas: '', services: '', years: '', kinds: [] });
+      }).catch(() => {});
+    }
     listRouters().then(rs => setRid((rs.find(r => r.driverId !== 'demo') ?? rs[0])?.id ?? null)).catch(() => {});
     load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
 
   const cities = useMemo(() => {
@@ -113,8 +165,10 @@ export default function Techs() {
     return set;
   }, [list]);
 
-  const shown = (list ?? []).filter(t => !filter || sameCity(t.city, filter));
-  const others = filter ? (list ?? []).filter(t => !sameCity(t.city, filter)) : [];
+  const ofTab = (list ?? []).filter(t => tab === 'near' || kindsOf(t).includes(tab));
+  const shown = ofTab.filter(t => !filter || sameCity(t.city, filter));
+  const others = filter ? ofTab.filter(t => !sameCity(t.city, filter)) : [];
+  const openJoin = () => setJoin({ name: '', phone: '', city: city || filter, areas: '', services: '', years: '', kinds: tab === 'repair' ? ['repair'] : tab === 'antenna' ? ['antenna'] : [] });
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -123,8 +177,19 @@ export default function Techs() {
         <LinearGradient colors={['#0c4a6e', '#1d4ed8']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={s.hero}>
           <View style={s.ring} />
           <Text style={s.heroTitle}>فنيين قريبين منك</Text>
-          <Text style={s.heroSub}>فنيين أنتينا معتمدين من Bandly — تركيب، توجيه، وتقوية الإشارة. تواصل معهم مباشرة.</Text>
+          <Text style={s.heroSub}>فنيين معتمدين من Bandly — تركيب وتوجيه الأنتنا، وصيانة الراوترات وإضافة أسلاك الأنتنا. تواصل معهم مباشرة.</Text>
         </LinearGradient>
+
+        <View style={s.tabs}>
+          {TABS.map(x => (
+            <Pressable key={x.id} style={[s.tab, tab === x.id && s.tabOn]} onPress={() => setTab(x.id)}>
+              <Text style={[s.tabTxt, tab === x.id && s.tabTxtOn]} numberOfLines={1} adjustsFontSizeToFit>{x.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+        {tab === 'repair' && (
+          <Text style={s.repairHint}>🔧 للراوترات اللي تحتاج فك وإضافة منافذ وأسلاك أنتنا، أو إصلاح عطل. ⚠️ فتح الراوتر يلغي الضمان، ولو الراوتر ملك شركة الاتصال تأكد منهم أول.</Text>
+        )}
 
         <Pressable onPress={() => setForm({ city: filter || city, phone: '', name: '', needs: [], note: '' })}
           style={({ pressed }) => [s.reqCard, pressed && { opacity: 0.9 }]}>
@@ -137,10 +202,10 @@ export default function Techs() {
           </View>
         </Pressable>
 
-        <View style={s.remoteInfo}>
+        {tab !== 'repair' && <View style={s.remoteInfo}>
           <Text style={s.remoteInfoTitle}>📹 كل فني هنا يقدر يساعدك عن بُعد</Text>
           <Text style={s.remoteInfoTxt}>اضغط «ساعدني عن بُعد» تحت الفني: يوصله رابط في واتساب، ويشوف قراءات إشارتك لحظة بلحظة ويوجّهك وأنت تحرّك الأنتينا — ويقدر يكلّمك صوت. بدون ما يجيك البيت.</Text>
-        </View>
+        </View>}
 
         {cities.length > 1 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={s.filters}>
@@ -180,13 +245,41 @@ export default function Techs() {
           </>
         )}
 
-        <Pressable style={({ pressed }) => [s.join, pressed && { opacity: 0.85 }]} onPress={() => Linking.openURL(BOT_TECH_SIGNUP).catch(() => {})}>
-          <Text style={s.joinEmoji}>🛠️</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={s.joinTitle}>أنت فني أنتينا؟</Text>
-            <Text style={s.joinSub}>سجّل من البوت — اسمك يطلع لعملاء مدينتك هنا، وتاخذ مفتاح «الفني عن بُعد».</Text>
+        {signup?.status === 'new' ? (
+          <View style={s.status}>
+            <Text style={s.statusTitle}>⏳ تسجيلك عند المراجعة</Text>
+            <Text style={s.statusSub}>وصلنا تسجيل {signup.name}. أول ما ينقبل يطلع اسمك للعملاء ويوصلك «مفتاح الفني» هنا — اسحب الصفحة لتحت عشان تحدّث.</Text>
           </View>
-        </Pressable>
+        ) : signup?.status === 'ok' ? (
+          <View style={[s.status, s.statusOk]}>
+            <Text style={s.statusTitle}>🎉 انقبلت كفني معتمد</Text>
+            <Text style={s.statusSub}>اسمك يطلع للعملاء الحين. مفتاح الفني حقك (لـ«وضع الفني» وصفحة has-host.com/live):</Text>
+            {!!signup.key && <Text selectable style={s.keyTxt}>{signup.key}</Text>}
+            {!!signup.key && (
+              <Pressable style={({ pressed }) => [s.keyBtn, pressed && { opacity: 0.85 }]}
+                onPress={() => Share.share({ message: `مفتاح الفني في Bandly: ${signup.key}` }).catch(() => {})}>
+                <Text style={s.keyBtnTxt}>احفظ المفتاح</Text>
+              </Pressable>
+            )}
+          </View>
+        ) : (
+          <>
+            {signup?.status === 'no' && (
+              <View style={s.status}>
+                <Text style={s.statusTitle}>ما انقبل تسجيلك المرة هذي</Text>
+                <Text style={s.statusSub}>تقدر تتواصل مع المبرمج @hasa_n20 للتفاصيل، أو تسجّل من جديد ببيانات أوضح.</Text>
+              </View>
+            )}
+            <Pressable style={({ pressed }) => [s.join, pressed && { opacity: 0.85 }]}
+              onPress={async () => { if (signup?.status === 'no') { await clearSignup(); setSignup(null); } openJoin(); }}>
+              <Text style={s.joinEmoji}>🛠️</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={s.joinTitle}>أنت فني أنتنا أو صيانة؟</Text>
+                <Text style={s.joinSub}>سجّل هنا — بعد الموافقة اسمك يطلع لعملاء مدينتك، وتاخذ مفتاح «الفني عن بُعد».</Text>
+              </View>
+            </Pressable>
+          </>
+        )}
         {!city && <Text style={s.hint}>💡 اختر مدينتك من الإعدادات عشان نرتّب لك الفنيين الأقرب.</Text>}
       </ScrollView>
 
@@ -227,6 +320,51 @@ export default function Techs() {
               </Pressable>
               <Text style={s.privacy}>🔒 رقمك يوصل لفنيين مدينتك بس، عشان يتواصلون معك.</Text>
             </View>
+          )}
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={!!join} transparent animationType="slide" onRequestClose={() => setJoin(null)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+          <Pressable style={s.backdrop} onPress={() => setJoin(null)} />
+          {join && (
+            <ScrollView style={{ maxHeight: '88%', flexGrow: 0 }} contentContainerStyle={[s.sheet, { paddingBottom: insets.bottom + 16 }]} keyboardShouldPersistTaps="handled">
+              <View style={s.grip} />
+              <Text style={s.sheetTitle}>سجّل كفني</Text>
+              <Text style={s.sheetSub}>بياناتك تطلع للعملاء بعد موافقتنا.</Text>
+
+              <Text style={s.label}>تخصصك</Text>
+              <View style={s.needs}>
+                {KINDS.map(k => {
+                  const on = join.kinds.includes(k);
+                  return (
+                    <Pressable key={k} style={[s.need, on && s.needOn]}
+                      onPress={() => setJoin({ ...join, kinds: on ? join.kinds.filter(x => x !== k) : [...join.kinds, k] })}>
+                      <Text style={[s.needTxt, on && s.needTxtOn]}>{KIND_ICON[k]} {KIND_LABEL[k]}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Text style={s.label}>الاسم</Text>
+              <TextInput value={join.name} onChangeText={v => setJoin({ ...join, name: v })} placeholder="الاسم اللي يطلع للعملاء" placeholderTextColor={P.faint} style={s.input} />
+              <Text style={s.label}>رقم الجوال (واتساب)</Text>
+              <TextInput value={join.phone} onChangeText={v => setJoin({ ...join, phone: v })} placeholder="05xxxxxxxx" placeholderTextColor={P.faint}
+                keyboardType="phone-pad" style={[s.input, { textAlign: 'left', writingDirection: 'ltr' }]} />
+              <Text style={s.label}>المدينة</Text>
+              <TextInput value={join.city} onChangeText={v => setJoin({ ...join, city: v })} placeholder="مثال: شرورة" placeholderTextColor={P.faint} style={s.input} />
+              <Text style={s.label}>المناطق أو الأحياء اللي تغطيها <Text style={{ color: P.faint, fontWeight: '600' }}>(اختياري)</Text></Text>
+              <TextInput value={join.areas} onChangeText={v => setJoin({ ...join, areas: v })} placeholder="مثلاً: كل شرورة والوديعة" placeholderTextColor={P.faint} style={s.input} />
+              <Text style={s.label}>خدماتك وخبرتك <Text style={{ color: P.faint, fontWeight: '600' }}>(اختياري)</Text></Text>
+              <TextInput value={join.services} onChangeText={v => setJoin({ ...join, services: v })} placeholder="مثلاً: تركيب أنتنا خارجية، إضافة منافذ للراوترات" placeholderTextColor={P.faint}
+                style={[s.input, { minHeight: 64, textAlignVertical: 'top', paddingTop: 10 }]} multiline />
+              <TextInput value={join.years} onChangeText={v => setJoin({ ...join, years: v })} placeholder="سنوات الخبرة (مثلاً: 5 سنوات)" placeholderTextColor={P.faint} style={[s.input, { marginTop: 8 }]} />
+
+              <Pressable onPress={sendJoin} disabled={joining} style={({ pressed }) => [s.sendBtn, (pressed || joining) && { opacity: 0.85 }]}>
+                {joining ? <ActivityIndicator color="#fff" /> : <Text style={s.sendTxt}>أرسل التسجيل</Text>}
+              </Pressable>
+              <Text style={s.privacy}>🔒 رقمك ما يطلع لأحد إلا بعد ما ننقبلك.</Text>
+            </ScrollView>
           )}
         </KeyboardAvoidingView>
       </Modal>
@@ -296,4 +434,20 @@ const s = sheet({
   sendBtn: { marginTop: 16, backgroundColor: tBg('#047857'), borderRadius: 16, paddingVertical: 14, alignItems: 'center' },
   sendTxt: { color: tFg('#ffffff'), fontSize: 16, fontWeight: '900' },
   privacy: { color: P.faint, fontSize: 12, textAlign: 'center', marginTop: 8 },
+  tabs: { flexDirection: 'row-reverse', gap: 6, backgroundColor: C.card, borderRadius: 16, padding: 4, borderWidth: 1, borderColor: C.cardBorder },
+  tab: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 12 },
+  tabOn: { backgroundColor: tBg('#2563eb') },
+  tabTxt: { color: C.text, fontSize: 13, fontWeight: '800' },
+  tabTxtOn: { color: tFg('#ffffff') },
+  repairHint: { color: P.sub, fontSize: 12.5, lineHeight: 19, textAlign: 'right', backgroundColor: C.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.cardBorder },
+  kindRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6 },
+  kindTag: { color: tFg('#1d4ed8'), backgroundColor: tBg('#e8efff'), fontSize: 11.5, fontWeight: '800', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999, overflow: 'hidden' },
+  kindTagRepair: { color: tFg('#9a3412'), backgroundColor: tBg('#fff1e6') },
+  status: { backgroundColor: C.card, borderRadius: 20, padding: 16, gap: 6, borderWidth: 1.5, borderColor: C.cardBorder, marginTop: 6 },
+  statusOk: { borderColor: tBd('#a7f3d0') },
+  statusTitle: { color: C.text, fontSize: 15.5, fontWeight: '900', textAlign: 'right' },
+  statusSub: { color: P.sub, fontSize: 12.5, lineHeight: 19, textAlign: 'right' },
+  keyTxt: { color: C.text, fontSize: 22, fontWeight: '900', textAlign: 'center', letterSpacing: 2, marginVertical: 4 },
+  keyBtn: { alignSelf: 'center', backgroundColor: tBg('#047857'), borderRadius: 12, paddingVertical: 9, paddingHorizontal: 18 },
+  keyBtnTxt: { color: tFg('#ffffff'), fontSize: 14, fontWeight: '900' },
 });
