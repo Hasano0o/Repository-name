@@ -85,8 +85,14 @@ export class ZltDriver implements RouterDriver {
   }
 
   async identify(): Promise<ModelProfile | null> {
+    // الموديل من DEVICE_VERSION_INFO (بالجلسة) — id لكل موديل عشان كرت «أرسل ملفات راوترك» يطلع لكل موديل ZLT جديد
+    // (كان «zlt» للكل: أول FULL من أي ZLT يخفي الكرت عن X300A وغيره)
+    if (!this.info && this.sid) {
+      try { const j = await this.read(ZCMD.DEVICE_VERSION_INFO); this.info = { model: str(j.module), fw: str(j.modversion), imei: str(j.imei) }; } catch {}
+    }
+    const m = (this.info?.model ?? '').replace(/^zlt[\s_-]*/i, '').trim();
     return {
-      id: 'zlt', label: this.info?.model ? `ZLT ${this.info.model}` : 'ZLT', brand: 'zlt', tech: '5G',
+      id: m ? 'zlt-' + m.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'zlt', label: m ? `ZLT ${m}` : 'ZLT', brand: 'zlt', tech: '5G',
       writeUnverified: true,
       note: 'راوتر ZLT. الدعم للحين: الدخول وقوة الإشارة. أرسل ملفات راوترك (الكرت تحت) عشان نضيف الترددات والأبراج.',
     };
@@ -195,7 +201,8 @@ export class ZltDriver implements RouterDriver {
     }
     let op: string | undefined;
     try { op = str((await this.read(ZCMD.SYS_INFO_NETWORK)).network_operator); } catch {}
-    return { model: this.info?.model ? `ZLT ${this.info.model}` : this.name, imei: this.info?.imei, operator: op, software: `${this.info?.fw ?? 'war'}|zlt-pages-1` };
+    const mm = (this.info?.model ?? '').replace(/^zlt[\s_-]*/i, '').trim();
+    return { model: mm ? `ZLT ${mm}` : this.name, imei: this.info?.imei, operator: op, software: `${this.info?.fw ?? 'war'}|zlt-pages-1` };
   }
 
   /** الجامع (FULL/AUTH): صفحة ثابتة — GET بس، والخطرة ما تنفتح */

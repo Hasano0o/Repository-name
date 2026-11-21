@@ -126,3 +126,12 @@ test('ZLT X300A: نسخة درايفر جديدة بدون detect (فتح صفح
   await d2.login('192.168.70.1', 'admin', 'Bpo', { fresh: true });
   assert.equal((await d2.getSignal()).rsrp, -97);
 });
+
+test('ZLT: الموديل في الـ id (كرت FULL لكل موديل)', async () => {
+  zlt('admin');
+  const d = new ZltDriver();
+  assert.equal((await d.identify()).id, 'zlt');
+  await d.login('192.168.0.1', 'admin', 'admin', { fresh: true });
+  const p = await d.identify();
+  assert.equal(p.id, 'zlt-x21'); assert.equal(p.label, 'ZLT X21');
+});
