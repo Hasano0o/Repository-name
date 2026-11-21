@@ -51,13 +51,15 @@ test('ZLT: التعرّف على الصفحة · قراءة الإشارة', () 
 });
 
 /** راوتر محاكى */
-function zlt(pw: string) {
+function zlt(pw: string, httpsOnly = false) {
   const log: string[] = [];
   const sha = routerSha();
   let sid = '', times = 3;
   const token = 'f00dbabe12345678';
   (globalThis as any).fetch = async (url: string, init?: any) => {
     const u = new URL(url);
+    if (httpsOnly && u.protocol === 'http:') throw new Error('Network request failed');
+    log.push(u.protocol);
     const res = (text: string) => ({ ok: true, status: 200, url, headers: { get: () => null }, text: async () => text } as any);
     if (u.pathname === '/') return res('<!-- * @,@FilePath: ,: \\simcom_war\\index.html --><html></html>');
     if (u.pathname !== '/cgi-bin/http.cgi') return res('');
@@ -105,4 +107,13 @@ test('ZLT: صفحات FULL ما فيها شي خطر · فيها صفحات ال
   const pages: string[] = new ZltDriver().afterLoginPages();
   assert.ok(pages.includes('/html/config/lteLockFrequencyConfig.html') && pages.includes('/js/isp/lockCell.js'));
   assert.ok(!pages.some(p => /reboot|reset|upgrade|logout|restore/i.test(p)));
+});
+
+test('ZLT X300A (du): https بس ← نتعرّف عليه وندخل على https', async () => {
+  const r = zlt('Bpo', true);
+  const d = new ZltDriver();
+  assert.ok(await d.detect('192.168.70.1'));
+  await d.login('192.168.70.1', 'admin', 'Bpo', { fresh: true });
+  assert.equal((await d.getSignal()).rsrp, -97);
+  assert.ok(!r.log.slice(1).some(x => x === 'http:'));
 });

@@ -40,7 +40,9 @@ export class ZltDriver implements RouterDriver {
   private info: { model?: string; fw?: string; imei?: string } | null = null;
   private loggedKeys = false;
 
-  private base(host = this.host) { return 'http://' + host.replace(/^https?:\/\//, '').replace(/\/+$/, ''); }
+  /** X300A (du — ٢١ نوفمبر) يفتح https بس (http = «تعذر الاتصال») — نتذكر اللي رد في detect */
+  private scheme: 'http' | 'https' = 'http';
+  private base(host = this.host) { return this.scheme + '://' + host.replace(/^https?:\/\//, '').replace(/\/+$/, ''); }
 
   private async cmd(cmd: number, method: 'GET' | 'POST' = 'GET', extra: Record<string, unknown> = {}, sid = this.sid, timeout = 8000): Promise<{ status: number; text: string; j: any }> {
     const r = await http(this.base() + ZLT_CGI, {
@@ -55,10 +57,19 @@ export class ZltDriver implements RouterDriver {
   async detect(host: string): Promise<boolean> {
     if (!isLanHost(host)) return false;
     this.host = host;
-    try {
-      const r = await http(this.base() + '/', { method: 'GET' }, 3000);
-      return isZltPage(await r.text());
-    } catch { return false; }
+    for (const sc of ['http', 'https'] as const) {
+      this.scheme = sc;
+      try {
+        const r = await http(this.base() + '/', { method: 'GET' }, 3000);
+        const t = await r.text();
+        // http يحوّل لـ https بنفسه؟ نكمل على https
+        try { if (/^https:/i.test((r as any).url ?? '')) this.scheme = 'https'; } catch {}
+        if (isZltPage(t)) return true;
+        if (sc === 'http') return false; // http رد بصفحة ثانية = مو ZLT (ما نضيّع وقت على https)
+      } catch { /* http ما رد ← نجرّب https */ }
+    }
+    this.scheme = 'http';
+    return false;
   }
 
   async identify(): Promise<ModelProfile | null> {

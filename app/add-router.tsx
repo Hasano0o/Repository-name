@@ -38,10 +38,10 @@ const COMMON_HOSTS: { host: string; hint: string; color: string }[] = [
  * يرد أحد على هالعنوان؟ (صفحة الراوتر الرئيسية، بدون دخول)
  * يرجّع العنوان اللي وصلنا له فعلاً — أو null لو ما رد.
  */
-async function probePath(h: string, path: string, ms: number): Promise<string | null> {
+async function probePath(h: string, path: string, ms: number, scheme: 'http' | 'https' = 'http'): Promise<string | null> {
   const c = new AbortController(); const t = setTimeout(() => c.abort(), ms);
   try {
-    const r = await fetch(`http://${h}${path}`, { signal: c.signal });
+    const r = await fetch(`${scheme}://${h}${path}`, { signal: c.signal });
     let to = h;
     try { to = new URL(r.url).hostname || h; } catch {}
     return to.toLowerCase();
@@ -54,9 +54,11 @@ async function probePath(h: string, path: string, ms: number): Promise<string | 
 async function probeHost(h: string, ms = 1800): Promise<string | null> {
   const a = probePath(h, '/', ms);
   const b = probePath(h, '/html/home.html', ms);
+  // راوترات https بس (ZLT X300A نسخة du — http = «تعذر الاتصال»)
+  const c = probePath(h, '/', ms, 'https');
   const first = await Promise.race([a, b]);
   if (first) return first;
-  return (await a) ?? (await b);
+  return (await a) ?? (await b) ?? (await c);
 }
 /**
  * رد من نفس العنوان؟ هواوي بدون إنترنت/شريحة يحوّل أي عنوان لصفحته (192.168.1.1 ← 192.168.8.1) —
@@ -455,7 +457,11 @@ export default function AddRouterScreen() {
         // كل العناوين مع بعض (ثانيتين) ← نتعرّف بس على اللي ردّ
         const ping = async (x: string) => {
           const c = new AbortController(); const t = setTimeout(() => c.abort(), 1800);
-          try { await fetch(`http://${x}/`, { signal: c.signal }); return true; } catch { return false; } finally { clearTimeout(t); }
+          try { await fetch(`http://${x}/`, { signal: c.signal }); return true; }
+          catch {
+            // https بس (ZLT X300A)
+            try { await fetch(`https://${x}/`, { signal: c.signal }); return true; } catch { return false; }
+          } finally { clearTimeout(t); }
         };
         const answered = (await Promise.all(ROUTER_HOSTS.filter(x => x !== h).map(async x => ((await ping(x)) ? x : null)))).filter(Boolean) as string[];
         for (const alt of answered) {
