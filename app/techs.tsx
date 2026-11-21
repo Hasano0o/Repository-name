@@ -284,10 +284,10 @@ export default function Techs() {
       </ScrollView>
 
       <Modal visible={!!form} transparent animationType="slide" onRequestClose={() => setForm(null)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <Pressable style={s.backdrop} onPress={() => setForm(null)} />
           {form && (
-            <View style={[s.sheet, { paddingBottom: insets.bottom + 16 }]}>
+            <ScrollView style={{ maxHeight: '88%', flexGrow: 0 }} contentContainerStyle={[s.sheet, { paddingBottom: insets.bottom + 16 }]} keyboardShouldPersistTaps="handled">
               <View style={s.grip} />
               <Text style={s.sheetTitle}>طلب فني</Text>
               <Text style={s.sheetSub}>يوصل للفنيين المعتمدين في مدينتك ويتواصلون معك مباشرة.</Text>
@@ -319,13 +319,13 @@ export default function Techs() {
                 {sending ? <ActivityIndicator color="#fff" /> : <Text style={s.sendTxt}>أرسل الطلب</Text>}
               </Pressable>
               <Text style={s.privacy}>🔒 رقمك يوصل لفنيين مدينتك بس، عشان يتواصلون معك.</Text>
-            </View>
+            </ScrollView>
           )}
         </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={!!join} transparent animationType="slide" onRequestClose={() => setJoin(null)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <Pressable style={s.backdrop} onPress={() => setJoin(null)} />
           {join && (
             <ScrollView style={{ maxHeight: '88%', flexGrow: 0 }} contentContainerStyle={[s.sheet, { paddingBottom: insets.bottom + 16 }]} keyboardShouldPersistTaps="handled">
