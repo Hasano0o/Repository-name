@@ -92,13 +92,23 @@ const factories: (() => RouterDriver)[] = [
   () => new UnknownDriver(),
 ];
 
+/**
+ * مهلة لكل درايفر — بعض الراوترات (ZLT X300A عند عضو ٢١ نوفمبر) ما ترد على مسارات غريبة وتخلي الاتصال معلّق،
+ * و«نتعرّف على نوع الراوتر» يدور بدون نهاية. بعد المهلة ننتقل للي بعده (والطلب المعلّق ينقطع بمهلته الخاصة).
+ */
+export const DETECT_TIMEOUT_MS = 10_000;
+
 export async function detectDriver(host: string): Promise<RouterDriver | null> {
   for (const make of factories) {
     const d = make();
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      if (await d.detect(host)) return d;
+      const timeout = new Promise<boolean>(res => { timer = setTimeout(() => res(false), DETECT_TIMEOUT_MS); });
+      if (await Promise.race([d.detect(host).catch(() => false), timeout])) return d;
     } catch {
       // لا نوقف — نجرب التالي
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
   return null;
