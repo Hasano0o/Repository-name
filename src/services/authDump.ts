@@ -30,6 +30,13 @@ export async function sendAfterLoginPagesFor(r: SavedRouter, onStep?: (msg: stri
   const got = pages.filter(p => files.some(f => f.p === p && !loginish(f.t)));
   // حتى لو ما وصل شي نرسل ملف صغير فيه السبب — عشان يبان في البوت وما نخمّن
   const send = files.length ? files : [{ p: '/_bandly/auth-miss.txt', t: skipped.filter(x => x.startsWith('✗')).join('\n') || 'ما وصل ولا ملف' }];
+  // تفاصيل الجهاز (الموديل/الفيرموير/المودم — ZLT يقرأ المودم بأوامر AT قراءة بس) + التشخيص — كانت تجي في FULL بس،
+  // و«أرسل تشخيص» من X300A (٢٢ نوفمبر) وصل صفحات بدون ما نعرف المودم
+  try {
+    const det = d.getDeviceDetails ? await d.getDeviceDetails().catch(() => null) : null;
+    if (det) send.push({ p: '/_bandly/device.txt', t: scrub([`model: ${det.model ?? '—'}`, `software: ${det.software ?? '—'}`, `hardware: ${det.hardware ?? '—'}`, `operator: ${det.operator ?? '—'}`].join('\n')) });
+    send.push({ p: '/_bandly/diag.txt', t: scrub(diagText('صفحات بعد الدخول (AUTH)', { driverName: model })) });
+  } catch {}
   onStep?.(`نرسل ${send.length} ملف…`);
   const res = await sendRouterFiles(send, { model, host: r.host, skipped });
   if (!res.ok) return 'صفحة الإعدادات ما وصلت للمطوّر — تأكد من النت وجرّب مرة ثانية';
