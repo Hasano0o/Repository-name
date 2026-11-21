@@ -16,7 +16,7 @@
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import {
-  RouterDriver, Capability, Signal, Carrier, SignalSnapshot, NetworkInfo, CellTower, DeviceTemp,
+  RouterDriver, Capability, Signal, Carrier, SignalSnapshot, NetworkInfo, CellTower, DeviceTemp, SmsMessage,
   Traffic, Usage, BandConfig, ActiveLock, CellLockState, DeviceDetails, WifiRadio, ConnectedDevice, ModemSignal,
 } from '../types';
 import { http } from '../http';
@@ -28,6 +28,7 @@ import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import { MODELS, ModelProfile } from '../models';
 import { diag } from '../../services/diag';
 import { u30NewKey } from '../zte/u30crypto';
+import { ucs2Hex, ngSmsNow, idList, parseNgSms, cmdState } from './sms';
 const rnd = async () => { const C = await import('expo-crypto'); return (n: number) => C.getRandomBytes(n); };
 
 const ZERO = '00000000000000000000000000000000';
@@ -86,7 +87,7 @@ export function _resetZteNgHttps() { httpsHosts.clear(); httpsTried.clear(); }
 export class ZteNgDriver implements RouterDriver {
   id = 'zte-ng';
   name = 'ZTE (الجيل الجديد)';
-  capabilities: Capability[] = ['signal', 'cells', 'bandLock', 'reboot', 'usage', 'traffic'];
+  capabilities: Capability[] = ['signal', 'cells', 'bandLock', 'reboot', 'usage', 'traffic', 'sms'];
   cellLockRisk = 'تثبيت البرج موقوف على هذا الجهاز للحين — فكّه ما يسري إلا بإعادة تشغيل الراوتر. استخدم تثبيت الترددات بداله.';
 
   private host = '';
@@ -951,6 +952,47 @@ export class ZteNgDriver implements RouterDriver {
     if (wn.length && !sameSet(nrListOf(a.nr5g_sa_band_lock), wn)) miss.push('ترددات 5G');
     if (want.net_select && str(a.net_select) !== want.net_select) miss.push('وضع الشبكة');
     if (miss.length) throw restoreMismatch(miss);
+  }
+
+  // ═══ الرسائل SMS (zwrt_wms — نفس صفحة الراوتر، service_rpc.js في FULL ١٨ و٢٠ نوفمبر) ═══
+
+  /** بعد إرسال/حذف: الصفحة تسأل get_cmd_status كل ثانية لين ٣ (تم) أو ٢ (فشل) */
+  private async smsWait(cmd: 4 | 6, what: string): Promise<void> {
+    for (let i = 0; i < 15; i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      let st: 'ok' | 'fail' | 'wait' = 'wait';
+      try { st = cmdState(await this.callRetry('zwrt_wms', 'zwrt_wms_get_cmd_status', { sms_cmd: cmd })); } catch {}
+      if (st === 'ok') return;
+      if (st === 'fail') throw new Error(`الراوتر ما قدر ${what}`);
+    }
+    // الأمر انقبل بس الحالة ما وصلت — ما نعيد (عشان ما تنرسل مرتين)
+    diag(`[zte-ng] sms_cmd ${cmd}: ما وصلت النتيجة خلال ١٥ ثانية`);
+  }
+
+  async listSms(box: 'inbox' | 'sent' = 'inbox'): Promise<SmsMessage[]> {
+    const r = await this.write('zwrt_wms', 'zte_libwms_get_sms_data',
+      { page: 0, data_per_page: 200, mem_store: 1, tags: 10, order_by: 'order by id desc' });
+    return parseNgSms(r, box);
+  }
+
+  async markSmsRead(index: string): Promise<void> {
+    const r = await this.write('zwrt_wms', 'zwrt_wms_modify_tag', { id: idList([index]), tag: 0 });
+    if (str(r.result) && str(r.result) !== 'success') throw new Error('الراوتر ما علّم الرسالة مقروءة');
+  }
+
+  async deleteSms(index: string): Promise<void> {
+    const r = await this.write('zwrt_wms', 'zwrt_wms_delete_sms', { id: idList([index]) });
+    if (str(r.result) !== 'success') throw new Error(`الراوتر رفض حذف الرسالة (${str(r.result) || 'بدون رد'})`);
+    await this.smsWait(6, 'يحذف الرسالة');
+  }
+
+  /** بدون إعادة محاولة بعد ما ينقبل — عشان ما تنرسل الرسالة مرتين */
+  async sendSms(phone: string, text: string): Promise<void> {
+    const r = await this.write('zwrt_wms', 'zte_libwms_send_sms', {
+      number: phone.trim(), sms_time: ngSmsNow(), message_body: ucs2Hex(text), id: '-1', encode_type: 'UNICODE',
+    });
+    if (str(r.result) !== 'success') throw new Error(`الراوتر رفض إرسال الرسالة (${str(r.result) || 'بدون رد'})`);
+    await this.smsWait(4, 'يرسل الرسالة');
   }
 
   /** إنقاذ: يرجّع الإعدادات الأصلية (أو كل الترددات)، يفك أي تثبيت برج، ويعيد التشغيل */
