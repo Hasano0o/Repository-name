@@ -37,6 +37,21 @@ export async function markLogin(driverName: string) {
   } catch {}
 }
 
+/**
+ * وين وصل في «إضافة راوتر» (أبعد خطوة) — عشان نعرف وين يوقف اللي ما دخل راوتره:
+ * opened فتح الشاشة · notfound ما لقينا راوتر من جواله · found تعرّفنا على راوتره · tried ضغط «اتصل» · failed فشل الدخول
+ */
+export type AddStep = 'opened' | 'notfound' | 'found' | 'tried' | 'failed';
+const ADD_STEP_KEY = 'bandly.stats.addStep';
+const STEP_RANK: Record<AddStep, number> = { opened: 1, notfound: 2, found: 3, tried: 4, failed: 5 };
+export async function markAddStep(step: AddStep) {
+  try {
+    const cur = (await AsyncStorage.getItem(ADD_STEP_KEY)) as AddStep | null;
+    if (cur && (STEP_RANK[cur] ?? 0) >= STEP_RANK[step]) return;
+    await AsyncStorage.setItem(ADD_STEP_KEY, step);
+  } catch {}
+}
+
 /** المدن الأكثر — والباقي يكتبه المستخدم */
 export const CITIES = [
   'الرياض', 'جدة', 'مكة', 'المدينة', 'الدمام', 'الخبر', 'الأحساء', 'الطائف',
@@ -85,6 +100,8 @@ export async function pingDaily(force = false): Promise<void> {
     } catch {}
     let screens: Record<string, number> = {};
     try { screens = JSON.parse((await AsyncStorage.getItem(SCREENS_KEY)) || '{}'); } catch {}
+    let addStep = '';
+    try { addStep = (await AsyncStorage.getItem(ADD_STEP_KEY)) || ''; } catch {}
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 8000);
     const r = await fetch(`${LIVE_BASE}/live-api/stats/ping`, {
@@ -106,6 +123,7 @@ export async function pingDaily(force = false): Promise<void> {
         screens,
         blocker,
         blockerNote,
+        addStep,
       }),
     }).finally(() => clearTimeout(t));
     if (r.ok) {

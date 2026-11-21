@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { cleanPassword, passwordShape } from '../src/utils/password';
 import { ROUTER_HOSTS } from '../src/utils/routerHosts';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform, } from 'react-native';
+import { ActivityIndicator, Alert, AppState, KeyboardAvoidingView, Linking, Platform, } from 'react-native';
 import { Pressable, ScrollView, Text, TextInput, View } from '../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -9,6 +9,7 @@ import { Icon, IconName } from '../src/ui/Icon';
 import { C, R, S, T, tBd, tBg, tFg } from '../src/ui/theme';
 import { isLanHost, cleanHostInput } from '../src/utils/host';
 import { detectDriver } from '../src/drivers/registry';
+import { markAddStep } from '../src/services/stats';
 import { MESH_HOST, MESH_TIP } from '../src/utils/meshHint';
 import { huaweiModelNoLogin, confirmLabelMixup, modelLine } from '../src/services/labelHint';
 import { addDemoRouter } from '../src/drivers/demo';
@@ -111,6 +112,24 @@ export default function AddRouterScreen() {
 
   // ═══ التعرّف على الراوتر وموديله أول ما تنفتح الشاشة (بدون كلمة مرور) ═══
   const [model, setModel] = useState<{ state: 'search' | 'found' | 'none'; label?: string; host?: string }>({ state: 'search' });
+  // «ما لقينا راوتر» ← دوّر من جديد: بزر، أو تلقائي لما يرجع للتطبيق (بعد ما يتصل بواي فاي الراوتر من الإعدادات)
+  const [scanTry, setScanTry] = useState(0);
+  const modelState = useRef(model.state);
+  modelState.current = model.state;
+  useEffect(() => {
+    if (editId) return;
+    const sub = AppState.addEventListener('change', st => {
+      if (st === 'active' && modelState.current === 'none' && !hostTouched.current) setScanTry(n => n + 1);
+    });
+    return () => sub.remove();
+  }, [editId]);
+  // الإحصائية: وين يوقف اللي ما يكمّل الإضافة (بدون أي بيانات شخصية)
+  useEffect(() => { if (!editId) markAddStep('opened'); }, [editId]);
+  useEffect(() => {
+    if (editId) return;
+    if (model.state === 'found') markAddStep('found');
+    else if (model.state === 'none') markAddStep('notfound');
+  }, [model.state, editId]);
   const identifyHost = async (h: string): Promise<string | null> => {
     const d = await detectDriver(h).catch(() => null);
     if (!d || (d as any).id === 'unknown') return null;
@@ -230,6 +249,7 @@ export default function AddRouterScreen() {
   useEffect(() => {
     if (editId || welcomeScan) { setModel({ state: 'none' }); return; }
     let alive = true;
+    if (scanTry > 0) setModel({ state: 'search' });
     (async () => {
       // العناوين المشهورة أول (٤ طلبات بس) — بعض الراوترات (هواوي بدون إنترنت) تعترض كل العناوين،
       // و٢٢ طلب مع بعض ممكن تعلّقها قبل الدخول. الباقي بس لو ما رد ولا واحد
@@ -251,7 +271,7 @@ export default function AddRouterScreen() {
       if (alive) setModel({ state: 'none' });
     })();
     return () => { alive = false; };
-  }, [editId, welcomeScan]);
+  }, [editId, welcomeScan, scanTry]);
   // غيّر العنوان بنفسه ← نتعرّف على اللي كتبه (بعد ما يوقف كتابة)
   useEffect(() => {
     if (!hostTouched.current || editId) return;
@@ -387,6 +407,7 @@ export default function AddRouterScreen() {
    * فلو ما رد العنوان الحالي نجرّب العناوين المشهورة (هواوي/ZTE/غيرها) قبل ما نستسلم.
    */
   async function onSave(over?: { host?: string; username?: string; password?: string; findHost?: boolean; wifi?: SavedWifi; name?: string; finishSetup?: boolean }) {
+    if (!editId) markAddStep('tried');
     if (isDevice && editId) {
       setBusy(true);
       try {
@@ -421,6 +442,7 @@ export default function AddRouterScreen() {
     setBusy(true);
     // فشل الإضافة يوصل للسيرفر (errors.jsonl · add-login) — بدون كلمة ولا آي بي عام: الموديل والعنوان المحلي والخطأ بس
     const addFail = (what: string, model?: string) => {
+      if (!editId) markAddStep('failed');
       lastFail.current = { host: h, model: model ?? '؟', what, ctx: `مستخدم ${u === 'admin' ? 'admin' : 'مخصص'} · طول الكلمة ${password.length} · شكلها ${passwordShape(password)}${junk ? ` (شلنا ${junk} مسافة/رمز مخفي)` : ''}` };
       pendingDump.current = null;
       return reportError('add-login', `${model ?? '؟'} · ${h} · مستخدم ${u === 'admin' ? 'admin' : 'مخصص'} · طول الكلمة ${password.length} · شكلها ${passwordShape(password)}${junk ? ` (شلنا ${junk} مسافة/رمز مخفي)` : ''} · ${what.slice(0, 220)}`).catch(() => {});
@@ -852,7 +874,24 @@ export default function AddRouterScreen() {
               </View>
             )}
             {!editId && model.state === 'none' && !isDevice && (
-              <Text style={styles.modelNone}>ما تعرّفنا على راوتر — تأكد إن جوالك متصل بواي فاي الراوتر، أو اختر نوعه تحت 👇</Text>
+              <View style={styles.noneCard}>
+                <Text style={styles.noneTitle}>📶 ما لقينا راوترك من جوالك</Text>
+                <Text style={styles.noneStep}>١. افتح إعدادات الواي فاي في جوالك واتصل بشبكة الراوتر — اسمها مكتوب على الملصق تحت الراوتر (WiFi Name / SSID).</Text>
+                <Text style={styles.noneStep}>٢. لو الراوتر ما فيه إنترنت الحين، جوالك ممكن يطلع منه لحاله — اختر «البقاء متصل» وطفّ بيانات الجوال.</Text>
+                <Text style={styles.noneStep}>٣. ارجع هنا — ندوّر على الراوتر لحالنا.</Text>
+                <View style={styles.noneRow}>
+                  {Platform.OS === 'android' && (
+                    <Pressable style={({ pressed }) => [styles.noneBtn, pressed && { opacity: 0.8 }]}
+                      onPress={() => Linking.sendIntent('android.settings.WIFI_SETTINGS').catch(() => Linking.openSettings().catch(() => {}))}>
+                      <Text style={styles.noneBtnTxt}>افتح إعدادات الواي فاي</Text>
+                    </Pressable>
+                  )}
+                  <Pressable style={({ pressed }) => [styles.noneBtn, styles.noneBtn2, pressed && { opacity: 0.8 }]} onPress={() => setScanTry(n => n + 1)}>
+                    <Text style={[styles.noneBtnTxt, styles.noneBtnTxt2]}>دوّر مرة ثانية</Text>
+                  </Pressable>
+                </View>
+                <Text style={styles.modelNone}>أو اختر نوع راوترك تحت 👇</Text>
+              </View>
             )}
             <Text style={styles.hostsCap}>وش نوع راوترك؟ اختره والعنوان يتعبى لحاله 👇</Text>
             <View style={styles.hosts}>
@@ -1056,6 +1095,14 @@ const styles = sheet({
   modelTxt: { color: C.text, fontSize: 14, fontWeight: '700', textAlign: 'right', flex: 1 },
   modelBold: { fontWeight: '900', color: tFg('#0f9d58') },
   modelNone: { color: C.sub, fontSize: 12.5, textAlign: 'right', marginBottom: 8 },
+  noneCard: { backgroundColor: tBg('#fff7ed'), borderColor: tBd('#fed7aa'), borderWidth: 1.5, borderRadius: 16, padding: 12, gap: 6, marginBottom: 8 },
+  noneTitle: { color: tFg('#9a3412'), fontSize: 14.5, fontWeight: '900', textAlign: 'right' },
+  noneStep: { color: C.text, fontSize: 12.5, lineHeight: 19, textAlign: 'right' },
+  noneRow: { flexDirection: 'row-reverse', gap: 8, marginTop: 4 },
+  noneBtn: { flex: 1, backgroundColor: tBg('#ea580c'), borderRadius: 12, paddingVertical: 10, alignItems: 'center' },
+  noneBtn2: { backgroundColor: C.card, borderWidth: 1.5, borderColor: tBd('#fed7aa') },
+  noneBtnTxt: { color: tFg('#ffffff'), fontSize: 13, fontWeight: '900' },
+  noneBtnTxt2: { color: tFg('#c2410c') },
   hostsCap: { color: C.sub, fontSize: 12, fontWeight: '700', textAlign: 'right', marginTop: -4, marginBottom: 8 },
   hosts: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8, marginBottom: S.md },
   hostChip: {

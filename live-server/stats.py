@@ -145,6 +145,7 @@ async def ping(req: Request):
         "screens": screens,
         "blocker": _clean(b.get("blocker"), 16),
         "blocker_note": _clean(b.get("blockerNote"), 40),
+        "add_step": _clean(b.get("addStep"), 10),
         "at": int(now),
     }
     day = _today()
@@ -184,7 +185,7 @@ def build_summary(day: str | None = None) -> dict:
     devs = _load(DEVICES, {})
     week_ago = (datetime.now(RIYADH) - timedelta(days=6)).strftime("%Y-%m-%d")
     week = set()
-    blockers: dict[str, tuple[str, str]] = {}
+    blockers: dict[str, tuple[str, str, str, bool]] = {}  # جهاز ← (الجواب، الملاحظة، اليوم، دخل راوتره؟)
     opens: Counter = Counter()
     users: dict[str, set] = {}
     for p in DAYS.glob("*.json"):
@@ -192,8 +193,8 @@ def build_summary(day: str | None = None) -> dict:
             wd = _load(p, {})
             week |= set(wd.keys())
             for did_, r in wd.items():
-                if r.get("blocker"):
-                    blockers[did_] = (r["blocker"], r.get("blocker_note") or "")
+                if r.get("blocker") and (did_ not in blockers or blockers[did_][2] < p.stem):
+                    blockers[did_] = (r["blocker"], r.get("blocker_note") or "", p.stem, bool(r.get("login_ever")))
                 for k, v in (r.get("screens") or {}).items():
                     k = _SCREEN_FIX.get(k, k)
                     opens[k] += int(v)
@@ -222,8 +223,10 @@ def build_summary(day: str | None = None) -> dict:
         "routers": Counter(x for r in recs for x in (r.get("routers") or [])).most_common(6),
         "funnel": _funnel(recs),
         "screens": [(k, v, len(users.get(k, ()))) for k, v in opens.most_common(25)],
-        "blockers": Counter(b for b, _ in blockers.values()).most_common(),
-        "blocker_notes": Counter(n for b, n in blockers.values() if n).most_common(8),
+        # «ليش ما أضافوا» = اللي لسا ما دخلوا راوترهم بس · واللي حلّوها بعدين ينعدّون لحالهم
+        "blockers": Counter(b for b, _, _, ok in blockers.values() if not ok).most_common(),
+        "blockers_solved": Counter(b for b, _, _, ok in blockers.values() if ok).most_common(),
+        "blocker_notes": Counter(n for b, n, _, ok in blockers.values() if n and not ok).most_common(8),
         "history": _history(day, devs),
     }
 
@@ -244,6 +247,8 @@ def _funnel(recs: list[dict]) -> dict:
         "added_no_login": sum(1 for r in rs if real(r) and not r.get("login_ever")),
         "demo_only": sum(1 for r in rs if (r.get("routers") or []) and not real(r)),
         "none": sum(1 for r in rs if not (r.get("routers") or [])),
+        # وين وقفوا في «إضافة راوتر» — اللي ما دخلوا راوترهم أبداً
+        "steps": Counter(r.get("add_step") or "never" for r in rs if not r.get("login_ever")).most_common(),
     }
 
 
@@ -310,13 +315,22 @@ def _fmt(s: dict) -> str:
             + f"  • دخلوا ولو مرة: {fu['logged_ever']}\n"
             f"  • أضافوا راوتر حقيقي وما قدروا يدخلون: {fu['added_no_login']}\n"
             f"  • التجريبي بس: {fu['demo_only']}\n"
-            f"  • ما أضافوا شي: {fu['none']}\n\n"
+            f"  • ما أضافوا شي: {fu['none']}\n"
         )
+        STEP = {"never": "ما فتح «إضافة راوتر» أبداً", "opened": "فتحها وطلع بسرعة", "notfound": "ما لقينا راوتر من جواله (غالباً مو على واي فاي الراوتر)",
+                "found": "تعرّفنا على راوتره وما ضغط «اتصل»", "tried": "ضغط «اتصل» وطلع قبل النتيجة", "failed": "حاول وفشل الدخول"}
+        st = fu.get("steps") or []
+        if st and any(k != "never" for k, _ in st):
+            fun += "  🪜 وين وقفوا (اللي ما دخلوا راوترهم):\n" + "".join(f"     – {STEP.get(k, k)}: {v}\n" for k, v in st)
+        fun += "\n"
     BL = {"none": "ما عنده راوتر الحين", "unsupported": "راوتره مو موجود", "howto": "ما عرف كيف يضيفه", "browsing": "يتفرج بس"}
     bl = s.get("blockers") or []
     blk = ""
     if bl:
-        blk = "🚧 <b>ليش ما أضافوا راوتر؟</b> (آخر ٧ أيام):\n" + "\n".join(f"  • {BL.get(k, k)}: {v}" for k, v in bl)
+        blk = "🚧 <b>ليش ما أضافوا راوتر؟</b> (آخر ٧ أيام — اللي لسا ما دخلوا):\n" + "\n".join(f"  • {BL.get(k, k)}: {v}" for k, v in bl)
+        solved = s.get("blockers_solved") or []
+        if solved:
+            blk += "\n  ✅ جاوبوا وبعدين دخلوا راوترهم: " + "، ".join(f"{BL.get(k, k)} {v}" for k, v in solved)
         notes = s.get("blocker_notes") or []
         if notes:
             blk += "\n  راوترات طلبوها: " + "، ".join(f"{n} ({c})" for n, c in notes)
