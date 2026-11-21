@@ -57,12 +57,22 @@ export async function learnOperatorBands(routerId: string, lte: number[], nr: nu
     if (!k || !OP_DEFAULT[k]) return;
     const cur = await getLearned(k);
     const add = (have: number[], base: number[], xs: number[]) =>
-      xs.filter(b => Number.isFinite(b) && b > 0 && !have.includes(b) && !base.includes(b));
-    const nl = add(cur.lte, OP_DEFAULT[k].lte, lte);
-    const nn = add(cur.nr, OP_DEFAULT[k].nr, nr);
+      xs.filter(b => Number.isFinite(b) && b > 0 && !have.includes(b));
+    // ٢١ نوفمبر: نحفظ كل اللي شفناه (حتى اللي في القائمة الثابتة) — المُحسّن يجرّب بس اللي انشاف فعلاً
+    const nl = add(cur.lte, [], lte);
+    const nn = add(cur.nr, [], nr);
     if (!nl.length && !nn.length) return;
     await AsyncStorage.setItem(learnKey(k), JSON.stringify({ lte: [...cur.lte, ...nl], nr: [...cur.nr, ...nn] }));
   } catch {}
+}
+
+/** الترددات اللي شفناها فعلاً شغالة على شبكة هالراوتر (بدون القائمة الثابتة) — للمُحسّن والتحسين التلقائي */
+export async function seenOperatorBands(routerId: string): Promise<OpBands> {
+  try {
+    const k = (await AsyncStorage.getItem(routerKey(routerId))) as OpKey | null;
+    if (!k || !OP_DEFAULT[k]) return { lte: [], nr: [] };
+    return await getLearned(k);
+  } catch { return { lte: [], nr: [] }; }
 }
 
 /** نفس useOperatorBands بدون React (للمحركات) — null = ما نعرف الشبكة */

@@ -11,7 +11,7 @@
  * ملف بدون react-native — عشان الاختبارات تشتغل في Node.
  */
 import type { CellTower } from '../drivers/types';
-import { bandLabel, SCAN_PREFERRED } from '../utils/bands';
+import { bandLabel } from '../utils/bands';
 
 export type PlanKey = 'band' | 'tower' | 'wifi';
 export type PlanLevel = 'good' | 'ok' | 'weak';
@@ -173,14 +173,15 @@ export function signalLevel(rsrp?: number, sinr?: number): PlanLevel {
 const RSRP_WORD = (v: number) => (v >= -80 ? 'ممتازة' : v >= -90 ? 'جيدة' : v >= -100 ? 'متوسطة' : 'ضعيفة');
 const SINR_WORD = (v: number) => (v >= 20 ? 'ممتاز' : v >= 13 ? 'جيد' : v >= 3 ? 'متوسط' : 'ضعيف');
 
-/** ترددات 4G المرشحة: اللي لها أبراج حولك فعلاً (الأقوى أول) + نكمّل من ترددات شبكتك — نفس منطق المحرك */
+/** ترددات 4G المرشحة: اللي لها أبراج حولك فعلاً (الأقوى أول) + نكمّل من اللي انشافت شغالة على شبكتك (opLte = المعروفة، مو القائمة الثابتة) — نفس منطق المحرك */
 export function bandCandidates(cells: CellTower[], supported: number[], opLte?: number[] | null, max = 4): number[] {
   const seen = new Map<number, number>();
   for (const c of cells) {
     if (c.tech === 'LTE' && c.band && supported.includes(c.band)) seen.set(c.band, Math.max(c.rsrp ?? -999, seen.get(c.band) ?? -999));
   }
   const out = [...seen.entries()].sort((a, b) => b[1] - a[1]).map(x => x[0]);
-  for (const b of (opLte?.length ? opLte : SCAN_PREFERRED)) if (out.length < max && supported.includes(b) && !out.includes(b)) out.push(b);
+  // ٢١ نوفمبر: كانت تكمّل من القائمة الثابتة (B40 لـ stc…) حتى لو ما فيه برج عليه عند العضو
+  for (const b of (opLte ?? [])) if (out.length < max && supported.includes(b) && !out.includes(b)) out.push(b);
   return out.slice(0, max);
 }
 
@@ -234,7 +235,7 @@ export function buildPlan(p: PlanInput): PilotPlan {
     const prefer = comm.lte?.length && comm.lte.every(b => supported.includes(b)) ? comm.lte : undefined;
     let bands = bandCandidates(p.cells, supported, p.opLte);
     if (prefer) bands = [...prefer, ...bands.filter(b => !prefer.includes(b))].slice(0, Math.max(4, prefer.length));
-    if (bands.length < 2) skipped.push({ key: 'band', title: 'أفضل تردد', why: 'راوترك يدعم تردد واحد بس — ما فيه شي نجرّبه' });
+    if (bands.length < 2) skipped.push({ key: 'band', title: 'أفضل تردد', why: 'ما شفت عندك إلا تردد واحد شغال — ما فيه شي نجرّبه (تقدر تختار بنفسك من المُحسّن)' });
     else {
       const tests = bands.length + (bands.length >= 3 ? 2 : 1) + (prefer && prefer.length >= 2 ? 1 : 0);
       const secs = tests * SECS_BAND;

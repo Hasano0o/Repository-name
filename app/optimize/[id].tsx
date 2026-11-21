@@ -10,6 +10,8 @@ import { withSession } from '../../src/store/sessions';
 import { safeApply, trialMessage } from '../../src/utils/safeLock';
 import { BandConfig, CellTower } from '../../src/drivers/types';
 import { OptTarget, buildCandidates, targetName, targetKey } from '../../src/utils/optimize';
+import { servingBands, verifyServing, knownBands } from '../../src/utils/bandVerify';
+import { seenOperatorBands } from '../../src/store/operator';
 import { bandLabel, freqLabel } from '../../src/utils/bands';
 import { saveProfile } from '../../src/store/profiles';
 import { C, tBg, tFg } from '../../src/ui/theme';
@@ -86,15 +88,19 @@ export default function OptimizeScreen() {
   }, []);
 
   const load = useCallback(async (r: SavedRouter) => {
-    const [c, cells] = await withSession(r, async d => Promise.all([
+    const [c, cells, sig, car] = await withSession(r, async d => Promise.all([
       d.getBandConfig ? d.getBandConfig() : Promise.resolve(null),
       d.getCells ? d.getCells().catch(() => [] as CellTower[]) : Promise.resolve([] as CellTower[]),
+      d.getSignal ? d.getSignal().catch(() => null) : Promise.resolve(null),
+      d.getCarriers ? d.getCarriers().catch(() => []) : Promise.resolve([]),
     ]));
+    // المعروفة لمنطقتك: المتصل الحين + اللي انشافت شغالة على شبكتك (مو كل اللي يدعمه الراوتر)
+    const known = knownBands(servingBands(sig, car as any), await seenOperatorBands(r.id).catch(() => null));
     if (!mounted.current) return;
     setCfg(c);
     const fromCells: OptTarget[] = [];
     for (const x of cells) if (x.band) fromCells.push({ tech: x.tech, band: x.band });
-    const cs = buildCandidates(fromCells, c?.supported ?? [], c?.nrPreferred ?? c?.nrSupported ?? [], 6);
+    const cs = buildCandidates(fromCells, c?.supported ?? [], c?.nrPreferred ?? c?.nrSupported ?? [], 6, known);
     setCands(cs);
     setPickLte(p => (p.length ? p : cs.filter(x => x.tech === 'LTE').map(x => x.band)));
     setPickNr(p => (p.length ? p : cs.filter(x => x.tech === 'NR').map(x => x.band)));
@@ -184,6 +190,17 @@ export default function OptimizeScreen() {
           const ok = await waitOnline(info, 35000);
           if (cancel.current) { upd(i, { status: 'pending', note: undefined }); break; }
           if (!ok) { upd(i, { status: 'failed', note: 'ما اتصل على هذا التردد' }); continue; }
+          // نتأكد إن الراوتر فعلاً انتقل للتردد (بعضها يتجاهل التثبيت ← كنا ننسب نتيجة B3 لـ B40)
+          {
+            const t = list[i];
+            const sv = await withSession(info, async d => servingBands(
+              d.getSignal ? await d.getSignal().catch(() => null) : null,
+              d.getCarriers ? await d.getCarriers().catch(() => []) : [],
+            ), false).catch(() => null);
+            const want = isCombo ? { lte: t.lte ?? null, nr: t.nr?.length ? t.nr : null } : tech === 'NR' ? { nr: [band] } : { lte: [band] };
+            const v = sv ? verifyServing(want, sv) : { ok: true };
+            if (!v.ok) { upd(i, { status: 'failed', note: v.why }); continue; }
+          }
 
           await sleep(2500);
           upd(i, { note: 'نقيس بالتفصيل...' });

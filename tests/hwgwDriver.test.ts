@@ -45,7 +45,7 @@ test('E5172: MyRSAEncryptB64 = PKCS#1 v1.5 نوع 2 (ينفك بالمفتاح �
   for (const pw of ['admin', 'Pa$$w0rd!', 'كلمة']) {
     const enc = P.gwRsaB64(pw, (n: number) => Uint8Array.from(crypto.randomBytes(n)), hex(jwk.n), hex(jwk.e));
     // node ٢٠٫٢٠+ منع فك PKCS#1 v1.5 (CVE-2023-46809) ← نفك خام (NO_PADDING) ونتأكد من شكل الحشو نوع 2 بنفسنا
-    const raw: Buffer = crypto.privateDecrypt({ key: privateKey, padding: crypto.constants.RSA_NO_PADDING }, Buffer.from(enc, 'base64'));
+    const raw = crypto.privateDecrypt({ key: privateKey, padding: crypto.constants.RSA_NO_PADDING }, Buffer.from(enc, 'base64'));
     assert.equal(raw[0], 0); assert.equal(raw[1], 2);
     const sep = raw.indexOf(0, 2);
     assert.ok(sep >= 10, 'الحشو ٨ بايت غير صفرية على الأقل');

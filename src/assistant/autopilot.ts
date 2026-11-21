@@ -19,8 +19,10 @@ import { savePending, clearPending } from '../store/pendingRestore';
 import { measureUrl, regionUrls, selectedRegion, gameScore, gamingGrade, LatencyResult } from '../utils/latency';
 import { runTowerTrials, TrialTarget } from '../utils/towerTrial';
 import { groupTowers, loadConfirmed, bandName } from '../utils/towers';
-import { bandLabel, SCAN_PREFERRED } from '../utils/bands';
-import { operatorBands } from '../store/operator';
+import { bandLabel } from '../utils/bands';
+import { operatorBands, seenOperatorBands } from '../store/operator';
+import { servingBands, verifyServing, knownBands } from '../utils/bandVerify';
+import { bandCandidates } from './pilotPlan';
 import { loadTrials } from '../utils/safeLock';
 import type { Carrier } from '../drivers/types';
 import { buildPlan, PilotPlan, PlanTarget, worseAfter } from './pilotPlan';
@@ -187,8 +189,8 @@ export async function scanPlan(r: SavedRouter, onStatus?: (s: string) => void): 
   const tower: TowerRef | null = tw ? { tower: String(tw), operator: rd.net?.operator ?? rd.dev?.operator ?? '' } : null;
   const combo = comboOf(rd.carriers, rd.sig);
   onStatus?.('أشوف وش حصّل الأعضاء على نفس برجك…');
-  const [opBands, trials, confirmed, community] = await Promise.all([
-    operatorBands(r.id).catch(() => null), loadTrials(r.id), loadConfirmed(r.id),
+  const [seen, trials, confirmed, community] = await Promise.all([
+    seenOperatorBands(r.id).catch(() => null), loadTrials(r.id), loadConfirmed(r.id),
     tower ? fetchCombos(tower).catch(() => null) : Promise.resolve(null as TowerCombos | null),
   ]);
   if (tower && combo) {
@@ -208,7 +210,8 @@ export async function scanPlan(r: SavedRouter, onStatus?: (s: string) => void): 
     carriers: rd.carriers.length ? rd.carriers.map(c => ({ tech: c.tech, band: c.band })) : carriersFromSig(rd.sig),
     bandCfg: rd.cfg,
     cells: rd.cells,
-    opLte: opBands?.lte ?? null,
+    // المعروفة بس (المتصل الحين + اللي انشافت على شبكتك) — مو القائمة الثابتة
+    opLte: knownBands(servingBands(rd.sig, rd.carriers), seen).lte,
     trials,
     caps: {
       band: !!(proto?.setBand && proto.readLockState && proto.restoreLockState),
@@ -323,21 +326,19 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
         report.startSnap = snap;
         // لو انقطعت التجارب في النص (التطبيق بالخلفية / الجوال طلع من الشبكة) نرجّعه أول ما يرجع (recoverPending)
         await savePending(r.id, snap, 'pilot:band', 'اضبط لي كل شي');
-        const [cfg, cells] = await withSession(r, async d => Promise.all([
+        const [cfg, cells, nowSig, nowCar] = await withSession(r, async d => Promise.all([
           d.getBandConfig ? d.getBandConfig() : Promise.resolve(null as BandConfig | null),
           d.getCells ? d.getCells().catch(() => [] as CellTower[]) : Promise.resolve([] as CellTower[]),
+          d.getSignal ? d.getSignal().catch(() => null) : Promise.resolve(null),
+          d.getCarriers ? d.getCarriers().catch(() => [] as Carrier[]) : Promise.resolve([] as Carrier[]),
         ]), false);
-        // المرشحين: ترددات 4G اللي لها أبراج حولك فعلاً (الأقوى أول)
-        const seen = new Map<number, number>();
-        for (const c of cells) if (c.tech === 'LTE' && c.band && cfg?.supported.includes(c.band)) seen.set(c.band, Math.max(c.rsrp ?? -999, seen.get(c.band) ?? -999));
-        let cands = [...seen.entries()].sort((a, b) => b[1] - a[1]).map(x => x[0]);
-        // بعض الراوترات (ZTE) ترجّع البرج المتصل بس — نكمّل من ترددات شبكتك (زين/موبايلي/stc) أو المشهورة
-        const opBands = await operatorBands(r.id);
-        for (const b of (opBands?.lte ?? SCAN_PREFERRED)) if (cands.length < 4 && cfg?.supported.includes(b) && !cands.includes(b)) cands.push(b);
-        cands = cands.slice(0, 4);
+        // المرشحين: ترددات 4G اللي لها أبراج حولك فعلاً (الأقوى أول)، وبعدها المعروفة لمنطقتك
+        // (المتصل الحين + اللي انشافت شغالة على شبكتك) — ٢١ نوفمبر: كانت تكمّل من القائمة الثابتة (B40…)
+        const known = knownBands(servingBands(nowSig, nowCar), await seenOperatorBands(r.id).catch(() => null));
+        let cands = bandCandidates(cells, cfg?.supported ?? [], known.lte, 4);
         // من التقرير: نفس الترددات اللي شافها المستخدم ووافق عليها (لو لسا مدعومة)
         if (o.choice?.band?.length) cands = o.choice.band.filter(b => cfg?.supported.includes(b)).slice(0, 4);
-        if (cands.length < 2) set('band', 'same', 'راوترك يدعم تردد واحد بس — ما فيه شي نجرّبه');
+        if (cands.length < 2) set('band', 'same', 'ما شفت عندك إلا تردد واحد شغال — ما فيه شي نجرّبه');
         else {
           // الحكم بالسعة (عرض النطاق × الصفاء = السرعة الفعلية) + البنق — مو القوة بس:
           // تردد لحاله نظيف ممكن يغلب دمج مشوّش، ودمج ترددين ممكن يغلب الاثنين
@@ -356,6 +357,13 @@ export async function runAutopilot(r: SavedRouter, o: PilotOpts): Promise<PilotR
             try {
               await withSession(r, d => d.setBand!(bands, undefined), false);
               if (!(await waitOnline(r, 120_000, cancelled))) return;
+              // نتأكد إن الراوتر فعلاً انتقل (بعضها يتجاهل التثبيت ويبقى على تردده ← كنا ننسب نتيجته للتردد الجديد)
+              const sv = await withSession(r, async d => servingBands(
+                d.getSignal ? await d.getSignal().catch(() => null) : null,
+                d.getCarriers ? await d.getCarriers().catch(() => [] as Carrier[]) : [],
+              ), false).catch(() => null);
+              const v = sv ? verifyServing({ lte: bands }, sv) : { ok: true };
+              if (!v.ok) { o.onStatus(v.why ?? ''); return; }
               const j = await judge();
               if (j) tried.push({ bands, score: j.score, carriers: j.carriers });
             } catch {}

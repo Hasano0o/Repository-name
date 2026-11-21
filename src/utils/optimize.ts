@@ -60,13 +60,18 @@ export function buildCandidates(
   supported: number[],
   nrSupported: number[],
   max = 6,
+  known?: { lte: number[]; nr: number[] } | null,
 ): OptTarget[] {
+  // ٢١ نوفمبر: نجرّب بس الترددات اللي انشافت فعلاً (أبراج حولك + المتصل الحين + اللي اشتغلت على شبكتك قبل)
+  // — كانت تكمّل من كل اللي يدعمه الراوتر (B40 · n28…) ويشبك على ترددات ما لها برج عند العضو
   // 5G بس من قائمة الراوتر — لو فاضية (مثل H158: ما يقبل تثبيت 5G) ما نجرّب 5G أبد
   const nrOk = (b: number) => nrSupported.includes(b);
   const nrCells = cellBands.filter(c => c.tech === 'NR' && nrOk(c.band)).map(c => c.band);
-  const nr = [...new Set([...nrCells, ...[...nrSupported].sort(byPri(NR_PRI))])].slice(0, Math.min(3, Math.max(1, max - 3)));
+  const nrKnown = (known?.nr ?? []).filter(nrOk).sort(byPri(NR_PRI));
+  const nr = [...new Set([...nrCells, ...nrKnown])].slice(0, Math.min(3, Math.max(1, max - 3)));
   const lteCells = cellBands.filter(c => c.tech === 'LTE').map(c => c.band);
-  const lte = [...new Set([...lteCells, ...[...supported].sort(byPri(LTE_PRI))])].slice(0, Math.max(0, max - nr.length));
+  const lteKnown = (known?.lte ?? []).filter(b => supported.includes(b)).sort(byPri(LTE_PRI));
+  const lte = [...new Set([...lteCells, ...lteKnown])].slice(0, Math.max(0, max - nr.length));
   return [
     ...lte.map(band => ({ tech: 'LTE' as Tech, band })),
     ...nr.map(band => ({ tech: 'NR' as Tech, band })),

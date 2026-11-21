@@ -25,6 +25,8 @@ const files = [
   'src/utils/bands.ts',
   'src/utils/advisor.ts',
   'src/assistant/pilotPlan.ts',
+  'src/utils/bandVerify.ts',
+  'src/utils/optimize.ts',
   'src/drivers/huawei/netStandard.ts',
   'src/drivers/lockSnapshot.ts',
   'src/drivers/huawei/lockState.ts',
