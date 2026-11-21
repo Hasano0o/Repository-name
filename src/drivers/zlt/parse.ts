@@ -8,7 +8,7 @@ import { bandOfArfcn } from '../../utils/arfcn';
 
 export const ZLT_CGI = '/cgi-bin/http.cgi';
 /** أرقام الأوامر من RequestCmd في main.js */
-export const ZCMD = { DEVICE_VERSION_INFO: 43, LOGIN: 100, SYS_INFO_NETWORK: 205, GET_NEXT_LOGIN_TIME: 232 } as const;
+export const ZCMD = { DEVICE_VERSION_INFO: 43, LOGIN: 100, SYS_INFO_NETWORK: 205, GET_NEXT_LOGIN_TIME: 232, NETWORKSET_MODE_MT2731: 256 } as const;
 
 /** «/» حقهم: تعليق المحرر «@FilePath … war\index.html» (X21: simcom_war) — ما نرسل POST لأي راوتر قبل ما نشوفه */
 export function isZltPage(html: string): boolean {
@@ -127,4 +127,48 @@ export function caCellsFrom(s0: any, sig: Signal): CellTower[] {
   if (sig.rsrp !== undefined) add('LTE', parts(s0?.PCI), parts(s0?.FREQ), sig.rsrp, sig.rsrq, sig.sinr, sig.band);
   if (sig.nrRsrp !== undefined) add('NR', parts(s0?.PCI_5G), parts(s0?.FREQ_5G), sig.nrRsrp, sig.nrRsrq, sig.nrSinr, sig.nrBand);
   return out;
+}
+
+/* ═══ وضع الشبكة — من js/advance/networkSet.js (FULL X300A، ٢٢ نوفمبر) ═══
+ * قراءة: { cmd:256 } ← { display_mode: <hex المدعوم>, networkMode: <hex الحالي> } (فاضي = "1C")
+ * كتابة: { cmd:256, method:"POST", networkMode: <hex> } ← message "0" = تم
+ * القائمة = programList[display_mode] (وإلا قائمة 1C)، وأكبر قيمة فيها اسمها «Auto». بتات TDD/FDD من display_mode.
+ * ما نعرض 2G/3G فقط (الـ 3G شبه متوقف عندنا).
+ */
+const MODE_NAME: Record<string, string> = {
+  '4': '4G فقط', '40': '4G TDD فقط', '20': '4G FDD فقط', '6': '4G/3G', '7': '4G/3G/2G',
+  C: '5G NSA فقط', '10': '5G SA فقط', '1C': '5G SA+NSA / 4G', E: '5G NSA / 4G / 3G', F: '5G NSA / 4G / 3G / 2G',
+  '1E': '5G SA+NSA / 4G / 3G', '1F': '5G SA+NSA / 4G / 3G / 2G',
+};
+const PROGRAM: Record<string, string[]> = {
+  '6': ['4', '6'], '7': ['4', '7'], C: ['4', 'C'], '1C': ['4', 'C', '10', '1C'], E: ['4', '6', 'C', 'E'],
+  '1E': ['4', '6', 'C', '10', '1C', '1E'], F: ['4', '7', 'C', 'F'], '1F': ['4', '7', 'C', '10', '1C', '1F'],
+};
+/** رموز التطبيق الموحّدة (نفس هواوي) للي لها مقابل — الباقي zlt:<hex> */
+const MODE_CODE: Record<string, string> = { '4': '03', '10': '08', C: 'nsa', '40': 'lte_tdd', '20': 'lte_fdd' };
+export interface ZltMode { code: string; label: string; value: string }
+
+export function zltModes(displayMode: unknown): ZltMode[] {
+  let sup = (str(displayMode) ?? '1C').toUpperCase();
+  let tdd = false, fdd = false;
+  if (sup.length > 1) {
+    const bits = [...sup].map(c => (parseInt(c, 16) || 0).toString(2).padStart(4, '0')).join('').split('');
+    if (bits[1] === '1') tdd = true; else if (bits[2] === '1') fdd = true;
+    bits[1] = '0'; bits[2] = '0';
+    sup = parseInt(bits.join(''), 2).toString(16).toUpperCase();
+  }
+  const arr = [...(PROGRAM[sup] ?? PROGRAM['1C'])];
+  if (tdd) arr.splice(1, 0, '40');
+  if (fdd) arr.splice(1, 0, '20');
+  const max = arr.reduce((m, v) => (parseInt(v, 16) > parseInt(m, 16) ? v : m), arr[0]);
+  const order = ['4', '40', '20', '6', '7', 'C', '10', '1C', 'E', 'F', '1E', '1F'];
+  return order.filter(v => arr.includes(v)).map(v => ({
+    value: v,
+    code: v === max ? '00' : MODE_CODE[v] ?? 'zlt:' + v,
+    label: v === max ? `تلقائي (${MODE_NAME[v] ?? v})` : MODE_NAME[v] ?? v,
+  }));
+}
+export function zltModeCode(modes: ZltMode[], v: unknown): string {
+  const h = (str(v) ?? '1C').toUpperCase();
+  return modes.find(m => m.value === h)?.code ?? 'zlt:' + h;
 }

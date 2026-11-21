@@ -12,7 +12,8 @@
  *  • «NO_AUTH» بالرد = الجلسة راحت ← دخول جديد (مرة كل دقيقتين بالكثير)
  *  • صفحاتهم فيها LOCK_BAND 161 · LOCK_PHY_CELL 160 · NETWORKSET_MODE 218 · GET_SUPPORT_BANDS 157 — الكتابة بعد FULL من عضو (كود الصفحات بالجلسة).
  */
-import { RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, DeviceDetails } from '../types';
+import { RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, DeviceDetails, BandConfig } from '../types';
+import { noChange } from '../noChange';
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import { http } from '../http';
@@ -21,7 +22,7 @@ import { isLanHost } from '../../utils/host';
 import { buildSnapshot } from '../../utils/snapshot';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import type { ModelProfile } from '../models';
-import { ZLT_CGI, ZCMD, isZltPage, parseZlt, isNoAuth, zltBody, signalFrom, caCellsFrom, loginFailMsg, str } from './parse';
+import { ZLT_CGI, ZCMD, isZltPage, parseZlt, isNoAuth, zltBody, signalFrom, caCellsFrom, loginFailMsg, str, zltModes, zltModeCode } from './parse';
 
 export const zltPass = (token: string, pw: string) => bytesToHex(sha256(utf8ToBytes(token + pw)));
 
@@ -94,7 +95,7 @@ export class ZltDriver implements RouterDriver {
     return {
       id: m ? 'zlt-' + m.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'zlt', label: m ? `ZLT ${m}` : 'ZLT', brand: 'zlt', tech: '5G',
       writeUnverified: true,
-      note: 'راوتر ZLT. الدعم للحين: الدخول وقوة الإشارة. أرسل ملفات راوترك (الكرت تحت) عشان نضيف الترددات والأبراج.',
+      note: 'راوتر ZLT. الدعم للحين: الدخول وقوة الإشارة والدمج ووضع الشبكة. صفحته ما فيها تثبيت ترددات ولا برج.',
     };
   }
 
@@ -206,6 +207,34 @@ export class ZltDriver implements RouterDriver {
     try { op = str((await this.read(ZCMD.SYS_INFO_NETWORK)).network_operator); } catch {}
     const mm = (this.info?.model ?? '').replace(/^zlt[\s_-]*/i, '').trim();
     return { model: mm ? `ZLT ${mm}` : this.name, imei: this.info?.imei, operator: op, software: `${this.info?.fw ?? 'war'}|zlt-pages-1` };
+  }
+
+  /* ═══ وضع الشبكة (NETWORKSET_MODE_MT2731 = 256) — نفس صفحة networkSet.html ═══ */
+  async getBandConfig(): Promise<BandConfig> {
+    const j = await this.read(ZCMD.NETWORKSET_MODE_MT2731);
+    const modes = zltModes(j.display_mode);
+    return {
+      supported: [], locked: [], nrSupported: [], nrLocked: [], nrLockable: false,
+      mode: zltModeCode(modes, j.networkMode), modes: modes.map(m => ({ value: m.code, label: m.label })),
+    };
+  }
+  async setBand(): Promise<void> {
+    throw noChange('راوتر ZLT ما يسمح بتثبيت الترددات — صفحته نفسها ما فيها هالخيار. تقدر تغيّر «وضع الشبكة» (4G فقط، 5G SA فقط …). ما غيّرنا شي.');
+  }
+  async setNetworkMode(code: string): Promise<void> {
+    const cur = await this.read(ZCMD.NETWORKSET_MODE_MT2731);
+    const modes = zltModes(cur.display_mode);
+    const m = modes.find(x => x.code === code) ?? modes.find(x => 'zlt:' + x.value === code);
+    if (!m) throw noChange('هالوضع مو موجود في قائمة راوترك — ما غيّرنا شي.');
+    if ((str(cur.networkMode) ?? '1C').toUpperCase() === m.value) return;
+    const r = await this.cmd(ZCMD.NETWORKSET_MODE_MT2731, 'POST', { networkMode: m.value });
+    diag(`[zlt] networkMode ${m.value} → message=${r.j?.message ?? '—'}`);
+    if (isNoAuth(r.text, r.j)) throw new Error('الجلسة انتهت — جرّب مرة ثانية');
+    if (String(r.j?.message ?? '') !== '0') throw new Error(`الراوتر رفض تغيير وضع الشبكة${r.j?.message ? ` (${r.j.message})` : ''}`);
+    await new Promise(res => setTimeout(res, 2500));
+    let after = '';
+    try { after = (str((await this.read(ZCMD.NETWORKSET_MODE_MT2731)).networkMode) ?? '').toUpperCase(); } catch {}
+    if (after && after !== m.value) throw new Error('الراوتر قبل أمر وضع الشبكة بس ما تغيّر');
   }
 
   /** الجامع (FULL/AUTH): صفحة ثابتة — GET بس، والخطرة ما تنفتح */

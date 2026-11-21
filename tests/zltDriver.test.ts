@@ -54,7 +54,7 @@ test('ZLT: التعرّف على الصفحة · قراءة الإشارة', () 
 function zlt(pw: string, httpsOnly = false) {
   const log: string[] = [];
   const sha = routerSha();
-  let sid = '', times = 3;
+  let sid = '', times = 3, nm = '1E';
   const token = 'f00dbabe12345678';
   (globalThis as any).fetch = async (url: string, init?: any) => {
     const u = new URL(url);
@@ -75,6 +75,10 @@ function zlt(pw: string, httpsOnly = false) {
     if (!sid || b.sessionId !== sid) return res('{"success":false,"message":"NO_AUTH"}');
     if (b.cmd === 205) return res(JSON.stringify({ network_type_str: '4G', network_operator: 'Zain KSA', RSRP: '-97', RSRQ: '-12', SINR: '9', PCI: '55', currentband: 'B3' }));
     if (b.cmd === 43) return res(JSON.stringify({ module: 'X21', modversion: 'V1.0.3', imei: '000' }));
+    if (b.cmd === 256) {
+      if (b.method === 'POST') { nm = String(b.networkMode); return res('{"message":"0"}'); }
+      return res(JSON.stringify({ display_mode: '1E', networkMode: nm }));
+    }
     return res('{}');
   };
   return { log, expire: () => { sid = ''; } };
@@ -144,4 +148,21 @@ test('ZLT X300A: الدمج بخانة وحدة «372+372+372» — الأساس
   assert.equal(c.length, 3);
   assert.deepEqual(c.map((x: any) => [x.kind, x.band]), [['serving', 78], ['secondary', 78], ['secondary', 41]]);
   assert.equal(P.signalFrom({ RSRP: '-90', PCI: '55' }).caCount, undefined);
+});
+
+test('ZLT وضع الشبكة: القائمة من display_mode (مثل networkSet.js) · الكتابة cmd 256 ونتأكد بالقراءة', async () => {
+  const m = P.zltModes('1E');
+  assert.deepEqual(m.map((x: any) => x.value), ['4', '6', 'C', '10', '1C', '1E']);
+  assert.equal(m.find((x: any) => x.value === '1E').code, '00');
+  assert.equal(m.find((x: any) => x.value === '10').code, '08');
+  assert.equal(m.find((x: any) => x.value === '4').code, '03');
+  assert.deepEqual(P.zltModes('').map((x: any) => x.value), ['4', 'C', '10', '1C']);
+  zlt('admin');
+  const d = new ZltDriver();
+  await d.login('192.168.0.1', 'admin', 'admin', { fresh: true });
+  const cfg = await d.getBandConfig();
+  assert.equal(cfg.mode, '00');
+  await d.setNetworkMode('08');
+  assert.equal((await d.getBandConfig()).mode, '08');
+  await assert.rejects(d.setNetworkMode('zz'), /مو موجود/);
 });
