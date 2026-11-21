@@ -22,7 +22,7 @@ import { isLanHost } from '../../utils/host';
 import { buildSnapshot } from '../../utils/snapshot';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import type { ModelProfile } from '../models';
-import { ZLT_CGI, ZCMD, isZltPage, parseZlt, isNoAuth, zltBody, signalFrom, caCellsFrom, loginFailMsg, str, zltModes, zltModeCode } from './parse';
+import { ZLT_CGI, ZCMD, isZltPage, parseZlt, isNoAuth, zltBody, signalFrom, caCellsFrom, loginFailMsg, str, zltModes, zltModeCode, AT_READ_ONLY, atBody, atText } from './parse';
 
 export const zltPass = (token: string, pw: string) => bytesToHex(sha256(utf8ToBytes(token + pw)));
 
@@ -196,6 +196,28 @@ export class ZltDriver implements RouterDriver {
     return caCellsFrom(this.lastRaw, sig);
   }
 
+  /** تعريف المودم بأوامر AT قراءة بس (مرة وحدة بالجلسة) — يوصل التشخيص عشان نعرف أوامر التثبيت الصحيحة لشريحته */
+  private modem: string | null = null;
+  private async modemInfo(): Promise<string | undefined> {
+    if (this.modem !== null) return this.modem || undefined;
+    this.modem = '';
+    const out: string[] = [];
+    for (const at of AT_READ_ONLY) {
+      try {
+        const r = await http(this.base() + ZLT_CGI, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest', Referer: this.base() + '/index.html' },
+          body: atBody(this.sid, at),
+        }, 8000);
+        const t = atText(parseZlt(await r.text()));
+        if (t) out.push(`${at}: ${t}`);
+      } catch {}
+    }
+    this.modem = out.join(' | ');
+    diag(`[zlt] المودم: ${this.modem || '— (شاشة AT ما ردت)'}`);
+    return this.modem || undefined;
+  }
+
   async getDeviceDetails(): Promise<DeviceDetails> {
     if (!this.info) {
       try {
@@ -206,7 +228,9 @@ export class ZltDriver implements RouterDriver {
     let op: string | undefined;
     try { op = str((await this.read(ZCMD.SYS_INFO_NETWORK)).network_operator); } catch {}
     const mm = (this.info?.model ?? '').replace(/^zlt[\s_-]*/i, '').trim();
-    return { model: mm ? `ZLT ${mm}` : this.name, imei: this.info?.imei, operator: op, software: `${this.info?.fw ?? 'war'}|zlt-pages-1` };
+    let hardware: string | undefined;
+    try { hardware = await this.modemInfo(); } catch {}
+    return { hardware, model: mm ? `ZLT ${mm}` : this.name, imei: this.info?.imei, operator: op, software: `${this.info?.fw ?? 'war'}|zlt-pages-1` };
   }
 
   /* ═══ وضع الشبكة (NETWORKSET_MODE_MT2731 = 256) — نفس صفحة networkSet.html ═══ */

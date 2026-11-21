@@ -75,6 +75,11 @@ function zlt(pw: string, httpsOnly = false) {
     if (!sid || b.sessionId !== sid) return res('{"success":false,"message":"NO_AUTH"}');
     if (b.cmd === 205) return res(JSON.stringify({ network_type_str: '4G', network_operator: 'Zain KSA', RSRP: '-97', RSRQ: '-12', SINR: '9', PCI: '55', currentband: 'B3' }));
     if (b.cmd === 43) return res(JSON.stringify({ module: 'X21', modversion: 'V1.0.3', imei: '000' }));
+    if (b.cmd === 270) {
+      const at = Buffer.from(b.atInfo, 'base64').toString();
+      assert.ok(['ATI', 'AT+CGMM', 'AT+CGMR'].includes(at), 'أمر AT مو قراءة: ' + at);
+      return res(JSON.stringify({ flag: at === 'ATI' ? 'MediaTek\r\nT750\r\nOK' : at === 'AT+CGMM' ? 'T750\r\nOK' : 'V1.2\r\nOK' }));
+    }
     if (b.cmd === 256) {
       if (b.method === 'POST') { nm = String(b.networkMode); return res('{"message":"0"}'); }
       return res(JSON.stringify({ display_mode: '1E', networkMode: nm }));
@@ -165,4 +170,13 @@ test('ZLT وضع الشبكة: القائمة من display_mode (مثل networkS
   await d.setNetworkMode('08');
   assert.equal((await d.getBandConfig()).mode, '08');
   await assert.rejects(d.setNetworkMode('zz'), /مو موجود/);
+});
+
+test('ZLT: تعريف المودم بأوامر AT قراءة بس (ATI/CGMM/CGMR) ← hardware · غيرها ممنوع', async () => {
+  zlt('admin');
+  const d = new ZltDriver();
+  await d.login('192.168.0.1', 'admin', 'admin', { fresh: true });
+  const det = await d.getDeviceDetails();
+  assert.match(det.hardware ?? '', /ATI: MediaTek · T750/);
+  assert.throws(() => P.atBody('s', 'AT+QNWLOCK'), /مو مسموح/);
 });

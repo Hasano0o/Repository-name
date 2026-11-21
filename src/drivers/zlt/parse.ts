@@ -8,7 +8,7 @@ import { bandOfArfcn } from '../../utils/arfcn';
 
 export const ZLT_CGI = '/cgi-bin/http.cgi';
 /** أرقام الأوامر من RequestCmd في main.js */
-export const ZCMD = { DEVICE_VERSION_INFO: 43, LOGIN: 100, SYS_INFO_NETWORK: 205, GET_NEXT_LOGIN_TIME: 232, NETWORKSET_MODE_MT2731: 256 } as const;
+export const ZCMD = { DEVICE_VERSION_INFO: 43, LOGIN: 100, SYS_INFO_NETWORK: 205, GET_NEXT_LOGIN_TIME: 232, NETWORKSET_MODE_MT2731: 256, SEND_AT: 270 } as const;
 
 /** «/» حقهم: تعليق المحرر «@FilePath … war\index.html» (X21: simcom_war) — ما نرسل POST لأي راوتر قبل ما نشوفه */
 export function isZltPage(html: string): boolean {
@@ -171,4 +171,18 @@ export function zltModes(displayMode: unknown): ZltMode[] {
 export function zltModeCode(modes: ZltMode[], v: unknown): string {
   const h = (str(v) ?? '1C').toUpperCase();
   return modes.find(m => m.value === h)?.code ?? 'zlt:' + h;
+}
+
+/**
+ * شاشة «AT» في صفحتهم (manage/sysAt.js): { cmd:270, method:"POST", atInfo: base64(الأمر) } ← { flag: الرد }.
+ * نستخدمها للقراءة بس (تعريف المودم) — صفحة X300A ما فيها تثبيت ترددات/برج، والتثبيت بأوامر AT يختلف حسب
+ * شريحة المودم، فما نرسل أي أمر تغيير لين نعرف المودم من التشخيص.
+ */
+export const AT_READ_ONLY = ['ATI', 'AT+CGMM', 'AT+CGMR'] as const;
+export function atBody(sessionId: string, at: string): string {
+  if (!(AT_READ_ONLY as readonly string[]).includes(at)) throw new Error('أمر AT مو مسموح: ' + at);
+  return zltBody(ZCMD.SEND_AT, 'POST', sessionId, { atInfo: btoa(at) });
+}
+export function atText(j: any): string {
+  return String(j?.flag ?? '').replace(/\r/g, '').split('\n').map(x => x.trim()).filter(x => x && x !== 'OK').join(' · ').slice(0, 200);
 }
