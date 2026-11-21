@@ -2380,6 +2380,8 @@ export const EN_PATTERNS: Record<string, string> = {
   'آخر ٣٠ يوم — منهم {0} هالأسبوع{1}': 'Last 30 days — {0} this week{1}',
   'آخر ٣٠ يوم — منهم {0} هالأسبوع': 'Last 30 days — {0} this week',
   'بنقهم: {0}ms': 'Their ping: {0}ms',
+  'الراوتر يعيد الاتصال على «{0}» — طبيعي ياخذ وقت (باقي {1})': 'The router is reconnecting on “{0}” — this normally takes a while ({1} left)',
+  'الراوتر ما اتصل على «{0}» خلال {1} دقيقة، فرجعنا الإعداد السابق.\n\nغالباً ما فيه تغطية لهالوضع عندك (مثلاً 5G فقط بدون برج 5G قريب).': 'The router didn\'t connect on “{0}” within {1} min, so we restored the previous setting.\n\nMost likely there\'s no coverage for this mode where you are (e.g. 5G only with no 5G tower nearby).',
   'الليل {0}ms · النهار {1}ms': 'Night {0}ms · Day {1}ms',
   'الأرقام تطلع لما يصيرون {0} أعضاء أو أكثر.': 'Numbers appear once there are {0} or more members.',
   'رقم موقع برجك (eNB): {0}\n\nبنفتح خريطة {1} في CellMapper على {2}. عشان يطلع برجك بالضبط: Menu ← Search ← Tower Search واكتب الرقم.\n\nالخريطة يعبّيها مستخدمين، فممكن برجك ما يكون مسجّل فيها.': 'Your tower site number (eNB): {0}\n\nWe\'ll open the {1} map on CellMapper at {2}. To find your exact tower: Menu ← Search ← Tower Search and enter the number.\n\nThe map is filled by users, so your tower may not be listed.',

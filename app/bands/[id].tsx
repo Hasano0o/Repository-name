@@ -26,6 +26,8 @@ import { trafficBurst } from '../../src/utils/nrprobe';
 import { safeApply, lastTrial, trialNote, trialMessage, freeRelease, waitOnline } from '../../src/utils/safeLock';
 
 import { sheet } from '../../src/i18n';
+import { modeWaitMs, leftLabel } from '../../src/utils/netMode';
+import { reportError } from '../../src/services/errors';
 type ScanStatus = 'pending' | 'testing' | 'done' | 'nocov' | 'error';
 interface ScanRow { tech: 'LTE' | 'NR'; band: number; status: ScanStatus; rsrp?: number; sinr?: number; score?: number; note?: string; }
 interface QuickRow { tech: 'LTE' | 'NR'; band: number; rsrp?: number; sinr?: number; score: number; cells: number; live: boolean; }
@@ -157,10 +159,11 @@ export default function BandsScreen() {
     })();
   }, [id, load]);
 
-  const waitConnected = async (r: SavedRouter, bands: number[], timeoutMs: number) => {
+  const waitConnected = async (r: SavedRouter, bands: number[], timeoutMs: number, tick?: (leftMs: number) => void) => {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       if (cancelRef.current) return false;
+      tick?.(deadline - Date.now());
       await sleep(3000);
       try {
         const res = await withSession(r, async d => {
@@ -662,17 +665,21 @@ export default function BandsScreen() {
             await withRouterLock(info, async () => {
               setStatus('نغيّر وضع الشبكة...');
               await withSession(info, d => d.setNetworkMode!(mode), false);
-              setStatus('ننتظر الاتصال...');
-              const ok = await waitConnected(info, [], 45000);
-              if (!ok) {
+              // ٢١ نوفمبر: كانت ٤٥ ثانية ثابتة ← نرجّع الوضع قبل ما يكمل الراوتر التسجيل (هواوي لين دقيقتين، ZTE لين ٤)
+              const waitMs = modeWaitMs(info.driverId);
+              const ok = await waitConnected(info, [], waitMs, left =>
+                setStatus(`الراوتر يعيد الاتصال على «${label}» — طبيعي ياخذ وقت (باقي ${leftLabel(left)})`));
+              if (!ok && !cancelRef.current) {
                 setStatus('ما اتصل — نرجع الإعداد السابق...');
                 await withSession(info, d => d.setNetworkMode!(prev), false);
-                Alert.alert('ما نجح التحويل', 'الراوتر ما اتصل على الوضع المختار، فرجعنا الإعداد السابق.');
+                reportError('netmode', `${prev} ← ${mode} · ما اتصل خلال ${Math.round(waitMs / 1000)} ثانية · رجّعنا السابق`, info).catch(() => {});
+                Alert.alert('ما نجح التحويل', `الراوتر ما اتصل على «${label}» خلال ${Math.round(waitMs / 60000)} دقيقة، فرجعنا الإعداد السابق.\n\nغالباً ما فيه تغطية لهالوضع عندك (مثلاً 5G فقط بدون برج 5G قريب).`);
               }
             }, { label: 'وضع الشبكة' });
             await load(info);
           } catch (e: any) {
             setError(e?.message ?? String(e));
+            reportError('netmode', `${prev} ← ${mode} · ${e?.message ?? e}`, info).catch(() => {});
           } finally {
             if (mounted.current) { setBusy(false); setStatus(''); }
           }

@@ -1558,10 +1558,18 @@ export class HuaweiDriver implements RouterDriver {
         after = await this.readNetModeFields();
       }
     }
+    // نفس الشي للوضع: بعض الموديلات (H155/H158/5G CPE) تحدّث NetworkMode بعد ثواني — كنا نحكم بعد ١٫٥ ثانية
+    if (patch.mode !== undefined) {
+      for (const wait of [2500, 4000]) {
+        if (after.find(f => f[0] === 'NetworkMode')?.[1] === patch.mode) break;
+        await new Promise(r => setTimeout(r, wait));
+        try { after = await this.readNetModeFields(); } catch {}
+      }
+    }
     const getA = (k: string) => after.find(f => f[0] === k)?.[1];
     this.log('net-mode readback', after.map(([k, v]) => `${k}=${v}`).join(' '));
     if (patch.mode !== undefined && getA('NetworkMode') !== patch.mode) {
-      throw new Error('الراوتر قبل الطلب لكن ما غيّر نوع الشبكة');
+      throw new Error(`الراوتر قبل الطلب لكن ما غيّر نوع الشبكة (طلبنا ${patch.mode} · الراوتر ${getA('NetworkMode') ?? '؟'})`);
     }
     // فك القفل وهو على وضع غير «4G فقط»: بعض الموديلات ترجع «OK» وتخلي القفل — نفكه على 4G فقط ونرجّع الوضع
     if (patch.bands && !patch.bands.length && patch.mode === undefined && has('LTEBandOption')

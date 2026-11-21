@@ -26,6 +26,7 @@ const files = [
   'src/utils/advisor.ts',
   'src/assistant/pilotPlan.ts',
   'src/utils/bandVerify.ts',
+  'src/utils/netMode.ts',
   'src/services/crashText.ts',
   'src/utils/optimize.ts',
   'src/drivers/huawei/netStandard.ts',
