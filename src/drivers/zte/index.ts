@@ -470,8 +470,10 @@ export class ZteDriver implements RouterDriver {
 
     const candidates = this.loginCandidates(password, ld, rd);
 
+    // service.js (دالة الدخول في صفحة ZTE نفسها): result "0" أو "4" = داخل · 1 فشل · 2 مستخدم ثاني · 3 كلمة غلط · 5 قفل.
+    // VORTEX-3 M49 (MF295N، ٢١ نوفمبر) يرد "4" — كنا نحسبه فشل ونكمل باقي الصيغ لين ينقفل ← «الدخول يدور».
     const isOk = (s: string) =>
-      /"result"\s*:\s*"?0"?/.test(s) || /"result"\s*:\s*"?success"?/i.test(s);
+      /"result"\s*:\s*"?[04]"?\s*[,}]/.test(s) || /"result"\s*:\s*"?success"?/i.test(s);
 
     let sawBusy = false;
 
