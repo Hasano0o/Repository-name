@@ -324,9 +324,9 @@ export default function RoutersList() {
             { text: 'إلغاء', style: 'cancel' },
           ]);
           return (
-            <View>
+            <View style={[s.card, s.rCard]}>
             <Pressable onPress={goIn} accessibilityRole="button" accessibilityLabel={item.name}
-              style={({ pressed }) => [s.card, s.rCard, pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] }]}>
+              style={({ pressed }) => [{ gap: 10 }, pressed && { opacity: 0.85 }]}>
               <View style={s.row}>
                 <View style={[s.rAvatar, { backgroundColor: tBg(stateCol + '1c') }]}>
                   {loading && !sig
@@ -356,13 +356,17 @@ export default function RoutersList() {
                 </View>
               )}
               {!ok && <Text style={s.metaTxt} numberOfLines={1}>{hostLabel(item.host)}</Text>}
-              {!hasPw && (
-                <View style={s.pwAsk}>
-                  <Icon name="lock" size={14} color={tFg('#c2410c')} stroke={2.3} />
-                  <Text style={s.pwAskTxt}>أضف بيانات الدخول — اضغط هنا</Text>
-                </View>
-              )}
             </Pressable>
+            {/* زر الدخول رجع (حسن ٢٢ نوفمبر: «لازم زر دخول») — أنحف من القديم */}
+            <PrimaryBtn
+              small
+              text={hasPw ? (loading ? 'يتصل…' : 'دخول للراوتر') : 'إضافة بيانات الدخول'}
+              icon={hasPw ? 'login' : 'lock'}
+              busy={loading}
+              disabled={loading}
+              colors={hasPw ? [P.heroA, P.heroB] : [P.amber, tBg('#f97316')]}
+              onPress={goIn}
+            />
             {/* ⋯ برا زر البطاقة (زر داخل زر يخرب في الويب/الويندوز) */}
             <Pressable onPress={more} hitSlop={10} accessibilityRole="button" accessibilityLabel="خيارات الراوتر" style={s.moreBtn}>
               <Text style={s.moreDots}>⋯</Text>
