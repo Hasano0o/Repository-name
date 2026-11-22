@@ -200,7 +200,6 @@ const APPSTORE_REVIEW = 'https://apps.apple.com/app/id6819877993?action=write-re
 
 export function HomeFooter({ onExplore }: { onExplore: () => void }) {
   const themeLabel = THEMES.find(t => t.id === THEME_PREF)?.a11y ?? '';
-  const [open, setOpen] = useState(false);
   return (
     <View style={{ gap: 12, marginTop: 4 }}>
       <View style={s.tiles}>
@@ -245,18 +244,8 @@ export function HomeFooter({ onExplore }: { onExplore: () => void }) {
         </View>
       </View>
 
-      {/* الإعدادات مطوية — سطر واحد يفتحها (تصميم حسن ٢٢ نوفمبر) */}
+      {/* الإعدادات ظاهرة دايماً (حسن ٢٢ نوفمبر: بدون سهم إخفاء) */}
       <View style={s.card}>
-        <Pressable onPress={() => setOpen(o => !o)} accessibilityRole="button" style={s.row}>
-          <View style={[s.rowIcon, { backgroundColor: tBg('#64748b22') }]}><Icon name="settings" size={17} color={tFg('#475569')} stroke={2.2} /></View>
-          <View style={s.rowTxt}>
-            <Text style={s.rowLabel}>الإعدادات</Text>
-            <Text style={s.rowValue} numberOfLines={1}>المظهر · اللغة · التشخيص · نسخة التطبيق</Text>
-          </View>
-          <Icon name={open ? 'up' : 'down'} size={16} color={P.faint} stroke={2.4} />
-        </Pressable>
-        {open && <>
-        <View style={s.sep} />
         <Row icon="sun" tint="#f59e0b" label="المظهر" value={themeLabel}>
           <Seg items={THEMES} value={THEME_PREF} onPick={t => { setThemePref(t); }} />
         </Row>
@@ -268,7 +257,6 @@ export function HomeFooter({ onExplore }: { onExplore: () => void }) {
         <DiagRow />
         {(desktop || Updates.isEnabled) && <View style={s.sep} />}
         <VersionRow />
-        </>}
       </View>
     </View>
   );
