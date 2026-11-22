@@ -44,8 +44,18 @@ function VerifiedDot({ color }: { color: string }) {
 }
 
 /** ترويسة الراوتر: الصورة يسار · الاسم والحالة بالوسط · الترس يمين */
-export function RouterHead({ name, ok, statusText, statusColor, showPhoto, onSettings, extra }: {
-  name: string; ok: boolean; statusText: string; statusColor: string; showPhoto: boolean; onSettings?: () => void; extra?: ReactNode;
+/** زر الرجوع الدائري (صفحة الراوتر بدون الشريط العلوي — حسن ٢٢ نوفمبر: الفراغ فوق «موكويس») */
+export function BackBtn({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel="رجوع" hitSlop={8}
+      style={({ pressed }) => [s.back, pressed && { opacity: 0.8 }]}>
+      <Icon name="back" size={22} color={isDark ? '#e5e7eb' : '#1e3a8a'} stroke={2.8} />
+    </Pressable>
+  );
+}
+
+export function RouterHead({ name, ok, statusText, statusColor, showPhoto, onSettings, onBack, extra }: {
+  name: string; ok: boolean; statusText: string; statusColor: string; showPhoto: boolean; onSettings?: () => void; onBack?: () => void; extra?: ReactNode;
 }) {
   return (
     <View style={s.head}>
@@ -66,12 +76,13 @@ export function RouterHead({ name, ok, statusText, statusColor, showPhoto, onSet
           </View>
         </View>
       </View>
-      <View style={s.photoWrap}>
+      <View style={[s.photoWrap, !!onBack && s.photoSmall]}>
         {showPhoto
-          ? <Image source={MIFI} style={s.photo} resizeMode="contain" />
+          ? <Image source={MIFI} style={onBack ? s.photoS : s.photo} resizeMode="contain" />
           : <View style={s.photoIcon}><Icon name="wifi" size={30} color="#2f6bff" stroke={2.4} /></View>}
-        {showPhoto && <View style={s.wifi}><Icon name="wifi" size={22} color="#2f6bff" stroke={2.6} /></View>}
+        {showPhoto && <View style={s.wifi}><Icon name="wifi" size={onBack ? 18 : 22} color="#2f6bff" stroke={2.6} /></View>}
       </View>
+      {!!onBack && <BackBtn onPress={onBack} />}
     </View>
   );
 }
@@ -174,17 +185,23 @@ const s = sheet({
 
   head: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, paddingTop: 2, paddingBottom: 2 },
   gear: {
-    width: 46, height: 46, borderRadius: 23, backgroundColor: tBg('#ffffff'), alignItems: 'center', justifyContent: 'center',
+    width: 42, height: 42, borderRadius: 21, backgroundColor: tBg('#ffffff'), alignItems: 'center', justifyContent: 'center',
     shadowColor: C.shadow, shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 3,
   },
   headMid: { flex: 1, alignItems: 'center', gap: 5, minWidth: 0 },
   nameRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, maxWidth: '100%' },
-  name: { color: isDark ? '#f1f5f9' : '#14213d', fontSize: 22, fontFamily: FONT.numHeavy, flexShrink: 1 },
+  name: { color: isDark ? '#f1f5f9' : '#14213d', fontSize: 21, fontFamily: FONT.numHeavy, flexShrink: 1 },
   statusRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
   status: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 3 },
   statusTxt: { fontSize: 14, fontWeight: '900' },
   dot: { width: 8, height: 8, borderRadius: 4 },
   photoWrap: { width: 96, height: 66, justifyContent: 'center' },
+  photoSmall: { width: 72, height: 56 },
+  photoS: { width: 58, height: 44 },
+  back: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: tBg('#ffffff'), alignItems: 'center', justifyContent: 'center',
+    shadowColor: C.shadow, shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3,
+  },
   photo: { width: 74, height: 56 },
   photoIcon: { width: 58, height: 58, borderRadius: 18, backgroundColor: tBg('#ffffff'), alignItems: 'center', justifyContent: 'center' },
   wifi: { position: 'absolute', right: 0, top: 0 },

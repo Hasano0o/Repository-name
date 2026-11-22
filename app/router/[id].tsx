@@ -25,7 +25,7 @@ import { GlassCard } from '../../src/ui/GlassCard';
 import { SignalRing } from '../../src/ui/SignalRing';
 import { ArcGauge } from '../../src/ui/ArcGauge';
 import { TechCards, techRows, Bars } from '../../src/ui/TechCards';
-import { RouterHead, LockBar, SpeedPill, SummaryCard } from '../../src/ui/ReadingsHero';
+import { RouterHead, LockBar, SpeedPill, SummaryCard, BackBtn } from '../../src/ui/ReadingsHero';
 import { RadarPoint } from '../../src/ui/SignalRadar';
 import { MetricRings, RingSpec } from '../../src/ui/MetricRing';
 import { Icon, IconName } from '../../src/ui/Icon';
@@ -789,9 +789,15 @@ export default function RouterDashboard() {
       <Stack.Screen options={{ title: tr(info?.name ?? 'الراوتر') }} />
 
       <ScrollView
-        contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 110 }]}
+        contentContainerStyle={[s.page, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 110 }]}
         refreshControl={<RefreshControl refreshing={busy} onRefresh={onRefresh} tintColor={C.blue} colors={[C.blue]} />}
       >
+        {/* بدون الشريط العلوي: لو الترويسة ما طلعت (تحميل/فايبر) زر رجوع لحاله */}
+        {!(!loading && info && feat.cellular) && (
+          <View style={{ alignSelf: 'flex-start' }}>
+            <BackBtn onPress={() => (router.canGoBack() ? router.back() : router.replace('/' as Href))} />
+          </View>
+        )}
         {info?.driverId === 'demo' && (
           <View style={s.demoBar}>
             <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
@@ -896,6 +902,7 @@ export default function RouterDashboard() {
             statusColor={noService || disconnected ? '#e5484d' : '#16a34a'}
             showPhoto={info.driverId === 'zte'}
             onSettings={() => router.push(`/add-router?id=${info.id}` as Href)}
+            onBack={() => (router.canGoBack() ? router.back() : router.replace('/' as Href))}
             extra={<OperatorBadge name={details?.operator} small />}
           />
         )}
