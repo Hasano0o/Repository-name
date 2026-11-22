@@ -99,7 +99,7 @@ const SCREENS: [string, string][] = [
 const SCREEN_NAME: Record<string, string> = { details: 'التفاصيل', ...Object.fromEntries(SCREENS.map(([k, t]) => [k.split('/')[0], t])) };
 
 // شاشات فيها عنوان كبير داخل الصفحة — ما نكرره في الشريط العلوي
-const OWN_TITLE = new Set(['aim/[id]', 'antenna/[id]']);
+const OWN_TITLE = new Set(['aim/[id]', 'antenna/[id]', 'router/[id]']);
 // شاشات لها ترويسة كاملة خاصة (فيها زر الرجوع) — نخفي الشريط العلوي
 const NO_HEADER = new Set(['hunt/[id]']);
 

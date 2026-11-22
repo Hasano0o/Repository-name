@@ -25,6 +25,7 @@ import { GlassCard } from '../../src/ui/GlassCard';
 import { SignalRing } from '../../src/ui/SignalRing';
 import { ArcGauge } from '../../src/ui/ArcGauge';
 import { TechCards, techRows, Bars } from '../../src/ui/TechCards';
+import { RouterHead, LockBar, SpeedPill, SummaryCard } from '../../src/ui/ReadingsHero';
 import { RadarPoint } from '../../src/ui/SignalRadar';
 import { MetricRings, RingSpec } from '../../src/ui/MetricRing';
 import { Icon, IconName } from '../../src/ui/Icon';
@@ -886,6 +887,19 @@ export default function RouterDashboard() {
           </View>
         )}
 
+        {/* ترويسة الراوتر (تصميم حسن ٢٢ نوفمبر) — الفايبر له كرت هوية في FiberHero */}
+        {!loading && info && feat.cellular && (
+          <RouterHead
+            name={info.name}
+            ok={!noService && !disconnected}
+            statusText={disconnected ? 'منقطع' : noService ? 'بلا شبكة' : 'متصل'}
+            statusColor={noService || disconnected ? '#e5484d' : '#16a34a'}
+            showPhoto={info.driverId === 'zte'}
+            onSettings={() => router.push(`/add-router?id=${info.id}` as Href)}
+            extra={<OperatorBadge name={details?.operator} small />}
+          />
+        )}
+
         {!loading && noNet && !noService && (
           <View style={[s.warnBanner, { backgroundColor: tBg('#e5484d14'), borderColor: tBd('#e5484d55') }]}>
             {lock && (lock.bands.length > 0 || !!lock.pci) ? (
@@ -909,24 +923,18 @@ export default function RouterDashboard() {
         )}
 
         {!loading && lock && (lock.bands.length > 0 || (lock.nrBands?.length ?? 0) > 0 || lock.pci) && (
-          <View style={s.warnBanner}>
-            <Pressable style={[s.warnBtn, busy && { opacity: 0.5 }]} onPress={onClearLock} disabled={busy}>
-              <Text style={s.warnBtnText}>رجوع للتلقائي</Text>
-            </Pressable>
-            <Text style={s.warnText}>
-              {/* ٢ نوفمبر (حسن): المحسّن ثبّت B20+B1+B3+n78 والبانر يقول «مقفل على B1+B3+B20 — قد يمنع 5G»:
-                  كان يتجاهل 5G ويحذّر من التثبيت اللي اخترناه نحن. والدمج و5G يناموا لين يصير تحميل */}
-              {lock.pci
-                ? `مثبّت على برج PCI ${lock.pci} — لو ضعفت الإشارة رجّع للتلقائي`
-                : `مثبّت على ${[...lock.bands.map(b => 'B' + b), ...(lock.nrBands ?? []).map(b => 'n' + b)].join(' + ')}${
-                  // نقول اللي نشوفه فعلاً من الراوتر — ما نوعد بـ 5G وهو ما ظهر (حسن ٢ نوفمبر: n78 فوق وما فيه 5G تحت)
-                  (lock.nrBands?.length ?? 0) > 0 && !hasNr
-                    ? ` — 5G (${(lock.nrBands ?? []).map(b => 'n' + b).join('+')}) ما شبك عليه الراوتر الحين`
-                    : lock.bands.length === 1 && !(lock.nrBands?.length)
-                      ? ' — تردد واحد يحد السرعة'
-                      : caIdle ? ' — الدمج يرجع وقت التحميل' : ''}`}
-            </Text>
-          </View>
+          // شريط التثبيت (تصميم حسن ٢٢ نوفمبر). ٢ نوفمبر: نقول اللي نشوفه فعلاً — ما نوعد بـ 5G وهو ما ظهر
+          <LockBar
+            onAuto={onClearLock} busy={busy}
+            text={lock.pci ? `مثبّت على برج PCI ${lock.pci}` : `مثبّت على ${[...lock.bands.map(b => 'B' + b), ...(lock.nrBands ?? []).map(b => 'n' + b)].join(' + ')}`}
+            note={lock.pci
+              ? 'لو ضعفت الإشارة رجّع للتلقائي'
+              : (lock.nrBands?.length ?? 0) > 0 && !hasNr
+                ? `5G (${(lock.nrBands ?? []).map(b => 'n' + b).join('+')}) ما شبك عليه الراوتر الحين`
+                : lock.bands.length === 1 && !(lock.nrBands?.length)
+                  ? 'تردد واحد يحد السرعة'
+                  : caIdle ? 'الدمج يرجع وقت التحميل' : undefined}
+          />
         )}
 
         {!loading && fourGOnly && (
@@ -944,23 +952,6 @@ export default function RouterDashboard() {
           </View>
         )}
 
-        {/* الفايبر: الاسم والحالة في كرت الهوية — الشريط الأزرق كان يكررهم (صورة عضو F660) */}
-        {!loading && info && feat.cellular && (
-          <LinearGradient colors={[tBg('#2f6bff'), tBg('#6a4cff')]} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={s.topBar}>
-            {/* سطر واحد مضغوط (طلب حسن): الراوتر · الشركة · الحالة — العنوان والأيقونة شلناهم (العنوان في الإعدادات والتفاصيل) */}
-            <View style={[s.statusPill, { backgroundColor: tBg('#ffffff') }]}>
-              <Text style={[s.statusText, { color: noService ? C.red : C.green }]}>
-                {disconnected ? 'منقطع' : noService ? 'بلا شبكة' : 'متصل'}
-              </Text>
-              <View style={[s.statusDot, { backgroundColor: noService ? C.red : C.green }]} />
-            </View>
-            <View style={s.topLine}>
-              <Text style={s.topName} numberOfLines={1}>{info.name}</Text>
-              <OperatorBadge name={details?.operator} onHero small />
-            </View>
-          </LinearGradient>
-        )}
-
         {!loading && info && !feat.cellular && (
           // فايبر/كابل (ما فيه إشارة جوال): صفحة الفايبر (تصميم حسن ١٥ نوفمبر) بدل عداد الإشارة والبرج والترددات
           <FiberHero
@@ -974,7 +965,7 @@ export default function RouterDashboard() {
         )}
 
         {!loading && info && feat.cellular && (
-          <LinearGradient colors={HERO_BG[noService ? 'poor' : level]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.heroX, showCards && { paddingHorizontal: 10, paddingTop: 10 }]}>
+          <LinearGradient colors={showCards ? ['transparent', 'transparent'] : HERO_BG[noService ? 'poor' : level]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.heroX, showCards && s.heroCards]}>
             {showCards
               ? <>
                 <TechCards signal={signal} onDetails={() => router.push(`/details/${info.id}` as Href)} />
@@ -991,6 +982,30 @@ export default function RouterDashboard() {
                 )}
               </>
               : <ArcGauge score={signalScore(primary)} label={LEVEL_LABEL[level]} color={LEVEL_COLOR[level]} size={172} />}
+            {showCards && !noNet ? (
+              // «اتصالك جيد» + السرعة الحالية (تصميم حسن ٢٢ نوفمبر)
+              <>
+                <SummaryCard
+                  title={`اتصالك ${LEVEL_LABEL[level]}`} color={LEVEL_COLOR[level]}
+                  bars={<Bars color={LEVEL_COLOR[level]} size={22} on={level === 'excellent' ? 4 : level === 'good' ? 3 : level === 'fair' ? 2 : 1} />}
+                  tower={String(signal?.pci ?? signal?.nrPci ?? '—')}
+                  tower5g={signal?.pci && signal?.nrPci ? String(signal.nrPci) : undefined}
+                  ca={{
+                    text: nrCc >= 2 ? '⚡ 5G ×2' : caCount > 1 ? 'مدموج' : caIdle ? '💤 جاهز' : '◻️ تردد واحد',
+                    color: caCount > 1 || nrCc >= 2 ? '#16a34a' : C.sub,
+                    linked: caCount > 1 && nrCc < 2,
+                    sub: nrCc >= 2 ? 'دمج 5G مزدوج'
+                    : caCount > 1 && !caShrunk ? `${caCount} نواقل${caBw ? ` · ${caBw}MHz` : ''}`
+                    : caCount > 1 && caShrunk && lastCa ? `${caCount} الحين · وقت التحميل ${lastCa.n}`
+                    : caCount <= 1 && caIdle && lastCa ? `آخر دمج ${lastCa.bands.join('+')}` : undefined,
+                  }}
+                  chips={heroChips.length ? <BandChips chips={heroChips} max={5} center /> : <Text style={s.heroCellVal}>—</Text>}
+                  chipsSub={chipsNote ? chipsNote : caShrunk && lastCa ? `وقت التحميل: ${lastCa.bands.join('+')}` : bands.length ? `الأساسي ${bands[0]}` : netLabel}
+                  onPress={() => router.push(`/towers/${info.id}` as Href)}
+                />
+                {!!traffic && <SpeedPill down={fmtRate(traffic.downBytesPerSec)} up={fmtRate(traffic.upBytesPerSec)} />}
+              </>
+            ) : (<>
             {showCards && !noNet ? (
               <View style={s.heroLineRow}>
                 <View style={s.heroLineRule} />
@@ -1038,6 +1053,7 @@ export default function RouterDashboard() {
                 {!!traffic && <Text style={s.heroSub}>{`السرعة الحين ↓ ${fmtRate(traffic.downBytesPerSec)} · ↑ ${fmtRate(traffic.upBytesPerSec)}`}</Text>}
               </>
             )}
+            </>)}
             {!!traffic && traffic.connectedSecs > 0 && (
               // إطار «مدة الاتصال · الآي بي» — تفاصيل يهتم فيها البعض (الآي بي يتغيّر مع «آي بي جديد»)، فتبان لحالها
               <View style={s.sinceBox}>
@@ -1310,6 +1326,7 @@ const s = sheet({
   bandChips: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 4, marginVertical: 5, alignSelf: 'stretch' },
   bandChip: { backgroundColor: C.blueSoft, borderRadius: 14, paddingHorizontal: 6, paddingVertical: 2 },
   bandChipText: { color: C.blue, fontWeight: '800', fontSize: 12.5 },
+  heroCards: { padding: 0, borderWidth: 0, shadowOpacity: 0, elevation: 0, gap: 10, alignItems: 'stretch', borderRadius: 0 },
   heroX: { borderRadius: 26, padding: 18, gap: 6, borderWidth: 1, borderColor: tBd('#ffffff'), alignItems: 'center', shadowColor: C.shadow, shadowOpacity: 0.08, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
   heroMain: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   heroSide: { flex: 1, gap: 8, alignItems: 'stretch' },

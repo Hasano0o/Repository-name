@@ -129,48 +129,85 @@ function Spark({ data, color, w = 64, h = 14 }: { data: number[]; color: string;
 /** نسبة قوة الإشارة على الشريط: ‎-125 (أحمر) ← ‎-80 (أخضر) */
 const rsrpPos = (v?: number) => (v === undefined ? 0 : Math.max(0.03, Math.min(0.97, (v + 125) / 45)));
 
-/** العدّاد النصف دائري (زخرفي — الرقم واللون يقولون المستوى) */
-function Arc({ w = 124, id }: { w?: number; id: string }) {
-  const h = w * 0.56, sw = 9, r = w / 2 - sw / 2, cx = w / 2, cy = h - 2;
+/** العدّاد (قوس أكبر من نص دائرة شوي — مثل تصميم حسن) */
+function Arc({ w, id }: { w: number; id: string }) {
+  const sw = 9, r = w / 2 - sw / 2, cx = w / 2, cy = r + sw / 2;
+  const x1 = cx - r, y1 = cy, x2 = cx + r, y2 = cy;
+  const h = cy + sw / 2 + 1;
   return (
     <Svg width={w} height={h}>
       <Defs>
         <SvgGrad id={`arc${id}`} x1="0" y1="0" x2="1" y2="0">
-          <Stop offset="0" stopColor="#8ee36b" />
-          <Stop offset="0.5" stopColor="#22c55e" />
+          <Stop offset="0" stopColor="#9be15d" />
+          <Stop offset="0.45" stopColor="#22c55e" />
           <Stop offset="1" stopColor="#14b8a6" />
         </SvgGrad>
       </Defs>
-      <Path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`} stroke={`url(#arc${id})`} strokeWidth={sw} strokeLinecap="round" fill="none" />
+      <Path d={`M ${x1} ${y1} A ${r} ${r} 0 1 1 ${x2} ${y2}`} stroke={`url(#arc${id})`} strokeWidth={sw} strokeLinecap="round" fill="none" />
     </Svg>
   );
 }
 
 /** شريط الألوان (أحمر ← أخضر) مع مثلث المؤشر */
-function LevelBar({ pos, w = 124, id }: { pos: number; w?: number; id: string }) {
+function LevelBar({ pos, w, id }: { pos: number; w: number; id: string }) {
   const x = 4 + pos * (w - 8);
   return (
-    <Svg width={w} height={18}>
+    <Svg width={w} height={15}>
       <Defs>
         <SvgGrad id={`lvl${id}`} x1="0" y1="0" x2="1" y2="0">
           <Stop offset="0" stopColor="#ef4444" />
-          <Stop offset="0.3" stopColor="#f59e0b" />
-          <Stop offset="0.5" stopColor="#facc15" />
-          <Stop offset="0.75" stopColor="#22c55e" />
-          <Stop offset="1" stopColor="#14b8a6" />
+          <Stop offset="0.28" stopColor="#f97316" />
+          <Stop offset="0.48" stopColor="#facc15" />
+          <Stop offset="0.75" stopColor="#4ade80" />
+          <Stop offset="1" stopColor="#22c55e" />
         </SvgGrad>
       </Defs>
-      <Rect x={0} y={9} width={w} height={7} rx={3.5} fill={`url(#lvl${id})`} />
-      <Polygon points={`${x - 5},1 ${x + 5},1 ${x},8.5`} fill={isDark ? '#e5e7eb' : '#1f2a44'} />
+      <Rect x={0} y={8} width={w} height={6} rx={3} fill={`url(#lvl${id})`} />
+      <Polygon points={`${x - 4.5},0.5 ${x + 4.5},0.5 ${x},7`} fill={isDark ? '#e5e7eb' : '#14532d'} />
     </Svg>
   );
 }
 
-/** منحنى حافة لوحة التقنية (يسارها) */
-function PanelCurve({ color }: { color: string }) {
+/** لوحة التقنية: خلفية متدرجة بحافة يسار منحنية وزاوية سفلية دائرية (فوق يمين البطاقة) */
+function PanelBg({ w, h, id, colors }: { w: number; h: number; id: string; colors: [string, string] }) {
+  const d = `M ${w} 0 L ${w * 0.02} 0 C ${w * 0.2} 0, ${w * 0.22} ${h * 0.3}, ${w * 0.27} ${h * 0.55} C ${w * 0.31} ${h * 0.8}, ${w * 0.36} ${h}, ${w * 0.5} ${h} L ${w} ${h} Z`;
   return (
-    <Svg width={26} height="100%" viewBox="0 0 26 100" preserveAspectRatio="none" style={{ position: 'absolute', left: -25, top: 0, bottom: 0 }}>
-      <Path d="M26 0 L14 0 C 2 30, 24 60, 0 100 L26 100 Z" fill={color} />
+    <Svg width={w} height={h} style={{ position: 'absolute', top: 0, right: 0 }}>
+      <Defs>
+        <SvgGrad id={`pan${id}`} x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor={colors[1]} />
+          <Stop offset="1" stopColor={colors[0]} />
+        </SvgGrad>
+      </Defs>
+      <Path d={d} fill={`url(#pan${id})`} />
+      <Path d={`M ${w * 0.45} ${h} C ${w * 0.6} ${h * 0.7}, ${w * 0.8} ${h * 0.95}, ${w} ${h * 0.6} L ${w} ${h} Z`} fill="#ffffff" opacity={0.07} />
+    </Svg>
+  );
+}
+
+/** موجات خفيفة بخلفية البطاقة (تحت يمين) */
+function CardWaves({ color }: { color: string }) {
+  return (
+    <Svg width="100%" height={70} viewBox="0 0 300 70" preserveAspectRatio="none" style={{ position: 'absolute', right: 0, bottom: 24, left: 0 }}>
+      <Path d="M120 70 C 170 30, 220 60, 300 20 L300 70 Z" fill={color} opacity={0.05} />
+      <Path d="M150 70 C 200 45, 250 65, 300 40 L300 70 Z" fill={color} opacity={0.05} />
+    </Svg>
+  );
+}
+
+function CheckDot({ color }: { color: string }) {
+  return (
+    <Svg width={15} height={15} viewBox="0 0 16 16">
+      <Circle cx={8} cy={8} r={8} fill={color} />
+      <Path d="M4.5 8.2l2.2 2.2 4.6-4.7" stroke="#fff" strokeWidth={1.8} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function Pulse({ color }: { color: string }) {
+  return (
+    <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
+      <Path d="M2 12h4l2-6 4 12 3-9 2 3h5" stroke={color} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
 }
@@ -182,14 +219,16 @@ function Tile({ icon, label, value, color, bg, onPress, spark }: {
     <Pressable style={[s.tile, { backgroundColor: bg }]} onPress={onPress} disabled={!onPress}>
       <Text style={s.tileLbl} numberOfLines={1} adjustsFontSizeToFit>{label}</Text>
       <View style={s.tileRow}>
-        <Text style={s.tileUnit}>dB</Text>
-        <Text style={[s.tileVal, { color }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
         {icon}
+        <Text style={[s.tileVal, { color }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+        <Text style={s.tileUnit}>dB</Text>
       </View>
-      {!!spark && <Spark data={spark} color={color} w={60} h={9} />}
+      <View style={s.tileSpark}>{!!spark && <Spark data={spark} color={color} w={50} h={9} />}</View>
     </Pressable>
   );
 }
+
+const PANEL_W = 140, PANEL_H = 94, GAUGE_W = 136;
 
 function TechRow({ r, onDetails, hist }: { r: Row; onDetails?: () => void; hist?: Hist }) {
   const b = num(r.band);
@@ -201,62 +240,58 @@ function TechRow({ r, onDetails, hist }: { r: Row; onDetails?: () => void; hist?
   const accent = TECH_ACCENT[r.tech];
   const bwN = num(r.bw);
   const iso = (x: string) => '⁨' + x + '⁩';
-  const meta = [r.pci && `PCI ${r.pci}`, r.arfcn && `قناة ${r.arfcn}`, bwN && `${bwN} MHz`].filter(Boolean).map(x => iso(String(x)));
+  const meta = [bwN && `${bwN} MHz`, r.arfcn && `قناة ${r.arfcn}`, r.pci && `PCI ${r.pci}`].filter(Boolean).map(x => iso(String(x)));
   return (
-    <View style={s.rowWrap}>
+    <View style={s.card}>
+      <CardWaves color={accent} />
+      <PanelBg w={PANEL_W} h={PANEL_H} id={r.tech} colors={TECH_TINT[r.tech]} />
       <View style={s.row}>
-        {/* ١. لوحة التقنية */}
-        <Pressable onPress={onDetails} disabled={!onDetails} accessibilityRole="button" accessibilityLabel="تفاصيل الإشارة" style={s.panelWrap}>
-          <LinearGradient colors={TECH_TINT[r.tech]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.panel}>
-            <Sheen />
-            <View style={s.panelTop}>
-              <Bars color="#ffffff" size={20} on={barsOn} />
-              <View style={s.techPill}><Text style={s.techPillTxt}>{r.tech === 'NR' ? '5G' : '4G'}</Text></View>
-            </View>
-            <Text style={s.panelBand} numberOfLines={1} adjustsFontSizeToFit>{code}</Text>
-            {!!mhz && <Text style={s.panelMhz} numberOfLines={1}>{iso(`${mhz} MHz`)}</Text>}
-          </LinearGradient>
-          <PanelCurve color={TECH_TINT[r.tech][0]} />
+        {/* ١. لوحة التقنية (المحتوى — الخلفية مرسومة فوق) */}
+        <Pressable onPress={onDetails} disabled={!onDetails} accessibilityRole="button" accessibilityLabel="تفاصيل الإشارة" style={s.panel}>
+          <View style={s.panelTop}>
+            <Bars color="#ffffff" size={20} on={barsOn} />
+            <View style={s.techPill}><Text style={s.techPillTxt}>{r.tech === 'NR' ? '5G' : '4G'}</Text></View>
+          </View>
+          <Text style={s.panelBand} numberOfLines={1} adjustsFontSizeToFit>{code}</Text>
+          {!!mhz && <Text style={s.panelMhz} numberOfLines={1}>{iso(`${mhz} MHz`)}</Text>}
         </Pressable>
 
         {/* ٢. العدّاد */}
         <View style={s.mid}>
           <View style={s.midHead}>
-            <Text style={s.midLbl} numberOfLines={1} adjustsFontSizeToFit>قوة الإشارة</Text>
+            <Text style={s.midLbl} numberOfLines={1}>قوة الإشارة</Text>
             <Waves color={accent} />
           </View>
           <View style={s.gauge}>
-            <Arc id={r.tech} />
+            <Arc w={GAUGE_W} id={r.tech} />
             <View style={s.gaugeTxt}>
               <Text style={s.gaugeUnit}>dBm</Text>
               <Text style={[s.rsrp, { color: LEVEL_COLOR[lv] }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{fmt(r.rsrp)}</Text>
             </View>
           </View>
-          <LevelBar pos={rsrpPos(r.rsrp)} id={r.tech} />
+          <LevelBar pos={rsrpPos(r.rsrp)} w={GAUGE_W + 8} id={r.tech} />
           <View style={[s.status, { backgroundColor: LEVEL_SOFT[lv] }]}>
-            <Text style={[s.statusTxt, { color: LEVEL_COLOR[lv] }]} numberOfLines={1} adjustsFontSizeToFit>{STATUS[lv]}</Text>
-            <View style={[s.check, { backgroundColor: LEVEL_COLOR[lv] }]}><Text style={s.checkTxt}>✓</Text></View>
+            <Text style={[s.statusTxt, { color: LEVEL_COLOR[lv] }]} numberOfLines={1}>{STATUS[lv]}</Text>
+            <CheckDot color={LEVEL_COLOR[lv]} />
           </View>
         </View>
 
         {/* ٣. النقاء والجودة */}
         <View style={s.tiles}>
-          <Tile icon={<Bars color={accent} size={16} />} label="SINR (النقاء)" value={fmt(r.sinr, 1)}
+          <Tile icon={<Bars color={accent} size={17} />} label="SINR (النقاء)" value={fmt(r.sinr, 1)}
             color={accent} bg={TECH_SOFT[r.tech]} onPress={onDetails} spark={hist?.sinr} />
-          <Tile icon={<Antenna color={LEVEL_COLOR[qlv]} size={16} />} label="RSRQ (الجودة)" value={fmt(r.rsrq, 1)}
+          <Tile icon={<Antenna color={LEVEL_COLOR[qlv]} size={17} />} label="RSRQ (الجودة)" value={fmt(r.rsrq, 1)}
             color={LEVEL_COLOR[qlv]} bg={LEVEL_SOFT[qlv]} onPress={onDetails} spark={hist?.rsrq} />
         </View>
       </View>
 
-      {/* ٤. PCI · قناة · MHz */}
+      {/* ٤. MHz · قناة · PCI */}
       {meta.length > 0 && (
         <View style={[s.metaBar, { backgroundColor: TECH_SOFT[r.tech] }]}>
           {meta.map((m, i) => (
             <View key={i} style={[s.metaCell, i > 0 && s.metaSep]}>
               <Text style={s.metaTxt} numberOfLines={1} adjustsFontSizeToFit>{m}</Text>
-              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-                <Path d="M2 12h4l2-6 4 12 3-9 2 3h5" stroke={accent} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              <Pulse color={accent} />
             </View>
           ))}
         </View>
@@ -288,42 +323,40 @@ export function TechCards({ signal, onDetails }: { signal?: Signal | null; onDet
 
 const s = sheet({
   wrap: { alignSelf: 'stretch', gap: 8 },
-  rowWrap: {
-    backgroundColor: tBg('#ffffffe6'), borderRadius: 24, borderWidth: 1, borderColor: tBd('#ffffff'),
-    overflow: 'hidden',
+  card: {
+    backgroundColor: tBg('#ffffff'), borderRadius: 24, borderWidth: 1, borderColor: tBd('#ffffff'),
+    overflow: 'hidden', paddingBottom: 8,
     shadowColor: C.shadow, shadowOpacity: 0.08, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 3,
   },
-  row: { flexDirection: 'row-reverse', alignItems: 'stretch', paddingLeft: 8, gap: 6 },
-  // ١. لوحة التقنية
-  panelWrap: { width: 92, marginLeft: 18 },
-  panel: { flex: 1, borderBottomLeftRadius: 0, paddingTop: 10, paddingBottom: 12, paddingHorizontal: 8, justifyContent: 'center', alignItems: 'center', gap: 2, overflow: 'hidden' },
-  panelTop: { alignSelf: 'stretch', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  techPill: { borderRadius: 999, borderWidth: 1.5, borderColor: '#ffffffcc', paddingHorizontal: 8, paddingVertical: 1 },
+  row: { flexDirection: 'row-reverse', alignItems: 'flex-start', paddingLeft: 8 },
+  // ١. لوحة التقنية — المحتوى في يمين اللوحة
+  panel: { width: 84, height: PANEL_H, paddingTop: 9, paddingRight: 10, paddingLeft: 2, alignItems: 'center' },
+  panelTop: { alignSelf: 'stretch', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
+  techPill: { borderRadius: 999, borderWidth: 1.5, borderColor: '#ffffffd9', paddingHorizontal: 7, paddingVertical: 0 },
   techPillTxt: { color: '#ffffff', fontSize: 12, fontFamily: FONT.numHeavy },
-  panelBand: { color: '#ffffff', fontSize: 34, lineHeight: 38, fontFamily: FONT.numHeavy, textAlign: 'center', includeFontPadding: false },
-  panelMhz: { color: '#ffffffeb', fontSize: 11, fontFamily: FONT.numSemi, textAlign: 'center' },
+  panelBand: { color: '#ffffff', fontSize: 30, lineHeight: 34, fontFamily: FONT.numHeavy, textAlign: 'center', includeFontPadding: false, marginTop: 4 },
+  panelMhz: { color: '#ffffffee', fontSize: 10.5, fontFamily: FONT.numSemi, textAlign: 'center' },
   // ٢. العدّاد
-  mid: { flex: 1, alignItems: 'center', paddingTop: 8, paddingBottom: 8 },
-  midHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4 },
-  midLbl: { color: C.text, fontSize: 12, fontWeight: '800', flexShrink: 1 },
-  gauge: { width: 124, height: 70, marginTop: 2, alignItems: 'center' },
-  gaugeTxt: { position: 'absolute', left: 0, right: 0, top: 16, alignItems: 'center' },
-  gaugeUnit: { color: C.sub, fontSize: 10, fontFamily: FONT.numSemi },
-  rsrp: { fontSize: 30, lineHeight: 34, fontFamily: FONT.numHeavy, includeFontPadding: false },
-  status: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3, marginTop: 4, maxWidth: '100%' },
-  statusTxt: { fontSize: 11, fontWeight: '800', flexShrink: 1 },
-  check: { width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
-  checkTxt: { color: '#fff', fontSize: 9, fontWeight: '900', lineHeight: 11 },
+  mid: { flex: 1, alignItems: 'center', paddingTop: 8 },
+  midHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, marginBottom: 2 },
+  midLbl: { color: C.text, fontSize: 12.5, fontWeight: '800' },
+  gauge: { width: GAUGE_W, alignItems: 'center' },
+  gaugeTxt: { position: 'absolute', left: 0, right: 0, top: 14, alignItems: 'center' },
+  gaugeUnit: { color: C.sub, fontSize: 11, fontFamily: FONT.numSemi },
+  rsrp: { fontSize: 32, lineHeight: 36, fontFamily: FONT.numHeavy, includeFontPadding: false },
+  status: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3, marginTop: 5 },
+  statusTxt: { fontSize: 11.5, fontWeight: '800' },
   // ٣. المربعات
-  tiles: { width: 86, gap: 6, paddingVertical: 8 },
-  tile: { flex: 1, borderRadius: 14, paddingHorizontal: 5, paddingVertical: 5, alignItems: 'center', justifyContent: 'center', gap: 1, overflow: 'hidden' },
-  tileLbl: { color: C.text, fontSize: 9, fontWeight: '800' },
-  tileRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  tileVal: { fontSize: 17, lineHeight: 21, fontFamily: FONT.numHeavy, includeFontPadding: false, flexShrink: 1 },
-  tileUnit: { color: C.sub, fontSize: 9, fontFamily: FONT.numSemi },
+  tiles: { width: 98, gap: 6, paddingTop: 8 },
+  tile: { height: 56, borderRadius: 14, paddingHorizontal: 6, paddingTop: 5, alignItems: 'center', overflow: 'hidden' },
+  tileLbl: { color: C.text, fontSize: 9.5, fontWeight: '800' },
+  tileRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
+  tileVal: { fontSize: 18, lineHeight: 22, fontFamily: FONT.numHeavy, includeFontPadding: false, flexShrink: 1 },
+  tileUnit: { color: C.text, fontSize: 10, fontFamily: FONT.numSemi },
+  tileSpark: { alignSelf: 'stretch', alignItems: 'flex-end', paddingRight: 4, height: 10 },
   // ٤. الشريط السفلي
-  metaBar: { flexDirection: 'row-reverse', marginHorizontal: 8, marginBottom: 8, borderRadius: 14, paddingVertical: 7 },
-  metaCell: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 2 },
+  metaBar: { flexDirection: 'row-reverse', marginHorizontal: 8, marginTop: 8, borderRadius: 14, paddingVertical: 7 },
+  metaCell: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 2 },
   metaSep: { borderRightWidth: 1, borderRightColor: C.cardBorder },
-  metaTxt: { color: C.text, fontSize: 11, fontFamily: FONT.numSemi, flexShrink: 1 },
+  metaTxt: { color: C.text, fontSize: 11.5, fontFamily: FONT.numSemi, flexShrink: 1 },
 });

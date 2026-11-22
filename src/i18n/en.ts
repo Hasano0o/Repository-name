@@ -1053,6 +1053,8 @@ export const EN: Record<string, string> = {
   'نحمّل شوي عشان يرجع الدمج…': 'Downloading a little to bring CA back…',
   'نعيد الاتصال بالشركة…': 'Reconnecting to the carrier…',
   'نشّط الدمج': 'Activate CA',
+  'السرعة الحالية': 'Current speed',
+  'لو ضعفت الإشارة رجّع للتلقائي': 'If the signal weakens, go back to auto',
   'SINR (النقاء)': 'SINR (clarity)',
   'RSRQ (الجودة)': 'RSRQ (quality)',
   'إشارة ممتازة': 'Excellent signal',
