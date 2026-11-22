@@ -1248,21 +1248,23 @@ export default function RouterDashboard() {
           </View>
         )}
 
+        {/* تعديل وحذف الراوتر جنب بعض (حسن ٢٢ نوفمبر: «يحتاج ترتيب أجمل») */}
         {!loading && info && (
-          <Pressable
-            onPress={() => router.push(`/add-router?id=${info.id}` as Href)}
-            style={s.editBtn}
-            accessibilityRole="button"
-            accessibilityLabel="تعديل الراوتر"
-          >
-            <Icon name="user" size={16} color={C.blue} />
-            <Text style={s.editBtnText}>تعديل الراوتر</Text>
-          </Pressable>
-        )}
-        {!loading && info && (
-          <Pressable onPress={onDelete}>
-            <Text style={s.deleteText}>حذف الراوتر من التطبيق</Text>
-          </Pressable>
+          <View style={s.manageRow}>
+            <Pressable onPress={() => router.push(`/add-router?id=${info.id}` as Href)} accessibilityRole="button" accessibilityLabel="تعديل الراوتر"
+              style={({ pressed }) => [s.manageBtn, s.manageEdit, pressed && { opacity: 0.8 }]}>
+              <View style={[s.manageIc, { backgroundColor: tBg('#2563eb1f') }]}><Icon name="settings" size={18} color={tFg('#2563eb')} stroke={2.3} /></View>
+              <View style={{ flexShrink: 1 }}>
+                <Text style={[s.manageTxt, { color: tFg('#2563eb') }]} numberOfLines={1}>تعديل الراوتر</Text>
+                <Text style={s.manageSub} numberOfLines={1}>الاسم · العنوان · كلمة المرور</Text>
+              </View>
+            </Pressable>
+            <Pressable onPress={onDelete} accessibilityRole="button" accessibilityLabel="حذف الراوتر من التطبيق"
+              style={({ pressed }) => [s.manageBtn, s.manageDel, pressed && { opacity: 0.8 }]}>
+              <View style={[s.manageIc, { backgroundColor: tBg('#e5484d1f') }]}><Icon name="trash" size={18} color={tFg('#e5484d')} stroke={2.3} /></View>
+              <Text style={[s.manageTxt, { color: tFg('#e5484d') }]} numberOfLines={1}>حذف</Text>
+            </Pressable>
+          </View>
         )}
 
         <StoreAd />
@@ -1468,6 +1470,17 @@ const s = sheet({
   blockedMac: { color: C.sub, fontSize: 11, textAlign: 'right' },
   unblockBtn: { borderColor: C.green, borderWidth: 1, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 },
   unblockText: { color: C.green, fontWeight: '800', fontSize: 12 },
+  manageRow: { flexDirection: 'row-reverse', gap: 10, marginTop: 4 },
+  manageBtn: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 10, borderRadius: 18, paddingVertical: 11, paddingHorizontal: 12,
+    backgroundColor: C.card, borderWidth: 1,
+    shadowColor: C.shadow, shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2,
+  },
+  manageEdit: { flex: 1, borderColor: tBd('#2563eb33') },
+  manageDel: { borderColor: tBd('#e5484d33'), paddingHorizontal: 16 },
+  manageIc: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  manageTxt: { fontWeight: '900', fontSize: 14.5, textAlign: 'right' },
+  manageSub: { color: C.sub, fontSize: 10.5, fontWeight: '600', textAlign: 'right', marginTop: 1 },
   editBtn: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
