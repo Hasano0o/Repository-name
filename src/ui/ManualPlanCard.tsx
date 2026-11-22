@@ -7,7 +7,7 @@ import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, TextInput, Pressable } from '../i18n/rn';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router, Href } from 'expo-router';
 import { GlassCard } from './GlassCard';
 import { C, tBg, tFg } from './theme';
 import { FONT } from './fonts';
@@ -24,7 +24,8 @@ const AGO: { n: number; label: string }[] = [{ n: 0, label: 'اليوم' }, { n:
 
 const fmtDate = (t: number) => { const d = new Date(t); return `${d.getDate()}/${d.getMonth() + 1}`; };
 
-export function ManualPlanCard({ routerId, refresh }: { routerId: string; refresh?: unknown }) {
+/** full = شاشة «باقتي» (كل المزايا ← الأجهزة والباقة، ٢٢ نوفمبر): مفتوحة دايماً، وبدون باقة تفتح الإضافة على طول */
+export function ManualPlanCard({ routerId, refresh, full }: { routerId: string; refresh?: unknown; full?: boolean }) {
   const [plan, setPlan] = useState<ManualPlan | null>(null);
   const [st, setSt] = useState<PlanStatus | null>(null);
   const [ready, setReady] = useState(false);
@@ -38,11 +39,12 @@ export function ManualPlanCard({ routerId, refresh }: { routerId: string; refres
 
   const load = useCallback(async () => {
     const [p, log, o] = await Promise.all([getManualPlan(routerId), getUsageLog(routerId), AsyncStorage.getItem(openKey).catch(() => null)]);
-    setOpen(o === '1');
+    setOpen(full || o === '1');
     setPlan(p);
+    if (full && !p) setEdit(true);
     setSt(p ? planStatus(p, log, Date.now()) : null);
     setReady(true);
-  }, [routerId, openKey]);
+  }, [routerId, openKey, full]);
 
   useFocusEffect(useCallback(() => { load().catch(() => {}); }, [load, refresh]));
 
@@ -115,7 +117,7 @@ export function ManualPlanCard({ routerId, refresh }: { routerId: string; refres
           <Text style={s.btnTxt}>احفظ</Text>
         </Pressable>
         <View style={s.linkRow}>
-          <Pressable onPress={() => setEdit(false)}><Text style={s.link}>إلغاء</Text></Pressable>
+          {!(full && !plan) && <Pressable onPress={() => setEdit(false)}><Text style={s.link}>إلغاء</Text></Pressable>}
           {!!plan && <Pressable onPress={remove}><Text style={[s.link, { color: tFg('#dc2626') }]}>حذف الباقة</Text></Pressable>}
         </View>
         <Text style={s.hint}>الاستهلاك يتحسب من عدّاد الراوتر، فممكن يختلف شوي عن رقم شركتك. ولما تخلص المدة تتجدد لحالها.</Text>
@@ -139,6 +141,7 @@ export function ManualPlanCard({ routerId, refresh }: { routerId: string; refres
   return (
     <GlassCard key={open ? 'o' : 'c'} title={`باقتي · ${plan.sizeGB} جيجا`} icon="📦" tint="#16a34a"
       defaultOpen={open}
+      collapsible={!full}
       subtitle={open ? undefined : `استهلكت ${fmtBytes(st.used)} · باقي ${fmtBytes(st.left)} · ${st.daysLeft} يوم`}
       onToggle={o => { setOpen(o); AsyncStorage.setItem(openKey, o ? '1' : '0').catch(() => {}); }}>
       <Pressable onPress={openEdit}>
@@ -196,4 +199,47 @@ const s = sheet({
   btnTxt: { color: '#fff', fontWeight: '800', fontSize: 15 },
   linkRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 10, paddingHorizontal: 4 },
   link: { color: C.blue, fontWeight: '800', fontSize: 13.5 },
+});
+
+/**
+ * صفحة الراوتر (اقتراح عضو ٢٢ نوفمبر): بدل بطاقة «باقتي» كاملة — سطر الاستهلاك بس، والضغط يفتح «باقتي».
+ * بدون باقة ما يطلع شي (الإضافة صارت في كل المزايا ← الأجهزة والباقة).
+ */
+export function PlanUsageStrip({ routerId, refresh }: { routerId: string; refresh?: unknown }) {
+  const [plan, setPlan] = useState<ManualPlan | null>(null);
+  const [st, setSt] = useState<PlanStatus | null>(null);
+  useFocusEffect(useCallback(() => {
+    let alive = true;
+    Promise.all([getManualPlan(routerId), getUsageLog(routerId)]).then(([p, log]) => {
+      if (!alive) return;
+      setPlan(p);
+      setSt(p ? planStatus(p, log, Date.now()) : null);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [routerId, refresh]));
+  if (!plan || !st) return null;
+  const col = st.pct >= 95 ? tFg('#dc2626') : st.pct >= 80 ? tFg('#ea580c') : tFg('#16a34a');
+  return (
+    <Pressable onPress={() => router.push(`/plan/${routerId}` as Href)} accessibilityRole="button" accessibilityLabel="باقتي"
+      style={({ pressed }) => [u.card, pressed && { opacity: 0.85 }]}>
+      <View style={u.top}>
+        <Text style={u.icon}>📦</Text>
+        <Text style={u.title}>استهلاك الباقة</Text>
+        <Text style={[u.used, { color: col }]}>{fmtBytes(st.used)}</Text>
+        <Text style={u.of}>من {plan.sizeGB} جيجا</Text>
+      </View>
+      <View style={s.track}><View style={[s.fill, { width: `${Math.max(2, Math.min(100, st.pct))}%`, backgroundColor: col }]} /></View>
+      <Text style={u.sub}>{st.pct >= 100 ? 'خلصت الباقة حسب عدّاد الراوتر' : `باقي ${fmtBytes(st.left)} · ${st.daysLeft} يوم للتجديد`}</Text>
+    </Pressable>
+  );
+}
+
+const u = sheet({
+  card: { backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: C.cardBorder, paddingHorizontal: 14, paddingVertical: 12 },
+  top: { flexDirection: 'row-reverse', alignItems: 'baseline', gap: 6 },
+  icon: { fontSize: 16 },
+  title: { color: C.text, fontWeight: '900', fontSize: 14, flex: 1, textAlign: 'right' },
+  used: { fontSize: 18, fontWeight: '900', fontFamily: FONT.num },
+  of: { color: C.sub, fontSize: 12, fontWeight: '700' },
+  sub: { color: C.sub, fontSize: 11.5, textAlign: 'right', marginTop: 6 },
 });

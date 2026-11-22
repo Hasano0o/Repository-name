@@ -8,7 +8,7 @@ import type { IconName } from './Icon';
 
 export interface FeatItem { key: string; title: string; icon: IconName; onPress: () => void }
 export interface FeatGroup { key: string; title: string; short: string; color: string; icon: IconName; hot?: boolean; items: FeatItem[] }
-export interface FeatFlags { cellular?: boolean; optic?: boolean; reboot?: boolean; network?: boolean; ussd?: boolean; sms?: boolean; antenna?: boolean }
+export interface FeatFlags { usage?: boolean; cellular?: boolean; optic?: boolean; reboot?: boolean; network?: boolean; ussd?: boolean; sms?: boolean; antenna?: boolean }
 
 export const CONTROL_DRIVERS = ['huawei-lte', 'zte', 'fiberhome', 'oppo', 'greenpacket', 'zyxel', 'demo'];
 
@@ -43,6 +43,7 @@ export function buildFeatureGroups(info: SavedRouter, f: FeatFlags | undefined, 
     {
       key: 'devices', title: 'الأجهزة والباقة', short: 'الأجهزة', color: '#7c3aed', icon: 'wifi', items: pick([
         { key: 'devices', title: 'الأجهزة', icon: 'phone', onPress: go(`/device/${rid}`) },
+        !!f?.usage && { key: 'plan', title: 'باقتي', icon: 'chart', onPress: go(`/plan/${rid}`) },
         { key: 'heavy', title: 'وش يثقّل نتك؟', icon: 'down', onPress: go(`/heavy/${rid}`) },
         cell && (!!f?.ussd || !!f?.sms) && { key: 'recharge', title: 'اشحن رصيدك', icon: 'spark', onPress: go(`/recharge/${rid}`) },
         notDevice && { key: 'wifi', title: 'شارك الواي فاي', icon: 'wifi', onPress: go(`/wifi/${rid}`) },

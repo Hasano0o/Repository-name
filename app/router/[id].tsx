@@ -36,7 +36,7 @@ import { LinkHealthCard } from '../../src/ui/LinkHealth';
 import { CongestionCard } from '../../src/ui/Congestion';
 import { DiagnosisCard } from '../../src/ui/Diagnosis';
 import { UsageRing } from '../../src/ui/UsageRing';
-import { ManualPlanCard } from '../../src/ui/ManualPlanCard';
+import { PlanUsageStrip } from '../../src/ui/ManualPlanCard';
 import { recordUsage } from '../../src/store/usageLog';
 import { DeviceRow } from '../../src/ui/DeviceRow';
 import { SyncIcon } from '../../src/ui/SyncIcon';
@@ -215,15 +215,16 @@ export default function RouterDashboard() {
   const [traffic, setTraffic] = useState<Traffic | null>(null);
   const [plan, setPlan] = useState<DataPlan | null>(null);
   const [loading, setLoading] = useState(true);
+  const hasUsage = !!usage;
   /** بطاقة «كل المزايا»: العدد الحقيقي + عيّنة من نفس أقسام الصفحة (featureGroups) */
   const allSummary = useMemo(() => {
     if (!info) return { sub: '', sample: [] as string[], rest: 0 };
-    const gs = buildFeatureGroups(info, feat, () => () => {}, () => {});
+    const gs = buildFeatureGroups(info, { ...feat, usage: hasUsage }, () => () => {}, () => {});
     const items = gs.flatMap(g => g.items);
     const sample = items.slice(0, 3).map(i => i.title);
     const sub = `${items.length} ميزة في ${gs.length} أقسام`;
     return { sub, sample, rest: Math.max(0, items.length - sample.length) };
-  }, [info, feat]);
+  }, [info, feat, hasUsage]);
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState('');
@@ -1136,7 +1137,8 @@ export default function RouterDashboard() {
               <ToolTile wide icon="game" color={tFg('#ec4899')} title="مُحسّن الألعاب" sub="أقل بنق للعبتك"
                 onPress={() => router.push(`/ping/${info.id}` as Href)} />
             </TileGrid>
-            {!!usage && <ManualPlanCard routerId={info.id} refresh={usage} />}
+            {/* اقتراح عضو ٢٢ نوفمبر: «باقتي» انتقلت لكل المزايا — هنا الاستهلاك بس (لو فيه باقة) */}
+            {!!usage && <PlanUsageStrip routerId={info.id} refresh={usage} />}
             {/* «كل المزايا» (١٦ نوفمبر — طلب حسن): باقي الأدوات بأيقونات في صفحة لحالها */}
             <Pressable onPress={() => router.push(`/features/${info.id}` as Href)} accessibilityRole="button" accessibilityLabel="كل المزايا" hitSlop={4}
               style={({ pressed }) => [s.allBtnWrap, pressed && { opacity: 0.88, transform: [{ scale: 0.98 }] }]}>
