@@ -981,7 +981,7 @@ export default function RouterDashboard() {
         )}
 
         {!loading && info && feat.cellular && (
-          <LinearGradient colors={showCards ? ['transparent', 'transparent'] : HERO_BG[noService ? 'poor' : level]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.heroX, showCards && s.heroCards]}>
+          <LinearGradient colors={HERO_BG[noService ? 'poor' : level]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.heroX, showCards && s.heroCards]}>
             {showCards
               ? <>
                 <TechCards signal={signal} onDetails={() => router.push(`/details/${info.id}` as Href)} />
@@ -1344,7 +1344,8 @@ const s = sheet({
   bandChips: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 4, marginVertical: 5, alignSelf: 'stretch' },
   bandChip: { backgroundColor: C.blueSoft, borderRadius: 14, paddingHorizontal: 6, paddingVertical: 2 },
   bandChipText: { color: C.blue, fontWeight: '800', fontSize: 12.5 },
-  heroCards: { padding: 0, borderWidth: 0, shadowOpacity: 0, elevation: 0, gap: 10, alignItems: 'stretch', borderRadius: 0 },
+  // الإطار الملوّن حسب المستوى رجع ورا البطاقات (حسن ٢٢ نوفمبر: «ما تتلون الخلفية مثل أول»)
+  heroCards: { padding: 10, gap: 10, alignItems: 'stretch' },
   heroX: { borderRadius: 26, padding: 18, gap: 6, borderWidth: 1, borderColor: tBd('#ffffff'), alignItems: 'center', shadowColor: C.shadow, shadowOpacity: 0.08, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
   heroMain: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   heroSide: { flex: 1, gap: 8, alignItems: 'stretch' },
