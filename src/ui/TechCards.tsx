@@ -16,7 +16,7 @@ import type { Signal } from '../drivers/types';
 import { LEVEL_COLOR, LEVEL_SOFT, Level, rsrpLevel, rsrqLevel, signalScore, parseBands, parseNrBands } from '../utils/signal';
 import { friendlyBand } from '../utils/bands';
 import { C, isDark, tBd, tBg } from './theme';
-import { sheet } from '../i18n';
+import { sheet, EN_MODE, tr } from '../i18n';
 import { FONT } from './fonts';
 
 type Tech = 'LTE' | 'NR';
@@ -172,7 +172,8 @@ function LevelBar({ pos, w, id }: { pos: number; w: number; id: string }) {
 function PanelBg({ w, h, id, colors }: { w: number; h: number; id: string; colors: [string, string] }) {
   const d = `M ${w} 0 L ${w * 0.02} 0 C ${w * 0.2} 0, ${w * 0.22} ${h * 0.3}, ${w * 0.27} ${h * 0.55} C ${w * 0.31} ${h * 0.8}, ${w * 0.36} ${h}, ${w * 0.5} ${h} L ${w} ${h} Z`;
   return (
-    <Svg width={w} height={h} style={{ position: 'absolute', top: 0, right: 0 }}>
+    // بالإنجليزي الصف ينقلب (اللوحة يسار) ← نقلب الخلفية معه
+    <Svg width={w} height={h} style={[{ position: 'absolute', top: 0 }, EN_MODE ? { left: 0, transform: [{ scaleX: -1 }] } : { right: 0 }]}>
       <Defs>
         <SvgGrad id={`pan${id}`} x1="0" y1="0" x2="1" y2="1">
           <Stop offset="0" stopColor={colors[1]} />
@@ -188,7 +189,7 @@ function PanelBg({ w, h, id, colors }: { w: number; h: number; id: string; color
 /** موجات خفيفة بخلفية البطاقة (تحت يمين) */
 function CardWaves({ color }: { color: string }) {
   return (
-    <Svg width="100%" height={70} viewBox="0 0 300 70" preserveAspectRatio="none" style={{ position: 'absolute', right: 0, bottom: 24, left: 0 }}>
+    <Svg width="100%" height={70} viewBox="0 0 300 70" preserveAspectRatio="none" style={[{ position: 'absolute', right: 0, bottom: 24, left: 0 }, EN_MODE && { transform: [{ scaleX: -1 }] }]}>
       <Path d="M120 70 C 170 30, 220 60, 300 20 L300 70 Z" fill={color} opacity={0.05} />
       <Path d="M150 70 C 200 45, 250 65, 300 40 L300 70 Z" fill={color} opacity={0.05} />
     </Svg>
@@ -220,8 +221,10 @@ function Tile({ icon, label, value, color, bg, onPress, spark }: {
       <Text style={s.tileLbl} numberOfLines={1} adjustsFontSizeToFit>{label}</Text>
       <View style={s.tileRow}>
         {icon}
-        <Text style={[s.tileVal, { color }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
-        <Text style={s.tileUnit}>dB</Text>
+        {/* الرقم والوحدة نص واحد (LTR) — بالإنجليزي الصف ينقلب فكانت dB تطلع قبل الرقم */}
+        <Text style={[s.tileVal, { color }]} numberOfLines={1} adjustsFontSizeToFit>
+          {'\u2066' + value.replace(/^\u200e/, '')}<Text style={s.tileUnit}>{' dB\u2069'}</Text>
+        </Text>
       </View>
       <View style={s.tileSpark}>{!!spark && <Spark data={spark} color={color} w={50} h={9} />}</View>
     </Pressable>
@@ -240,7 +243,8 @@ function TechRow({ r, onDetails, hist }: { r: Row; onDetails?: () => void; hist?
   const accent = TECH_ACCENT[r.tech];
   const bwN = num(r.bw);
   const iso = (x: string) => '⁨' + x + '⁩';
-  const meta = [bwN && `${bwN} MHz`, r.arfcn && `قناة ${r.arfcn}`, r.pci && `PCI ${r.pci}`].filter(Boolean).map(x => iso(String(x)));
+  // tr قبل العزل: النمط «قناة {0}» ما يتطابق والنص فيه علامات العزل
+  const meta = [bwN && `${bwN} MHz`, r.arfcn && tr(`قناة ${r.arfcn}`), r.pci && `PCI ${r.pci}`].filter(Boolean).map(x => iso(String(x)));
   return (
     <View style={s.card}>
       <CardWaves color={accent} />

@@ -16,7 +16,7 @@ import { getFeatCache, setFeatCache, RouterFeatures } from '../../src/store/feat
 import { Icon } from '../../src/ui/Icon';
 import { C, S, isDark } from '../../src/ui/theme';
 import { FONT } from '../../src/ui/fonts';
-import { sheet, tr } from '../../src/i18n';
+import { sheet, tr, EN_MODE } from '../../src/i18n';
 import { LabelCard } from '../../src/ui/LabelCard';
 import { buildFeatureGroups, FeatGroup } from '../../src/ui/featureGroups';
 
@@ -27,6 +27,8 @@ function lift(hex: string, amt = 0.45): string {
   return '#' + f(0) + f(2) + f(4);
 }
 const ink = (c: string) => (isDark ? lift(c) : c);
+/** حبات أقصر بالإنجليزي (العربي نفس اسم القسم المختصر) */
+const EN_CHIP: Record<string, string> = { all: 'All', hot: 'Top', signal: 'Signal', devices: 'Devices' };
 
 export default function Features() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -137,7 +139,7 @@ export default function Features() {
                 <Pressable key={g.key} onPress={() => jump(g.key)} accessibilityRole="button"
                   style={({ pressed }) => [s.chip, on && s.chipOn, pressed && { opacity: 0.8 }]}>
                   <Icon name={g.chipIcon} size={19} color={ic} stroke={2.3} />
-                  <Text style={[s.chipTxt, on && s.chipTxtOn]} numberOfLines={1} adjustsFontSizeToFit>{g.short}</Text>
+                  <Text style={[s.chipTxt, on && s.chipTxtOn]} numberOfLines={1} adjustsFontSizeToFit>{EN_MODE ? (EN_CHIP[g.key] ?? g.short) : g.short}</Text>
                 </Pressable>
               );
             })}
