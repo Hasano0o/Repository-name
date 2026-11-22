@@ -8,7 +8,8 @@ export type IconName =
   | 'eye' | 'eye-off'
   | 'antenna' | 'layers' | 'pin' | 'clock' | 'bell' | 'share'
   | 'trash' | 'plus' | 'compass' | 'check' | 'vibrate' | 'sound' | 'wifi' | 'login' | 'mic' | 'call' | 'hangup' | 'mic-off' | 'speaker' | 'earpiece'
-  | 'video' | 'video-off' | 'flip' | 'camera' | 'star' | 'target' | 'send' | 'mail' | 'sun' | 'moon' | 'globe' | 'search';
+  | 'video' | 'video-off' | 'flip' | 'camera' | 'star' | 'target' | 'send' | 'mail' | 'sun' | 'moon' | 'globe' | 'search'
+  | 'grid' | 'sliders' | 'fire' | 'router' | 'trend' | 'back';
 
 export function Icon({
   name, size = 20, color = C.sub, stroke = 2.0,
@@ -66,6 +67,12 @@ export function Icon({
       {name === 'flip' && <><Path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5" {...p} /><Path d="M20 4v4.5h-4.5" {...p} /><Path d="M20 12a8 8 0 0 1-13.7 5.6L4 15.5" {...p} /><Path d="M4 20v-4.5h4.5" {...p} /></>}
       {name === 'camera' && <><Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" {...p} /><Circle cx={12} cy={13} r={4} {...p} /></>}
       {name === 'search' && <><Circle cx={11} cy={11} r={7} {...p} /><Path d="M20 20l-3.6-3.6" {...p} /></>}
+      {name === 'grid' && <><Rect x={3} y={3} width={7.5} height={7.5} rx={2} {...p} /><Rect x={13.5} y={3} width={7.5} height={7.5} rx={2} {...p} /><Rect x={3} y={13.5} width={7.5} height={7.5} rx={2} {...p} /><Rect x={13.5} y={13.5} width={7.5} height={7.5} rx={2} {...p} /></>}
+      {name === 'sliders' && <><Path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0" {...p} /><Circle cx={16} cy={6} r={2} {...p} /><Circle cx={10} cy={12} r={2} {...p} /><Circle cx={18} cy={18} r={2} {...p} /></>}
+      {name === 'fire' && <Path d="M12 22c4 0 7-2.7 7-6.8 0-3.6-2.4-6-4.2-8.2-.5 2-1.6 3.2-2.8 3.6.4-3.4-1.2-6.4-4-8.6.2 3.6-3 5.8-3 10.2C5 19.3 8 22 12 22z" {...p} />}
+      {name === 'router' && <><Rect x={2.5} y={13} width={19} height={7} rx={2} {...p} /><Path d="M6 13V5M18 13V5M7 16.5h.01M11 16.5h.01" {...p} /></>}
+      {name === 'trend' && <><Path d="M3 3v18h18" {...p} /><Path d="M7 15l4-4 3 3 6-6" {...p} /><Path d="M15 8h5v5" {...p} /></>}
+      {name === 'back' && <Path d="M15 5l-7 7 7 7" {...p} />}
       {name === 'star' && <Polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" {...p} />}
       {name === 'sun' && <><Circle cx={12} cy={12} r={5} {...p} /><Path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" {...p} /></>}
       {name === 'moon' && <Path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" {...p} />}

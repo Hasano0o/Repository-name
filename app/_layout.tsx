@@ -101,7 +101,7 @@ const SCREEN_NAME: Record<string, string> = { details: 'التفاصيل', ...Ob
 // شاشات فيها عنوان كبير داخل الصفحة — ما نكرره في الشريط العلوي
 const OWN_TITLE = new Set(['aim/[id]', 'antenna/[id]', 'router/[id]']);
 // شاشات لها ترويسة كاملة خاصة (فيها زر الرجوع) — نخفي الشريط العلوي
-const NO_HEADER = new Set(['hunt/[id]']);
+const NO_HEADER = new Set(['hunt/[id]', 'features/[id]']);
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
