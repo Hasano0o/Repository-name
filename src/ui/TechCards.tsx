@@ -231,7 +231,8 @@ function Tile({ icon, label, value, color, bg, onPress, spark }: {
   );
 }
 
-const PANEL_W = 140, PANEL_H = 94, GAUGE_W = 136;
+// الإطار الملوّن رجع (بطاقة أضيق) — العدّاد كان يدخل على لوحة التقنية (صورة حسن ٢٢ نوفمبر)
+const PANEL_W = 126, PANEL_H = 92, GAUGE_W = 118;
 
 function TechRow({ r, onDetails, hist }: { r: Row; onDetails?: () => void; hist?: Hist }) {
   const b = num(r.band);
@@ -334,24 +335,24 @@ const s = sheet({
   },
   row: { flexDirection: 'row-reverse', alignItems: 'flex-start', paddingLeft: 8 },
   // ١. لوحة التقنية — المحتوى في يمين اللوحة
-  panel: { width: 84, height: PANEL_H, paddingTop: 9, paddingRight: 10, paddingLeft: 2, alignItems: 'center' },
+  panel: { width: 80, height: PANEL_H, paddingTop: 9, paddingRight: 9, paddingLeft: 2, alignItems: 'center' },
   panelTop: { alignSelf: 'stretch', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
   techPill: { borderRadius: 999, borderWidth: 1.5, borderColor: '#ffffffd9', paddingHorizontal: 7, paddingVertical: 0 },
   techPillTxt: { color: '#ffffff', fontSize: 12, fontFamily: FONT.numHeavy },
-  panelBand: { color: '#ffffff', fontSize: 30, lineHeight: 34, fontFamily: FONT.numHeavy, textAlign: 'center', includeFontPadding: false, marginTop: 4 },
+  panelBand: { color: '#ffffff', fontSize: 28, lineHeight: 32, fontFamily: FONT.numHeavy, textAlign: 'center', includeFontPadding: false, marginTop: 4 },
   panelMhz: { color: '#ffffffee', fontSize: 10.5, fontFamily: FONT.numSemi, textAlign: 'center' },
   // ٢. العدّاد
   mid: { flex: 1, alignItems: 'center', paddingTop: 8 },
   midHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, marginBottom: 2 },
   midLbl: { color: C.text, fontSize: 12.5, fontWeight: '800' },
   gauge: { width: GAUGE_W, alignItems: 'center' },
-  gaugeTxt: { position: 'absolute', left: 0, right: 0, top: 14, alignItems: 'center' },
+  gaugeTxt: { position: 'absolute', left: 0, right: 0, top: 12, alignItems: 'center' },
   gaugeUnit: { color: C.sub, fontSize: 11, fontFamily: FONT.numSemi },
-  rsrp: { fontSize: 32, lineHeight: 36, fontFamily: FONT.numHeavy, includeFontPadding: false },
+  rsrp: { fontSize: 30, lineHeight: 34, fontFamily: FONT.numHeavy, includeFontPadding: false },
   status: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3, marginTop: 5 },
   statusTxt: { fontSize: 11.5, fontWeight: '800' },
   // ٣. المربعات
-  tiles: { width: 98, gap: 6, paddingTop: 8 },
+  tiles: { width: 90, gap: 6, paddingTop: 8 },
   tile: { height: 56, borderRadius: 14, paddingHorizontal: 6, paddingTop: 5, alignItems: 'center', overflow: 'hidden' },
   tileLbl: { color: C.text, fontSize: 9.5, fontWeight: '800' },
   tileRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
