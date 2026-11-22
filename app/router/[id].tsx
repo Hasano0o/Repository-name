@@ -176,6 +176,15 @@ async function upgradeUnknown(r: SavedRouter): Promise<SavedRouter> {
   } catch { return r; }
 }
 
+/** لمسة لون خفيفة على خلفية الصفحة حسب مستوى الإشارة (حسن ٢٢ نوفمبر — بعد ما صارت البطاقات بيضاء) */
+const PAGE_BG: Record<string, [string, string, string]> = {
+  excellent: ['#e3f7ec', '#eef8f3', '#e8f6ff'],
+  good: ['#eaf2ff', '#f3efff', '#eaf9f3'],
+  fair: ['#fff1de', '#fff7ec', '#f5f0ff'],
+  poor: ['#ffe6e7', '#fff2f2', '#f6f0ff'],
+  unknown: ['#eaf2ff', '#f3efff', '#eaf9f3'],
+};
+
 export default function RouterDashboard() {
   const { id, welcome } = useLocalSearchParams<{ id: string; welcome?: string }>();
   // أول راوتر للمستخدم ← «كيف تبدأ» مرة وحدة (نشيل welcome من الرابط عشان الرجوع ما يعيدها)
@@ -783,7 +792,7 @@ export default function RouterDashboard() {
 
   return (
     <LinearGradient
-      colors={error || disconnected ? [C.dangerTop, C.dangerBottom] : [tBg('#eaf2ff'), tBg('#f3efff'), tBg('#eaf9f3')]}
+      colors={error || disconnected ? [C.dangerTop, C.dangerBottom] : PAGE_BG[noService ? 'poor' : level].map(tBg) as [string, string, string]}
       style={{ flex: 1 }}
     >
       <Stack.Screen options={{ title: tr(info?.name ?? 'الراوتر') }} />
