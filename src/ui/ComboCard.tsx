@@ -173,16 +173,14 @@ export function ComboCard({ r }: { r: SavedRouter }) {
         );
       })()}
 
-      {/* «نشّط الدمج» — بس لما ما فيه ثانوي */}
-      {!!pcc && (scc.length === 0 || !!act || !!actMsg) && (
+      {/* «نشّط الدمج» — دايماً (حسن ٢٢ نوفمبر)؛ والدمج شغال ← يأكّده «الدمج شغال» */}
+      {!!pcc && (
         <View style={{ gap: 6 }}>
-          {scc.length === 0 && (
-            <Pressable onPress={() => activate()} disabled={!!act} accessibilityRole="button" accessibilityLabel="نشّط الدمج"
-              style={({ pressed }) => [s.wake, pressed && { opacity: 0.8 }]}>
-              {act ? <ActivityIndicator size="small" color={SEC_ORANGE} /> : <Icon name="spark" size={16} color={SEC_ORANGE} />}
-              <Text style={s.wakeTxt}>{actLabel}</Text>
-            </Pressable>
-          )}
+          <Pressable onPress={() => activate(scc.length > 0)} disabled={!!act} accessibilityRole="button" accessibilityLabel="نشّط الدمج"
+            style={({ pressed }) => [s.wake, pressed && { opacity: 0.8 }]}>
+            {act ? <ActivityIndicator size="small" color={SEC_ORANGE} /> : <Icon name="spark" size={16} color={SEC_ORANGE} />}
+            <Text style={s.wakeTxt}>{actLabel}</Text>
+          </Pressable>
           {!!actMsg && !act && <Text style={[s.wakeMsg, { color: actMsg.ok ? '#12b76a' : C.sub }]}>{actMsg.text}</Text>}
         </View>
       )}

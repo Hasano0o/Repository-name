@@ -38,16 +38,18 @@ export function useCaActivate(r: SavedRouter | null, onBack: (w: WokeCa | null) 
     ]);
   };
 
-  /** skipBurst: الشاشة قرت النواقل بتحميل للتو وما فيه ثانوي ← نبدأ من إعادة الاتصال */
-  const activate = useCallback(async (skipBurst = false) => {
+  /** hadCa: الشاشة تعرض دمج الحين — لو التحميل أكّده نقول «الدمج شغال» بدل «رجع» */
+  const activate = useCallback(async (hadCa = false) => {
     if (!r || act) return;
     setMsg(null);
-    if (!skipBurst) {
-      setAct('burst');
-      const w = await wakeCa(r, true, true);
-      if (hasCa(w)) { onBack(w); done(true, 'رجع الدمج'); return; }
-    }
     setAct('burst');
+    const w0 = await wakeCa(r, true, true);
+    if (hasCa(w0)) {
+      const n = w0!.carriers.length;
+      onBack(w0);
+      done(true, hadCa ? `الدمج شغال — ${n} نواقل` : `رجع الدمج — ${n} نواقل`);
+      return;
+    }
     const caps = await withSession(r, async d => ({ rc: !!d.reconnectData, rb: !!d.reboot }), false).catch(() => ({ rc: false, rb: false }));
     if (!alive.current) return;
     if (!caps.rc) { offerReboot(r, caps.rb, false); return; }
@@ -65,7 +67,7 @@ export function useCaActivate(r: SavedRouter | null, onBack: (w: WokeCa | null) 
           }
           await new Promise(res => setTimeout(res, 12_000));
           const w = await wakeCa(r, true, true);
-          if (hasCa(w)) { onBack(w); done(true, 'رجع الدمج'); return; }
+          if (hasCa(w)) { onBack(w); done(true, `رجع الدمج — ${w!.carriers.length} نواقل`); return; }
           offerReboot(r, caps.rb, true);
         },
       },
