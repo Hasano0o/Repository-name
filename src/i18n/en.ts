@@ -1053,6 +1053,7 @@ export const EN: Record<string, string> = {
   'نحمّل شوي عشان يرجع الدمج…': 'Downloading a little to bring CA back…',
   'نعيد الاتصال بالشركة…': 'Reconnecting to the carrier…',
   'نشّط الدمج': 'Activate CA',
+  'ما فيه ثانوي — نشّط الدمج': 'No secondary — activate CA',
   'أداء أفضل وأقل بنق': 'Better performance, lower ping',
   'اختر أقرب سيرفر للعبتك عشان تاخذ أقل بنق': 'Pick the server closest to your game for the lowest ping',
   'أدوات أكثر': 'More tools',

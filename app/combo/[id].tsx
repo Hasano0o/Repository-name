@@ -18,6 +18,8 @@ import { GlassCard } from '../../src/ui/GlassCard';
 
 import { sheet } from '../../src/i18n';
 import { SEC_ORANGE } from '../../src/ui/ComboCard';
+import { useCaActivate } from '../../src/ui/useCaActivate';
+import { Icon } from '../../src/ui/Icon';
 import { comboPlan } from '../../src/utils/comboPlan';
 const LTE_ONLY = '03';
 /** 'any' = البرج يختار · 'none' = 4G فقط · قائمة = نسمح بهالترددات بس (وحدة أو أكثر) */
@@ -144,6 +146,11 @@ export default function ComboScreen() {
       if (mounted.current) { setBusy(false); setStatus(''); }
     }
   };
+
+  // «نشّط الدمج»: بعد الفحص وما فيه ثانوي ← إعادة الاتصال ثم إعادة التشغيل (بموافقته)
+  const onCaBack = useCallback((w: { carriers: Carrier[] } | null) => { if (w && mounted.current) setCarriers(w.carriers); }, []);
+  const ca = useCaActivate(info, onCaBack);
+  const noScc = !!carriers && carriers.length > 0 && !carriers.some(c => c.role === 'SCC');
 
   const nrModes = !!cfg?.modes.some(m => m.value === LTE_ONLY);
 
@@ -499,6 +506,14 @@ export default function ComboScreen() {
               <Pressable style={[s.btnGhost, busy && s.dim]} onPress={checkNow} disabled={busy}>
                 <Text style={s.btnGhostTxt}>افحص الدمج</Text>
               </Pressable>
+              {(noScc || !!ca.act) && (
+                <Pressable style={[s.caBtn, (busy || !!ca.act) && s.dim]} onPress={() => ca.activate(true)} disabled={busy || !!ca.act}
+                  accessibilityRole="button" accessibilityLabel="نشّط الدمج">
+                  {ca.act ? <ActivityIndicator size="small" color={SEC_ORANGE} /> : <Icon name="spark" size={16} color={SEC_ORANGE} />}
+                  <Text style={s.caBtnTxt}>{ca.act ? ca.label : 'ما فيه ثانوي — نشّط الدمج'}</Text>
+                </Pressable>
+              )}
+              {!!ca.msg && !ca.act && <Text style={[s.hint, { textAlign: 'center', color: ca.msg.ok ? '#12b76a' : C.sub }]}>{ca.msg.text}</Text>}
             </GlassCard>
 
             <GlassCard title="١. الأساسي (4G)" icon="⭐" tint={C.blueSoft} collapsible={false}>
@@ -614,6 +629,11 @@ export default function ComboScreen() {
 }
 
 const s = sheet({
+  caBtn: {
+    marginTop: 8, height: 44, borderRadius: 14, borderWidth: 1.5, borderColor: SEC_ORANGE + '88',
+    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6,
+  },
+  caBtnTxt: { color: SEC_ORANGE, fontSize: 14, fontWeight: '900' },
   sameBand: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: SEC_ORANGE + '88', backgroundColor: SEC_ORANGE + '12', borderRadius: 14, padding: 12, gap: 4, marginBottom: 4 },
   sameTitle: { color: SEC_ORANGE, fontWeight: '900', fontSize: 14.5, textAlign: 'right' },
   sameSub: { color: C.sub, fontSize: 12.5, lineHeight: 19, textAlign: 'right' },
