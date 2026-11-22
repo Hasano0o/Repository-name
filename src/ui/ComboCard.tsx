@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, } from 'react-native';
+import { ActivityIndicator, Alert } from 'react-native';
 import { View, Text, Pressable } from '../i18n/rn';
 import { useFocusEffect, router, Href } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SavedRouter } from '../store/routers';
-import { withSession } from '../store/sessions';
+import { withSession, routerWrite, dropSession } from '../store/sessions';
 import { Carrier } from '../drivers/types';
-import { getWoke, onWoke } from '../services/caWake';
+import { getWoke, onWoke, wakeCa, hasCa } from '../services/caWake';
 import { bandLabel, friendlyBand } from '../utils/bands';
 import { Icon } from './Icon';
 import { C, R, tBd, tBg } from './theme';
@@ -36,13 +36,68 @@ export function ComboCard({ r }: { r: SavedRouter }) {
   const [list, setList] = useState<Carrier[] | null>(null);
   const alive = useRef(true);
 
-  useFocusEffect(useCallback(() => {
-    alive.current = true;
+  const reload = useCallback(() => {
     withSession(r, async d => (d.getCarriers ? d.getCarriers() : []))
       .catch(() => [] as Carrier[])
       .then(l => { if (alive.current) setList(l); });
+  }, [r]);
+  useFocusEffect(useCallback(() => {
+    alive.current = true;
+    reload();
     return () => { alive.current = false; };
-  }, [r]));
+  }, [reload]));
+
+  // ═══ «نشّط الدمج» (طلب عضو ٢٢ نوفمبر): الراوتر يفصل الدمج وقت الخمول وأحياناً ما يرجع إلا بإعادة تشغيل ═══
+  // ١) تحميل ٨ ثواني ونقرأ النواقل (قراءة بس)  ٢) بموافقته: قطع البيانات ورجوعها  ٣) بموافقته: إعادة تشغيل
+  const [act, setAct] = useState<'' | 'burst' | 'reconnect'>('');
+  const [actMsg, setActMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const setDone = (ok: boolean, text: string) => { if (alive.current) { setAct(''); setActMsg({ ok, text }); } };
+  const offerReboot = (canReboot: boolean, afterReconnect: boolean) => {
+    const why = afterReconnect ? 'جرّبنا التحميل وإعادة الاتصال والدمج ما رجع.' : 'جرّبنا التحميل والدمج ما رجع.';
+    if (!canReboot) { setDone(false, `${why} البرج ممكن ما يعطي دمج الحين — جرّب بعد شوي أو أعد تشغيل الراوتر من زره.`); return; }
+    setDone(false, why);
+    Alert.alert('الدمج ما رجع', `${why}\n\nإعادة تشغيل الراوتر ترجّعه غالباً — النت ينقطع دقيقتين تقريباً.`, [
+      { text: 'لاحقاً', style: 'cancel' },
+      {
+        text: 'إعادة تشغيل', style: 'destructive', onPress: async () => {
+          try {
+            await routerWrite(r, d => d.reboot!(), { label: 'إعادة تشغيل' });
+            dropSession(r.id);
+            setDone(true, 'الراوتر يعيد التشغيل — ارجع بعد دقيقتين وشوف الدمج');
+          } catch (e: any) {
+            setDone(false, e?.message ?? String(e));
+          }
+        },
+      },
+    ]);
+  };
+  const activate = async () => {
+    if (act) return;
+    setActMsg(null);
+    setAct('burst');
+    if (hasCa(await wakeCa(r, true, true))) { reload(); setDone(true, 'رجع الدمج'); return; }
+    const caps = await withSession(r, async d => ({ rc: !!d.reconnectData, rb: !!d.reboot }), false).catch(() => ({ rc: false, rb: false }));
+    if (!alive.current) return;
+    if (!caps.rc) { offerReboot(caps.rb, false); return; }
+    setAct('');
+    Alert.alert('نعيد الاتصال بالشركة؟', 'التحميل ما رجّع الدمج. نقطع البيانات ونرجّعها — النت ينقطع حوالي ١٥ ثانية، وغالباً يرجع الدمج بدون إعادة تشغيل.', [
+      { text: 'لا', style: 'cancel', onPress: () => setDone(false, 'الدمج ما رجع بالتحميل') },
+      {
+        text: 'أعد الاتصال', onPress: async () => {
+          setAct('reconnect');
+          try {
+            await routerWrite(r, d => d.reconnectData!({ holdSecs: 8 }), { label: 'تنشيط الدمج' });
+          } catch (e: any) {
+            setDone(false, e?.message ?? String(e));
+            return;
+          }
+          await new Promise(res => setTimeout(res, 12_000));
+          if (hasCa(await wakeCa(r, true, true))) { reload(); setDone(true, 'رجع الدمج'); return; }
+          offerReboot(caps.rb, true);
+        },
+      },
+    ]);
+  };
 
   // الدمج وقت التحميل (services/caWake — صفحة الراوتر تقراه بتحميل قصير): لو الحين بدون ثانوي ونفس الأساسي ← نعرضه
   const [woke, setWoke] = useState(() => getWoke(r.id));
@@ -166,6 +221,20 @@ export function ComboCard({ r }: { r: SavedRouter }) {
         );
       })()}
 
+      {/* «نشّط الدمج» — بس لما ما فيه ثانوي */}
+      {!!pcc && (scc.length === 0 || !!act || !!actMsg) && (
+        <View style={{ gap: 6 }}>
+          {scc.length === 0 && (
+            <Pressable onPress={activate} disabled={!!act} accessibilityRole="button" accessibilityLabel="نشّط الدمج"
+              style={({ pressed }) => [s.wake, pressed && { opacity: 0.8 }]}>
+              {act ? <ActivityIndicator size="small" color={SEC_ORANGE} /> : <Icon name="spark" size={16} color={SEC_ORANGE} />}
+              <Text style={s.wakeTxt}>{act === 'burst' ? 'نحمّل شوي عشان يرجع الدمج…' : act === 'reconnect' ? 'نعيد الاتصال بالشركة…' : 'نشّط الدمج'}</Text>
+            </Pressable>
+          )}
+          {!!actMsg && !act && <Text style={[s.wakeMsg, { color: actMsg.ok ? '#12b76a' : C.sub }]}>{actMsg.text}</Text>}
+        </View>
+      )}
+
       {/* الزر */}
       <LinearGradient colors={['#2f6bff', '#6a4cff']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 0 }} style={s.btn}>
         <Text style={s.btnTxt}>غيّر الأساسي والثانوي</Text>
@@ -232,4 +301,10 @@ const s = sheet({
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6,
   },
   btnTxt: { color: '#ffffff', fontSize: 13.5, fontWeight: '900' },
+  wake: {
+    height: 40, borderRadius: 14, borderWidth: 1.5, borderColor: SEC_ORANGE + '88', backgroundColor: tBg('#fff4ec'),
+    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6,
+  },
+  wakeTxt: { color: SEC_ORANGE, fontSize: 13.5, fontWeight: '900' },
+  wakeMsg: { fontSize: 11.5, textAlign: 'center', fontWeight: '700' },
 });

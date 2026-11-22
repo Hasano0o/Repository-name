@@ -36,7 +36,11 @@ export function onWoke(fn: (id: string) => void): () => void {
 
 const scc = (l: Carrier[]) => l.filter(c => c.role === 'SCC').length;
 
-export async function wakeCa(r: SavedRouter, force = false): Promise<WokeCa | null> {
+/**
+ * heavy = زر «نشّط الدمج» (طلب عضو ٢٢ نوفمبر: الراوتر يفصل الدمج وقت الخمول وأحياناً ما يرجع إلا بإعادة تشغيل):
+ * تحميل أطول (٨ ثواني، حد ١٥ ميقا) عشان البرج يرجّع النواقل الثانوية — برضو قراءة بس.
+ */
+export async function wakeCa(r: SavedRouter, force = false, heavy = false): Promise<WokeCa | null> {
   if (running.has(r.id) || AppState.currentState !== 'active' || isRouterBusy(r)) return getWoke(r.id);
   const gap = (misses.get(r.id) ?? 0) >= 2 ? MISS_GAP : MIN_GAP;
   if (!force && Date.now() - (lastTry.get(r.id) ?? 0) < gap) return getWoke(r.id);
@@ -44,9 +48,9 @@ export async function wakeCa(r: SavedRouter, force = false): Promise<WokeCa | nu
   lastTry.set(r.id, Date.now());
   try {
     let stop = false;
-    const burst = trafficBurst(4500, 5_000_000, () => stop).catch(() => 0);
+    const burst = (heavy ? trafficBurst(8000, 15_000_000, () => stop) : trafficBurst(4500, 5_000_000, () => stop)).catch(() => 0);
     let best: WokeCa | null = null;
-    for (const wait of [1800, 1400, 1200]) {
+    for (const wait of heavy ? [2200, 1800, 1800, 1600] : [1800, 1400, 1200]) {
       await sleep(wait);
       const got = await withSession(r, async d => {
         const [c, s] = await Promise.all([
@@ -70,3 +74,6 @@ export async function wakeCa(r: SavedRouter, force = false): Promise<WokeCa | nu
     running.delete(r.id);
   }
 }
+
+/** في دمج الحين (قراءة قصيرة بعد التحميل)؟ */
+export const hasCa = (w: WokeCa | null) => !!w && scc(w.carriers) > 0;
