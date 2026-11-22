@@ -74,6 +74,7 @@ export function HomeHeader(p: HomeHeaderProps) {
 
   return (
     <Hero style={s.card}>
+      <View style={s.top}>
       <View style={s.ringWrap}>
         <Svg width={96} height={96} viewBox="0 0 96 96">
           <Circle cx={48} cy={48} r={44} fill="rgba(0,0,0,0.16)" />
@@ -124,15 +125,18 @@ export function HomeHeader(p: HomeHeaderProps) {
         )}
       </View>
 
+      </View>
+
+      {/* الأزرار صف تحت (تصميم حسن ٢٢ نوفمبر) بدل المربعين الجانبيين */}
       <View style={s.btns}>
-        <Pressable onPress={p.onAdd} accessibilityLabel="إضافة راوتر" hitSlop={6}
-          style={({ pressed }) => [s.btn, s.btnAdd, pressed && { opacity: 0.8 }]}>
+        <Pressable onPress={p.onAdd} accessibilityLabel="إضافة راوتر" hitSlop={4}
+          style={({ pressed }) => [s.btn, s.btnAdd, pressed && { opacity: 0.85 }]}>
           <Icon name="plus" size={18} color={P.blue} stroke={2.8} />
-          <Text style={[s.btnLbl, { color: P.blue }]}>راوتر</Text>
+          <Text style={[s.btnLbl, { color: P.blue }]}>أضف راوتر</Text>
         </Pressable>
-        <Pressable onPress={p.onExplore} accessibilityLabel="استكشاف جهاز غير مدعوم" hitSlop={6}
-          style={({ pressed }) => [s.btn, s.btnAlt, pressed && { opacity: 0.8 }]}>
-          <Icon name="compass" size={17} color="#ffffff" stroke={2.1} />
+        <Pressable onPress={p.onExplore} accessibilityLabel="استكشاف جهاز غير مدعوم" hitSlop={4}
+          style={({ pressed }) => [s.btn, s.btnAlt, pressed && { opacity: 0.85 }]}>
+          <Icon name="compass" size={18} color="#ffffff" stroke={2.2} />
           <Text style={[s.btnLbl, { color: '#ffffff' }]}>استكشف</Text>
         </Pressable>
       </View>
@@ -141,7 +145,8 @@ export function HomeHeader(p: HomeHeaderProps) {
 }
 
 const s = sheet({
-  card: { flexDirection: 'row-reverse', alignItems: 'center', gap: 14, paddingHorizontal: 16 },
+  card: { gap: 14, paddingHorizontal: 16 },
+  top: { flexDirection: 'row-reverse', alignItems: 'center', gap: 14 },
   ringWrap: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center' },
   ringTxt: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', paddingTop: 4 },
   num: { color: '#ffffff', fontSize: 26, fontWeight: '700', lineHeight: 30, fontFamily: FONT.bold },
@@ -161,9 +166,9 @@ const s = sheet({
   placeAsk: { borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.6)', backgroundColor: 'transparent' },
   placeTxt: { color: '#ffffff', fontSize: 11.5, fontWeight: '700', flexShrink: 1 },
   placeGo: { color: 'rgba(255,255,255,0.75)', fontSize: 10.5, fontWeight: '600' },
-  btns: { gap: 8 },
-  btn: { width: 54, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 1 },
-  btnLbl: { fontSize: 10, fontWeight: '800', lineHeight: 13 },
+  btns: { flexDirection: 'row-reverse', gap: 10 },
+  btn: { flex: 1, height: 44, borderRadius: 14, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  btnLbl: { fontSize: 14, fontWeight: '800' },
   btnAdd: { backgroundColor: '#ffffff' },
-  btnAlt: { backgroundColor: 'rgba(255,255,255,0.18)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
+  btnAlt: { backgroundColor: 'rgba(255,255,255,0.18)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.28)' },
 });

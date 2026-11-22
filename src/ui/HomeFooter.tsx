@@ -1,6 +1,6 @@
 /**
  * أسفل الرئيسية — مرتّب في ثلاث كتل بدل سبع بطاقات:
- *  ١) ثلاث مربعات: وضع الفني · جهاز جديد · ادعُ ربعك
+ *  ١) أربع مربعات: وضع الفني · مو مدعوم؟ · ادعُ ربعك · حلول المشاكل
  *  ٢) تواصل مع المطوّر: سطر واحد بأربع أيقونات
  *  ٣) الإعدادات: المظهر · اللغة · نسخة التطبيق (كلها في بطاقة وحدة)
  */
@@ -200,6 +200,7 @@ const APPSTORE_REVIEW = 'https://apps.apple.com/app/id6819877993?action=write-re
 
 export function HomeFooter({ onExplore }: { onExplore: () => void }) {
   const themeLabel = THEMES.find(t => t.id === THEME_PREF)?.a11y ?? '';
+  const [open, setOpen] = useState(false);
   return (
     <View style={{ gap: 12, marginTop: 4 }}>
       <View style={s.tiles}>
@@ -210,6 +211,8 @@ export function HomeFooter({ onExplore }: { onExplore: () => void }) {
           icon={<Icon name="compass" size={22} color={tFg('#ea580c')} stroke={2.2} />} onPress={onExplore} />
         <Tile title="ادعُ ربعك" sub="شارك الرابط" colors={['#f472b6', '#c0389b']}
           icon={<PeopleIcon c={tFg('#c0389b')} />} onPress={invite} />
+        <Tile title="حلول المشاكل" sub="قروب الدعم" colors={['#f87171', '#dc2626']}
+          icon={<Icon name="settings" size={22} color={tFg('#dc2626')} stroke={2.2} />} onPress={() => openWay('https://t.me/BandlyHelp')} />
       </View>
 
       {/* تقييم في App Store — رابط صفحة الكتابة مباشرة (مسموح عند Apple، بدون فلترة ولا مكافأة) */}
@@ -227,18 +230,6 @@ export function HomeFooter({ onExplore }: { onExplore: () => void }) {
         </Pressable>
       )}
 
-      <Pressable onPress={() => openWay('https://t.me/BandlyHelp')}
-        style={({ pressed }) => [s.card, s.contact, pressed && s.pressed]}>
-        <View style={[s.way, { backgroundColor: '#ef4444' }]}>
-          <Icon name="settings" size={17} color="#fff" stroke={2.2} />
-        </View>
-        <View style={s.rowTxt}>
-          <Text style={s.rowLabel}>حلول المشاكل</Text>
-          <Text style={s.rowValue}>قروب الدعم في تليجرام — اسأل ونساعدك</Text>
-        </View>
-        <View style={{ transform: [{ scaleX: -1 }] }}><Icon name="chevron" size={16} color={P.faint} /></View>
-      </Pressable>
-
       <View style={[s.card, s.contact]}>
         <View style={s.rowTxt}>
           <Text style={s.rowLabel}>تواصل مع المطوّر</Text>
@@ -254,7 +245,18 @@ export function HomeFooter({ onExplore }: { onExplore: () => void }) {
         </View>
       </View>
 
+      {/* الإعدادات مطوية — سطر واحد يفتحها (تصميم حسن ٢٢ نوفمبر) */}
       <View style={s.card}>
+        <Pressable onPress={() => setOpen(o => !o)} accessibilityRole="button" style={s.row}>
+          <View style={[s.rowIcon, { backgroundColor: tBg('#64748b22') }]}><Icon name="settings" size={17} color={tFg('#475569')} stroke={2.2} /></View>
+          <View style={s.rowTxt}>
+            <Text style={s.rowLabel}>الإعدادات</Text>
+            <Text style={s.rowValue} numberOfLines={1}>المظهر · اللغة · التشخيص · نسخة التطبيق</Text>
+          </View>
+          <Icon name={open ? 'up' : 'down'} size={16} color={P.faint} stroke={2.4} />
+        </Pressable>
+        {open && <>
+        <View style={s.sep} />
         <Row icon="sun" tint="#f59e0b" label="المظهر" value={themeLabel}>
           <Seg items={THEMES} value={THEME_PREF} onPick={t => { setThemePref(t); }} />
         </Row>
@@ -266,6 +268,7 @@ export function HomeFooter({ onExplore }: { onExplore: () => void }) {
         <DiagRow />
         {(desktop || Updates.isEnabled) && <View style={s.sep} />}
         <VersionRow />
+        </>}
       </View>
     </View>
   );
@@ -277,14 +280,14 @@ const SOFT = isDark
 
 const s = sheet({
   pressed: { opacity: 0.8, transform: [{ scale: 0.97 }] },
-  tiles: { flexDirection: 'row-reverse', gap: 10 },
+  tiles: { flexDirection: 'row-reverse', gap: 8 },
   tile: {
-    flex: 1, alignItems: 'center', gap: 4, paddingVertical: 16, paddingHorizontal: 6,
+    flex: 1, alignItems: 'center', gap: 3, paddingVertical: 14, paddingHorizontal: 4,
     backgroundColor: P.card, borderRadius: 22, ...SOFT,
   },
-  tileIcon: { width: 48, height: 48, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  tileTitle: { color: P.text, fontSize: 13, fontWeight: '800' },
-  tileSub: { color: P.sub, fontSize: 10.5, fontWeight: '600' },
+  tileIcon: { width: 44, height: 44, borderRadius: 15, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  tileTitle: { color: P.text, fontSize: 12, fontWeight: '800' },
+  tileSub: { color: P.sub, fontSize: 10, fontWeight: '600' },
 
   card: { backgroundColor: P.card, borderRadius: 22, ...SOFT, paddingHorizontal: 14, paddingVertical: 4 },
   contact: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, paddingVertical: 12 },

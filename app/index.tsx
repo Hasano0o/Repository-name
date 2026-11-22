@@ -312,55 +312,62 @@ export default function RoutersList() {
             : noService ? 'بلا شبكة — اضغط ورجّع الإشارة'
             : sig ? ['متصل', tech].filter(Boolean).join(' · ')
             : loading ? 'نقرأ الإشارة…' : '—';
+          // تصميم حسن ٢٢ نوفمبر: البطاقة كلها تدخل (بدون زر «دخول») · الترس والحذف في ⋯ · «متصل» أخضر دايماً،
+          // ولون المستوى على رقم الإشارة بس (كان الأحمر على «متصل» يلخبط)
+          const ok = !st?.error && !noService && !!sig;
+          const stateCol = st?.error || noService ? P.red : ok ? P.green : P.sub;
+          const rsrp = sig?.rsrp ?? sig?.nrRsrp;
+          const goIn = () => (hasPw && !/\(1080\d\d\)|كلمة/.test(st?.error ?? '') ? open(item.id) : edit(item.id));
+          const more = () => Alert.alert(item.name, undefined, [
+            { text: 'تعديل الراوتر', onPress: () => edit(item.id) },
+            { text: 'حذف الراوتر', style: 'destructive', onPress: () => onDelete(item) },
+            { text: 'إلغاء', style: 'cancel' },
+          ]);
           return (
-            <Pressable onPress={() => (hasPw && !/\(1080\d\d\)|كلمة/.test(st?.error ?? '') ? open(item.id) : edit(item.id))}
-              style={({ pressed }) => [s.card, s.cardSlim, pressed && { opacity: 0.9 }]}>
+            <View>
+            <Pressable onPress={goIn} accessibilityRole="button" accessibilityLabel={item.name}
+              style={({ pressed }) => [s.card, s.rCard, pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] }]}>
               <View style={s.row}>
-                <LinearGradient
-                  colors={sig && !noService ? [color, color + 'AA'] : noService || st?.error ? [P.red, P.red + 'AA'] : [P.heroA, P.heroB]}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                  style={s.avatar}
-                >
+                <View style={[s.rAvatar, { backgroundColor: tBg(stateCol + '1c') }]}>
                   {loading && !sig
-                    ? <ActivityIndicator size="small" color={tFg('#fff')} />
-                    : <Icon name="wifi" size={22} color={tFg('#fff')} stroke={2.1} />}
-                </LinearGradient>
-                <View style={{ flex: 1, alignItems: 'flex-end', gap: 4 }}>
+                    ? <ActivityIndicator size="small" color={stateCol} />
+                    : <Icon name={item.driverId === 'demo' ? 'spark' : 'wifi'} size={22} color={stateCol} stroke={2.3} />}
+                </View>
+                <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
                   <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
                     <Text style={s.name} numberOfLines={1}>{item.name}</Text>
-                    {item.driverId === 'demo' && (
-                      <View style={s.demoTag}><Text style={s.demoTagTxt}>🧪 تجريبي</Text></View>
-                    )}
+                    {item.driverId === 'demo' && <View style={s.demoTag}><Text style={s.demoTagTxt}>تجريبي</Text></View>}
                   </View>
                   <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6 }}>
-                    <View style={[s.stateDot, { backgroundColor: tone }]} />
-                    <Text style={[s.slimLine, { color: tone }]} numberOfLines={1}>{line}</Text>
-                  </View>
-                  {!st?.error && !noService && chipsOf.length > 0 && <BandChips chips={chipsOf} />}
-                  <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6, maxWidth: '100%' }}>
-                    {!!st?.operator && <OperatorBadge name={st.operator} small />}
-                    <Text style={[s.metaTxt, { flexShrink: 1 }]} numberOfLines={1}>{hostLabel(item.host)}</Text>
+                    <View style={[s.stateDot, { backgroundColor: stateCol }]} />
+                    <Text style={[s.slimLine, { color: stateCol }]} numberOfLines={1}>{line}</Text>
+                    {!!st?.operator && ok && <OperatorBadge name={st.operator} small />}
                   </View>
                 </View>
-                <View style={{ gap: 6, alignItems: 'center' }}>
-                  <Pressable style={s.iconBtnSm} onPress={() => edit(item.id)} hitSlop={6}>
-                    <Icon name="settings" size={16} color={P.sub} />
-                  </Pressable>
-                  <Pressable style={[s.iconBtnSm, s.delBtn]} onPress={() => onDelete(item)} hitSlop={6}>
-                    <Icon name="trash" size={16} color={P.red} />
-                  </Pressable>
-                </View>
+                <View style={s.moreSpace} />
+                <View style={s.flip}><Icon name="chevron" size={18} color={P.faint} stroke={2.4} /></View>
               </View>
-              <PrimaryBtn
-                small
-                text={hasPw ? (loading ? 'يتصل…' : 'دخول للراوتر') : 'إضافة بيانات الدخول'}
-                icon={hasPw ? 'login' : 'lock'}
-                busy={loading}
-                disabled={loading}
-                colors={hasPw ? [P.heroA, P.heroB] : [P.amber, tBg('#f97316')]}
-                onPress={() => (hasPw ? open(item.id) : edit(item.id))}
-              />
+              {ok && (chipsOf.length > 0 || rsrp !== undefined) && (
+                <View style={s.rFoot}>
+                  {chipsOf.length > 0 && <BandChips chips={chipsOf} />}
+                  {rsrp !== undefined && (
+                    <Text style={[s.rSig, { color: color }]} numberOfLines={1}>{`⁦${rsrp} dBm⁩ · ${LEVEL_LABEL[level]}`}</Text>
+                  )}
+                </View>
+              )}
+              {!ok && <Text style={s.metaTxt} numberOfLines={1}>{hostLabel(item.host)}</Text>}
+              {!hasPw && (
+                <View style={s.pwAsk}>
+                  <Icon name="lock" size={14} color={tFg('#c2410c')} stroke={2.3} />
+                  <Text style={s.pwAskTxt}>أضف بيانات الدخول — اضغط هنا</Text>
+                </View>
+              )}
             </Pressable>
+            {/* ⋯ برا زر البطاقة (زر داخل زر يخرب في الويب/الويندوز) */}
+            <Pressable onPress={more} hitSlop={10} accessibilityRole="button" accessibilityLabel="خيارات الراوتر" style={s.moreBtn}>
+              <Text style={s.moreDots}>⋯</Text>
+            </Pressable>
+            </View>
           );
         }}
       />
@@ -373,6 +380,15 @@ export default function RoutersList() {
 
 const s = sheet({
   cardSlim: { paddingVertical: 14, gap: 10 },
+  rCard: { paddingVertical: 13, gap: 10 },
+  rAvatar: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  moreSpace: { width: 32 },
+  moreBtn: { position: 'absolute', top: 21, left: 40, width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: P.soft },
+  moreDots: { color: P.sub, fontSize: 20, fontWeight: '900', lineHeight: 22 },
+  rFoot: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' },
+  rSig: { fontSize: 12, fontWeight: '800' },
+  pwAsk: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, alignSelf: 'flex-end', backgroundColor: tBg('#f9731614'), borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 },
+  pwAskTxt: { color: tFg('#c2410c'), fontSize: 12, fontWeight: '800' },
   slimLine: { fontSize: 13, fontWeight: '800', flexShrink: 1, textAlign: 'right' },
   iconBtnSm: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: P.border, backgroundColor: P.soft },
   theme: {
