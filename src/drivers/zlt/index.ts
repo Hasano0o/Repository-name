@@ -22,12 +22,16 @@ import { isLanHost } from '../../utils/host';
 import { buildSnapshot } from '../../utils/snapshot';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import type { ModelProfile } from '../models';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ZLT_CGI, ZCMD, isZltPage, parseZlt, isNoAuth, zltBody, signalFrom, caCellsFrom, loginFailMsg, str, zltModes, zltModeCode, AT_READ_ONLY, atBody, atText } from './parse';
 
 export const zltPass = (token: string, pw: string) => bytesToHex(sha256(utf8ToBytes(token + pw)));
 
 /** أوامر/صفحات تغيّر شي — الجامع ما يفتحها */
 const ZLT_DANGER = /reboot|reset|restore|factory|upload|upgrade|logout/i;
+
+/** أوامر الفحص — GET بس (قراءة) */
+const ZLT_PROBE = [['GET_SUPPORT_BANDS', 157], ['LOCK_BAND', 161], ['LOCK_PHY_CELL', 160], ['GET_NEIGHBOR_INFO', 282]] as const;
 
 export class ZltDriver implements RouterDriver {
   readonly id = 'zlt';
@@ -147,6 +151,48 @@ export class ZltDriver implements RouterDriver {
     }
     await markBadPassword(key, null);
     this.creds = { user, password };
+    // فحص قراءة بس مرة وحدة لكل موديل/نسخة — يوصل الرسيفر لحاله (العضو ما يرسل شي)
+    const pt = setTimeout(() => { this.probeOnce().catch(() => {}); }, 4000);
+    (pt as any)?.unref?.();
+  }
+
+  /**
+   * ٢٢ نوفمبر: صفحة X300A ما فيها تثبيت ترددات ولا برج (الصفحات 404) والعضو طفش من إرسال الملفات.
+   * نجمع لحالنا — قراءة بس، مرة وحدة لكل موديل ونسخة: نوع المودم (ATI/CGMM/CGMR) + ردود GET لـ
+   * GET_SUPPORT_BANDS 157 · LOCK_BAND 161 · LOCK_PHY_CELL 160 · GET_NEIGHBOR_INFO 282 (method GET = قراءة، مثل صفحاتهم).
+   * ← سجل التشخيص + reportError('zlt-probe') اللي يرسل السجل للرسيفر تلقائي. ما نرسل POST لأي أمر تثبيت.
+   */
+  private probing = false;
+  async probeOnce(): Promise<boolean> {
+    if (this.probing || !this.sid) return false;
+    this.probing = true;
+    try {
+      if (!this.info) {
+        try { const j = await this.read(ZCMD.DEVICE_VERSION_INFO); this.info = { model: str(j.module), fw: str(j.modversion), imei: str(j.imei) }; } catch {}
+      }
+      const key = `bandly.zltProbe.${this.info?.model ?? 'zlt'}.${this.info?.fw ?? ''}`;
+      try { if (await AsyncStorage.getItem(key)) return false; } catch {}
+      let modem: string | undefined;
+      try { modem = await this.modemInfo(); } catch {}
+      const parts: string[] = [];
+      for (const [name, c] of ZLT_PROBE) {
+        try {
+          const r = await this.cmd(c, 'GET');
+          const t = r.text.replace(/\s+/g, ' ').replace(/\b\d{14,17}\b/g, '«رقم»').slice(0, 700);
+          diag(`[zlt] فحص ${name} (${c}) → ${r.status} · ${t}`);
+          parts.push(`${c}:${r.j && typeof r.j === 'object' ? Object.keys(r.j).slice(0, 5).join('/') || '{}' : r.status}`);
+        } catch (e: any) {
+          diag(`[zlt] فحص ${name} (${c}) ✗ ${String(e?.message ?? e).slice(0, 60)}`);
+          parts.push(`${c}:✗`);
+        }
+      }
+      try { await AsyncStorage.setItem(key, new Date().toISOString()); } catch {}
+      try {
+        const { reportError } = await import('../../services/errors');
+        await reportError('zlt-probe', `${this.info?.model ?? 'ZLT'} ${this.info?.fw ?? ''} · مودم: ${modem ?? '—'} · ${parts.join(' · ')}`, { driverName: this.name });
+      } catch {}
+      return true;
+    } finally { this.probing = false; }
   }
 
   async logout(): Promise<void> { /* ما نرسل خروج — الجلسة تنتهي لحالها */ }

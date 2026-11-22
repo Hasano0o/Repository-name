@@ -80,6 +80,11 @@ function zlt(pw: string, httpsOnly = false) {
       assert.ok(['ATI', 'AT+CGMM', 'AT+CGMR'].includes(at), 'أمر AT مو قراءة: ' + at);
       return res(JSON.stringify({ flag: at === 'ATI' ? 'MediaTek\r\nT750\r\nOK' : at === 'AT+CGMM' ? 'T750\r\nOK' : 'V1.2\r\nOK' }));
     }
+    if ([157, 161, 160, 282].includes(b.cmd)) {
+      assert.equal(b.method, 'GET', 'الفحص قراءة بس: cmd ' + b.cmd);
+      log.push(`probe ${b.cmd}`);
+      return res(JSON.stringify(b.cmd === 161 ? { lock_band_enable: '0', lte_band: '1,3,7', imei: '869777080435608' } : { ok: '1' }));
+    }
     if (b.cmd === 256) {
       if (b.method === 'POST') { nm = String(b.networkMode); return res('{"message":"0"}'); }
       return res(JSON.stringify({ display_mode: '1E', networkMode: nm }));
@@ -179,4 +184,20 @@ test('ZLT: تعريف المودم بأوامر AT قراءة بس (ATI/CGMM/CGM
   const det = await d.getDeviceDetails();
   assert.match(det.hardware ?? '', /ATI: MediaTek · T750/);
   assert.throws(() => P.atBody('s', 'AT+QNWLOCK'), /مو مسموح/);
+});
+
+test('ZLT: فحص قراءة بس مرة وحدة بعد الدخول (المودم + 157/161/160/282 بـ GET) — والمرة الثانية ما يعيد', async () => {
+  const r = zlt('admin');
+  const d = new ZltDriver();
+  await d.login('192.168.0.1', 'admin', 'admin', { fresh: true });
+  assert.equal(await d.probeOnce(), true);
+  for (const c of [157, 161, 160, 282]) assert.ok(r.log.includes(`probe ${c}`), 'ما انفحص ' + c);
+  assert.ok(r.log.includes('cmd 270'), 'نوع المودم');
+  const n = r.log.filter(x => x.startsWith('probe')).length;
+  assert.equal(await d.probeOnce(), false, 'نفس الموديل والنسخة ← ما نعيد');
+  assert.equal(r.log.filter(x => x.startsWith('probe')).length, n);
+  // سجل التشخيص فيه الردود بدون الأرقام الطويلة (IMEI)
+  const log = require('../src/services/diag').diagDump('x');
+  assert.match(log, /فحص LOCK_BAND \(161\)/);
+  assert.ok(!log.includes('869777080435608'));
 });
