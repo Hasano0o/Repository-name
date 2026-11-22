@@ -2381,6 +2381,7 @@ export const EN: Record<string, string> = {
 export const EN_PATTERNS: Record<string, string> = {
   'آخر ٣٠ يوم — منهم {0} هالأسبوع{1}': 'Last 30 days — {0} this week{1}',
   'آخر ٣٠ يوم — منهم {0} هالأسبوع': 'Last 30 days — {0} this week',
+  '{0} ميزة في {1} أقسام': '{0} features in {1} sections',
   'بنقهم: {0}ms': 'Their ping: {0}ms',
   'الراوتر يعيد الاتصال على «{0}» — طبيعي ياخذ وقت (باقي {1})': 'The router is reconnecting on “{0}” — this normally takes a while ({1} left)',
   'الراوتر ما اتصل على «{0}» خلال {1} دقيقة، فرجعنا الإعداد السابق.\n\nغالباً ما فيه تغطية لهالوضع عندك (مثلاً 5G فقط بدون برج 5G قريب).': 'The router didn\'t connect on “{0}” within {1} min, so we restored the previous setting.\n\nMost likely there\'s no coverage for this mode where you are (e.g. 5G only with no 5G tower nearby).',

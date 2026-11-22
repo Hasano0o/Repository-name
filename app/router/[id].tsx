@@ -1,5 +1,5 @@
 import { sendAfterLoginPagesFor, fullDumpNeeded, sendFullRouterFiles } from '../../src/services/authDump';
-import { useCallback, useEffect, useRef, useState, ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator, Alert, LayoutAnimation, RefreshControl, AppState } from 'react-native';
 import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
@@ -28,6 +28,7 @@ import { TechCards, techRows, Bars } from '../../src/ui/TechCards';
 import { RadarPoint } from '../../src/ui/SignalRadar';
 import { MetricRings, RingSpec } from '../../src/ui/MetricRing';
 import { Icon, IconName } from '../../src/ui/Icon';
+import { buildFeatureGroups } from '../../src/ui/featureGroups';
 import { HeroCard, MetricCard, Section, TileGrid, ToolTile, GroupTitle } from '../../src/ui/Cards';
 import { buildAdvice } from '../../src/utils/advice';
 import { linkHealth } from '../../src/utils/linkHealth';
@@ -214,6 +215,15 @@ export default function RouterDashboard() {
   const [traffic, setTraffic] = useState<Traffic | null>(null);
   const [plan, setPlan] = useState<DataPlan | null>(null);
   const [loading, setLoading] = useState(true);
+  /** بطاقة «كل المزايا»: العدد الحقيقي + عيّنة من نفس أقسام الصفحة (featureGroups) */
+  const allSummary = useMemo(() => {
+    if (!info) return { sub: '', sample: [] as string[], rest: 0 };
+    const gs = buildFeatureGroups(info, feat, () => () => {}, () => {});
+    const items = gs.flatMap(g => g.items);
+    const sample = items.slice(0, 3).map(i => i.title);
+    const sub = `${items.length} ميزة في ${gs.length} أقسام`;
+    return { sub, sample, rest: Math.max(0, items.length - sample.length) };
+  }, [info, feat]);
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState('');
@@ -1128,15 +1138,26 @@ export default function RouterDashboard() {
             </TileGrid>
             {!!usage && <ManualPlanCard routerId={info.id} refresh={usage} />}
             {/* «كل المزايا» (١٦ نوفمبر — طلب حسن): باقي الأدوات بأيقونات في صفحة لحالها */}
-            <Pressable onPress={() => router.push(`/features/${info.id}` as Href)} accessibilityRole="button" hitSlop={4}
+            <Pressable onPress={() => router.push(`/features/${info.id}` as Href)} accessibilityRole="button" accessibilityLabel="كل المزايا" hitSlop={4}
               style={({ pressed }) => [s.allBtnWrap, pressed && { opacity: 0.88, transform: [{ scale: 0.98 }] }]}>
-              <LinearGradient colors={['#2f6bff', '#6d4dff']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={s.allBtn}>
-                <View style={s.allIcon}><Icon name="layers" size={24} color="#fff" stroke={2.2} /></View>
-                <View style={{ flex: 1, alignItems: 'flex-end', gap: 2 }}>
-                  <Text style={s.allTitle}>كل المزايا</Text>
-                  <Text style={s.allSub} numberOfLines={1}>{feat.cellular ? 'آي بي جديد · مركز التحكم · السرعة · والمزيد' : 'الواي فاي · الأجهزة · ملفاتي · والمزيد'}</Text>
+              <LinearGradient colors={['#4f46e5', '#6d4dff']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={s.allBtn}>
+                <View style={s.allTop}>
+                  <View style={s.allIcon}><Icon name="layers" size={22} color="#fff" stroke={2.2} /></View>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={s.allTitle} numberOfLines={1}>كل المزايا</Text>
+                    <Text style={s.allSub} numberOfLines={1}>{allSummary.sub}</Text>
+                  </View>
+                  <View style={s.allOpen}>
+                    <Text style={s.allOpenTxt}>افتح</Text>
+                    <View style={{ transform: [{ rotate: '180deg' }] }}><Icon name="chevron" size={14} color="#3c3489" stroke={2.8} /></View>
+                  </View>
                 </View>
-                <View style={{ transform: [{ rotate: '180deg' }] }}><Icon name="chevron" size={20} color="#fff" stroke={2.6} /></View>
+                <View style={s.allChips}>
+                  {allSummary.sample.map(t => (
+                    <View key={t} style={s.allChip}><Text style={s.allChipTxt} numberOfLines={1}>{t}</Text></View>
+                  ))}
+                  {allSummary.rest > 0 && <View style={s.allChip}><Text style={s.allChipTxt}>+{allSummary.rest}</Text></View>}
+                </View>
               </LinearGradient>
             </Pressable>
           </>
@@ -1230,10 +1251,16 @@ export default function RouterDashboard() {
 
 const s = sheet({
   allBtnWrap: { borderRadius: 22, shadowColor: '#2f6bff', shadowOpacity: 0.25, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
-  allBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, borderRadius: 22, paddingVertical: 15, paddingHorizontal: 16 },
-  allIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
-  allTitle: { color: '#fff', fontFamily: FONT.bold, fontSize: 17 },
-  allSub: { color: 'rgba(255,255,255,0.88)', fontFamily: FONT.medium, fontSize: 11.5 },
+  allBtn: { borderRadius: 22, paddingVertical: 14, paddingHorizontal: 16 },
+  allTop: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
+  allIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  allTitle: { color: '#fff', fontFamily: FONT.bold, fontSize: 17, textAlign: 'right', alignSelf: 'stretch' },
+  allSub: { color: 'rgba(255,255,255,0.85)', fontFamily: FONT.medium, fontSize: 12, textAlign: 'right', alignSelf: 'stretch' },
+  allOpen: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: '#fff', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
+  allOpenTxt: { color: '#3c3489', fontFamily: FONT.bold, fontSize: 13 },
+  allChips: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6, marginTop: 12 },
+  allChip: { backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 9, paddingHorizontal: 9, paddingVertical: 4 },
+  allChipTxt: { color: '#fff', fontFamily: FONT.medium, fontSize: 11.5 },
   moveBar: { backgroundColor: C.blueSoft, borderColor: C.blue, borderWidth: 1, borderRadius: 14, padding: 12 },
   moveText: { color: C.blue, fontWeight: '800', fontSize: 13, textAlign: 'right', lineHeight: 20 },
   page: { padding: 13, gap: 10 },

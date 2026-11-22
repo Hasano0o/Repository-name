@@ -3,7 +3,7 @@
  * بالعربي تمرّر كل شي مثل ما هو، وبالإنجليزي تترجم النص وتقلب الاتجاه (row-reverse ← row، يمين ← يسار).
  * كل ملفات التطبيق تستوردها من هنا بدل react-native.
  */
-import { Children } from 'react';
+import { Children, forwardRef } from 'react';
 import {
   View as RNView, Text as RNText, TextInput as RNTextInput, Pressable as RNPressable, ScrollView as RNScrollView,
 } from 'react-native';
@@ -41,9 +41,10 @@ function PressableW(p: any) {
   const a11y = EN_MODE && typeof p.accessibilityLabel === 'string' ? tr(p.accessibilityLabel) : p.accessibilityLabel;
   return <RNPressable {...p} style={style} accessibilityLabel={a11y} />;
 }
-function ScrollViewW(p: any) {
-  return <RNScrollView {...p} style={fx(p.style)} contentContainerStyle={fx(p.contentContainerStyle)} />;
-}
+// forwardRef: «كل المزايا» تنزل للقسم بـ scrollTo — بالإنجليزي كان الـ ref يضيع
+const ScrollViewW = forwardRef<RNScrollView, any>(function ScrollViewW(p, ref) {
+  return <RNScrollView ref={ref} {...p} style={fx(p.style)} contentContainerStyle={fx(p.contentContainerStyle)} />;
+});
 
 export const Text = (EN_MODE ? TextW : RNText) as unknown as typeof RNText;
 export const View = (EN_MODE || isDark ? ViewW : RNView) as unknown as typeof RNView;
