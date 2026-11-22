@@ -3,7 +3,7 @@ import { RefreshControl, ActivityIndicator, Dimensions, Image } from 'react-nati
 import { ScrollView, View, Text, Pressable } from '../../src/i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router, Href } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect, router, Href } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import { SavedRouter, getRouter } from '../../src/store/routers';
@@ -104,6 +104,9 @@ export default function AntennaAdvisor() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const alive = useRef(true);
+  /** آخر نواقل/أبراج (القراءة المباشرة تجيب الإشارة بس — أخف على الراوتر) */
+  const extra = useRef<{ carriers: Carrier[]; cells: CellTower[] }>({ carriers: [], cells: [] });
+  const [live, setLive] = useState(false);
 
   const load = useCallback(async (r: SavedRouter) => {
     setError('');
@@ -115,6 +118,7 @@ export default function AntennaAdvisor() {
         return { s, carriers, cells };
       });
       if (sigData.rsrp === undefined) throw new Error('ما قدرنا نقرأ الإشارة من الراوتر.');
+      extra.current = { carriers, cells };
       if (alive.current) {
         setSig(sigData);
         setAdv(adviseAntenna(sigData, carriers, cells));
@@ -137,6 +141,28 @@ export default function AntennaAdvisor() {
     })();
     return () => { alive.current = false; };
   }, [id, load]);
+
+  // قراءة مباشرة كل ٣ ثواني والشاشة مفتوحة (حسن ٢٣ نوفمبر: «ما تتغير القراءة حتى إذا حركت الراوتر»)
+  useFocusEffect(useCallback(() => {
+    if (!info) return;
+    let busy = false, stop = false;
+    const tick = async () => {
+      if (busy || stop) return;
+      busy = true;
+      try {
+        const s = await withSession(info, async d => (d.getSignal ? d.getSignal() : ({} as Signal)));
+        if (!stop && alive.current && s.rsrp !== undefined) {
+          setSig(s);
+          setAdv(adviseAntenna(s, extra.current.carriers, extra.current.cells));
+          setLive(true);
+        }
+      } catch {
+        if (!stop) setLive(false);
+      } finally { busy = false; }
+    };
+    const t = setInterval(tick, 3000);
+    return () => { stop = true; clearInterval(t); setLive(false); };
+  }, [info]));
 
   const toggleAnt = async () => {
     const v = !hasAnt;
@@ -236,7 +262,7 @@ export default function AntennaAdvisor() {
                 </View>
                 <View style={{ flex: 1, alignItems: 'flex-end' }}>
                   <Text style={g.ringsTitle}>التفاصيل التقنية</Text>
-                  <Text style={g.ringsSub}>مؤشرات الإشارة الحالية</Text>
+                  <Text style={g.ringsSub}>{live ? 'مؤشرات الإشارة الحالية · مباشر ●' : 'مؤشرات الإشارة الحالية'}</Text>
                 </View>
               </View>
               <View style={g.grid2x2}>

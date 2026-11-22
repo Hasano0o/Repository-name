@@ -92,6 +92,18 @@ export default function DetailsScreen() {
     return () => { alive.current = false; };
   }, [id, load]));
 
+  // تتحدث كل ٣ ثواني والشاشة مفتوحة (حسن ٢٣ نوفمبر: القراءة ما تتغير لما يحرك الراوتر)
+  useFocusEffect(useCallback(() => {
+    if (!info) return;
+    let busy = false;
+    const t = setInterval(async () => {
+      if (busy) return;
+      busy = true;
+      try { await load(info); } finally { busy = false; }
+    }, 3000);
+    return () => clearInterval(t);
+  }, [info, load]));
+
   const onRefresh = async () => {
     if (!info) return;
     setRefreshing(true);
