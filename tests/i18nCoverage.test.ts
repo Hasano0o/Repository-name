@@ -38,7 +38,7 @@ const DONE = [
   'src/ui/GameIntro.tsx',
   'src/ui/GameBadge.tsx',
   // عدّة الألياف (٢٣ نوفمبر)
-  'app/planspeed/[id].tsx', 'app/rooms/[id].tsx', 'app/fiberkit.tsx', 'src/ui/FiberHero.tsx',
+  'app/planspeed/[id].tsx', 'app/rooms/[id].tsx', 'app/fiberkit.tsx', 'src/ui/FiberHero.tsx', 'app/wifiboost/[id].tsx',
 ];
 
 // ═══ القاموس نفسه ═══

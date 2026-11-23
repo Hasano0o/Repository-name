@@ -11,6 +11,7 @@ import { sheet } from '../src/i18n';
 
 const TOOLS: { path: string; title: string; sub: string; icon: IconName; grad: [string, string] }[] = [
   { path: '/planspeed/none', title: 'سرعتك مقابل باقتك', sub: 'توصلك سرعة باقتك؟ ولو لا: من الواي فاي ولا من الشركة', icon: 'speed', grad: ['#0d9488', '#14b8a6'] },
+  { path: '/wifiboost/none', title: 'سرّع واي فايك', sub: 'وش اللي يبطّئ الواي فاي في بيتك، وكيف تصلّحه', icon: 'spark', grad: ['#f97316', '#fb923c'] },
   { path: '/rooms/none', title: 'الواي فاي بالغرف', sub: 'قِس كل غرفة وشوف وين يضعف الواي فاي ووين تحط المقوّي', icon: 'wifi', grad: ['#2f6bff', '#6a4cff'] },
 ];
 

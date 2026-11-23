@@ -81,6 +81,7 @@ const SCREENS: [string, string][] = [
   ['planspeed/[id]', 'سرعتك مقابل باقتك'],
   ['rooms/[id]', 'الواي فاي بالغرف'],
   ['fiberkit', 'بدون دخول الراوتر'],
+  ['wifiboost/[id]', 'سرّع واي فايك'],
   ['network/[id]', 'إعدادات الشبكة'],
   ['carriers/[id]', 'الناقلات النشطة'],
   ['places/[id]', 'مقارنة الأماكن'],
