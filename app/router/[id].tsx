@@ -20,7 +20,7 @@ import {
   rsrpLevel, rsrqLevel, sinrLevel, rssiLevel, isNoService } from '../../src/utils/signal';
 import { fmtRate, fmtDuration, fmtBytes } from '../../src/utils/format';
 import {addSample, stability } from '../../src/store/history';
-import { C, tBd, tBg, tFg, isDark } from '../../src/ui/theme';
+import { C, tBd, tBg, tFg, isDark, glow } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { SignalRing } from '../../src/ui/SignalRing';
 import { ArcGauge } from '../../src/ui/ArcGauge';
@@ -93,6 +93,20 @@ const featuresOf = (d: RouterDriver): Features => ({
   optic: !!d.getOptic,
 });
 
+/** بانر النصيحة (٢٣ نوفمبر): سطر تحت العنوان + أيقونة لكل وجهة */
+const CTA_SUB: Partial<Record<string, string>> = {
+  ping: 'استمتع بأقل ping وأفضل استقرار',
+  towers: 'شوف الأبراج حولك وأقواها',
+  optimize: 'نجرّب الترددات ونثبّت الأنظف',
+  aim: 'وجّه الأنتنا لأقوى إشارة',
+  bands: 'نكشف إذا فيه 5G حولك',
+  report: 'نفحص الاتصال ونقول لك وش فيه',
+  speed: 'قِس سرعتك الحين',
+};
+const CTA_ICON: Record<string, IconName> = { ping: 'game', towers: 'tower', optimize: 'spark', aim: 'target', bands: 'layers', report: 'report', speed: 'speed' };
+/** الليلي (٢٣ نوفمبر): الخلفية كحلي ثابت والتوهج حول البطاقة هو اللي يتلوّن حسب الإشارة (كان يلوّن الخلفية كلها بني) */
+const HERO_GLOW: Record<Level, string> = { excellent: '#22c55e', good: '#3b82f6', fair: '#f59e0b', poor: '#ef4444', unknown: '#6366f1' };
+const HERO_NIGHT: [string, string, string] = ['#0e1a44', '#0b1638', '#101e52'];
 /** خلفية البطاقة الرئيسية حسب جودة الاتصال */
 const HERO_BG: Record<Level, [string, string, string]> = {
   excellent: [tBg('#ffffff'), tBg('#e3f8ee'), tBg('#c9f0de')],
@@ -183,6 +197,15 @@ const PAGE_BG: Record<string, [string, string, string]> = {
   fair: ['#fff1de', '#fff7ec', '#f5f0ff'],
   poor: ['#ffe6e7', '#fff2f2', '#f6f0ff'],
   unknown: ['#eaf2ff', '#f3efff', '#eaf9f3'],
+};
+
+/** الليلي (٢٣ نوفمبر): كحلي ثابت + لمسة لون خفيفة فوق بس — بدل البني/البرتقالي الغامق اللي كان يطلع من تكييف الألوان الفاتحة */
+const PAGE_NIGHT: Record<string, [string, string, string]> = {
+  excellent: ['#082238', '#070d24', '#0a1238'],
+  good: ['#0c1b4c', '#070d24', '#0d1240'],
+  fair: ['#1b1b44', '#070d24', '#0d1238'],
+  poor: ['#24143e', '#070d24', '#0d1238'],
+  unknown: ['#0c1b4c', '#070d24', '#0d1240'],
 };
 
 export default function RouterDashboard() {
@@ -792,7 +815,7 @@ export default function RouterDashboard() {
 
   return (
     <LinearGradient
-      colors={error || disconnected ? [C.dangerTop, C.dangerBottom] : PAGE_BG[noService ? 'poor' : level].map(tBg) as [string, string, string]}
+      colors={error || disconnected ? [C.dangerTop, C.dangerBottom] : isDark ? PAGE_NIGHT[noService ? 'poor' : level] : PAGE_BG[noService ? 'poor' : level].map(tBg) as [string, string, string]}
       style={{ flex: 1 }}
     >
       <Stack.Screen options={{ title: tr(info?.name ?? 'الراوتر') }} />
@@ -981,7 +1004,8 @@ export default function RouterDashboard() {
         )}
 
         {!loading && info && feat.cellular && (
-          <LinearGradient colors={HERO_BG[noService ? 'poor' : level]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.heroX, showCards && s.heroCards]}>
+          <LinearGradient colors={isDark ? HERO_NIGHT : HERO_BG[noService ? 'poor' : level]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={[s.heroX, showCards && s.heroCards, isDark && { borderColor: HERO_GLOW[noService ? 'poor' : level] + '88', ...glow(HERO_GLOW[noService ? 'poor' : level], 22) }]}>
             {showCards
               ? <>
                 <TechCards signal={signal} onDetails={() => router.push(`/details/${info.id}` as Href)} />
@@ -1126,14 +1150,19 @@ export default function RouterDashboard() {
         {!loading && signal && info && !noService && !rescueStep && (() => {
           const adv = buildAdvice(signal, [], { no5g: has5g === false, canBands: feat.bands });
           if (!adv.action) return null;
-          const soft = level === 'excellent';
+          // ٢٣ نوفمبر (تصميم حسن): بانر متدرّج متوهج — العنوان + سطر تحته + أيقونة كبيرة + نجمة
+          const sub = CTA_SUB[adv.action.route];
           return (
-            <Pressable
-              style={[s.cta, soft ? s.ctaSoft : s.ctaSolid]}
-              onPress={() => router.push(`/${adv.action!.route}/${info.id}` as Href)}
-            >
-              <Icon name="spark" size={17} color={soft ? C.blue : C.onAccent} />
-              <Text style={[s.ctaText, { color: soft ? C.blue : C.onAccent }]}>{adv.action.label}</Text>
+            <Pressable onPress={() => router.push(`/${adv.action!.route}/${info.id}` as Href)}
+              style={({ pressed }) => [s.ctaWrap, glow('#5b5bff', 20), pressed && { opacity: 0.9 }]}>
+              <LinearGradient colors={['#5b3df5', '#2f6bff', '#2a8cff']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.ctaBanner}>
+                <Text style={s.ctaStar}>⭐</Text>
+                <View style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+                  <Text style={s.ctaTitle} numberOfLines={1} adjustsFontSizeToFit>{adv.action.label}</Text>
+                  {!!sub && <Text style={s.ctaSub} numberOfLines={1}>{sub}</Text>}
+                </View>
+                <View style={s.ctaIcon}><Icon name={CTA_ICON[adv.action.route]} size={30} color="#ffffff" stroke={2.2} /></View>
+              </LinearGradient>
             </Pressable>
           );
         })()}
@@ -1573,6 +1602,12 @@ const s = sheet({
   heroChips: { alignSelf: 'stretch', alignItems: 'center', paddingVertical: 1 },
   heroCellSub: { color: C.sub, fontSize: 10.5, fontWeight: '700' },
   heroSub: { color: C.sub, fontSize: 12.5, fontWeight: '700', textAlign: 'center', marginTop: 1 },
+  ctaWrap: { borderRadius: 22 },
+  ctaBanner: { borderRadius: 22, minHeight: 74, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row-reverse', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: '#ffffff40' },
+  ctaTitle: { color: '#ffffff', fontSize: 17, fontWeight: '900', textAlign: 'center' },
+  ctaSub: { color: '#ffffffd9', fontSize: 11.5, fontWeight: '700', textAlign: 'center' },
+  ctaIcon: { width: 52, height: 52, borderRadius: 16, backgroundColor: '#ffffff26', borderWidth: 1, borderColor: '#ffffff55', alignItems: 'center', justifyContent: 'center' },
+  ctaStar: { fontSize: 22 },
   cta: { height: 54, borderRadius: 16, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 9 },
   ctaSolid: { backgroundColor: C.blue },
   ctaSoft: { backgroundColor: C.blueSoft },

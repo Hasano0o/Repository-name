@@ -5,6 +5,28 @@
  */
 export const EN: Record<string, string> = {
   // عدّة الألياف (٢٣ نوفمبر)
+  'أداء ممتاز': 'Excellent performance',
+  'أداء جيد': 'Good performance',
+  'أداء متوسط': 'Fair performance',
+  'استقرار عالي': 'High stability',
+  'استقرار جيد': 'Good stability',
+  'استقرار ضعيف': 'Weak stability',
+  'Ping منخفض': 'Low ping',
+  'Ping متوسط': 'Medium ping',
+  'Ping عالي': 'High ping',
+  'تجميعتك الحالية': 'Your current combo',
+  'إجمالي النطاق': 'Total bandwidth',
+  'الترددات الثانوية': 'Secondary bands',
+  'استجابة الألعاب': 'Game response',
+  'استقرار الاتصال': 'Connection stability',
+  'طبّق أفضل تجميعة الآن': 'Apply the best combo now',
+  'استمتع بأقل ping وأفضل استقرار': 'Enjoy the lowest ping and best stability',
+  'شوف الأبراج حولك وأقواها': 'See nearby towers and the strongest',
+  'نجرّب الترددات ونثبّت الأنظف': 'We test bands and lock the cleanest',
+  'وجّه الأنتنا لأقوى إشارة': 'Aim the antenna at the strongest signal',
+  'نكشف إذا فيه 5G حولك': 'We check for 5G around you',
+  'نفحص الاتصال ونقول لك وش فيه': 'We check the connection and tell you what\'s wrong',
+  'قِس سرعتك الحين': 'Measure your speed now',
   'الجوال ما يسمح للتطبيقات تثبّت التردد — هذا يحدده الجوال والشبكة.': 'Phones don\'t let apps lock the band — the phone and network decide it.',
   'التردد الحالي والأبراج اللي حولك تشوفها من صفحة الجهاز.': 'You can see the current band and nearby towers on the device page.',
   'صفحة راوترك نفسها ما فيها تثبيت ترددات — نقدر نضيفه لو وصلتنا ملفاته وفيها هالخيار.': 'Your router\'s own page has no band lock — we can add it if its files reach us with that option.',
@@ -2558,6 +2580,7 @@ export const EN: Record<string, string> = {
 };
 
 export const EN_PATTERNS: Record<string, string> = {
+  'الـ 5G ({0}) مربوط على {1} — لو طاح {2} يطيح معه': '5G ({0}) is anchored to {1} — if {2} drops, it drops too',
   '{0}، لكن فيه تداخل قوي (SINR سالب) — جرّب مكان ثاني أو قرّب من الشباك.': '{0}, but there is strong interference (negative SINR) — try another spot or move near a window.',
   '{0}. ما فيه 5G حالياً — شوف الأبراج حولك تعرف إذا فيه تغطية 5G.': '{0}. No 5G right now — check the towers around you to see if there is 5G coverage.',
   'شبكة 5 جيجا بيصير اسمها «{0}» بنفس كلمة المرور. كل الأجهزة اللي عليها بتنفصل وتحتاج تتصل فيها من جديد.': 'The 5 GHz network will be named “{0}” with the same password. Every device on it will disconnect and must reconnect.',
