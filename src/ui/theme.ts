@@ -100,27 +100,26 @@ const LIGHT = {
 
 // داكن كحلي — نفس ألوان الوضع المسائي في موقع bandly.store (٣ نوفمبر ٢٠٢٦): خلفية #0a1425، بطاقات #111f35،
 // حدود #263753، نص #e5edff، نص ثانوي #a5b4ce. الأزرق يبقى أزرق. (القديم كان يقلب الرمادي بني/برتقالي)
-// ٢٣ نوفمبر (حسن — «اللون الليلي كذا أجمل مع التوهج»): كحلي أعمق يميل للنيلي + حدود زرقاء تتوهج
 const DARK: typeof LIGHT = {
-  bg: '#070d24',
-  bgTop: '#0b1638',
-  bgBottom: '#070d24',
-  card: '#0e1838',
+  bg: '#0a1425',
+  bgTop: '#0d1a30',
+  bgBottom: '#0a1425',
+  card: '#111f35',
   // ٧ نوفمبر: الحد أفتح شوي (كان #293b56 — الكروت تذوب في الخلفية) + حافة علوية أفتح = لمعة خفيفة بدون توهج
-  cardBorder: '#27417c',
-  cardEdge: '#4166b8',
-  rowBg: '#132049',
-  track: '#1e3468',
+  cardBorder: '#304868',
+  cardEdge: '#4b6892',
+  rowBg: '#172640',
+  track: '#20385e',
 
-  heroFrom: '#102357',
-  heroMid: '#17307c',
-  heroTo: '#2443a8',
+  heroFrom: '#10264b',
+  heroMid: '#15305b',
+  heroTo: '#183e7c',
   dangerTop: '#2a1a2b',
   dangerBottom: '#331d33',
 
   text: '#e5edff',
-  sub: '#a9b8dc',
-  muted: '#8fa1c9',
+  sub: '#a5b4ce',
+  muted: '#94a6c3',
 
   blue: '#2f6bff',
   blueIcon: '#82aaff',
@@ -149,8 +148,8 @@ const DARK: typeof LIGHT = {
   red: '#ff7d6b',
   redSoft: '#3a1f2b',
 
-  line: '#22386b',
-  lineSoft: '#18295a',
+  line: '#263753',
+  lineSoft: '#1f2f49',
   onAccent: '#ffffff',
   onAccentSoft: '#d6e2ff',
   shadow: '#000000',
@@ -185,11 +184,3 @@ export const S = { xs: 4, sm: 8, md: 12, lg: 16, xl: 22 };
 
 /** مقاسات الخط */
 export const T = { score: 44, h1: 23, h2: 17, body: 14, label: 12, tiny: 11 };
-
-/**
- * توهج ملوّن (الليلي بس — ٢٣ نوفمبر): ظل بلون البطاقة حولها. بالنهاري يرجع ظل خفيف عادي.
- * boxShadow (RN 0.86) يشتغل بالآيفون وأندرويد.
- */
-export const glow = (color: string, size = 18) => (isDark
-  ? { boxShadow: `0px 0px ${size}px ${color}66` }
-  : { boxShadow: `0px 6px ${Math.round(size * 0.8)}px ${color}26` });
