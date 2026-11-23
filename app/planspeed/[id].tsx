@@ -13,7 +13,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { runSpeedTest, SpeedProgress } from '../../src/utils/speedtest';
 import { measureWifi } from '../../src/utils/latency';
 import { findGateway } from '../../src/services/gateway';
-import { judgePlan, complaintText, PLAN_CHOICES, PlanCheck, PlanCheckLog, WifiRead } from '../../src/utils/fiberKit';
+import { readWifi } from '../../modules/bandly-cell/src';
+import { judgePlan, complaintText, PLAN_CHOICES, PlanCheck, PlanCheckLog, WifiRead, PhoneWifi, wifiBand } from '../../src/utils/fiberKit';
 import { copyText } from '../../src/utils/clipboard';
 import { Icon } from '../../src/ui/Icon';
 import { C, R, S, tBg, tBd } from '../../src/ui/theme';
@@ -27,7 +28,7 @@ const PHASE_TXT: Record<string, string> = {
   wifi: 'نقيس الواي فاي بينك وبين الراوتر…', meta: 'نجهّز…', ping: 'نقيس البنق…', download: 'نقيس التنزيل…', upload: 'نقيس الرفع…', done: 'خلص ✓',
 };
 
-interface Res { check: PlanCheck; down: number; up: number; ping: number; wifi: WifiRead | null }
+interface Res { check: PlanCheck; down: number; up: number; ping: number; wifi: WifiRead | null; phone: PhoneWifi | null }
 
 export default function PlanSpeed() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -79,6 +80,9 @@ export default function PlanSpeed() {
         const w = await measureWifi(host, 10).catch(() => null);
         if (w && w.samples > 0) wifi = { median: w.median, jitter: w.jitter, lossPct: w.lossPct, samples: w.samples };
       }
+      // قوة الواي فاي والتردد من الجوال (أندرويد — بناء ٢٣ نوفمبر)
+      const ph = readWifi();
+      const phone: PhoneWifi | null = ph?.connected ? { rssi: ph.rssi, frequency: ph.frequency, linkSpeed: ph.linkSpeed } : null;
       if (cancel.current) return;
       // ٢) السرعة
       const r = await runSpeedTest((p: SpeedProgress) => {
@@ -86,9 +90,9 @@ export default function PlanSpeed() {
         setPhase(p.phase);
         if (p.phase === 'download' || p.phase === 'upload') setLive(p.mbps);
       }, () => cancel.current || !alive.current);
-      const check = judgePlan(plan, r.downloadMbps, wifi);
+      const check = judgePlan(plan, r.downloadMbps, wifi, phone);
       if (!alive.current) return;
-      setRes({ check, down: r.downloadMbps, up: r.uploadMbps, ping: r.pingMs, wifi });
+      setRes({ check, down: r.downloadMbps, up: r.uploadMbps, ping: r.pingMs, wifi, phone });
       const entry: PlanCheckLog = { at: Date.now(), plan, down: r.downloadMbps, up: r.uploadMbps, ping: r.pingMs, wifiMs: wifi?.median, verdict: check.verdict };
       const next = [entry, ...log].slice(0, 20);
       setLog(next);
@@ -170,6 +174,13 @@ export default function PlanSpeed() {
             <Tile lbl="البنق" val={`${Math.round(res.ping)}`} unit="ms" />
             <Tile lbl="الواي فاي" val={res.wifi ? `${Math.round(res.wifi.median)}` : '—'} unit={res.wifi ? 'ms' : ''} />
           </View>
+          {!!res.phone && (typeof res.phone.rssi === 'number' || !!res.phone.frequency) && (
+            <View style={{ flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'center', gap: 10 }}>
+              {typeof res.phone.rssi === 'number' && <Text style={s.sub}>{`إشارة الواي فاي ${res.phone.rssi} dBm`}</Text>}
+              {!!wifiBand(res.phone.frequency) && <Text style={s.sub}>{`${wifiBand(res.phone.frequency)} جيجا`}</Text>}
+              {!!res.phone.linkSpeed && <Text style={s.sub}>{`الربط ${res.phone.linkSpeed} ميقا`}</Text>}
+            </View>
+          )}
           <View style={[s.verdict, { backgroundColor: tBg(col + '14') }]}>
             <Text style={[s.vTitle, { color: col }]}>{res.check.title}</Text>
             <Text style={s.vWhy}>{res.check.why}</Text>

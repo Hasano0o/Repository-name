@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { judgePlan, wifiWeak, complaintText, linkScore, roomScore, roomLevel, speedRef, roomsAdvice, upsertRoom, RoomRead } from '../src/utils/fiberKit';
+import { wifiBand, rssiLevel, rssiScore, near24, judgePlan, wifiWeak, complaintText, linkScore, roomScore, roomLevel, speedRef, roomsAdvice, upsertRoom, RoomRead } from '../src/utils/fiberKit';
 
 const goodWifi = { median: 3, jitter: 1, lossPct: 0, samples: 10 };
 const badWifi = { median: 40, jitter: 20, lossPct: 10, samples: 10 };
@@ -71,4 +71,35 @@ test('الغرف: قياس جديد لنفس الغرفة يستبدل القد�
   const r = upsertRoom([room('أ', 10, 50)], room('أ', 200, 3));
   assert.equal(r.length, 1);
   assert.equal(r[0].mbps, 200);
+});
+
+test('واي فاي الجوال: التردد والقوة', () => {
+  assert.equal(wifiBand(2437), '2.4');
+  assert.equal(wifiBand(5180), '5');
+  assert.equal(wifiBand(6115), '6');
+  assert.equal(wifiBand(null), undefined);
+  assert.equal(rssiLevel(-50), 'excellent');
+  assert.equal(rssiLevel(-70), 'fair');
+  assert.equal(rssiLevel(-80), 'poor');
+  assert.equal(rssiScore(-90), 0);
+  assert.equal(rssiScore(-50), 100);
+  assert.equal(near24({ rssi: -50, frequency: 2412 }), true);
+  assert.equal(near24({ rssi: -75, frequency: 2412 }), false);
+  assert.equal(near24({ rssi: -50, frequency: 5180 }), false);
+});
+
+test('سرعتك مقابل باقتك: جوال على 2.4 وباقة ٢٠٠ ← الواي فاي (2.4)', () => {
+  const r = judgePlan(200, 60, goodWifi, { rssi: -50, frequency: 2437 });
+  assert.equal(r.verdict, 'wifi');
+  assert.match(r.title, /2\.4/);
+  // باقة ١٠٠ على 2.4 ما نلوم 2.4
+  assert.equal(judgePlan(100, 50, goodWifi, { frequency: 2437 }).verdict, 'isp');
+});
+
+test('الغرف: قوة dBm تدخل في الدرجة + نصيحة 2.4', () => {
+  const strong: RoomRead = { ...room('أ', 100, 10), rssi: -45 };
+  const weakSig: RoomRead = { ...room('أ', 100, 10), rssi: -85 };
+  assert.ok(roomScore(strong, 100) > roomScore(weakSig, 100));
+  const adv = roomsAdvice([{ ...room('الصالة', 90, 3), rssi: -48, freq: 2437 }, { ...room('المجلس', 85, 4), rssi: -60, freq: 5180 }]);
+  assert.ok(adv.some(a => a.includes('2.4') && a.includes('الصالة')));
 });

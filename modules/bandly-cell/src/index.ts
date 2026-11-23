@@ -44,7 +44,23 @@ export interface RawDeviceInfo {
   simState: number;
 }
 
+/** الواي فاي اللي الجوال متصل فيه (أندرويد — من بناء ٢٣ نوفمبر ٢٠٢٦) */
+export interface RawWifi {
+  connected: boolean;
+  rssi?: number | null;
+  /** سرعة الربط بالراوتر (Mbps) — مو سرعة النت */
+  linkSpeed?: number | null;
+  rxLinkSpeed?: number | null;
+  txLinkSpeed?: number | null;
+  /** MHz — أقل من 3000 = 2.4 جيجا */
+  frequency?: number | null;
+  /** 4=Wi‑Fi 4 · 5=Wi‑Fi 5 · 6=Wi‑Fi 6 · 8=Wi‑Fi 7 */
+  standard?: number | null;
+}
+
 interface BandlyCellNative {
+  /** موجود من بناء ٢٣ نوفمبر ٢٠٢٦ — النسخ الأقدم ما فيها */
+  wifiInfo?(): RawWifi;
   isSupported(): boolean;
   hasPermission(): boolean;
   deviceInfo(): RawDeviceInfo;
@@ -77,3 +93,10 @@ export async function recognizeText(uri: string): Promise<{ text: string; lines:
   if (!Native?.recognizeText) throw new Error('قراءة النص تحتاج آخر نسخة من Bandly — حمّلها من البوت');
   return Native.recognizeText(uri);
 }
+
+/** قوة الواي فاي من الجوال — null لو آيفون أو نسخة قديمة أو فشل */
+export function readWifi(): RawWifi | null {
+  if (!Native || typeof Native.wifiInfo !== 'function') return null;
+  try { return Native.wifiInfo(); } catch { return null; }
+}
+export const wifiNativeAvailable = (): boolean => typeof Native?.wifiInfo === 'function';

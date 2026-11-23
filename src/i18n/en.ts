@@ -5,6 +5,13 @@
  */
 export const EN: Record<string, string> = {
   // عدّة الألياف (٢٣ نوفمبر)
+  'قوة الواي فاي الحين': 'Wi‑Fi strength now',
+  'جوالك مو متصل بواي فاي': 'Your phone isn\'t on Wi‑Fi',
+  'حدّث Bandly لآخر نسخة عشان تشوف قوة الواي فاي بالـ dBm وهل جوالك على 2.4 ولا 5 جيجا.': 'Update Bandly to the latest version to see Wi‑Fi strength in dBm and whether your phone is on 2.4 or 5 GHz.',
+  'جوالك على شبكة 2.4 جيجا': 'Your phone is on the 2.4 GHz network',
+  'شبكة 2.4 جيجا بطيئة وما توصل سرعة الألياف — حتى لو الإشارة قوية.': 'The 2.4 GHz network is slow and can\'t reach fiber speeds — even with a strong signal.',
+  'اتصل بشبكة 5 جيجا من نفس الراوتر (غالباً في اسمها 5G) وأعد الفحص': 'Connect to the router\'s 5 GHz network (usually has 5G in its name) and check again',
+  'لو ما فيه شبكة 5 جيجا: فعّلها من إعدادات الراوتر أو افصل الشبكتين باسمين مختلفين': 'No 5 GHz network? Enable it in the router settings or split the two bands into different names',
   'نقيس الواي فاي بينك وبين الراوتر…': 'Measuring Wi‑Fi between you and the router…',
   'نقيس التنزيل…': 'Measuring download…',
   'نقيس الرفع…': 'Measuring upload…',
@@ -2499,6 +2506,10 @@ export const EN: Record<string, string> = {
 };
 
 export const EN_PATTERNS: Record<string, string> = {
+  'الربط {0} ميقا': 'Link {0} Mbps',
+  'إشارة الواي فاي {0} dBm': 'Wi‑Fi signal {0} dBm',
+  'في {0} الإشارة قوية بس جوالك على 2.4 جيجا — اتصل بشبكة 5 جيجا وتزيد السرعة': 'In {0} the signal is strong but your phone is on 2.4 GHz — switch to 5 GHz for more speed',
+  '{0} dBm': '{0} dBm',
   'باقتك: {0} ميقا': 'Your plan: {0} Mbps',
   'من سرعة باقتك ({0} ميقا)': 'of your plan speed ({0} Mbps)',
   'الغرف ({0})': 'Rooms ({0})',

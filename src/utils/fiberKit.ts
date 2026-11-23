@@ -10,6 +10,26 @@ export const PLAN_CHOICES = [100, 200, 300, 500, 1000];
 /** قياس الواي فاي (الجوال ↔ الراوتر) — نفس شكل LatencyResult */
 export interface WifiRead { median: number; jitter: number; lossPct: number; samples: number }
 
+/** قوة الواي فاي من الجوال (أندرويد — بناء ٢٣ نوفمبر) */
+export interface PhoneWifi { rssi?: number | null; frequency?: number | null; linkSpeed?: number | null }
+
+export type WifiBand = '2.4' | '5' | '6';
+export function wifiBand(freq?: number | null): WifiBand | undefined {
+  if (!freq || freq <= 0) return undefined;
+  return freq < 3000 ? '2.4' : freq < 5925 ? '5' : '6';
+}
+export type RssiLevel = 'excellent' | 'good' | 'fair' | 'poor';
+export function rssiLevel(rssi: number): RssiLevel {
+  if (rssi >= -55) return 'excellent';
+  if (rssi >= -67) return 'good';
+  if (rssi >= -75) return 'fair';
+  return 'poor';
+}
+/** ٠–١٠٠: ‎-90 = صفر · ‎-55 وفوق = ١٠٠ */
+export const rssiScore = (rssi: number) => Math.round(Math.max(0, Math.min(100, ((rssi + 90) / 35) * 100)));
+/** جوال قريب (قوي) بس على 2.4 جيجا — يضيّع سرعة */
+export const near24 = (w?: PhoneWifi | null) => !!w && wifiBand(w.frequency) === '2.4' && typeof w.rssi === 'number' && w.rssi >= -62;
+
 export type PlanVerdict = 'ok' | 'wifi' | 'phone' | 'isp' | 'unknown';
 export interface PlanCheck { pct: number; verdict: PlanVerdict; title: string; why: string; steps: string[] }
 
@@ -18,8 +38,19 @@ export function wifiWeak(w?: WifiRead | null): boolean {
   return !!w && w.samples > 0 && (w.median > 15 || w.jitter > 12 || w.lossPct >= 5);
 }
 
-export function judgePlan(planMbps: number, downMbps: number, wifi?: WifiRead | null): PlanCheck {
+export function judgePlan(planMbps: number, downMbps: number, wifi?: WifiRead | null, phone?: PhoneWifi | null): PlanCheck {
   const pct = planMbps > 0 ? Math.round((downMbps / planMbps) * 100) : 0;
+  // جوال على 2.4 جيجا وباقة فوق ١٠٠ ← 2.4 ما يوصل أكثر من ~١٠٠ ميقا عادةً
+  if (pct < 80 && planMbps > 100 && wifiBand(phone?.frequency) === '2.4') {
+    return {
+      pct, verdict: 'wifi', title: 'جوالك على شبكة 2.4 جيجا',
+      why: 'شبكة 2.4 جيجا بطيئة وما توصل سرعة الألياف — حتى لو الإشارة قوية.',
+      steps: [
+        'اتصل بشبكة 5 جيجا من نفس الراوتر (غالباً في اسمها 5G) وأعد الفحص',
+        'لو ما فيه شبكة 5 جيجا: فعّلها من إعدادات الراوتر أو افصل الشبكتين باسمين مختلفين',
+      ],
+    };
+  }
   if (pct >= 80) {
     return {
       pct, verdict: 'ok', title: 'توصلك سرعة باقتك ✓',
@@ -92,7 +123,7 @@ export function complaintText(plan: number, log: PlanCheckLog[]): string {
 
 // ═══ الواي فاي بالغرف ═══
 
-export interface RoomRead { name: string; at: number; mbps: number; wifiMs: number; jitter: number; lossPct: number }
+export interface RoomRead { name: string; at: number; mbps: number; wifiMs: number; jitter: number; lossPct: number; rssi?: number; freq?: number; link?: number }
 export type RoomLevel = 'excellent' | 'good' | 'fair' | 'poor';
 
 const clamp = (x: number, a = 0, b = 100) => Math.max(a, Math.min(b, x));
@@ -111,7 +142,9 @@ export function speedRef(rooms: RoomRead[], plan?: number): number {
 
 export function roomScore(r: RoomRead, ref: number): number {
   const sp = clamp((r.mbps / Math.max(1, ref)) * 100);
-  return Math.round(linkScore(r) * 0.5 + sp * 0.5);
+  // لو عندنا قوة الإشارة من الجوال (أندرويد): نصّ درجة الاتصال من dBm
+  const link = typeof r.rssi === 'number' ? (linkScore(r) + rssiScore(r.rssi)) / 2 : linkScore(r);
+  return Math.round(link * 0.5 + sp * 0.5);
 }
 
 export function roomLevel(score: number): RoomLevel {
@@ -139,16 +172,21 @@ export function roomsAdvice(rooms: RoomRead[], plan?: number): string[] {
   const best = scored[0], worst = scored[scored.length - 1];
   const out: string[] = [];
   const weak = scored.filter(x => x.s < 40).map(x => x.r.name);
+  const on24 = rooms.filter(r => near24({ rssi: r.rssi, frequency: r.freq })).map(r => r.name);
+  const tip24 = on24.length ? `في ${on24.join('، ')} الإشارة قوية بس جوالك على 2.4 جيجا — اتصل بشبكة 5 جيجا وتزيد السرعة` : '';
   if (rooms.length === 1) {
     out.push(`قِس غرفة ثانية عشان نقارن ونعرف وين يضعف الواي فاي`);
     if (best.s < 60) out.push('الإشارة هنا مو قوية — جرّب جنب الراوتر وقارن');
+    if (tip24) out.push(tip24);
     return out;
   }
   if (!weak.length && worst.s >= 60) {
     out.push('الواي فاي يغطي البيت كله زين 👌');
+    if (tip24) out.push(tip24);
     return out;
   }
   if (weak.length) out.push(`الواي فاي ضعيف في: ${weak.join('، ')}`);
+  if (tip24) out.push(tip24);
   if (worst.r.lossPct >= 5 || worst.r.wifiMs > 30) {
     out.push(`حط مقوّي أو جهاز Mesh في منتصف الطريق بين الراوتر و${worst.r.name} (مو داخل ${worst.r.name} نفسها)`);
   } else {

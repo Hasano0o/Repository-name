@@ -2,10 +2,10 @@
  * «الواي فاي بالغرف» (عدّة الألياف — حسن ٢٣ نوفمبر): بدون دخول الراوتر.
  * العضو يوقف في كل غرفة ويضغط «قِس هنا» ← بنق الجوال↔الراوتر (١٠ قياسات) + تنزيل قصير (٥ ثواني).
  * النتيجة لكل غرفة (ممتاز/جيد/متوسط/ضعيف) + نصيحة للبيت كامل (وين المقوّي، وين أقوى مكان).
- * (قوة الإشارة dBm من الجوال تحتاج مكتبة أصلية — مسجّلة في docs/NEXT_BUILD.md)
+ * أندرويد (بناء ٢٣ نوفمبر وبعده): قوة الإشارة dBm مباشرة + التردد 2.4/5 + سرعة الربط — تدخل في درجة الغرفة.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert } from 'react-native';
+import { ActivityIndicator, Alert, Platform } from 'react-native';
 import { ScrollView, View, Text, Pressable, TextInput } from '../../src/i18n/rn';
 import { useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -13,8 +13,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { measureWifi } from '../../src/utils/latency';
 import { quickDownload } from '../../src/utils/speedtest';
 import { findGateway } from '../../src/services/gateway';
+import { readWifi, wifiNativeAvailable, RawWifi } from '../../modules/bandly-cell/src';
 import {
   RoomRead, ROOM_PRESETS, ROOM_LEVEL_COL, ROOM_LEVEL_TXT, roomLevel, roomScore, roomsAdvice, speedRef, upsertRoom,
+  rssiLevel, wifiBand,
 } from '../../src/utils/fiberKit';
 import { Icon } from '../../src/ui/Icon';
 import { C, R, S, tBg, tBd } from '../../src/ui/theme';
@@ -30,6 +32,14 @@ export default function Rooms() {
   const [busy, setBusy] = useState('');
   const [step, setStep] = useState('');
   const alive = useRef(true);
+  // قوة الواي فاي مباشرة (أندرويد) — تتحدث كل ثانية والشاشة مفتوحة
+  const hasNative = wifiNativeAvailable();
+  const [live, setLive] = useState<RawWifi | null>(() => readWifi());
+  useEffect(() => {
+    if (!hasNative) return;
+    const t = setInterval(() => setLive(readWifi()), 1000);
+    return () => clearInterval(t);
+  }, [hasNative]);
 
   useEffect(() => {
     alive.current = true;
@@ -66,9 +76,16 @@ export default function Rooms() {
         return;
       }
       setStep('نقيس السرعة…');
+      const ph = readWifi();
       const d = await quickDownload(5000).catch(() => ({ mbps: 0, bytes: 0 }));
       if (!alive.current) return;
-      save(upsertRoom(rooms, { name: nm, at: Date.now(), mbps: d.mbps, wifiMs: w.median, jitter: w.jitter, lossPct: w.lossPct }));
+      const pw = ph?.connected ? ph : null;
+      save(upsertRoom(rooms, {
+        name: nm, at: Date.now(), mbps: d.mbps, wifiMs: w.median, jitter: w.jitter, lossPct: w.lossPct,
+        ...(typeof pw?.rssi === 'number' ? { rssi: pw.rssi } : {}),
+        ...(pw?.frequency ? { freq: pw.frequency } : {}),
+        ...(pw?.linkSpeed ? { link: pw.linkSpeed } : {}),
+      }));
       setName('');
     } catch (e: any) {
       if (alive.current) Alert.alert('فشل القياس', e?.message ?? '');
@@ -120,6 +137,35 @@ export default function Rooms() {
         {!!busy && <Text style={[s.sub, { textAlign: 'center', color: C.blue }]}>{`${busy}: ${step}`}</Text>}
       </View>
 
+      {/* قوة الواي فاي الحين (أندرويد) */}
+      {hasNative && (() => {
+        const ok = !!live?.connected && typeof live.rssi === 'number';
+        const lv = ok ? rssiLevel(live!.rssi!) : null;
+        const col = lv ? ROOM_LEVEL_COL[lv] : C.muted;
+        const band = wifiBand(live?.frequency);
+        return (
+          <View style={[s.card, s.liveCard, { borderColor: tBd(col + '66') }]}>
+            <View style={{ alignItems: 'center', minWidth: 92 }}>
+              <Text style={[s.liveNum, { color: col }]}>{ok ? `${live!.rssi}` : '—'}</Text>
+              <Text style={s.liveUnit}>dBm</Text>
+            </View>
+            <View style={{ flex: 1, gap: 3 }}>
+              <Text style={s.title}>قوة الواي فاي الحين</Text>
+              <Text style={[s.liveLv, { color: col }]}>{lv ? ROOM_LEVEL_TXT[lv] : 'جوالك مو متصل بواي فاي'}</Text>
+              {ok && (
+                <View style={s.stats}>
+                  {!!band && <Text style={[s.sub, band === '2.4' && { color: '#f79009' }]}>{`${band} جيجا`}</Text>}
+                  {!!live!.linkSpeed && <Text style={s.sub}>{`الربط ${live!.linkSpeed} ميقا`}</Text>}
+                </View>
+              )}
+            </View>
+          </View>
+        );
+      })()}
+      {!hasNative && Platform.OS === 'android' && (
+        <Text style={s.note}>حدّث Bandly لآخر نسخة عشان تشوف قوة الواي فاي بالـ dBm وهل جوالك على 2.4 ولا 5 جيجا.</Text>
+      )}
+
       {/* النتائج */}
       {sorted.length > 0 && (
         <View style={s.card}>
@@ -151,6 +197,8 @@ export default function Rooms() {
                   <Text style={s.stat}>{`السرعة ${r.mbps >= 100 ? r.mbps.toFixed(0) : r.mbps.toFixed(1)} Mbps`}</Text>
                   <Text style={s.stat}>{`للراوتر ${Math.round(r.wifiMs)}ms`}</Text>
                   {r.lossPct > 0 && <Text style={[s.stat, { color: '#e5484d' }]}>{`فقد ${Math.round(r.lossPct)}٪`}</Text>}
+                  {typeof r.rssi === 'number' && <Text style={s.stat}>{`${r.rssi} dBm`}</Text>}
+                  {!!wifiBand(r.freq) && <Text style={[s.stat, wifiBand(r.freq) === '2.4' && { color: '#f79009' }]}>{`${wifiBand(r.freq)} جيجا`}</Text>}
                 </View>
               </View>
             );
@@ -210,5 +258,9 @@ const s = sheet({
   step: { flexDirection: 'row-reverse', gap: 6 },
   stepDot: { fontSize: 14, fontWeight: '900', lineHeight: 19 },
   stepTxt: { flex: 1, color: C.text, fontSize: 12.5, lineHeight: 19, textAlign: 'right' },
+  liveCard: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
+  liveNum: { fontSize: 38, lineHeight: 44, fontWeight: '900' },
+  liveUnit: { color: C.sub, fontSize: 11, fontWeight: '700', marginTop: -4 },
+  liveLv: { fontSize: 14, fontWeight: '900', textAlign: 'right' },
   note: { color: C.muted, fontSize: 11, textAlign: 'center', lineHeight: 17 },
 });

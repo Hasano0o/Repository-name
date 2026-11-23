@@ -78,6 +78,29 @@ class BandlyCellModule : Module() {
       }
     }
 
+    /**
+     * الواي فاي اللي الجوال متصل فيه (٢٣ نوفمبر ٢٠٢٦ — «الواي فاي بالغرف»): القوة dBm · سرعة الربط · التردد (2.4/5/6).
+     * ما يحتاج صلاحية الموقع (الاسم SSID ما نقراه). connected=false لو الجوال مو على واي فاي.
+     */
+    Function("wifiInfo") {
+      val wm = ctx.applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+      @Suppress("DEPRECATION")
+      val i = wm.connectionInfo
+      val ok = i != null && i.networkId != -1 && i.rssi > -127 && i.rssi < 0
+      val m = mutableMapOf<String, Any?>("connected" to ok)
+      if (ok && i != null) {
+        m["rssi"] = i.rssi
+        m["linkSpeed"] = if (i.linkSpeed > 0) i.linkSpeed else null
+        m["frequency"] = if (i.frequency > 0) i.frequency else null
+        if (Build.VERSION.SDK_INT >= 29) {
+          m["rxLinkSpeed"] = if (i.rxLinkSpeedMbps > 0) i.rxLinkSpeedMbps else null
+          m["txLinkSpeed"] = if (i.txLinkSpeedMbps > 0) i.txLinkSpeedMbps else null
+        }
+        if (Build.VERSION.SDK_INT >= 30) m["standard"] = i.wifiStandard
+      }
+      m
+    }
+
     Function("deviceInfo") {
       val t = tm()
       mapOf(
