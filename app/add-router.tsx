@@ -1019,6 +1019,21 @@ export default function AddRouterScreen() {
               <Icon name="chevron" size={18} color={tFg('#12b76a')} />
             </Pressable>
           )}
+          {/* عدّة الألياف بدون دخول (حسن ٢٣ نوفمبر): السرعة مقابل الباقة + الواي فاي بالغرف */}
+          {!isEdit && (
+            <Pressable
+              onPress={() => nav.push('/fiberkit' as any)}
+              disabled={busy}
+              style={({ pressed }) => [styles.deviceCard, { borderColor: tBd('#9fdccd') }, pressed && { opacity: 0.8 }]}
+            >
+              <View style={[styles.deviceIcon, { backgroundColor: tBg('#e3f6f1') }]}><Text style={{ fontSize: 24 }}>🌐</Text></View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.deviceTitle}>ما أبي أدخل الراوتر</Text>
+                <Text style={styles.deviceSub}>عندك ألياف أو أي راوتر؟ افحص سرعتك مقابل باقتك والواي فاي بالغرف — بدون كلمة مرور</Text>
+              </View>
+              <Icon name="chevron" size={18} color={tFg('#0d9488')} />
+            </Pressable>
+          )}
           <LabelScannerHost visible={scanning} onClose={() => setScanning(false)} onResult={onScanned} />
 
           {isEdit && (

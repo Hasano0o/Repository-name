@@ -37,6 +37,8 @@ const DONE = [
   'src/ui/ServerMap.tsx',
   'src/ui/GameIntro.tsx',
   'src/ui/GameBadge.tsx',
+  // عدّة الألياف (٢٣ نوفمبر)
+  'app/planspeed/[id].tsx', 'app/rooms/[id].tsx', 'app/fiberkit.tsx', 'src/ui/FiberHero.tsx',
 ];
 
 // ═══ القاموس نفسه ═══

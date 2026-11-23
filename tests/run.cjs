@@ -14,6 +14,7 @@ const out = fs.mkdtempSync(path.join(os.tmpdir(), 'bandly-tests-'));
 const files = [
   'src/drivers/noChange.ts',
   'src/utils/fiberAdvice.ts',
+  'src/utils/fiberKit.ts',
   'src/utils/pciTarget.ts',
   'src/utils/fiberBar.ts',
   'src/utils/speedCore.ts',

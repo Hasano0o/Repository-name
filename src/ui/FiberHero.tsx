@@ -5,6 +5,7 @@
  */
 import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router, Href } from 'expo-router';
 import { View, Text, Pressable } from '../i18n/rn';
 import { sheet } from '../i18n';
 import { P } from './Pro';
@@ -38,6 +39,7 @@ export function FiberHero({ routerId, name, mode, online, optic, opticSupported,
   onAdvisor: () => void; onSpeed: () => void; onDevices?: () => void;
 }) {
   const [speed, setSpeed] = useState<SpeedPoint | null>(null);
+  const [plan, setPlan] = useState(0);
   const [, tick] = useState(0);
   useEffect(() => {
     // آخر اختبار: شاشة السرعة (bandly.lastSpeed) أو بطاقة قبل/بعد في التوجيه (bandly_speed) — الأحدث
@@ -48,6 +50,7 @@ export function FiberHero({ routerId, name, mode, online, optic, opticSupported,
       const last = all.filter(x => x && x.at).sort((x, y) => y.at - x.at)[0];
       if (last) setSpeed(last);
     }).catch(() => {});
+    AsyncStorage.getItem(`bandly.fiberPlan.${routerId}`).then(v => setPlan(Number(v) || 0)).catch(() => {});
   }, [routerId, updatedAt]);
   // «آخر تحديث» يتحدّث كل دقيقة
   useEffect(() => { const t = setInterval(() => tick(x => x + 1), 60_000); return () => clearInterval(t); }, []);
@@ -150,6 +153,26 @@ export function FiberHero({ routerId, name, mode, online, optic, opticSupported,
         </View>
         <Text style={f.link}>اختبر الحين ‹</Text>
       </Pressable>
+
+      {/* عدّة الألياف (٢٣ نوفمبر): السرعة مقابل الباقة + الواي فاي بالغرف */}
+      <View style={f.tiles}>
+        <Pressable onPress={() => router.push(`/planspeed/${routerId}` as Href)} style={[f.sp, { borderColor: tBd('#9fdccd') }]}>
+          <View style={[f.spIcon, { backgroundColor: tBg('#e3f6f1') }]}><Icon name="chart" size={18} color={TEAL} stroke={2.4} /></View>
+          <View style={{ flex: 1 }}>
+            <Text style={f.tileLbl}>سرعتك وباقتك</Text>
+            <Text style={[f.rowVal, { color: TEAL }]} numberOfLines={1}>
+              {plan && speed ? `${Math.round((speed.down / plan) * 100)}٪ من الباقة` : 'افحص ‹'}
+            </Text>
+          </View>
+        </Pressable>
+        <Pressable onPress={() => router.push(`/rooms/${routerId}` as Href)} style={[f.sp, { borderColor: tBd('#dbe5f3') }]}>
+          <View style={[f.spIcon, { backgroundColor: P.blueSoft }]}><Icon name="wifi" size={18} color={P.blue} stroke={2.4} /></View>
+          <View style={{ flex: 1 }}>
+            <Text style={f.tileLbl}>الواي فاي</Text>
+            <Text style={[f.rowVal, { color: P.blue }]} numberOfLines={1}>بالغرف ‹</Text>
+          </View>
+        </Pressable>
+      </View>
 
       {/* الأجهزة + آخر تحديث */}
       <View style={[f.card, f.rowCard, { borderColor: tBd('#dbe5f3') }]}>
