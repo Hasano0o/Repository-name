@@ -60,11 +60,12 @@ export function ErrorCard({
   message, onRetry, retrying, hint, tone = 'error',
 }: {
   message: string; onRetry?: () => void; retrying?: boolean; hint?: string;
-  tone?: 'error' | 'offline';
+  tone?: 'error' | 'offline' | 'info';
 }) {
   const offline = tone === 'offline';
-  const color = offline ? C.gold : C.red;
-  const soft = offline ? C.goldSoft : C.redSoft;
+  const info = tone === 'info';
+  const color = info ? C.blue : offline ? C.gold : C.red;
+  const soft = info ? C.blueSoft : offline ? C.goldSoft : C.redSoft;
   const icon: IconName = offline ? 'tower' : 'bulb';
   return (
     <View style={[s.card, { backgroundColor: soft, borderColor: soft, gap: S.sm }]}>
@@ -73,7 +74,7 @@ export function ErrorCard({
           <Icon name={icon} size={17} color={color} />
         </View>
         <Text style={[s.errTitle, { color }]} numberOfLines={2}>
-          {offline ? 'ما وصلنا للراوتر' : 'صار خطأ'}
+          {info ? 'ما يتوفر هنا' : offline ? 'ما وصلنا للراوتر' : 'صار خطأ'}
         </Text>
       </View>
       <Text style={s.errBody}>{message}</Text>

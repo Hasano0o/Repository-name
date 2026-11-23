@@ -12,8 +12,10 @@ export interface Advice {
 export function buildAdvice(
   signal?: Signal | null,
   cells: CellTower[] = [],
-  opts: { no5g?: boolean } = {},
+  /** canBands=false: الجهاز ما فيه تثبيت ترددات (مثل «إشارة هالجهاز» — الجوال نفسه) ← ما نودّيه لشاشة الترددات/المحسّن */
+  opts: { no5g?: boolean; canBands?: boolean } = {},
 ): Advice {
+  const canBands = opts.canBands !== false;
   if (!signal || (signal.rsrp === undefined && signal.nrRsrp === undefined)) {
     return {
       sentence: 'ما قدرنا نقرأ الإشارة من الراوتر — جرّب تحدّث الصفحة أو تأكد إنك على شبكته.',
@@ -39,6 +41,13 @@ export function buildAdvice(
     };
   }
 
+  if ((signal.sinr ?? 99) < 0 && !canBands) {
+    return {
+      sentence: `${parts.join(' ')}، لكن فيه تداخل قوي (SINR سالب) — جرّب مكان ثاني أو قرّب من الشباك.`,
+      action: { label: 'افتح توجيه الأنتنا', route: 'aim' },
+    };
+  }
+
   if ((signal.sinr ?? 99) < 0) {
     return {
       sentence: `${parts.join(' ')}، لكن فيه تداخل قوي (SINR سالب) — تغيير التردد غالباً يحلّه.`,
@@ -57,6 +66,13 @@ export function buildAdvice(
     return {
       sentence: `${parts.join(' ')}. البرج يدعم 5G لكنه غير نشط الحين — ينشط وقت التحميل. ` +
         'لو ما نشط حتى وأنت تحمّل، الأرجح أن شريحتك أو باقتك ما تدعم 5G.',
+      action: { label: 'تأكد من 5G في الأبراج', route: 'towers' },
+    };
+  }
+
+  if (!nr && !opts.no5g && !canBands) {
+    return {
+      sentence: `${parts.join(' ')}. ما فيه 5G حالياً — شوف الأبراج حولك تعرف إذا فيه تغطية 5G.`,
       action: { label: 'تأكد من 5G في الأبراج', route: 'towers' },
     };
   }

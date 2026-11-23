@@ -22,6 +22,10 @@ import { C, R, S, T, tFg } from '../../src/ui/theme';
 import { HeroCard, MetricCard } from '../../src/ui/Cards';
 import { Icon } from '../../src/ui/Icon';
 import { Skeleton, ErrorCard } from '../../src/ui/States';
+
+// الجهاز ما فيه تثبيت ترددات (٢٣ نوفمبر — كانت تطلع «صار خطأ» + «تأكد أن جوالك متصل بشبكة الراوتر» في وضع «إشارة هالجهاز»)
+const NO_BANDS_DEVICE = 'الجوال ما يسمح للتطبيقات تثبّت التردد — هذا يحدده الجوال والشبكة.';
+const NO_BANDS = 'هذا الراوتر ما يدعم التحكم بالترددات';
 import { trafficBurst } from '../../src/utils/nrprobe';
 import { safeApply, lastTrial, trialNote, trialMessage, freeRelease, waitOnline } from '../../src/utils/safeLock';
 
@@ -108,7 +112,7 @@ export default function BandsScreen() {
     setError('');
     try {
       const [c, sig, cells, cars] = await withSession(r, async d => {
-        if (!d.getBandConfig) throw new Error('هذا الراوتر ما يدعم التحكم بالترددات');
+        if (!d.getBandConfig) throw new Error(r.driverId === 'device' ? NO_BANDS_DEVICE : NO_BANDS);
         return Promise.all([
           d.getBandConfig(),
           d.getSignal ? d.getSignal().catch(() => null) : Promise.resolve(null),
@@ -737,12 +741,22 @@ export default function BandsScreen() {
         )}
 
         {!!error && (
+          error === NO_BANDS_DEVICE || error === NO_BANDS ? (
+            <ErrorCard
+              tone="info"
+              message={error}
+              hint={error === NO_BANDS_DEVICE
+                ? 'التردد الحالي والأبراج اللي حولك تشوفها من صفحة الجهاز.'
+                : 'صفحة راوترك نفسها ما فيها تثبيت ترددات — نقدر نضيفه لو وصلتنا ملفاته وفيها هالخيار.'}
+            />
+          ) : (
           <ErrorCard
             message={error}
             hint="تأكد أن جوالك متصل بشبكة الراوتر نفسها."
             onRetry={info ? () => load(info) : undefined}
             retrying={locked}
           />
+          )
         )}
 
         {!!status && (

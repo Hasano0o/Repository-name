@@ -147,7 +147,10 @@ export class DeviceDriver implements RouterDriver {
       enodebId: ci !== undefined ? String(Math.floor(ci / 256)) : undefined,
       pci: str(pcc?.pci),
       earfcn: str(pcc?.earfcn),
-      dlBandwidth: totalBwMhz !== undefined ? `${totalBwMhz}MHz` : (bw !== undefined ? `${Math.round(bw / 1000)}MHz` : undefined),
+      // بدون دمج: عرض الخلية الأساسية بس (٢٣ نوفمبر — جوال حسن طلّع 80 MHz على B3 مع «تردد واحد»: كان يجمع كل العروض)
+      dlBandwidth: caActive && totalBwMhz !== undefined ? `${totalBwMhz}MHz`
+        : bw !== undefined ? `${Math.round(bw / 1000)}MHz`
+        : widths.length ? `${Math.round(widths[0] / 1000)}MHz` : undefined,
       caCount,
       caBandwidthMhz: caActive ? totalBwMhz : undefined,
       rsrp: n(pcc?.rsrp),

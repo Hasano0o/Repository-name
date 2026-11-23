@@ -5,6 +5,10 @@
  */
 export const EN: Record<string, string> = {
   // عدّة الألياف (٢٣ نوفمبر)
+  'الجوال ما يسمح للتطبيقات تثبّت التردد — هذا يحدده الجوال والشبكة.': 'Phones don\'t let apps lock the band — the phone and network decide it.',
+  'التردد الحالي والأبراج اللي حولك تشوفها من صفحة الجهاز.': 'You can see the current band and nearby towers on the device page.',
+  'صفحة راوترك نفسها ما فيها تثبيت ترددات — نقدر نضيفه لو وصلتنا ملفاته وفيها هالخيار.': 'Your router\'s own page has no band lock — we can add it if its files reach us with that option.',
+  'ما يتوفر هنا': 'Not available here',
   'ما قدرنا نفحص الواي فاي': "We couldn't check the Wi‑Fi",
   'تأكد إن جوالك على واي فاي البيت واضغط «أعد الفحص»': 'Make sure your phone is on the home Wi‑Fi and tap “Check again”',
   'نقرأ إعدادات الواي فاي من الراوتر…': 'Reading Wi‑Fi settings from the router…',
@@ -2554,6 +2558,8 @@ export const EN: Record<string, string> = {
 };
 
 export const EN_PATTERNS: Record<string, string> = {
+  '{0}، لكن فيه تداخل قوي (SINR سالب) — جرّب مكان ثاني أو قرّب من الشباك.': '{0}, but there is strong interference (negative SINR) — try another spot or move near a window.',
+  '{0}. ما فيه 5G حالياً — شوف الأبراج حولك تعرف إذا فيه تغطية 5G.': '{0}. No 5G right now — check the towers around you to see if there is 5G coverage.',
   'شبكة 5 جيجا بيصير اسمها «{0}» بنفس كلمة المرور. كل الأجهزة اللي عليها بتنفصل وتحتاج تتصل فيها من جديد.': 'The 5 GHz network will be named “{0}” with the same password. Every device on it will disconnect and must reconnect.',
   'اتصل الحين بـ «{0}» بنفس كلمة المرور.': 'Now connect to “{0}” with the same password.',
   'لقينا {0} أشياء تبطّئ الواي فاي': 'Found {0} things slowing your Wi‑Fi',

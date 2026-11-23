@@ -1124,7 +1124,7 @@ export default function RouterDashboard() {
         )}
 
         {!loading && signal && info && !noService && !rescueStep && (() => {
-          const adv = buildAdvice(signal, [], { no5g: has5g === false });
+          const adv = buildAdvice(signal, [], { no5g: has5g === false, canBands: feat.bands });
           if (!adv.action) return null;
           const soft = level === 'excellent';
           return (
@@ -1148,8 +1148,10 @@ export default function RouterDashboard() {
             {feat.cellular && (<>
             <GroupTitle title="خلّ Bandly يسويها عنك" color={tFg('#7c5cff')} />
             <TileGrid>
-              <ToolTile wide icon="spark" color={tFg('#7c5cff')} title="اضبط لي كل شي" sub="تردد · برج · قناة"
-                onPress={() => router.push(`/autopilot/${info.id}` as Href)} />
+              {feat.bands && (
+                <ToolTile wide icon="spark" color={tFg('#7c5cff')} title="اضبط لي كل شي" sub="تردد · برج · قناة"
+                  onPress={() => router.push(`/autopilot/${info.id}` as Href)} />
+              )}
               {assistantOn && (
                 <ToolTile wide icon="mic" color={tFg('#0e7d93')} title="المساعد" sub="اسأله بكلامك"
                   onPress={() => router.push(`/assistant/${info.id}` as Href)} />
