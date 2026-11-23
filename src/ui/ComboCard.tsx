@@ -100,12 +100,13 @@ export function ComboCard({ r }: { r: SavedRouter }) {
       <View style={s.linkLine} />
     </View>
   );
-  const groupHead = (tech: '4G' | '5G', txt: string) => (
+  const groupHead = (title: string, txt: string) => (
     <View style={s.gHead}>
-      <View style={[s.gChip, { backgroundColor: tech === '5G' ? '#7c3aed' : C.blue }]}><Text style={s.gChipTxt}>{tech}</Text></View>
+      <Text style={s.gTitle}>{title}</Text>
       <Text style={s.gTxt} numberOfLines={1}>{txt}</Text>
     </View>
   );
+  const nsaSecs = nsa ? [...chainScc, ...nrScc] : [];
 
   return (
     <Pressable
@@ -138,8 +139,55 @@ export function ComboCard({ r }: { r: SavedRouter }) {
       ) : !pcc ? (
         <Text style={[s.muted, { paddingVertical: 8 }]}>اضغط تشوف الترددات الحالية وتغيّرها</Text>
       ) : (
-        <View style={{ gap: 8 }}>
-        {nsa && groupHead('4G', 'الأساسي يمسك الاتصال')}
+        nsa && nrMain ? (
+          /* NSA (حسن ٢٣ نوفمبر): الأساسي 4G + رئيسي 5G جنب بعض فوق، والثانوي كله لحاله تحت */
+          <View style={{ gap: 8 }}>
+            {groupHead('الأساسي', `${bandLabel(nrMain.tech, nrMain.band)} مربوط على ${anchor} — لو طاح ${anchor} يطيح معه`)}
+            <View style={s.chain}>
+              <LinearGradient colors={GRAD.LTE} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.main, { flex: 1 }]}>
+                <View style={s.mainTop}>
+                  <Text style={s.star}>⭐</Text>
+                  <View style={s.mainPill}><Text style={s.mainPillTxt}>الأساسي 4G</Text></View>
+                </View>
+                <Text style={s.mainBand} numberOfLines={1} adjustsFontSizeToFit>{bandLabel(pcc.tech, pcc.band)}</Text>
+                <Text style={s.mainNice} numberOfLines={1} adjustsFontSizeToFit>
+                  {friendlyBand(pcc.tech, pcc.band)}{mhzOf(pcc) ? `  ·  ${mhzOf(pcc)}MHz` : ''}
+                </Text>
+              </LinearGradient>
+              {linkDot(true)}
+              <LinearGradient colors={GRAD.NR} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.main, { flex: 1 }]}>
+                <View style={s.mainTop}>
+                  <Text style={s.star}>⚡</Text>
+                  <View style={s.mainPill}><Text style={s.mainPillTxt}>الأساسي 5G</Text></View>
+                </View>
+                <Text style={s.mainBand} numberOfLines={1} adjustsFontSizeToFit>{bandLabel(nrMain.tech, nrMain.band)}</Text>
+                <Text style={s.mainNice} numberOfLines={1} adjustsFontSizeToFit>
+                  {friendlyBand(nrMain.tech, nrMain.band)}{mhzOf(nrMain) ? `  ·  ${mhzOf(nrMain)}MHz` : ''}
+                </Text>
+              </LinearGradient>
+            </View>
+
+            {groupHead('الثانوي', nsaSecs.length ? 'ينضم مع الأساسي ويزيد السرعة' : 'يجي وقت التحميل')}
+            {nsaSecs.length === 0 ? (
+              <View style={[s.sec, s.secEmpty, { minHeight: 44 }]}>
+                <Text style={s.emptyTxt}>بدون دمج</Text>
+              </View>
+            ) : (
+              <View style={s.secRow}>
+                {nsaSecs.slice(0, 6).map((c, i) => (
+                  <LinearGradient key={i} colors={secGrad(c)} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                    style={[s.secCell, { flexBasis: nsaSecs.length <= 3 ? '30%' : '22%' }]}>
+                    <Text style={s.secTech}>{c.tech === 'NR' ? '5G' : '4G'}</Text>
+                    <Text style={[s.secBand, { fontSize: 19, lineHeight: 22 }]} numberOfLines={1} adjustsFontSizeToFit>
+                      {bandLabel(c.tech, c.band)}
+                    </Text>
+                    {!!mhzOf(c) && <Text style={s.secNice} numberOfLines={1}>{mhzOf(c)}MHz</Text>}
+                  </LinearGradient>
+                ))}
+              </View>
+            )}
+          </View>
+        ) : (
         <View style={s.chain}>
           {/* الأساسي */}
           <LinearGradient colors={GRAD[pcc.tech]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.main}>
@@ -167,28 +215,7 @@ export function ComboCard({ r }: { r: SavedRouter }) {
             ) : secTiles(chainScc)}
           </View>
         </View>
-
-        {/* 5G في NSA: رئيسي 5G (مربوط على الأساسي) + ثانوي 5G لو فيه */}
-        {nsa && nrMain && (
-          <>
-            {groupHead('5G', `مربوط على ${anchor} — لو طاح الأساسي يطيح معه`)}
-            <View style={s.chain}>
-              <LinearGradient colors={GRAD.NR} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                style={[s.main, nrScc.length === 0 && { flex: 1 }]}>
-                <View style={[s.mainTop, nrScc.length === 0 && { justifyContent: 'center' }]}>
-                  <View style={s.mainPill}><Text style={s.mainPillTxt}>رئيسي 5G</Text></View>
-                </View>
-                <Text style={s.mainBand} numberOfLines={1} adjustsFontSizeToFit>{bandLabel(nrMain.tech, nrMain.band)}</Text>
-                <Text style={s.mainNice} numberOfLines={1} adjustsFontSizeToFit>
-                  {friendlyBand(nrMain.tech, nrMain.band)}{mhzOf(nrMain) ? `  ·  ${mhzOf(nrMain)}MHz` : ''}
-                </Text>
-              </LinearGradient>
-              {nrScc.length > 0 && linkDot(true)}
-              {nrScc.length > 0 && <View style={s.side}>{secTiles(nrScc)}</View>}
-            </View>
-          </>
-        )}
-        </View>
+        )
       )}
 
       {/* توزيع عرض النطاق: مين شايل السرعة — بنفس الألوان (أساسي أزرق · ثانوي برتقالي · 5G بنفسجي) */}
@@ -286,6 +313,9 @@ const s = sheet({
   gHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
   gChip: { borderRadius: 7, paddingHorizontal: 6, paddingVertical: 1 },
   gChipTxt: { color: '#ffffff', fontSize: 10.5, fontFamily: FONT.numHeavy },
+  gTitle: { color: C.text, fontSize: 12.5, fontWeight: '900' },
+  secRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6 },
+  secCell: { flexGrow: 1, borderRadius: 14, paddingVertical: 6, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', gap: 1, minHeight: 58 },
   gTxt: { flex: 1, color: C.sub, fontSize: 10.5, fontWeight: '700', textAlign: 'right' },
 
   share: { flexDirection: 'row-reverse', height: 8, borderRadius: 99, overflow: 'hidden', gap: 2, backgroundColor: C.track },

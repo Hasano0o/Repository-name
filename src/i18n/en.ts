@@ -934,8 +934,9 @@ export const EN: Record<string, string> = {
   'الدمج وقت التحميل (قريناه بتحميل قصير)': 'CA while downloading (read with a short download)',
   'التردد اللي يمسك الاتصال، واللي ينضم معه': 'The band that holds the connection, and the ones that join it',
   'الأساسي': 'Primary',
-  'الأساسي يمسك الاتصال': 'The primary holds the connection',
-  'رئيسي 5G': '5G anchor',
+  'الأساسي 4G': '4G primary',
+  'الأساسي 5G': '5G primary',
+  'ينضم مع الأساسي ويزيد السرعة': 'Joins the primary and adds speed',
   'يجي وقت التحميل': 'Comes while downloading',
   // ═══ الدفعة ١: إضافة راوتر · صفحة الراوتر ═══
   'غيره': 'Other',
@@ -2416,7 +2417,7 @@ export const EN: Record<string, string> = {
 };
 
 export const EN_PATTERNS: Record<string, string> = {
-  'مربوط على {0} — لو طاح الأساسي يطيح معه': 'Tied to {0} — if the primary drops, it drops too',
+  '{0} مربوط على {1} — لو طاح {2} يطيح معه': '{0} is tied to {1} — if {2} drops, it drops too',
   'آخر ٣٠ يوم — منهم {0} هالأسبوع{1}': 'Last 30 days — {0} this week{1}',
   'آخر ٣٠ يوم — منهم {0} هالأسبوع': 'Last 30 days — {0} this week',
   '{0} ميزة في {1} أقسام': '{0} features in {1} sections',
