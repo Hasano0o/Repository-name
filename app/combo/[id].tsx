@@ -13,8 +13,7 @@ import { trafficBurst } from '../../src/utils/nrprobe';
 import { bandLabel, freqLabel } from '../../src/utils/bands';
 import { saveProfile } from '../../src/store/profiles';
 import { useOperatorBands } from '../../src/store/operator';
-import { C, glow, isDark, tBg } from '../../src/ui/theme';
-import { Icon, IconName } from '../../src/ui/Icon';
+import { C } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 
 import { sheet } from '../../src/i18n';
@@ -37,16 +36,6 @@ function bestBySeen(cells: CellTower[], tech: 'LTE' | 'NR') {
 
 const rsrpCol = (v?: number) => (v === undefined ? C.sub : v >= -85 ? C.green : v >= -100 ? '#e0a100' : C.red);
 
-/** خطوات التطبيق (تطابق رسائل safeApply في utils/safeLock) */
-const APPLY_STEPS: { k: string; t: string; icon: IconName; m: RegExp }[] = [
-  { k: 'measure', t: 'نقيس الوضع الحالي', icon: 'chart', m: /نقرأ إعدادك|نقيس الوضع الحالي/ },
-  { k: 'apply', t: 'نطبّق التغيير', icon: 'refresh', m: /نطبّق التغيير|لسا يطبّق|لسا ينفّذ/ },
-  { k: 'wait', t: 'ننتظر الراوتر يتصل', icon: 'clock', m: /ننتظر الراوتر يتصل|ننتظر الإشارة/ },
-  { k: 'after', t: 'نقيس النتيجة', icon: 'chart', m: /نقيس بعد/ },
-];
-/** المدة المتوقعة تقريباً (ثانية) — للعداد «باقي تقريباً» */
-const APPLY_EST = 75;
-
 export default function ComboScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
@@ -66,16 +55,6 @@ export default function ComboScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
-  // تقدّم التطبيق (تصميم حسن): الخطوات + مرّ/باقي
-  const [startAt, setStartAt] = useState<number | null>(null);
-  const [now, setNow] = useState(Date.now());
-  const stepMax = useRef(0);
-  useEffect(() => {
-    if (!busy) { setStartAt(null); stepMax.current = 0; return; }
-    setStartAt(Date.now());
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [busy]);
   const [error, setError] = useState('');
   const [verdict, setVerdict] = useState<{ ok: boolean; text: string } | null>(null);
   /** «وضع الشبكة» الدقيق (هواوي WebUI 4.0) — null = الراوتر ما يدعمه، نعرض الخيارين القدام */
@@ -286,20 +265,18 @@ export default function ComboScreen() {
   const Tile = ({ label, sub, sig, on, onPress, color, faint }: {
     label: string; sub?: string; sig?: number; on: boolean; onPress: () => void; color: string; faint?: boolean;
   }) => (
-    // ٢٣ نوفمبر (تصميم حسن): بطاقة زجاجية بحد ملوّن + مربع اختيار؛ المختار يتلوّن ويتوهج
     <Pressable
-      style={[s.tile, { backgroundColor: isDark ? color + (on ? '40' : '1a') : tBg(color + (on ? '26' : '0f')), borderColor: on ? color : color + '55' },
-        on && glow(color, 14), faint && !on && s.tileFaint, busy && s.dim]}
+      style={[s.tile, on && { backgroundColor: color, borderColor: color }, faint && !on && s.tileFaint, busy && s.dim]}
       onPress={onPress}
       disabled={busy}
     >
-      <View style={[s.miniCheck, { borderColor: on ? color : color + '88' }, on && { backgroundColor: color }]}>
-        {on && <Text style={[s.checkMark, { color: '#ffffff' }]}>✓</Text>}
+      <View style={[s.miniCheck, on && s.miniCheckOn]}>
+        {on && <Text style={[s.checkMark, { color }]}>✓</Text>}
       </View>
-      <View style={{ flex: 1, alignItems: 'center' }}>
-        <Text style={s.tileName} numberOfLines={1}>{label}</Text>
-        {!!sub && <Text style={s.tileSub} numberOfLines={1}>{sub}</Text>}
-        {sig !== undefined && <Text style={[s.tileSig, { color: rsrpCol(sig) }]}>{sig} dBm</Text>}
+      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+        <Text style={[s.tileName, on && { color: C.onAccent }]} numberOfLines={1}>{label}</Text>
+        {!!sub && <Text style={[s.tileSub, on && { color: C.onAccentSoft }]} numberOfLines={1}>{sub}</Text>}
+        {sig !== undefined && <Text style={[s.tileSig, { color: on ? C.onAccent : rsrpCol(sig) }]}>{sig} dBm</Text>}
       </View>
     </Pressable>
   );
@@ -437,58 +414,12 @@ export default function ComboScreen() {
       <ScrollView contentContainerStyle={[s.page, { paddingBottom: insets.bottom + 40 }]}>
         {loading && <View style={s.center}><ActivityIndicator size="large" color={C.blue} /></View>}
         {!!error && <View style={s.errBox}><Text style={s.err}>{error}</Text></View>}
-        {!!status && !busy && (
+        {!!status && (
           <View style={s.statusBox}>
             <Text style={s.statusText}>{status}</Text>
             <ActivityIndicator color={C.blue} />
           </View>
         )}
-        {busy && (() => {
-          // الخطوة الحالية من رسالة safeApply — وما نرجع لورا
-          const idx = APPLY_STEPS.reduce((a, st, i) => (st.m.test(status) ? i : a), -1);
-          if (idx > stepMax.current) stepMax.current = idx;
-          const cur = Math.max(0, stepMax.current);
-          const back = /نرجّع|نفك|رفض|ما اتصل|ما رجع/.test(status);
-          const el = startAt ? Math.max(0, Math.round((now - startAt) / 1000)) : 0;
-          const left = Math.max(5, APPLY_EST - el);
-          const frac = Math.min(0.97, Math.max((cur + 0.5) / APPLY_STEPS.length, el / (APPLY_EST + 10)));
-          return (
-            <View style={[s.prog, glow('#3b82f6', 16)]}>
-              {APPLY_STEPS.map((st, i) => {
-                const done = i < cur;
-                const on = i === cur;
-                return (
-                  <View key={st.k} style={[s.stepRow, i < APPLY_STEPS.length - 1 && s.stepLine]}>
-                    <View style={[s.stepDot, done && { backgroundColor: '#22c55e', borderColor: '#22c55e' }, on && { borderColor: C.blue }]}>
-                      {done ? <Text style={s.stepCheck}>✓</Text> : on ? <View style={s.stepInner} /> : null}
-                    </View>
-                    <Icon name={st.icon} size={20} color={done || on ? '#60a5fa' : C.muted} stroke={2.2} />
-                    <Text style={[s.stepTxt, !(done || on) && { color: C.muted }]}>{st.t}</Text>
-                    {on && <ActivityIndicator size="small" color={C.blue} />}
-                  </View>
-                );
-              })}
-              {!!status && <Text style={[s.stepNow, back && { color: C.red }]}>{status}</Text>}
-              <View style={s.progTrack}>
-                <LinearGradient colors={['#22d3ee', '#3b82f6', '#a855f7']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[s.progFill, { width: `${Math.round(frac * 100)}%` }]} />
-              </View>
-              <View style={s.timeRow}>
-                <View style={[s.timeBox, { borderColor: '#22c55e66', backgroundColor: isDark ? '#0f2a24' : tBg('#e9f9f0') }]}>
-                  <Icon name="clock" size={18} color="#22c55e" stroke={2.4} />
-                  <Text style={s.timeTxt}>باقي تقريباً <Text style={[s.timeNum, { color: '#22c55e' }]}>{left}</Text> ثانية</Text>
-                </View>
-                <View style={s.timeBox}>
-                  <Icon name="clock" size={18} color="#a78bfa" stroke={2.4} />
-                  <Text style={s.timeTxt}>مرّ <Text style={s.timeNum}>{el}</Text> ثانية</Text>
-                </View>
-              </View>
-              <View style={s.warnBox}>
-                <Text style={s.warnIcon}>⚠️</Text>
-                <Text style={s.warnTxt}>لا تطلع من الشاشة — الراوتر في نص التغيير، ونقول لك لما يخلص</Text>
-              </View>
-            </View>
-          );
-        })()}
 
         {!loading && !cfg && <Text style={s.hint}>راوترك ما يدعم قفل الترددات، فما نقدر نحدد الأساسي والثانوي.</Text>}
 
@@ -559,15 +490,10 @@ export default function ComboScreen() {
               {primary !== null && (
                 <Pressable onPress={() => router.push(`/nrdual/${id}?t=lte` as Href)} accessibilityRole="button"
                   style={({ pressed }) => [s.sameBand, pressed && { opacity: 0.8 }]}>
-                  <View style={s.sameRow}>
-                    <View style={{ flex: 1, gap: 3 }}>
-                      <Text style={s.sameTitle}>✓ {bandLabel('LTE', primary)} + {bandLabel('LTE', primary)} مسموح تلقائياً</Text>
-                      <Text style={s.sameSub}>
-                        لو برجك فيه قناتين على {bandLabel('LTE', primary)} يدمجها لحاله — اضغط هنا وشوف إذا برجك يدعمها ←
-                      </Text>
-                    </View>
-                    <View style={s.sameIcon}><Icon name="tower" size={24} color="#60a5fa" stroke={2} /></View>
-                  </View>
+                  <Text style={s.sameTitle}>✓ {bandLabel('LTE', primary)} + {bandLabel('LTE', primary)} مسموح تلقائياً</Text>
+                  <Text style={s.sameSub}>
+                    تبي {bandLabel('LTE', primary)} مع نفسه بس؟ اختر {bandLabel('LTE', primary)} أساسي وخلّ هالقسم فاضي — لو البرج فيه قناتين على {bandLabel('LTE', primary)} يدمجها لحاله. اضغط هنا نفحص هل برجك يدعمها ←
+                  </Text>
                 </Pressable>
               )}
               <View style={s.grid}>
@@ -625,38 +551,13 @@ export default function ComboScreen() {
             {!!op && (hiddenCount > 0 || allBands) && (
               <Pressable onPress={() => setAllBands(v => !v)} hitSlop={6} style={s.moreRow}>
                 <Text style={s.moreTxt}>
-                  {allBands ? `اعرض ترددات ${op.name} بس` : `💡 نعرض ترددات ${op.name} بس — اعرض كل ترددات الراوتر (+${hiddenCount})`}
+                  {allBands ? `اعرض ترددات ${op.name} بس` : `معروض ترددات ${op.name} بس · اعرض كل ترددات الراوتر (+${hiddenCount})`}
                 </Text>
               </Pressable>
             )}
 
-            {primary !== null && (() => {
-              const lteSel = autoSec ? null : [primary, ...extra];
-              const best = (autoSec || extra.length >= lteList.length - 1) && nr === 'any';
-              const lteTxt = lteSel ? lteSel.map(b => bandLabel('LTE', b)).join(' + ') : `${bandLabel('LTE', primary)} + أي ثانوي`;
-              const nrTxt = nr === 'none' ? '' : Array.isArray(nr) ? nr.map(b => bandLabel('NR', b)).join(' + ') : 'أي 5G';
-              return (
-                <View style={[s.plan, glow('#3b82f6', 18)]}>
-                  <View style={s.planBadge}><Text style={s.planBadgeTxt}>{best ? '⭐ أقوى تجميعة ممكنة' : '⭐ التجميعة اللي بنطبّقها'}</Text></View>
-                  <View style={s.planRow}>
-                    <View style={{ flex: 1, alignItems: 'center' }}>
-                      <Text style={s.planLte}>{lteTxt}</Text>
-                      {!!nrTxt && <Text style={s.planNr}>{`ومعه ${nrTxt}`}</Text>}
-                      {nr === 'none' && <Text style={s.planNone}>بدون 5G</Text>}
-                    </View>
-                    <Text style={s.planRocket}>🚀</Text>
-                  </View>
-                </View>
-              );
-            })()}
-
-            <Pressable onPress={apply} disabled={busy || primary === null}
-              style={({ pressed }) => [{ borderRadius: 999 }, glow('#6a4cff', 18), (busy || primary === null) && s.dim, pressed && { opacity: 0.88 }]}>
-              <LinearGradient colors={['#2f8bff', '#2f6bff', '#8b3dff']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 0 }} style={s.btn}>
-                <View style={s.btnCheck}><Text style={s.btnCheckTxt}>✓</Text></View>
-                <Text style={s.btnTxt}>{primary === null ? 'اختر الأساسي أول' : 'طبّق وتأكد من الدمج'}</Text>
-                <View style={{ transform: [{ scaleX: -1 }] }}><Icon name="chevron" size={18} color="#ffffff" /></View>
-              </LinearGradient>
+            <Pressable style={[s.btn, (busy || primary === null) && s.dim]} onPress={apply} disabled={busy || primary === null}>
+              <Text style={s.btnTxt}>{primary === null ? 'اختر الأساسي أول' : 'طبّق وتأكد من الدمج'}</Text>
             </Pressable>
 
             {verdict && (
@@ -680,8 +581,8 @@ export default function ComboScreen() {
 }
 
 const s = sheet({
-  sameBand: { borderWidth: 1, borderColor: isDark ? '#3b82f6aa' : '#93c5fd', backgroundColor: isDark ? '#0c1a45' : tBg('#f2f7ff'), borderRadius: 22, padding: 12, gap: 4, marginBottom: 4 },
-  sameTitle: { color: isDark ? '#7dd3fc' : '#0369a1', fontWeight: '900', fontSize: 14, textAlign: 'right' },
+  sameBand: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: SEC_ORANGE + '88', backgroundColor: SEC_ORANGE + '12', borderRadius: 14, padding: 12, gap: 4, marginBottom: 4 },
+  sameTitle: { color: SEC_ORANGE, fontWeight: '900', fontSize: 14.5, textAlign: 'right' },
   sameSub: { color: C.sub, fontSize: 12.5, lineHeight: 19, textAlign: 'right' },
   page: { padding: 16, gap: 14 },
   center: { alignItems: 'center', paddingVertical: 40 },
@@ -714,37 +615,8 @@ const s = sheet({
   carrRole: { color: C.sub, fontWeight: '800', fontSize: 12, minWidth: 64, textAlign: 'right' },
   carrName: { flex: 1, color: C.text, fontWeight: '900', fontSize: 15, textAlign: 'right' },
   carrSig: { fontWeight: '800', fontSize: 13 },
-  btn: { height: 56, borderRadius: 999, flexDirection: 'row-reverse', alignItems: 'center', paddingHorizontal: 14, gap: 8, borderWidth: 1, borderColor: '#ffffff40' },
-  btnTxt: { flex: 1, color: '#ffffff', fontWeight: '900', fontSize: 16, textAlign: 'center' },
-  btnCheck: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center' },
-  btnCheckTxt: { color: '#2f6bff', fontSize: 15, fontWeight: '900' },
-  prog: { backgroundColor: C.card, borderRadius: 22, borderWidth: 1, borderColor: isDark ? '#2c4fa0aa' : C.line, padding: 14, gap: 4 },
-  stepRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, paddingVertical: 9 },
-  stepLine: { borderBottomWidth: 1, borderBottomColor: isDark ? '#1e3468' : C.lineSoft },
-  stepDot: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
-  stepInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: C.blue },
-  stepCheck: { color: '#ffffff', fontSize: 13, fontWeight: '900' },
-  stepTxt: { flex: 1, color: C.text, fontSize: 15, fontWeight: '800', textAlign: 'right' },
-  stepNow: { color: C.sub, fontSize: 12, textAlign: 'right', marginTop: 2 },
-  progTrack: { height: 10, borderRadius: 99, backgroundColor: C.track, overflow: 'hidden', marginTop: 8, flexDirection: 'row' },
-  progFill: { height: 10, borderRadius: 99 },
-  timeRow: { flexDirection: 'row-reverse', gap: 8, marginTop: 8 },
-  timeBox: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, height: 46, borderRadius: 999, borderWidth: 1, borderColor: isDark ? '#2c4a8c' : C.line },
-  timeTxt: { color: C.text, fontSize: 13, fontWeight: '800' },
-  timeNum: { fontSize: 19, fontWeight: '900' },
-  warnBox: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, marginTop: 8, borderRadius: 16, borderWidth: 1, borderColor: '#f59e0b88', backgroundColor: isDark ? '#3a2410' : tBg('#fff4e3'), padding: 12 },
-  warnIcon: { fontSize: 22 },
-  warnTxt: { flex: 1, color: isDark ? '#fbbf24' : '#b45309', fontSize: 13, fontWeight: '800', textAlign: 'right', lineHeight: 20 },
-  plan: { borderRadius: 22, borderWidth: 1.5, borderColor: isDark ? '#3b82f6aa' : '#93c5fd', backgroundColor: isDark ? '#0c1a45' : tBg('#f2f7ff'), paddingTop: 22, paddingBottom: 14, paddingHorizontal: 12, marginTop: 12 },
-  planBadge: { position: 'absolute', top: -14, alignSelf: 'center', paddingHorizontal: 14, height: 28, borderRadius: 999, justifyContent: 'center', backgroundColor: isDark ? '#3a2a0c' : '#fff4d6', borderWidth: 1, borderColor: '#f59e0b99' },
-  planBadgeTxt: { color: isDark ? '#ffffff' : '#92400e', fontSize: 12.5, fontWeight: '900' },
-  planRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
-  planLte: { color: isDark ? '#5eead4' : '#0e7490', fontSize: 22, fontWeight: '900', textAlign: 'center' },
-  planNr: { color: isDark ? '#c4b5fd' : '#7c3aed', fontSize: 20, fontWeight: '900', textAlign: 'center' },
-  planNone: { color: C.sub, fontSize: 13, fontWeight: '800' },
-  planRocket: { fontSize: 34 },
-  sameRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
-  sameIcon: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: '#60a5fa88', alignItems: 'center', justifyContent: 'center' },
+  btn: { backgroundColor: C.blue, borderRadius: 16, padding: 15, alignItems: 'center' },
+  btnTxt: { color: C.onAccent, fontWeight: '900', fontSize: 15 },
   btnGhost: { borderWidth: 1, borderColor: C.blue, borderRadius: 14, padding: 12, alignItems: 'center' },
   btnGhostTxt: { color: C.blue, fontWeight: '800', fontSize: 14 },
   dim: { opacity: 0.45 },

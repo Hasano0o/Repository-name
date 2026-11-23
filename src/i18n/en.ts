@@ -5,10 +5,6 @@
  */
 export const EN: Record<string, string> = {
   // عدّة الألياف (٢٣ نوفمبر)
-  'ثانية': 'sec',
-  'لا تطلع من الشاشة — الراوتر في نص التغيير، ونقول لك لما يخلص': 'Don\'t leave this screen — the router is mid‑change, and we\'ll tell you when it\'s done',
-  '⭐ أقوى تجميعة ممكنة': '⭐ Strongest possible combo',
-  '⭐ التجميعة اللي بنطبّقها': '⭐ The combo we will apply',
   'أداء ممتاز': 'Excellent performance',
   'أداء جيد': 'Good performance',
   'أداء متوسط': 'Fair performance',
@@ -2584,10 +2580,6 @@ export const EN: Record<string, string> = {
 };
 
 export const EN_PATTERNS: Record<string, string> = {
-  'لو برجك فيه قناتين على {0} يدمجها لحاله — اضغط هنا وشوف إذا برجك يدعمها ←': 'If your tower has two {0} channels it combines them by itself — tap to see if yours supports it ←',
-  '💡 نعرض ترددات {0} بس — اعرض كل ترددات الراوتر (+{1})': '💡 Showing {0} bands only — show all router bands (+{1})',
-  '{0} + أي ثانوي': '{0} + any secondary',
-  'ومعه {0}': 'with {0}',
   'الـ 5G ({0}) مربوط على {1} — لو طاح {2} يطيح معه': '5G ({0}) is anchored to {1} — if {2} drops, it drops too',
   '{0}، لكن فيه تداخل قوي (SINR سالب) — جرّب مكان ثاني أو قرّب من الشباك.': '{0}, but there is strong interference (negative SINR) — try another spot or move near a window.',
   '{0}. ما فيه 5G حالياً — شوف الأبراج حولك تعرف إذا فيه تغطية 5G.': '{0}. No 5G right now — check the towers around you to see if there is 5G coverage.',
