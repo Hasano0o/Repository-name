@@ -112,6 +112,7 @@ grep -aE "BUILD (SUCCESSFUL|FAILED)" /root/bandly-build.log | tail -1; ls -l --t
   cd /root/router-manager/mobile && git pull --ff-only origin main && nohup bash desktop/build-windows.sh > /root/bandly-win.log 2>&1 &
   ```
   الناتج: https://has-host.com/dl/Bandly-Setup.exe
+- **⚠️ `bandly-update.sh` ما يوصل الويندوز** — واجهة البرنامج داخل المثبّت، فأي تعديل يحتاج بناء ويندوز. **البناء التلقائي** (٢٧ نوفمبر): `desktop/auto-build.sh` بـ cron كل نص ساعة — يسحب main، ولو تغيّر شي في app/src/desktop/assets/package من آخر بناء (`/root/bandly-desktop.last`) يبني وينشر، والملاحظات = عناوين الـ commits الجديدة. ما يشتغل وقت بناء الأندرويد، ونسخة فشلت ما تنعاد لين commit جديد (`.last.fail`). التركيب: `bash desktop/auto-build.sh --install` · الحالة `--status` · الإيقاف `--uninstall`.
 - **التحديث:** كل بناء ياخذ رقم نسخة جديد (`1.2.<تاريخ>`) وينشر `dl/bandly-desktop.json` (نسخة + sha256 + ملاحظات = عنوان آخر commit).
   البرنامج المثبت يشيك بعد ما يفتح وكل 6 ساعات، ويعرض «حدّث الحين» ← يحمّل المثبّت ويتحقق منه ويثبّته. (نسخة 1.0/1.1 ما فيها التحديث — تحتاج تثبيت يدوي مرة وحدة.)
   تغيير `version` في `desktop/package.json` (مثل 1.2 ← 1.3) فقط لما تبي ترقّم إصدار كبير.
