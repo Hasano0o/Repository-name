@@ -237,6 +237,8 @@ const PANEL_W = 126, PANEL_H = 92, GAUGE_W = 118;
 /** عرض اللوحة والمربعات (لازم يطابق s.panel و s.tiles) */
 const PANEL_CW = 80, TILES_W = 90;
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+/** أقل من هالعرض (بعد قسمة تكبير الخط) تنزل SINR/RSRQ تحت العدّاد — 0 = موقوف (التصميم السابق دايماً) */
+const COMPACT_BELOW = 0;
 
 /**
  * حجم البطاقة حسب الجوال (٢٧ نوفمبر — صورة عضو: العدّاد داخل على المربعات واللوحة في جوال صغير/خط كبير):
@@ -244,7 +246,8 @@ const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
  */
 export function techLayout(cardW: number, fontScale = 1): { compact: boolean; gaugeW: number } {
   if (!(cardW > 0)) return { compact: false, gaugeW: GAUGE_W };
-  const compact = cardW / Math.max(1, fontScale) < 345;
+  // حسن ٢٨ نوفمبر: «رجّع التصميم نفس السابق» — المربعات دايماً جنب العدّاد (ما تنزل تحته). نرجّعها بتغيير COMPACT_BELOW
+  const compact = COMPACT_BELOW > 0 && cardW / Math.max(1, fontScale) < COMPACT_BELOW;
   // عرض عمود العدّاد = البطاقة − الحافة (8) − اللوحة − المربعات (لو جنبه)
   const midW = cardW - 8 - PANEL_CW - (compact ? 0 : TILES_W);
   // ضيّق: العدّاد ما يدخل على خلفية اللوحة الملونة (أعرض من محتواها بـ PANEL_W − PANEL_CW)
