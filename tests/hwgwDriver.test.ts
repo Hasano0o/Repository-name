@@ -63,7 +63,24 @@ test('E5172: رد الحالة (getStatusByAjax.cgi)', () => {
   assert.equal(P.gwStatus(page()), null);
 });
 
-/** راوتر محاكى: كلمة صحيحة ← جلسة والحالة ترد · غلط ← صفحة الدخول والعدّاد يزيد */
+/** صفحة «ارجع لـ /» (٢٥٧ بايت) — نفسها من راوتر العضو ٢٧ نوفمبر */
+const BOUNCE = `<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>replace</title>
+<body>
+<script language="JavaScript" type="text/javascript">
+var pageName = '/';
+window.location.replace(pageName);
+</script>
+</head>
+</body>
+</html>`;
+
+/**
+ * راوتر محاكى بسلوك الجهاز الحقيقي (ملف FULL عضو ٢٧ نوفمبر): الحالة ترد **بدون دخول** · login.cgi يرد «ارجع لـ /»
+ * نجح أو فشل · html/index.asp بدون جلسة = «ارجع لـ /» · غلط ← «/» العدّاد يزيد.
+ */
 function gw(opts: { times?: number } = {}) {
   let times = opts.times ?? 0, logged = false;
   const log: string[] = [];
@@ -80,11 +97,12 @@ function gw(opts: { times?: number } = {}) {
       const enc = Buffer.from(q.get('Password') ?? '', 'base64');
       const okShape = enc.length >= 120 && enc.length <= 128;
       const ok = okShape && q.get('Username') === 'admin' && (globalThis as any).__pwOk;
-      if (ok) { logged = true; times = 0; return res('<script>top.location="/html/index.asp"</script>', 'SessionID_R3=abc; path=/'); }
+      if (ok) { logged = true; times = 0; return res(BOUNCE, 'SessionID_R3=abc; path=/'); }
       times++;
-      return res(page(times));
+      return res(BOUNCE);
     }
-    if (u.pathname === '/index/getStatusByAjax.cgi') return res(logged ? '<response><SIG>3</SIG><Mode>7</Mode><Connect>2</Connect><SIM>1</SIM><Operator>Zain</Operator></response>' : page(times));
+    if (u.pathname === '/html/index.asp') return res(logged ? '<html><head><script src="/js/main.js"></script></head><body id="main">'.padEnd(3000, ' ') + '</body></html>' : BOUNCE);
+    if (u.pathname === '/index/getStatusByAjax.cgi') return res('<response><SIG>3</SIG><Mode>7</Mode><Connect>2</Connect><SIM>1</SIM><Operator>Zain</Operator></response>');
     return res('', '');
   };
   void privateKey;
@@ -115,6 +133,35 @@ test('E5172: كلمة غلط ← «رفض» والعدّاد · الخلفية �
   const d3 = new HuaweiGwDriver();
   await assert.rejects(d3.login('192.168.1.1', 'admin', 'admin', { fresh: true }), /٣ محاولات/);
   assert.equal(r3.log.filter(x => x === 'POST /index/login.cgi').length, 0);
+});
+
+test('E5172 (عضو ٢٧ نوفمبر): الحالة ترد بدون دخول ← ما نحسبها دخول · اسم الموديل ما ينرسل', async () => {
+  assert.ok(P.isGwBounce(BOUNCE));
+  assert.equal(P.isGwBounce(page()), false);
+  assert.ok(P.gwModelLikeUser('E5172-920'));
+  assert.ok(P.gwModelLikeUser('E5172s-927'));
+  assert.equal(P.gwModelLikeUser('admin'), false);
+  assert.equal(P.gwModelLikeUser('user'), false);
+
+  (globalThis as any).__pwOk = false;
+  const r = gw({ times: 1 });
+  const d = new HuaweiGwDriver();
+  // القديم: الحالة ترد ← «دخل» بدون ما يرسل شي، وكرت FULL يجمع صفحات «ارجع لـ /»
+  await assert.rejects(d.login('192.168.1.1', 'admin', 'wrong27'), /رفض اسم المستخدم أو الكلمة \(محاولة 2/);
+  assert.equal(r.log.filter(x => x === 'POST /index/login.cgi').length, 1);
+
+  const r2 = gw();
+  const d2 = new HuaweiGwDriver();
+  await assert.rejects(d2.login('192.168.1.1', 'E5172-920', 'admin', { fresh: true }), /اسم الموديل مو اسم المستخدم/);
+  assert.equal(r2.log.filter(x => x === 'POST /index/login.cgi').length, 0);
+
+  // جلسة شغالة (html/index.asp يرد الصفحة) ← ما نرسل الكلمة
+  (globalThis as any).__pwOk = true;
+  const r3 = gw();
+  const d3 = new HuaweiGwDriver();
+  await d3.login('192.168.1.1', 'admin', 'admin', { fresh: true });
+  await d3.login('192.168.1.1', 'admin', 'admin');
+  assert.equal(r3.log.filter(x => x === 'POST /index/login.cgi').length, 1);
 });
 
 test('E5172: صفحات FULL ما فيها شي خطر', () => {

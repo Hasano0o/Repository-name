@@ -27,6 +27,22 @@ export function gwLoginError(html: string): { times: number; code: string } | nu
   return m ? { times: parseInt(m[1], 10), code: m[2] } : null;
 }
 
+/**
+ * صفحة «ارجع للبداية» (٢٥٧ بايت): «var pageName = '/'; window.location.replace(pageName);» — الراوتر يردها
+ * على login.cgi (نجح أو فشل) وعلى أي صفحة html/*.asp بدون جلسة. فما تقول شي عن الدخول بحد ذاتها.
+ */
+export function isGwBounce(html: string): boolean {
+  return html.length < 1200 && /var\s+pageName\s*=\s*['"]\/['"]/.test(html) && /location\.replace\(\s*pageName\s*\)/.test(html);
+}
+
+/**
+ * اسم مستخدم شكله اسم موديل (E5172-920 · E5172s-927 …) — عضو ٢٧ نوفمبر دخل به (غالباً من الملصق) وانرفض مرتين.
+ * الاسم في هالراوترات admin — ما نصرف محاولة (الراوتر يحذّر بعد ٣).
+ */
+export function gwModelLikeUser(user: string): boolean {
+  return /^(e|b)\d{3,4}[a-z]?s?(-\d{2,4})?$/i.test(user.trim());
+}
+
 /** نسخة الفيرموير من loadbyver.js?ver=… */
 export function gwVersion(html: string): string | undefined {
   return html.match(/loadbyver\.js\?ver=([A-Za-z0-9._-]{4,40})/)?.[1];

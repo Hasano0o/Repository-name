@@ -14,7 +14,7 @@ import { diag } from '../../services/diag';
 import { isLanHost } from '../../utils/host';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import type { ModelProfile } from '../models';
-import { isGwLoginPage, gwLoginError, gwVersion, gwRsaB64, gwLoginBody, gwStatus, GwStatus } from './parse';
+import { isGwLoginPage, isGwBounce, gwModelLikeUser, gwLoginError, gwVersion, gwRsaB64, gwLoginBody, gwStatus, GwStatus } from './parse';
 
 /** صفحات تغيّر شي — الجامع ما يفتحها أبداً */
 const GW_DANGER = /reset|reboot|restore|factory|firmware\.asp|upgrade|logout|cfgfile/i;
@@ -67,6 +67,17 @@ export class HuaweiGwDriver implements RouterDriver {
     return s;
   }
 
+  /**
+   * فيه جلسة؟ «/html/index.asp» بدون جلسة يرد صفحة «ارجع لـ /» (٢٥٧ بايت — ملف عضو ٢٧ نوفمبر)، ومع الجلسة يرد الصفحة الرئيسية.
+   * (getStatusByAjax.cgi يرد بدون دخول، فما يثبت شي.)
+   */
+  private async authed(): Promise<{ ok: boolean; len: number }> {
+    try {
+      const t = (await this.req('/html/index.asp', { method: 'GET', headers: { Referer: this.base() + '/' } }, 8000)).text;
+      return { ok: t.length > 0 && !isGwBounce(t) && !isGwLoginPage(t), len: t.length };
+    } catch { return { ok: false, len: 0 }; }
+  }
+
   async login(host: string, username: string, password: string, opts?: { lastTry?: boolean; fresh?: boolean }): Promise<void> {
     if (!isLanHost(host)) throw new Error('العنوان لازم يكون محلي (192.168 / 10 / 172)');
     this.host = host;
@@ -76,8 +87,11 @@ export class HuaweiGwDriver implements RouterDriver {
     if (!opts?.fresh && !opts?.lastTry && await isBadPassword(key, fp)) {
       throw new Error('كلمة المرور المحفوظة رفضها الراوتر قبل — ما جرّبناها مرة ثانية عشان ما ينقفل. عدّلها من إعدادات الراوتر.');
     }
-    // جلسة شغالة؟ (الحالة ترد) ← ما نصرف محاولة — إلا لو المستخدم كتب الكلمة بنفسه
-    if (!opts?.fresh) { try { if (await this.status()) { this.creds = { user, password }; return; } } catch {} }
+    if (gwModelLikeUser(user)) {
+      throw new Error(`«${user}» هذا اسم الموديل مو اسم المستخدم — اكتب admin في خانة اسم المستخدم، والكلمة اللي على الملصق (غالباً admin).`);
+    }
+    // جلسة شغالة ← ما نصرف محاولة (إلا لو المستخدم كتب الكلمة بنفسه)
+    if (!opts?.fresh && (await this.authed()).ok) { this.creds = { user, password }; return; }
 
     const page = (await this.req('/', { method: 'GET' }, 10000)).text;
     if (!isGwLoginPage(page)) throw new Error('صفحة الدخول في راوترك مختلفة عن اللي نعرفه — اضغط «أرسل الخطأ للمطوّر»');
@@ -102,20 +116,21 @@ export class HuaweiGwDriver implements RouterDriver {
     } catch (e: any) {
       throw new Error(`الراوتر ما رد على الدخول — ${String(e?.message ?? e).slice(0, 60)}`);
     }
-    const after = gwLoginError(r.text);
-    diag(`[hwgw] login.cgi (${user}) → ${r.status} · ${r.text.length}B · set-cookie ${r.setCookie ? r.setCookie.split('=')[0].slice(0, 20) : '✗'} · ${isGwLoginPage(r.text) ? `صفحة الدخول (محاولات ${after?.times ?? '؟'} · كود ${after?.code ?? '؟'})` : 'مو صفحة الدخول'} · ${this.version || '؟'}`);
-    let st: GwStatus | null = null;
-    try { st = await this.status(); } catch {}
-    diag(`[hwgw] الحالة بعد الدخول: ${st ? `✓ SIG ${st.sig} · Mode ${st.mode} · Connect ${st.connect} · SIM ${st.sim}` : '✗ ما ردت'}`);
-    if (st) {
+    // الرد صفحة «ارجع لـ /» نجح أو فشل ← الحكم من html/index.asp، والعدّاد من «/»
+    const au = await this.authed();
+    let after: { times: number; code: string } | null = isGwLoginPage(r.text) ? gwLoginError(r.text) : null;
+    if (!au.ok && !after) { try { after = gwLoginError((await this.req('/', { method: 'GET' }, 10000)).text); } catch {} }
+    diag(`[hwgw] login.cgi (${user}) → ${r.status} · ${r.text.length}B${isGwBounce(r.text) ? ' (ارجع لـ /)' : ''} · set-cookie ${r.setCookie ? r.setCookie.split('=')[0].slice(0, 20) : '✗'} · html/index.asp: ${au.ok ? `✓ (${au.len}B)` : `✗ (${au.len}B)`} · محاولات ${before?.times ?? '؟'}→${after?.times ?? '-'} · ${this.version || '؟'}`);
+    if (au.ok) {
       await markBadPassword(key, null);
       this.creds = { user, password };
+      try { const st = await this.status(); diag(`[hwgw] الحالة: ${st ? `SIG ${st.sig} · Mode ${st.mode} · Connect ${st.connect} · SIM ${st.sim}` : '✗'}`); } catch {}
       return;
     }
     // رجعنا لصفحة الدخول والعدّاد زاد ← الراوتر رفض الاسم/الكلمة فعلاً
-    if (isGwLoginPage(r.text) && (after?.times ?? 0) > (before?.times ?? 0)) {
+    if ((after?.times ?? 0) > (before?.times ?? 0)) {
       await markBadPassword(key, fp);
-      throw new Error(`الراوتر رفض اسم المستخدم أو الكلمة (محاولة ${after!.times} من ٣). الافتراضي على الملصق: admin / admin.`);
+      throw new Error(`الراوتر رفض اسم المستخدم أو الكلمة (محاولة ${after!.times} من ٣). اسم المستخدم admin، والكلمة اللي على الملصق (غالباً admin).`);
     }
     throw new Error('ما قدرنا نتأكد من الدخول — اضغط «أرسل الخطأ للمطوّر» عشان نشوف رد راوترك.');
   }
@@ -153,7 +168,7 @@ export class HuaweiGwDriver implements RouterDriver {
   async fetchAuthPage(path: string): Promise<{ ok: boolean; status: number; text: string; type: string }> {
     if (GW_DANGER.test(path)) return { ok: false, status: 0, text: '', type: '' };
     let r = await this.req(path, { method: 'GET' }, 10000).catch(() => ({ status: 0, text: '', setCookie: '', url: '' }));
-    if (isGwLoginPage(r.text) && this.creds && Date.now() - this.reloginAt > 120_000) {
+    if ((isGwLoginPage(r.text) || isGwBounce(r.text)) && this.creds && Date.now() - this.reloginAt > 120_000) {
       this.reloginAt = Date.now();
       diag(`[hwgw] الجلسة انتهت عند ${path} — دخول جديد`);
       try { await this.login(this.host, this.creds.user, this.creds.password); r = await this.req(path, { method: 'GET' }, 10000); } catch {}
@@ -177,6 +192,6 @@ export class HuaweiGwDriver implements RouterDriver {
 
   /** software = نسخة الفيرموير + قائمة الصفحات — نرفعها لو أضفنا صفحات عشان يرجع كرت FULL */
   async getDeviceDetails(): Promise<DeviceDetails> {
-    return { model: 'E5172', software: `${this.version || 'hwgw'}|hwgw-pages-1` };
+    return { model: 'E5172', software: `${this.version || 'hwgw'}|hwgw-pages-2` };
   }
 }
