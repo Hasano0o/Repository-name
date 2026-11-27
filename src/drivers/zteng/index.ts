@@ -17,7 +17,7 @@ import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import {
   RouterDriver, Capability, Signal, Carrier, SignalSnapshot, NetworkInfo, CellTower, DeviceTemp, SmsMessage,
-  Traffic, Usage, BandConfig, ActiveLock, CellLockState, DeviceDetails, WifiRadio, ConnectedDevice, ModemSignal, BatteryInfo,
+  Traffic, Usage, BandConfig, ActiveLock, CellLockState, DeviceDetails, WifiRadio, ConnectedDevice, ModemSignal, BatteryInfo, RouterExtras,
 } from '../types';
 import { http } from '../http';
 import { noChange } from '../noChange';
@@ -30,6 +30,11 @@ import { diag } from '../../services/diag';
 import { u30NewKey } from '../zte/u30crypto';
 import { ucs2Hex, ngSmsNow, idList, parseNgSms, cmdState } from './sms';
 import { zteBattery } from './battery';
+import { parseRebootSchedule, rebootView, rebootBody, rebootReady, parseWatchdog, watchdogBody, watchdogReady, parseDirectPower } from './topflow';
+
+/** راوترات عرفنا إنها TopFlow MU5252 (web_info بدون دخول) — مرة لكل عنوان */
+const topflowHosts = new Map<string, boolean>();
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const rnd = async () => { const C = await import('expo-crypto'); return (n: number) => C.getRandomBytes(n); };
 
 const ZERO = '00000000000000000000000000000000';
@@ -154,6 +159,7 @@ export class ZteNgDriver implements RouterDriver {
     this.password = password || '';
     // القراءة ما تحتاج دخول. نتحقق من الكلمة الحين بس لو المستخدم كتبها بنفسه
     if (password && (opts?.fresh || opts?.lastTry)) await this.doLogin(true);
+    await this.attachTopflow();
   }
 
   /** محاولة دخول وحدة. user=true: المستخدم طلبها بنفسه (نتجاوز «انرفضت قبل») */
@@ -716,6 +722,85 @@ export class ZteNgDriver implements RouterDriver {
    * الصفحة: bat_charger_status "0" = ما يشحن (أيقونات التفريغ)، غيره = يشحن · bat_temperature بالدرجة (transTemperature).
    * راوتر بدون بطارية (MU5250…) ← الرد بدون bat_percent أو bat_online = "0" ← null. قراءة بس.
    */
+  // ─── مركز التحكم — TopFlow MU5252 بس (topflow.ts: كل أمر من صفحة في قائمة الجهاز) ───
+  getExtras?: () => Promise<RouterExtras>;
+  setDirectPower?: (on: boolean) => Promise<void>;
+  setAutoReboot?: (on: boolean) => Promise<void>;
+  setNetWatch?: (on: boolean) => Promise<void>;
+
+  /**
+   * MU5252 ← نضيف دوال مركز التحكم لهالنسخة بس (U60 Pro / MU5250 / MC8830 ما تتغيّر — كل موديل لحاله).
+   * web_info بدون دخول (نفس identify) · نتذكره للعنوان.
+   */
+  private async attachTopflow(): Promise<void> {
+    let yes = topflowHosts.get(this.host);
+    if (yes === undefined) {
+      try {
+        const i = await this.call('zwrt_web', 'web_info', {}, ZERO);
+        yes = /MU5252|TOPFLOW/i.test(JSON.stringify(i));
+        topflowHosts.set(this.host, yes);
+      } catch { return; }
+    }
+    if (!yes) return;
+    this.getExtras = () => this.topflowExtras();
+    this.setDirectPower = on => this.topflowPower(on);
+    this.setAutoReboot = on => this.topflowReboot(on);
+    this.setNetWatch = on => this.topflowWatch(on);
+  }
+
+  private async tfPower(): Promise<boolean | undefined> {
+    return parseDirectPower(await this.authRead(() => this.call('zwrt_deviceui', 'zwrt_deviceui_direct_power_mode_get', { moduleName: 'web' })));
+  }
+  private async tfReboot() { return parseRebootSchedule(await this.uciGet('zwrt_zte_mc', 'reboot_schedule')); }
+  private async tfWatch() { return parseWatchdog(await this.uciGet('zwrt_router', 'watchdog')); }
+
+  private async topflowExtras(): Promise<RouterExtras> {
+    const x: RouterExtras = {};
+    const [bat, temps, power, rb, wd] = await Promise.all([
+      this.getBattery().catch(() => null), this.getTemps().catch(() => []),
+      this.tfPower().catch(() => undefined), this.tfReboot().catch(() => null), this.tfWatch().catch(() => null),
+    ]);
+    const cpu = temps.find(t => t.key === 'cpu')?.c;
+    if (bat || cpu !== undefined) x.health = { battery: bat?.percent, charging: bat?.charging, tempC: cpu ?? bat?.tempC };
+    if (power !== undefined) x.directPower = power;
+    if (rb && rebootReady(rb)) x.autoReboot = rebootView(rb);
+    if (wd) x.netWatch = { on: wd.on, url: wd.url, times: parseInt(wd.pingTimes, 10) || 0, gapSec: parseInt(wd.timeGap, 10) || 0 };
+    return x;
+  }
+
+  /** power_supply.js: zwrt_bsp.charger.set ← نتأكد بالقراءة */
+  private async topflowPower(on: boolean): Promise<void> {
+    await this.write('zwrt_bsp.charger', 'set', { direct_power_supply_mode: on ? 'enable' : 'disable' });
+    for (let k = 0; k < 4; k++) {
+      await sleep(1000);
+      if (await this.tfPower().catch(() => undefined) === on) return;
+    }
+    throw new Error('الراوتر قبل الأمر بس القراءة بعده ما تغيّرت — حدّث الصفحة بعد شوي');
+  }
+
+  /** system_setting.js: set_device_info بنفس جسم الصفحة — نبدّل التشغيل بس، والوقت والوضع كما هي */
+  private async topflowReboot(on: boolean): Promise<void> {
+    const r = await this.tfReboot();
+    if (!r || !rebootReady(r)) throw new Error('اضبط وقت إعادة التشغيل أول مرة من صفحة الراوتر (إعدادات النظام)، وبعدها تقدر تشغّلها وتطفيها من هنا');
+    await this.write('zwrt_mc.device.manager', 'set_device_info', { deviceInfoList: rebootBody(r, on) });
+    await sleep(800);
+    const a = await this.tfReboot().catch(() => null);
+    if ((a?.enable === '1') !== on) throw new Error('الراوتر قبل الأمر بس القراءة بعده ما تغيّرت — حدّث الصفحة بعد شوي');
+  }
+
+  /** system_setting.js: router_set_watchdog — الصفحة تنتظر ١٠ ثواني وتقرأ */
+  private async topflowWatch(on: boolean): Promise<void> {
+    const w = await this.tfWatch();
+    if (!w) throw new Error('الراوتر ما رجّع إعداد مراقبة الاتصال');
+    if (on && !watchdogReady(w)) throw new Error('اضبط مراقبة الاتصال أول مرة من صفحة الراوتر (إعدادات النظام)، وبعدها تقدر تشغّلها وتطفيها من هنا');
+    await this.write('zwrt_router.api', 'router_set_watchdog', watchdogBody(w, on));
+    for (let k = 0; k < 6; k++) {
+      await sleep(2000);
+      if ((await this.tfWatch().catch(() => null))?.on === on) return;
+    }
+    throw new Error('الراوتر قبل الأمر بس القراءة بعده ما تغيّرت — حدّث الصفحة بعد شوي');
+  }
+
   async getBattery(): Promise<BatteryInfo | null> {
     let b: Record<string, unknown>;
     try {

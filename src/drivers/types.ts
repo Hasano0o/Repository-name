@@ -84,6 +84,10 @@ export interface RouterExtras {
   wifiSleep?: number;
   /** شبكات الواي فاي الأساسية (بدون الضيوف) — للتعديل على الاسم وكلمة المرور */
   wifiNets?: { index: string; band: '2.4' | '5'; name: string; secured: boolean }[];
+  /** ZTE TopFlow: يشتغل من الكهرباء مباشرة بدون ما يشحن البطارية (يحمي البطارية لو الراوتر دايم على الشاحن) */
+  directPower?: boolean;
+  /** ZTE TopFlow: مراقبة الاتصال — لو فشل الـ ping كذا مرة ورا بعض الراوتر يعيد تشغيل نفسه */
+  netWatch?: { on: boolean; url: string; times: number; gapSec: number };
   /** صحة الجهاز: البطارية والحرارة (°م) — throttle = الراوتر قاعد يخفّف قوته بسبب الحرارة */
   health?: { battery?: number; charging?: boolean; tempC?: number; throttle?: boolean };
 }
@@ -455,6 +459,8 @@ export interface RouterDriver {
   /** ضبط المصنع: كل الإعدادات والواي فاي وكلمة الدخول ترجع لللي على الملصق */
   factoryReset?(): Promise<void>;
   setAutoRecover?(on: boolean): Promise<void>;
+  setDirectPower?(on: boolean): Promise<void>;
+  setNetWatch?(on: boolean): Promise<void>;
   setWifiSleep?(mins: number): Promise<void>;
   /** موديل الراوتر بالضبط (بدون كلمة مرور) — التطبيق يضبط نفسه عليه */
   identify?(): Promise<ModelProfile | null>;

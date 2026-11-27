@@ -75,6 +75,8 @@ interface Features {
   cellular: boolean;
   /** الدرايفر يعرف يقرأ الإشارة الضوئية (فايبر) */
   optic: boolean;
+  /** مركز التحكم لدرايفر مو في القائمة — ZTE TopFlow MU5252 بس */
+  control?: boolean;
 }
 const NO_FEATURES: Features = {
   bands: false, sms: false, ussd: false, block: false, reboot: false, devices: false, cells: false, details: false, plan: false, network: false, carriers: false, antenna: false, cellular: true, optic: false,
@@ -94,6 +96,7 @@ const featuresOf = (d: RouterDriver): Features => ({
   antenna: !!d.getAntenna,
   cellular: !!d.getSignal,
   optic: !!d.getOptic,
+  control: d.id === 'zte-ng' && !!d.getExtras,
 });
 
 /** خلفية البطاقة الرئيسية حسب جودة الاتصال */
@@ -376,7 +379,7 @@ export default function RouterDashboard() {
         setFeatCache(r.id, {
           bands: !!d.getBandConfig, sms: !!d.listSms, ussd: !!d.ussd, reboot: !!d.reboot, devices: !!d.getDevices,
           usage: !!d.getUsage, network: !!d.getApnProfiles || !!d.getDns, antenna: !!d.getAntenna,
-          cellular: !!d.getSignal, optic: !!d.getOptic,
+          cellular: !!d.getSignal, optic: !!d.getOptic, control: d.id === 'zte-ng' && !!d.getExtras,
         });
         rememberBands(r.id, !!d.getBandConfig);
         if (d.codePair) { const cp = d.codePair; cp.needed().then(n => setPair(n ? { title: cp.title, hint: cp.hint } : null)).catch(() => {}); } else setPair(null);

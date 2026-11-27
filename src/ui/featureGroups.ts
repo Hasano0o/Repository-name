@@ -11,7 +11,7 @@ export interface FeatGroup {
   key: string; title: string; short: string; chipIcon: IconName; color: string; band: [string, string];
   icon: IconName; hot?: boolean; items: FeatItem[];
 }
-export interface FeatFlags { usage?: boolean; cellular?: boolean; optic?: boolean; reboot?: boolean; network?: boolean; ussd?: boolean; sms?: boolean; antenna?: boolean }
+export interface FeatFlags { usage?: boolean; cellular?: boolean; optic?: boolean; reboot?: boolean; network?: boolean; ussd?: boolean; sms?: boolean; antenna?: boolean; control?: boolean }
 
 export const CONTROL_DRIVERS = ['huawei-lte', 'zte', 'fiberhome', 'oppo', 'greenpacket', 'zyxel', 'demo'];
 
@@ -26,7 +26,7 @@ export function buildFeatureGroups(info: SavedRouter, f: FeatFlags | undefined, 
     {
       key: 'hot', title: 'الأكثر طلباً', short: 'الأكثر طلباً', chipIcon: 'fire', color: '#f59e0b', band: ['#fde8c8', '#fff7ea'], icon: 'star', hot: true, items: pick([
         notDevice && cell && { key: 'newip', title: 'آي بي جديد', icon: 'refresh', color: ORANGE, onPress: go(`/newip/${rid}`) },
-        CONTROL_DRIVERS.includes(info.driverId) && { key: 'control', title: 'مركز التحكم', icon: 'settings', color: BLUE, onPress: go(`/control/${rid}`) },
+        (CONTROL_DRIVERS.includes(info.driverId) || !!f?.control) && { key: 'control', title: 'مركز التحكم', icon: 'settings', color: BLUE, onPress: go(`/control/${rid}`) },
         { key: 'speed', title: 'السرعة', icon: 'speed', color: GREEN, onPress: go(`/speed/${rid}`) },
         !cell && { key: 'planspeed', title: 'سرعتك وباقتك', icon: 'chart', color: TEAL, onPress: go(`/planspeed/${rid}`) },
         !cell && { key: 'wifiboost', title: 'سرّع واي فايك', icon: 'spark', color: ORANGE, onPress: go(`/wifiboost/${rid}`) },

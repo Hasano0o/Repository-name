@@ -51,7 +51,7 @@ export default function Features() {
         const f = await withSession(r, async d => ({
           bands: !!d.getBandConfig, sms: !!d.listSms, ussd: !!d.ussd, reboot: !!d.reboot, devices: !!d.getDevices,
           usage: !!d.getUsage, network: !!d.getApnProfiles || !!d.getDns, antenna: !!d.getAntenna,
-          cellular: !!d.getSignal, optic: !!d.getOptic,
+          cellular: !!d.getSignal, optic: !!d.getOptic, control: d.id === 'zte-ng' && !!d.getExtras,
         }));
         setFeatCache(id, f);
         if (alive) setFeat(f);

@@ -18,7 +18,7 @@ import { P, shadow } from '../../src/ui/Pro';
 import { C, tBg, tBd, tFg } from '../../src/ui/theme';
 
 import { sheet, tr } from '../../src/i18n';
-type Key = 'nat' | 'upnp' | 'dmz' | 'led' | 'reboot' | 'guest' | 'b2.4' | 'b5' | 'rule' | 'url' | 'recover' | 'sleep' | 'wifi' | 'reset';
+type Key = 'nat' | 'upnp' | 'dmz' | 'led' | 'reboot' | 'guest' | 'b2.4' | 'b5' | 'rule' | 'url' | 'recover' | 'sleep' | 'wifi' | 'reset' | 'power' | 'watch';
 
 const hhmm = (mins: number) => `${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')}`;
 /** مدة التشغيل: «01:01:47» → «ساعة و ١ دقيقة» */
@@ -313,7 +313,7 @@ export default function ControlCenter() {
     }
   };
 
-  const empty = ex && !ex.nat && ex.upnp === undefined && !ex.dmz && !ex.ledNight && ex.led === undefined && !ex.autoReboot && !ex.guest && !ex.bands && !ex.timeRules && !ex.urlBlocks && ex.autoRecover === undefined && ex.wifiSleep === undefined && !ex.health;
+  const empty = ex && !ex.nat && ex.upnp === undefined && !ex.dmz && !ex.ledNight && ex.led === undefined && !ex.autoReboot && !ex.guest && !ex.bands && !ex.timeRules && !ex.urlBlocks && ex.autoRecover === undefined && ex.wifiSleep === undefined && !ex.health && ex.directPower === undefined && !ex.netWatch;
   const games = ex && (ex.nat || ex.upnp !== undefined || ex.dmz);
 
   return (
@@ -526,7 +526,7 @@ export default function ControlCenter() {
               </Section>
             )}
 
-            {(ex?.autoReboot || ex?.uptime || ex?.autoRecover !== undefined || ex?.wifiSleep !== undefined || ex?.health) && (
+            {(ex?.autoReboot || ex?.uptime || ex?.autoRecover !== undefined || ex?.wifiSleep !== undefined || ex?.health || ex?.directPower !== undefined || ex?.netWatch) && (
               <Section icon="refresh" title="الصيانة" caption="راوتر مرتاح = سرعة ثابتة" colors={['#2dd4bf', '#0f766e']}>
                 {!!ex?.health && (
                   <Row title="صحة الجهاز" last={!ex.uptime && !ex.autoReboot && ex.autoRecover === undefined && ex.wifiSleep === undefined}
@@ -543,6 +543,22 @@ export default function ControlCenter() {
                     sub={ex.autoRecover ? 'شغّال — لو انقطعت الخدمة (No Service) الراوتر يعيد الاتصال بنفسه.' : 'طافي. ننصح تشغّله — يرجّع الشبكة لحالها بدل ما تطفي وتشغّل.'}
                     right={<Toggle value={ex.autoRecover} busy={busy === 'recover'} color="#0f766e"
                       onChange={v => apply('recover', d => d.setAutoRecover(v), x => x.autoRecover === v)} />} />
+                )}
+                {ex?.directPower !== undefined && (
+                  <Row title="تشغيل مباشر من الكهرباء"
+                    sub={ex.directPower
+                      ? 'شغّال — الراوتر ياخذ الكهرباء من الشاحن مباشرة وما يشحن البطارية. يحميها لو الراوتر دايم على الشاحن.'
+                      : 'طافي — الراوتر يشحن البطارية وهو شغّال. لو الراوتر دايم على الشاحن، شغّله عشان تطوّل عمر البطارية.'}
+                    right={<Toggle value={ex.directPower} busy={busy === 'power'} color="#0f766e"
+                      onChange={v => apply('power', d => d.setDirectPower(v), x => x.directPower === v)} />} />
+                )}
+                {!!ex?.netWatch && (
+                  <Row title="مراقبة الاتصال"
+                    sub={ex.netWatch.on
+                      ? `شغّالة — لو ما رد النت ${ex.netWatch.times} مرات ورا بعض، الراوتر يعيد تشغيل نفسه.`
+                      : 'طافية — لو النت علّق، الراوتر يبقى معلّق لين تطفيه وتشغّله بنفسك.'}
+                    right={<Toggle value={ex.netWatch.on} busy={busy === 'watch'} color="#0f766e"
+                      onChange={v => apply('watch', d => d.setNetWatch(v), x => x.netWatch?.on === v)} />} />
                 )}
                 {ex?.wifiSleep !== undefined && (
                   <Row title="نوم الواي فاي" last={!ex.uptime && !ex.autoReboot}

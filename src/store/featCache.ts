@@ -5,6 +5,8 @@
 export interface RouterFeatures {
   bands: boolean; sms: boolean; ussd: boolean; reboot: boolean; devices: boolean; usage: boolean;
   network: boolean; antenna: boolean; cellular: boolean; optic: boolean;
+  /** مركز التحكم لدرايفر مو في CONTROL_DRIVERS (ZTE TopFlow MU5252 بس) */
+  control?: boolean;
 }
 
 const cache = new Map<string, RouterFeatures>();
