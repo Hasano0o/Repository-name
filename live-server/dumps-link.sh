@@ -23,10 +23,22 @@ for d in /root/bandly-live/data/dumps /root/bandly-archive/dumps; do
     done
   done
 done
-c=$(ls "$T" | wc -l)
+# تقارير الدعم (قناة الواي فاي، أخطاء الإضافة…) — آخر ١٤ يوم، بالاسم أو المحتوى
+RP=/root/bandly-live/data/reports
+if [ -d "$RP" ]; then
+  find "$RP" -maxdepth 1 -type f -mtime -14 | while read -r f; do
+    n=$(basename "$f")
+    for k in "$@"; do
+      if echo "$n" | grep -qi -- "$k" || grep -qi -- "$k" "$f" 2>/dev/null; then
+        mkdir -p "$T/reports" && cp "$f" "$T/reports/"; break
+      fi
+    done
+  done
+fi
+c=$(find "$T" -type f | wc -l)
 [ "$c" -gt 0 ] || { echo "ما لقيت ملفات تطابق: $*"; rm -rf "$T"; exit 1; }
 R=$(head -c4 /dev/urandom | od -An -tx1 | tr -d ' \n')
-(cd "$T" && zip -q -0 "$DL/z-$R.zip" *)
+(cd "$T" && zip -q -0 -r "$DL/z-$R.zip" .)
 rm -rf "$T"
 nohup bash -c "sleep 3600; rm -f $DL/z-$R.zip" >/dev/null 2>&1 &
 echo "✓ $c ملف · $(du -h "$DL/z-$R.zip" | cut -f1) — حمّله وأرفقه بالمحادثة (ينحذف بعد ساعة):"
