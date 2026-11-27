@@ -149,7 +149,7 @@ export const EN: Record<string, string> = {
   'الراوتر ما يطلب رمز': "The router isn't asking for a code",
   '✓ تم — الأدوات صارت شغالة': '✓ Done — the tools are active now',
   'رمز MONDO': 'MONDO code',
-  'جهازك عليه أداة MONDO للتثبيت. من شاشة الجهاز: القائمة ← MONDO ← رمز الويب، واكتب الرمز كما هو. الجلسة تبقى ١٥ دقيقة من آخر استخدام.': 'Your device has the MONDO lock tool. On the device screen: Menu → MONDO → Web code, then type the code exactly as shown. The session stays active for 15 minutes after last use.',
+  'جهازك عليه أداة MONDO للتثبيت. بدون الرمز صفحة الجهاز ما تعطي الجودة (RSRQ) ولا رقم البرج. من شاشة الجهاز: القائمة ← MONDO ← رمز الويب، واكتب الرمز كما هو. الجلسة تبقى ١٥ دقيقة من آخر استخدام.': "Your device has the MONDO lock tool. Without the code, the device page doesn't show quality (RSRQ) or the tower number. On the device screen: Menu → MONDO → Web code, then type the code exactly as shown. The session stays active for 15 minutes after last use.",
   'اكتب الرمز اللي على شاشة الجهاز': 'Type the code shown on the device screen',
   'الرمز': 'Code',
   'أسبوع': 'Week',

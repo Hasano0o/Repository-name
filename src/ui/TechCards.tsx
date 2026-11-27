@@ -7,8 +7,8 @@
  *   شارة التردد (4G · أعمدة · B3 · 1800 متوازن) | قوة الإشارة + الشريط + الحالة | مربعا SINR و RSRQ
  * مربعات SINR/RSRQ تفتح «التفاصيل». ألوان التقييم من signal.ts عشان تطابق باقي الشاشات.
  */
-import { useEffect, useRef } from 'react';
-import { Animated, Easing } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, useWindowDimensions } from 'react-native';
 import { View, Text, Pressable } from '../i18n/rn';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Rect, Circle, Polyline, Defs, LinearGradient as SvgGrad, Stop, Polygon } from 'react-native-svg';
@@ -213,17 +213,18 @@ function Pulse({ color }: { color: string }) {
   );
 }
 
-function Tile({ icon, label, value, color, bg, onPress, spark }: {
-  icon: React.ReactNode; label: string; value: string; color: string; bg: string; onPress?: () => void; spark?: number[];
+function Tile({ icon, label, value, color, bg, onPress, spark, wide }: {
+  icon: React.ReactNode; label: string; value: string; color: string; bg: string; onPress?: () => void; spark?: number[]; wide?: boolean;
 }) {
+  const none = value === '—';
   return (
-    <Pressable style={[s.tile, { backgroundColor: bg }]} onPress={onPress} disabled={!onPress}>
-      <Text style={s.tileLbl} numberOfLines={1} adjustsFontSizeToFit>{label}</Text>
+    <Pressable style={[s.tile, wide && s.tileWide, { backgroundColor: bg }]} onPress={onPress} disabled={!onPress}>
+      <Text style={s.tileLbl} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.2}>{label}</Text>
       <View style={s.tileRow}>
         {icon}
         {/* الرقم والوحدة نص واحد (LTR) — بالإنجليزي الصف ينقلب فكانت dB تطلع قبل الرقم */}
-        <Text style={[s.tileVal, { color }]} numberOfLines={1} adjustsFontSizeToFit>
-          {'\u2066' + value.replace(/^\u200e/, '')}<Text style={s.tileUnit}>{' dB\u2069'}</Text>
+        <Text style={[s.tileVal, { color }]} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.2}>
+          {'\u2066' + value.replace(/^\u200e/, '')}<Text style={s.tileUnit}>{none ? '\u2069' : ' dB\u2069'}</Text>
         </Text>
       </View>
       <View style={s.tileSpark}>{!!spark && <Spark data={spark} color={color} w={50} h={9} />}</View>
@@ -233,8 +234,28 @@ function Tile({ icon, label, value, color, bg, onPress, spark }: {
 
 // الإطار الملوّن رجع (بطاقة أضيق) — العدّاد كان يدخل على لوحة التقنية (صورة حسن ٢٢ نوفمبر)
 const PANEL_W = 126, PANEL_H = 92, GAUGE_W = 118;
+/** عرض اللوحة والمربعات (لازم يطابق s.panel و s.tiles) */
+const PANEL_CW = 80, TILES_W = 90;
+const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+
+/**
+ * حجم البطاقة حسب الجوال (٢٧ نوفمبر — صورة عضو: العدّاد داخل على المربعات واللوحة في جوال صغير/خط كبير):
+ * نقيس عرض البطاقة الفعلي ونقسمه على تكبير الخط. ضيّق ← المربعات تنزل تحت العدّاد صف واحد (compact).
+ */
+export function techLayout(cardW: number, fontScale = 1): { compact: boolean; gaugeW: number } {
+  if (!(cardW > 0)) return { compact: false, gaugeW: GAUGE_W };
+  const compact = cardW / Math.max(1, fontScale) < 345;
+  // عرض عمود العدّاد = البطاقة − الحافة (8) − اللوحة − المربعات (لو جنبه)
+  const midW = cardW - 8 - PANEL_CW - (compact ? 0 : TILES_W);
+  // ضيّق: العدّاد ما يدخل على خلفية اللوحة الملونة (أعرض من محتواها بـ PANEL_W − PANEL_CW)
+  const gaugeW = compact ? midW - 2 * (PANEL_W - PANEL_CW) : midW - 56;
+  return { compact, gaugeW: Math.round(clamp(gaugeW, 96, compact ? 132 : GAUGE_W)) };
+}
 
 function TechRow({ r, onDetails, hist }: { r: Row; onDetails?: () => void; hist?: Hist }) {
+  const [cardW, setCardW] = useState(0);
+  const { fontScale } = useWindowDimensions();
+  const { compact, gaugeW } = techLayout(cardW, fontScale);
   const b = num(r.band);
   const code = r.band ? (r.tech === 'NR' ? `n${b ?? ''}` : `B${b ?? ''}`) : r.tech === 'NR' ? '5G' : '4G';
   const mhz = b ? friendlyBand(r.tech, b).match(/\d{3,4}/)?.[0] : undefined;
@@ -245,9 +266,17 @@ function TechRow({ r, onDetails, hist }: { r: Row; onDetails?: () => void; hist?
   const bwN = num(r.bw);
   const iso = (x: string) => '⁨' + x + '⁩';
   // tr قبل العزل: النمط «قناة {0}» ما يتطابق والنص فيه علامات العزل
+  const tiles = (
+    <View style={compact ? s.tilesRow : s.tiles}>
+      <Tile icon={<Bars color={accent} size={17} />} label="SINR (النقاء)" value={fmt(r.sinr, 1)} wide={compact}
+        color={accent} bg={TECH_SOFT[r.tech]} onPress={onDetails} spark={hist?.sinr} />
+      <Tile icon={<Antenna color={LEVEL_COLOR[qlv]} size={17} />} label="RSRQ (الجودة)" value={fmt(r.rsrq, 1)} wide={compact}
+        color={LEVEL_COLOR[qlv]} bg={LEVEL_SOFT[qlv]} onPress={onDetails} spark={hist?.rsrq} />
+    </View>
+  );
   const meta = [bwN && `${bwN} MHz`, r.arfcn && tr(`قناة ${r.arfcn}`), r.pci && `PCI ${r.pci}`].filter(Boolean).map(x => iso(String(x)));
   return (
-    <View style={s.card}>
+    <View style={s.card} onLayout={e => { const w = Math.round(e.nativeEvent.layout.width); if (Math.abs(w - cardW) > 2) setCardW(w); }}>
       <CardWaves color={accent} />
       <PanelBg w={PANEL_W} h={PANEL_H} id={r.tech} colors={TECH_TINT[r.tech]} />
       <View style={s.row}>
@@ -257,38 +286,34 @@ function TechRow({ r, onDetails, hist }: { r: Row; onDetails?: () => void; hist?
             <Bars color="#ffffff" size={20} on={barsOn} />
             <View style={s.techPill}><Text style={s.techPillTxt}>{r.tech === 'NR' ? '5G' : '4G'}</Text></View>
           </View>
-          <Text style={s.panelBand} numberOfLines={1} adjustsFontSizeToFit>{code}</Text>
-          {!!mhz && <Text style={s.panelMhz} numberOfLines={1}>{iso(`${mhz} MHz`)}</Text>}
+          <Text style={s.panelBand} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.15}>{code}</Text>
+          {!!mhz && <Text style={s.panelMhz} numberOfLines={1} maxFontSizeMultiplier={1.2}>{iso(`${mhz} MHz`)}</Text>}
         </Pressable>
 
         {/* ٢. العدّاد */}
         <View style={s.mid}>
           <View style={s.midHead}>
-            <Text style={s.midLbl} numberOfLines={1}>قوة الإشارة</Text>
+            <Text style={s.midLbl} numberOfLines={1} maxFontSizeMultiplier={1.2}>قوة الإشارة</Text>
             <Waves color={accent} />
           </View>
-          <View style={s.gauge}>
-            <Arc w={GAUGE_W} id={r.tech} />
+          <View style={[s.gauge, { width: gaugeW }]}>
+            <Arc w={gaugeW} id={r.tech} />
             <View style={s.gaugeTxt}>
               <Text style={s.gaugeUnit}>dBm</Text>
-              <Text style={[s.rsrp, { color: LEVEL_COLOR[lv] }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{fmt(r.rsrp)}</Text>
+              <Text style={[s.rsrp, { color: LEVEL_COLOR[lv] }, gaugeW < 110 && { fontSize: 26, lineHeight: 30 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6} maxFontSizeMultiplier={1.15}>{fmt(r.rsrp)}</Text>
             </View>
           </View>
-          <LevelBar pos={rsrpPos(r.rsrp)} w={GAUGE_W + 8} id={r.tech} />
+          <LevelBar pos={rsrpPos(r.rsrp)} w={gaugeW + 8} id={r.tech} />
           <View style={[s.status, { backgroundColor: LEVEL_SOFT[lv] }]}>
-            <Text style={[s.statusTxt, { color: LEVEL_COLOR[lv] }]} numberOfLines={1}>{STATUS[lv]}</Text>
+            <Text style={[s.statusTxt, { color: LEVEL_COLOR[lv] }]} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.2}>{STATUS[lv]}</Text>
             <CheckDot color={LEVEL_COLOR[lv]} />
           </View>
         </View>
 
-        {/* ٣. النقاء والجودة */}
-        <View style={s.tiles}>
-          <Tile icon={<Bars color={accent} size={17} />} label="SINR (النقاء)" value={fmt(r.sinr, 1)}
-            color={accent} bg={TECH_SOFT[r.tech]} onPress={onDetails} spark={hist?.sinr} />
-          <Tile icon={<Antenna color={LEVEL_COLOR[qlv]} size={17} />} label="RSRQ (الجودة)" value={fmt(r.rsrq, 1)}
-            color={LEVEL_COLOR[qlv]} bg={LEVEL_SOFT[qlv]} onPress={onDetails} spark={hist?.rsrq} />
-        </View>
+        {/* ٣. النقاء والجودة — جنب العدّاد، أو تحته في الجوالات الضيقة */}
+        {!compact && tiles}
       </View>
+      {compact && tiles}
 
       {/* ٤. MHz · قناة · PCI */}
       {meta.length > 0 && (
@@ -335,7 +360,7 @@ const s = sheet({
   },
   row: { flexDirection: 'row-reverse', alignItems: 'flex-start', paddingLeft: 8 },
   // ١. لوحة التقنية — المحتوى في يمين اللوحة
-  panel: { width: 80, height: PANEL_H, paddingTop: 9, paddingRight: 9, paddingLeft: 2, alignItems: 'center' },
+  panel: { width: PANEL_CW, height: PANEL_H, paddingTop: 9, paddingRight: 9, paddingLeft: 2, alignItems: 'center' },
   panelTop: { alignSelf: 'stretch', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
   techPill: { borderRadius: 999, borderWidth: 1.5, borderColor: '#ffffffd9', paddingHorizontal: 7, paddingVertical: 0 },
   techPillTxt: { color: '#ffffff', fontSize: 12, fontFamily: FONT.numHeavy },
@@ -344,7 +369,7 @@ const s = sheet({
   // ٢. العدّاد
   mid: { flex: 1, alignItems: 'center', paddingTop: 8 },
   midHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, marginBottom: 2 },
-  midLbl: { color: C.text, fontSize: 12.5, fontWeight: '800' },
+  midLbl: { color: C.text, fontSize: 12.5, fontWeight: '800', flexShrink: 1 },
   gauge: { width: GAUGE_W, alignItems: 'center' },
   gaugeTxt: { position: 'absolute', left: 0, right: 0, top: 12, alignItems: 'center' },
   gaugeUnit: { color: C.sub, fontSize: 11, fontFamily: FONT.numSemi },
@@ -352,7 +377,9 @@ const s = sheet({
   status: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3, marginTop: 5 },
   statusTxt: { fontSize: 11.5, fontWeight: '800' },
   // ٣. المربعات
-  tiles: { width: 90, gap: 6, paddingTop: 8 },
+  tiles: { width: TILES_W, gap: 6, paddingTop: 8 },
+  tilesRow: { flexDirection: 'row-reverse', gap: 8, marginHorizontal: 8, marginTop: 8 },
+  tileWide: { flex: 1, height: 52 },
   tile: { height: 56, borderRadius: 14, paddingHorizontal: 6, paddingTop: 5, alignItems: 'center', overflow: 'hidden' },
   tileLbl: { color: C.text, fontSize: 9.5, fontWeight: '800' },
   tileRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
