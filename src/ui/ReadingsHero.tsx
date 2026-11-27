@@ -12,6 +12,7 @@ import { Icon } from './Icon';
 import { C, isDark, tBd, tBg } from './theme';
 import { FONT } from './fonts';
 import { sheet } from '../i18n';
+import { CpeArt, BoxArt, RouterArtKind } from './RouterArt';
 
 const MIFI = require('../../assets/images/router-mifi.png');
 
@@ -54,8 +55,8 @@ export function BackBtn({ onPress }: { onPress: () => void }) {
   );
 }
 
-export function RouterHead({ name, ok, statusText, statusColor, showPhoto, onSettings, onBack, extra }: {
-  name: string; ok: boolean; statusText: string; statusColor: string; showPhoto: boolean; onSettings?: () => void; onBack?: () => void; extra?: ReactNode;
+export function RouterHead({ name, ok, statusText, statusColor, art, onSettings, onBack, extra }: {
+  name: string; ok: boolean; statusText: string; statusColor: string; art: RouterArtKind; onSettings?: () => void; onBack?: () => void; extra?: ReactNode;
 }) {
   return (
     <View style={s.head}>
@@ -77,10 +78,13 @@ export function RouterHead({ name, ok, statusText, statusColor, showPhoto, onSet
         </View>
       </View>
       <View style={[s.photoWrap, !!onBack && s.photoSmall]}>
-        {showPhoto
+        {/* رسمة ثابتة حسب نوع الجهاز (حسن ٢٨ نوفمبر) — ZTE صورته، هواوي راوتر واقف، الباقي راوتر بأنتنات */}
+        {art === 'mifi'
           ? <Image source={MIFI} style={onBack ? s.photoS : s.photo} resizeMode="contain" />
-          : <View style={s.photoIcon}><Icon name="wifi" size={30} color="#2f6bff" stroke={2.4} /></View>}
-        {showPhoto && <View style={s.wifi}><Icon name="wifi" size={onBack ? 18 : 22} color="#2f6bff" stroke={2.6} /></View>}
+          : art === 'cpe'
+            ? <CpeArt width={onBack ? 58 : 74} height={onBack ? 44 : 56} />
+            : <BoxArt width={onBack ? 58 : 74} height={onBack ? 44 : 56} />}
+        <View style={s.wifi}><Icon name="wifi" size={onBack ? 18 : 22} color="#2f6bff" stroke={2.6} /></View>
       </View>
       {!!onBack && <BackBtn onPress={onBack} />}
     </View>
@@ -203,7 +207,6 @@ const s = sheet({
     shadowColor: C.shadow, shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3,
   },
   photo: { width: 74, height: 56 },
-  photoIcon: { width: 58, height: 58, borderRadius: 18, backgroundColor: tBg('#ffffff'), alignItems: 'center', justifyContent: 'center' },
   wifi: { position: 'absolute', right: 0, top: 0 },
 
   lock: {
