@@ -10,7 +10,7 @@ import Svg, { Rect, Circle, Path } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SavedRouter } from '../store/routers';
 import { withSession } from '../store/sessions';
-import type { DeviceTemp } from '../drivers/types';
+import type { DeviceTemp, BatteryInfo } from '../drivers/types';
 import { C, R, isDark, tBd } from './theme';
 import { FONT } from './fonts';
 import { sheet } from '../i18n';
@@ -34,8 +34,13 @@ function ThermoIcon() {
   );
 }
 
+/** لون البطارية: أحمر ≤١٥ · برتقالي ≤٣٠ (إلا لو يشحن) · أخضر */
+const batCol = (b: BatteryInfo) => (b.charging || b.plugged ? COL.ok : b.percent <= 15 ? COL.danger : b.percent <= 30 ? COL.warm : COL.ok);
+
 export function TempCard({ r }: { r: SavedRouter }) {
   const [list, setList] = useState<DeviceTemp[] | null>(null);
+  // البطارية (راوترات البطارية مثل ZTE MU5252) — تنعرض في نفس البطاقة
+  const [bat, setBat] = useState<BatteryInfo | null>(null);
   const alive = useRef(true);
 
   useFocusEffect(useCallback(() => {
@@ -43,14 +48,19 @@ export function TempCard({ r }: { r: SavedRouter }) {
     const load = () => withSession(r, async d => (d.getTemps ? d.getTemps() : []))
       .catch(() => [] as DeviceTemp[])
       .then(l => { if (alive.current) setList(l); });
+    const loadBat = () => withSession(r, async d => (d.getBattery ? d.getBattery() : null))
+      .catch(() => null)
+      .then(b => { if (alive.current) setBat(b); });
     load();
-    const t = setInterval(load, 30_000);
+    loadBat();
+    const t = setInterval(() => { load(); loadBat(); }, 30_000);
     return () => { alive.current = false; clearInterval(t); };
   }, [r]));
 
-  if (!list || list.length === 0) return null;
-  const shown = list.slice(0, 3);
-  const max = Math.max(...list.map(x => x.c));
+  if ((!list || list.length === 0) && !bat) return null;
+  const temps = list ?? [];
+  const shown = temps.slice(0, bat ? 2 : 3);
+  const max = temps.length ? Math.max(...temps.map(x => x.c)) : 0;
   const lv = lvOf(max);
   const tip = lv === 'danger' ? 'الراوتر حار جداً — بعّده عن الشمس والأجهزة الحارة، وخلّ حوله تهوية'
     : lv === 'hot' ? 'حار شوي — ممكن يخفّض السرعة لحاله. بعّده عن الشمس المباشرة'
@@ -66,7 +76,7 @@ export function TempCard({ r }: { r: SavedRouter }) {
           <ThermoIcon />
         </LinearGradient>
         <View style={s.headTxt}>
-          <Text style={s.title} numberOfLines={1}>حرارة الراوتر</Text>
+          <Text style={s.title} numberOfLines={1}>{bat ? 'الحرارة والبطارية' : 'حرارة الراوتر'}</Text>
           <Text style={[s.word, { color: COL[lv] }]} numberOfLines={1}>{WORD[lv]}</Text>
         </View>
         <View style={s.vals}>
@@ -79,6 +89,12 @@ export function TempCard({ r }: { r: SavedRouter }) {
               </View>
             );
           })}
+          {bat && (
+            <View style={[s.cell, { borderColor: batCol(bat) + '40' }]}>
+              <Text style={[s.val, { color: batCol(bat) }]}>{'\u2066' + bat.percent + '%\u2069'}</Text>
+              <Text style={s.lbl} numberOfLines={1}>{bat.charging ? '⚡ يشحن' : bat.plugged ? '🔌 على الكهرباء' : '🔋 البطارية'}</Text>
+            </View>
+          )}
         </View>
       </View>
       {(lv === 'hot' || lv === 'danger') && (

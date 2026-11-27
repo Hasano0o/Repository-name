@@ -74,6 +74,7 @@ const files = [
   'src/drivers/zte/extras.ts',
   'src/drivers/zte/formulaStore.ts',
   'src/drivers/zteng/sms.ts',
+  'src/drivers/zteng/battery.ts',
   'src/drivers/zteng/index.ts',
   'src/drivers/http.ts',
   'src/services/diag.ts',

@@ -17,7 +17,7 @@ import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import {
   RouterDriver, Capability, Signal, Carrier, SignalSnapshot, NetworkInfo, CellTower, DeviceTemp, SmsMessage,
-  Traffic, Usage, BandConfig, ActiveLock, CellLockState, DeviceDetails, WifiRadio, ConnectedDevice, ModemSignal,
+  Traffic, Usage, BandConfig, ActiveLock, CellLockState, DeviceDetails, WifiRadio, ConnectedDevice, ModemSignal, BatteryInfo,
 } from '../types';
 import { http } from '../http';
 import { noChange } from '../noChange';
@@ -29,6 +29,7 @@ import { MODELS, ModelProfile } from '../models';
 import { diag } from '../../services/diag';
 import { u30NewKey } from '../zte/u30crypto';
 import { ucs2Hex, ngSmsNow, idList, parseNgSms, cmdState } from './sms';
+import { zteBattery } from './battery';
 const rnd = async () => { const C = await import('expo-crypto'); return (n: number) => C.getRandomBytes(n); };
 
 const ZERO = '00000000000000000000000000000000';
@@ -695,13 +696,34 @@ export class ZteNgDriver implements RouterDriver {
   }
 
   async getTemps(): Promise<DeviceTemp[]> {
+    const out: DeviceTemp[] = [];
     try {
       const t = await this.call('zwrt_bsp.thermal', 'get_cpu_temp', {});
       let c = num(t.cpuss_temp ?? t.cpu_temp ?? t.temp);
-      if (c === undefined) return [];
-      if (c > 1000) c = c / 1000; else if (c > 150) c = c / 10;
-      return c > 0 && c < 130 ? [{ key: 'cpu', label: 'المعالج', c: Math.round(c) }] : [];
-    } catch { return []; }
+      if (c !== undefined) {
+        if (c > 1000) c = c / 1000; else if (c > 150) c = c / 10;
+        if (c > 0 && c < 130) out.push({ key: 'cpu', label: 'المعالج', c: Math.round(c) });
+      }
+    } catch {}
+    // حرارة البطارية (MU5252/U60 Pro — نفس الرئيسية في صفحتهم: bat_temperature بالدرجة)
+    try { const b = await this.getBattery(); if (b?.tempC !== undefined) out.push({ key: 'bat', label: 'البطارية', c: b.tempC }); } catch {}
+    return out;
+  }
+
+  /**
+   * البطارية — نفس getBatteryInfo في صفحة MU5252 (service_rpc.js + home.js، FULL ٩ نوفمبر):
+   * get_device_info {deviceInfoList:[bat_online, bat_percent, bat_charger_connect, bat_charger_status, bat_temperature…]}.
+   * الصفحة: bat_charger_status "0" = ما يشحن (أيقونات التفريغ)، غيره = يشحن · bat_temperature بالدرجة (transTemperature).
+   * راوتر بدون بطارية (MU5250…) ← الرد بدون bat_percent أو bat_online = "0" ← null. قراءة بس.
+   */
+  async getBattery(): Promise<BatteryInfo | null> {
+    let b: Record<string, unknown>;
+    try {
+      b = await this.authRead(() => this.call('zwrt_mc.device.manager', 'get_device_info', {
+        deviceInfoList: ['bat_online', 'bat_percent', 'bat_charger_connect', 'bat_charger_status', 'bat_temperature'],
+      }));
+    } catch { return null; }
+    return zteBattery(b);
   }
 
   private async wanStats(): Promise<Record<string, unknown>> {

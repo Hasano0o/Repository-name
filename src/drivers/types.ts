@@ -36,6 +36,8 @@ export interface NetworkInfo {
 }
 /** قراءة حرارة وحدة: key ثابت للتخزين، label للعرض */
 export interface DeviceTemp { key: string; label: string; c: number }
+/** بطارية الراوتر (راوترات الجيب/البطارية) — percent ٠–١٠٠ · charging = قاعد يشحن الحين */
+export interface BatteryInfo { percent: number; charging?: boolean; plugged?: boolean; tempC?: number }
 export interface Traffic {
   downBytesPerSec: number; upBytesPerSec: number; connectedSecs: number;
   /** تنزيل/رفع هالاتصال (من آخر ما اتصل الراوتر) — لو الراوتر يعطيه */
@@ -314,6 +316,8 @@ export interface RouterDriver {
   getTraffic?(): Promise<Traffic>;
   /** حرارة القطع داخل الراوتر (°C) — فاضية لو الراوتر ما يعطيها */
   getTemps?(): Promise<DeviceTemp[]>;
+  /** البطارية — null لو الراوتر ما فيه بطارية أو ما يعطيها */
+  getBattery?(): Promise<BatteryInfo | null>;
   /**
    * المودمات الإضافية (راوتر بأكثر من شريحة، مثل ZTE MU5252: شريحة 5G + شريحتين 4G يدمجهم) — قراءة بس.
    * الشريحة الأساسية تبقى في getSignal؛ هنا الباقي. التحكم (ترددات/أبراج) للأساسية بس.
