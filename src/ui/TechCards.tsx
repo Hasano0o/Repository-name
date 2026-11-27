@@ -129,21 +129,26 @@ function Spark({ data, color, w = 64, h = 14 }: { data: number[]; color: string;
 /** نسبة قوة الإشارة على الشريط: ‎-125 (أحمر) ← ‎-80 (أخضر) */
 const rsrpPos = (v?: number) => (v === undefined ? 0 : Math.max(0.03, Math.min(0.97, (v + 125) / 45)));
 
-/** العدّاد (قوس أكبر من نص دائرة شوي — مثل تصميم حسن) */
-function Arc({ w, id }: { w: number; id: string }) {
+/** ألوان مقاطع العدّاد من الأحمر (يسار) للأخضر (يمين) — نفس ترتيب شريط الألوان تحته */
+const SEG_COLORS = ['#ef4444', '#ef4444', '#f97316', '#f97316', '#facc15', '#facc15', '#a3e635', '#4ade80', '#22c55e', '#22c55e', '#22c55e'];
+
+/**
+ * العدّاد المقطّع (حسن ٢٨ نوفمبر — «مقطع جميل»): نص دائرة من ١١ مقطع تولع لين قراءة RSRP (مثل عدّاد الشحن)،
+ * والباقي باهت. بدون قراءة ← كلها باهتة. (قبل: قوس أخضر ثابت ما يتغيّر مع القراءة.)
+ */
+function Arc({ w, pos }: { w: number; pos: number }) {
   const sw = 9, r = w / 2 - sw / 2, cx = w / 2, cy = r + sw / 2;
-  const x1 = cx - r, y1 = cy, x2 = cx + r, y2 = cy;
   const h = cy + sw / 2 + 1;
+  const n = SEG_COLORS.length, gap = 0.014;
+  const pt = (f: number) => { const a = Math.PI * (1 - f); return `${(cx + r * Math.cos(a)).toFixed(2)} ${(cy - r * Math.sin(a)).toFixed(2)}`; };
+  const off = isDark ? '#ffffff1a' : '#0f172a14';
   return (
     <Svg width={w} height={h}>
-      <Defs>
-        <SvgGrad id={`arc${id}`} x1="0" y1="0" x2="1" y2="0">
-          <Stop offset="0" stopColor="#9be15d" />
-          <Stop offset="0.45" stopColor="#22c55e" />
-          <Stop offset="1" stopColor="#14b8a6" />
-        </SvgGrad>
-      </Defs>
-      <Path d={`M ${x1} ${y1} A ${r} ${r} 0 1 1 ${x2} ${y2}`} stroke={`url(#arc${id})`} strokeWidth={sw} strokeLinecap="round" fill="none" />
+      {SEG_COLORS.map((c, i) => {
+        const f0 = i / n + gap, f1 = (i + 1) / n - gap;
+        const on = pos > 0 && (i + 0.5) / n <= Math.max(pos, 0.5 / n);
+        return <Path key={i} d={`M ${pt(f0)} A ${r} ${r} 0 0 1 ${pt(f1)}`} stroke={on ? c : off} strokeWidth={sw} fill="none" />;
+      })}
     </Svg>
   );
 }
@@ -300,7 +305,7 @@ function TechRow({ r, onDetails, hist }: { r: Row; onDetails?: () => void; hist?
             <Waves color={accent} />
           </View>
           <View style={[s.gauge, { width: gaugeW }]}>
-            <Arc w={gaugeW} id={r.tech} />
+            <Arc w={gaugeW} pos={rsrpPos(r.rsrp)} />
             <View style={s.gaugeTxt}>
               <Text style={s.gaugeUnit}>dBm</Text>
               <Text style={[s.rsrp, { color: LEVEL_COLOR[lv] }, gaugeW < 110 && { fontSize: 26, lineHeight: 30 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6} maxFontSizeMultiplier={1.15}>{fmt(r.rsrp)}</Text>
