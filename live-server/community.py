@@ -637,3 +637,40 @@ async def accel(req: Request):
         c.execute("INSERT INTO accel VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", row)
         c.execute("DELETE FROM accel WHERE at < ?", (now - OBS_KEEP_DAYS * 86400,))
     return {"ok": True}
+
+
+# ═══ الشريحة الإلكترونية (eSIM) — ٢٧ نوفمبر (قرار حسن: «نشغّلها ونشوف المستخدمين») ═══
+# POST /live-api/community/esim {device, kind, model, brand, esim}
+#   want  = ضغط «أبغاها» في بطاقة الشريحة (أي راوتر جوال)
+#   probe = نتيجة فحص الراوتر (هواوي): esim yes / no / unknown
+#   open / scan / page = استخدام الشاشة التجريبية (فتح · صوّر باركود · فتح صفحة الراوتر)
+# صف واحد لكل (جهاز، نوع، موديل) — آخر مرة بس. الملخص: python3 /root/bandly-live/esim_report.py
+ESIM_KINDS = ("want", "probe", "open", "scan", "page")
+
+
+def _esim_db():
+    c = _db()
+    c.execute("CREATE TABLE IF NOT EXISTS esim(at INTEGER, dev TEXT, kind TEXT, model TEXT, brand TEXT, esim TEXT)")
+    c.execute("CREATE INDEX IF NOT EXISTS i_esim ON esim(kind, at)")
+    return c
+
+
+def esim_row(b: dict, now: int):
+    kind = _clean(b.get("kind"), 8)
+    if kind not in ESIM_KINDS:
+        raise HTTPException(400, "bad kind")
+    es = _clean(b.get("esim"), 8)
+    if es not in ("yes", "no", "unknown"):
+        es = "unknown"
+    return (now, _dev(b.get("device")), kind, _clean(b.get("model"), 40), _clean(b.get("brand"), 20), es)
+
+
+@router.post("/esim")
+async def esim(req: Request):
+    b = await req.json()
+    row = esim_row(b, int(time.time()))
+    _limit(row[1])
+    with _esim_db() as c:
+        c.execute("DELETE FROM esim WHERE dev=? AND kind=? AND model=?", (row[1], row[2], row[3]))
+        c.execute("INSERT INTO esim VALUES (?,?,?,?,?,?)", row)
+    return {"ok": True}

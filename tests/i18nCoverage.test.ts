@@ -22,7 +22,7 @@ const DONE = [
   'app/control/[id].tsx', 'app/newip/[id].tsx', 'app/bands/[id].tsx', 'app/towers/[id].tsx',
   'app/aim/[id].tsx', 'app/gameboost/[id].tsx', 'app/speed/[id].tsx',
   // الدفعة ٣
-  'app/ping/[id].tsx', 'app/hunt/[id].tsx', 'app/combo/[id].tsx', 'app/tech.tsx', 'app/wifich/[id].tsx',
+  'app/ping/[id].tsx', 'app/hunt/[id].tsx', 'app/combo/[id].tsx', 'app/tech.tsx', 'app/wifich/[id].tsx', 'app/esim/[id].tsx',
   // الدفعة ٤
   'app/newdevice.tsx', 'app/autopilot/[id].tsx', 'app/places/[id].tsx', 'app/assistant/[id].tsx',
   'app/nrdual/[id].tsx', 'app/techs.tsx', 'src/ui/BandPicker.tsx',

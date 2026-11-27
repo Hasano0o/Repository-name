@@ -51,6 +51,7 @@ const SCREENS: [string, string][] = [
   ['history/[id]', 'السجل'],
   ['sms/[id]', 'الرسائل'],
   ['recharge/[id]', 'اشحن رصيدك'],
+  ['esim/[id]', 'الشريحة الإلكترونية'],
   ['plan/[id]', 'باقتي'],
   ['features/[id]', 'كل المزايا'],
   ['hwtools/[id]', 'الأنتنا والباقة'],

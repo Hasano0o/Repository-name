@@ -12,6 +12,7 @@ import type { SavedRouter } from '../store/routers';
 import { withSession } from '../store/sessions';
 import { sendSupportReport } from './errors';
 import { maskLongDigits } from '../utils/esimMask';
+import { esimEvent } from './community';
 
 const k = (id: string) => `bandly.esimProbe.${id}`;
 let running = false;
@@ -21,8 +22,15 @@ export async function probeEsimOnce(r: SavedRouter): Promise<void> {
   try {
     if (await AsyncStorage.getItem(k(r.id))) return;
     running = true;
-    const res = await withSession(r, async d => (d.getEsimRaw ? d.getEsimRaw() : null), false).catch(() => null);
+    const res = await withSession(r, async d => {
+      if (!d.getEsimRaw) return null;
+      const raw = await d.getEsimRaw();
+      const model = await d.getDeviceDetails?.().then(x => x.model).catch(() => undefined);
+      return { ...raw, model };
+    }, false).catch(() => null);
     if (!res) return;
+    // عدّاد المستخدمين (٢٧ نوفمبر): كل راوتر انفحص — فيه / ما فيه / ما عرفنا
+    esimEvent('probe', { model: res.model, brand: r.driverId, esim: res.enabled === true ? 'yes' : res.enabled === false ? 'no' : 'unknown' }).catch(() => {});
     // مو مدعومة ← ما نرسل شي (السيرفر يحفظ آخر ٣٠٠ تقرير بس — ما نزحم تقارير الدعم الحقيقية بـ ١٧٠ هواوي)
     if (res.enabled === false) { await AsyncStorage.setItem(k(r.id), 'no'); return; }
     const lines = [
@@ -40,4 +48,9 @@ export async function probeEsimOnce(r: SavedRouter): Promise<void> {
   } finally {
     running = false;
   }
+}
+
+/** نتيجة الفحص المحفوظة: 'yes' فيه eSIM · 'no' ما فيه · '?' ما عرفنا · null ما انفحص */
+export async function esimProbeResult(id: string): Promise<string | null> {
+  try { return await AsyncStorage.getItem(k(id)); } catch { return null; }
 }

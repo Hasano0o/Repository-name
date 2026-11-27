@@ -268,3 +268,12 @@ export async function fetchMembers(t: TowerRef): Promise<TowerMembers | null> {
     clearTimeout(tm);
   }
 }
+
+/**
+ * الشريحة الإلكترونية (٢٧ نوفمبر): نعرف كم عضو يبيها وكم راوتر فيه eSIM فعلاً — ما فيه موقع ولا أرقام شريحة.
+ * want/open/scan/page = ضغطة من العضو نفسه (تنرسل دايم) · probe = فحص تلقائي (يحترم رفض المشاركة)
+ */
+export async function esimEvent(kind: 'want' | 'probe' | 'open' | 'scan' | 'page', x: { model?: string; brand?: string; esim?: 'yes' | 'no' | 'unknown' }): Promise<void> {
+  if (kind === 'probe' && (await getConsent()) === 'off') return;
+  await post('esim', { device: await deviceId(), kind, model: x.model ?? '', brand: x.brand ?? '', esim: x.esim ?? 'unknown' });
+}

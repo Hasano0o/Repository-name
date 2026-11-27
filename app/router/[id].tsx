@@ -47,6 +47,7 @@ import { StoreAd } from '../../src/ui/StoreAd';
 import { TechStrip } from '../../src/ui/TechStrip';
 import { ComboCard } from '../../src/ui/ComboCard';
 import { CodePairCard } from '../../src/ui/CodePairCard';
+import { EsimCard } from '../../src/ui/EsimCard';
 import { BandChips } from '../../src/ui/BandChips';
 import { OperatorBadge } from '../../src/ui/OperatorBadge';
 import { bandChips } from '../../src/utils/bandChips';
@@ -1149,6 +1150,7 @@ export default function RouterDashboard() {
             {feat.bands && <ComboCard r={info} />}
             <ModemsCard r={info} />
             <TempCard r={info} />
+            {feat.cellular && <EsimCard r={info} model={details?.model} />}
             {/* رجعت بطلب حسن (١٦ نوفمبر): المجموعتين و«باقتي» تبقى هنا، والباقي في «كل المزايا» */}
             {feat.cellular && (<>
             <GroupTitle title="خلّ Bandly يسويها عنك" color={tFg('#7c5cff')} />
