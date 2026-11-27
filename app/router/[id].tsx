@@ -27,7 +27,6 @@ import { SignalRing } from '../../src/ui/SignalRing';
 import { ArcGauge } from '../../src/ui/ArcGauge';
 import { TechCards, techRows, Bars } from '../../src/ui/TechCards';
 import { RouterHead, LockBar, SpeedPill, SummaryCard, BackBtn } from '../../src/ui/ReadingsHero';
-import { routerArtKind } from '../../src/ui/RouterArt';
 import { RadarPoint } from '../../src/ui/SignalRadar';
 import { MetricRings, RingSpec } from '../../src/ui/MetricRing';
 import { Icon, IconName } from '../../src/ui/Icon';
@@ -916,7 +915,7 @@ export default function RouterDashboard() {
             ok={!noService && !disconnected}
             statusText={disconnected ? 'منقطع' : noService ? 'بلا شبكة' : 'متصل'}
             statusColor={noService || disconnected ? '#e5484d' : '#16a34a'}
-            art={routerArtKind(info.driverId)}
+            showPhoto={info.driverId === 'zte'}
             onSettings={() => router.push(`/add-router?id=${info.id}` as Href)}
             onBack={() => (router.canGoBack() ? router.back() : router.replace('/' as Href))}
             extra={<OperatorBadge name={details?.operator} small />}
