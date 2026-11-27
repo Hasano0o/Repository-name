@@ -48,13 +48,13 @@ function Tile({ title, sub, colors, icon, onPress }: {
 const PHONE = '0562294460';
 const PHONE_INTL = '966562294460';
 const EMAIL = 'ko.1416@hotmail.com';
-const WAYS: { id: string; label: string; icon: IconName; color: string; url: string }[] = [
+export const WAYS: { id: string; label: string; icon: IconName; color: string; url: string }[] = [
   { id: 'wa', label: 'واتساب', icon: 'sms', color: '#25a35a', url: `https://wa.me/${PHONE_INTL}` },
   { id: 'tg', label: 'تليجرام', icon: 'send', color: '#2a9fd8', url: 'https://t.me/hasa_n20' },
   { id: 'call', label: 'اتصال', icon: 'call', color: '#2f6bff', url: `tel:${PHONE}` },
   { id: 'mail', label: 'إيميل', icon: 'mail', color: '#e07a3a', url: `mailto:${EMAIL}?subject=${encodeURIComponent('Bandly')}` },
 ];
-const openWay = (url: string) =>
+export const openWay = (url: string) =>
   Linking.openURL(url).catch(() => Alert.alert('ما قدرنا نفتحه', `تواصل معنا على ${PHONE} أو ${EMAIL}`));
 
 // ═══ ٣) الإعدادات ═══
@@ -110,7 +110,7 @@ const when = (d: Date | null) => {
 };
 
 /** زر التشخيص: يرسل آخر ما صار بين التطبيق والراوتر للمطوّر (بدون كلمات سر ولا بيانات شخصية) */
-function DiagRow() {
+export function DiagRow() {
   const [st, setSt] = useState<'' | 'busy' | 'ok' | 'fail'>('');
   const [note, setNote] = useState('');
   const send = async () => {
@@ -133,7 +133,7 @@ function DiagRow() {
   );
 }
 
-function VersionRow() {
+export function VersionRow() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [ready, setReady] = useState(false);
@@ -196,7 +196,7 @@ function VersionRow() {
   );
 }
 
-const APPSTORE_REVIEW = 'https://apps.apple.com/app/id6819877993?action=write-review';
+export const APPSTORE_REVIEW = 'https://apps.apple.com/app/id6819877993?action=write-review';
 
 export function HomeFooter({ onExplore }: { onExplore: () => void }) {
   const themeLabel = THEMES.find(t => t.id === THEME_PREF)?.a11y ?? '';
@@ -244,20 +244,16 @@ export function HomeFooter({ onExplore }: { onExplore: () => void }) {
         </View>
       </View>
 
-      {/* الإعدادات ظاهرة دايماً (حسن ٢٢ نوفمبر: بدون سهم إخفاء) */}
-      <View style={s.card}>
-        <Row icon="sun" tint="#f59e0b" label="المظهر" value={themeLabel}>
-          <Seg items={THEMES} value={THEME_PREF} onPick={t => { setThemePref(t); }} />
-        </Row>
-        <View style={s.sep} />
-        <Row icon="globe" tint="#2f6bff" label="اللغة" value={LANG === 'en' ? 'English' : 'العربية'}>
-          <Seg items={LANGS} value={LANG} onPick={l => { setLang(l); }} />
-        </Row>
-        <View style={s.sep} />
-        <DiagRow />
-        {(desktop || Updates.isEnabled) && <View style={s.sep} />}
-        <VersionRow />
-      </View>
+      {/* الإعدادات: شاشة كاملة من ٢٧ نوفمبر (app/settings.tsx) — هنا مدخل ظاهر دايماً */}
+      <Pressable onPress={() => router.push('/settings' as Href)} accessibilityRole="button"
+        style={({ pressed }) => [s.card, s.contact, { minHeight: 60 }, pressed && s.pressed]}>
+        <View style={[s.rowIcon, { backgroundColor: tBg('#6b7796' + '22') }]}><Icon name="settings" size={17} color={P.sub} stroke={2.2} /></View>
+        <View style={s.rowTxt}>
+          <Text style={s.rowLabel}>الإعدادات</Text>
+          <Text style={s.rowValue} numberOfLines={1}>{`المظهر ${themeLabel} · ${LANG === 'en' ? 'English' : 'العربية'} · سيرفر اللعبة · التشخيص`}</Text>
+        </View>
+        <View style={{ transform: [{ scaleX: -1 }] }}><Icon name="chevron" size={16} color={P.sub} /></View>
+      </Pressable>
     </View>
   );
 }

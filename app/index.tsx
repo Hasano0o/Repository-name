@@ -277,7 +277,7 @@ export default function RoutersList() {
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={{ gap: 12, marginBottom: 4 }}>
-          <HomeHeader {...header} onAdd={add} onExplore={explore}
+          <HomeHeader {...header} onAdd={add} onExplore={explore} onSettings={() => router.push('/settings' as Href)}
             place={placeCity
               ? { text: placeCity, set: true, onPress: () => router.push('/carriers' as Href) }
               : statsCity !== null && statsCity !== '' ? { text: 'حدد مدينتك', set: false, onPress: () => setCityOpen(true) } : undefined} />

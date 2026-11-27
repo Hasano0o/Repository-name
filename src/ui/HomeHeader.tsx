@@ -31,6 +31,7 @@ export interface HomeHeaderProps {
   bands?: BandChip[];
   onAdd: () => void;
   onExplore: () => void;
+  onSettings?: () => void;
   /** شارة 📍 المدينة — تضغطها ← «أفضل شركة في منطقتك» (أو اختيار المدينة لو ما حددها) */
   place?: { text: string; set: boolean; onPress: () => void };
 }
@@ -139,6 +140,12 @@ export function HomeHeader(p: HomeHeaderProps) {
           <Icon name="compass" size={18} color="#ffffff" stroke={2.2} />
           <Text style={[s.btnLbl, { color: '#ffffff' }]}>استكشف</Text>
         </Pressable>
+        {!!p.onSettings && (
+          <Pressable onPress={p.onSettings} accessibilityRole="button" accessibilityLabel="الإعدادات" hitSlop={4}
+            style={({ pressed }) => [s.btn, s.btnAlt, s.btnIcon, pressed && { opacity: 0.85 }]}>
+            <Icon name="settings" size={19} color="#ffffff" stroke={2.2} />
+          </Pressable>
+        )}
       </View>
     </Hero>
   );
@@ -171,4 +178,5 @@ const s = sheet({
   btnLbl: { fontSize: 14, fontWeight: '800' },
   btnAdd: { backgroundColor: '#ffffff' },
   btnAlt: { backgroundColor: 'rgba(255,255,255,0.18)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.28)' },
+  btnIcon: { flex: 0, width: 48 },
 });
