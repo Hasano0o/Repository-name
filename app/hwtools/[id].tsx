@@ -14,6 +14,7 @@ import { AntennaInfo, RouterPingResult } from '../../src/drivers/types';
 import { C, tBg, tFg } from '../../src/ui/theme';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { sheet } from '../../src/i18n';
+import { sendPageChunkOnce } from '../../src/services/pageChunkProbe';
 
 const MODES: { v: number; label: string; sub: string }[] = [
   { v: 3, label: 'تلقائي', sub: 'الراوتر يختار' },
@@ -97,7 +98,16 @@ export default function HuaweiTools() {
     if (!/^[a-z0-9.\-]{3,80}$/i.test(h)) { setPingErr('اكتب عنوان صحيح مثل 8.8.8.8'); return; }
     setPingBusy(true); setPing(null); setPingErr('');
     try { setPing(await withSession(info, d => d.routerPing!(h))); }
-    catch (e: any) { setPingErr(e?.message ?? 'ما قدرنا'); }
+    catch (e: any) {
+      const msg = e?.message ?? 'ما قدرنا';
+      setPingErr(msg);
+      // الراوتر رفض صيغة الطلب (100006 مثل H158-381) ← نرسل كود صفحة «التشخيص» من راوترك للمطوّر مرة وحدة
+      if (/\(1000(02|05|06)\)/.test(msg)) {
+        sendPageChunkOnce(info, 'diagnosis', `بنق ${msg}`)
+          .then(sent => { if (sent) setPingErr(`${msg}\nراوترك يطلب صيغة ثانية للبنق — وصلت تفاصيل صفحته للمطوّر ونصلحه.`); })
+          .catch(() => {});
+      }
+    }
     finally { setPingBusy(false); }
   };
 

@@ -10,6 +10,7 @@ import { SavedRouter, getRouter, deleteRouter, updateRouter } from '../../src/st
 import { detectDriver } from '../../src/drivers/registry';
 import { diag } from '../../src/services/diag';
 import { withSession, dropSession, routerWrite } from '../../src/store/sessions';
+import { sendPageChunkOnce } from '../../src/services/pageChunkProbe';
 import { discoverFeatures } from '../../src/services/autoprog';
 import { discoverySummary, writeLabels } from '../../src/utils/autoprogCore';
 import { Carrier, Signal, Usage, ConnectedDevice, Traffic, RouterDriver, DeviceDetails, DataPlan, ActiveLock, OpticReading } from '../../src/drivers/types';
@@ -722,7 +723,11 @@ export default function RouterDashboard() {
     );
   };
 
-  const onLimit = () => Alert.alert('قريباً', 'تحديد السرعة غير مدعوم لهذا الراوتر حالياً');
+  const onLimit = () => {
+    Alert.alert('قريباً', 'تحديد السرعة غير مدعوم لهذا الراوتر حالياً');
+    // هواوي: نرسل كود صفحة «إدارة الأجهزة» من راوترك مرة وحدة — نتأكد هل فيها تحديد سرعة (قراءة بس)
+    if (info) sendPageChunkOnce(info, 'devicemanagement', 'تحديد السرعة').catch(() => {});
+  };
 
   const onDelete = () => {
     if (!info) return;

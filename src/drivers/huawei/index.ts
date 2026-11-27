@@ -2111,6 +2111,11 @@ export class HuaweiDriver implements RouterDriver {
    *   sim/sim-info (sim_slot_num = esim؟) · sim/esim-profiles · sim/sim-mode · sim/esim-auto-download
    * ما نرسل أي أمر تغيير (down-profile / operate-profile / sim-mode-reboot) — المرحلة ٢ بعد ما نشوف الردود.
    */
+  async getPageChunk(name: string): Promise<string> {
+    if (!/^[a-z]{3,30}$/.test(name)) throw new Error('اسم صفحة غلط');
+    const r = await this.http(`${this.base()}/js/${name}-${name}-vue.js`, { headers: this.headers() }, 15000);
+    return await r.text();
+  }
   async getEsimRaw(): Promise<{ enabled: boolean | null; raw: Record<string, string> }> {
     const raw: Record<string, string> = {};
     const read = async (p: string) => {

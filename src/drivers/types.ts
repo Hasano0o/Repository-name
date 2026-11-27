@@ -428,6 +428,11 @@ export interface RouterDriver {
    * enabled: من مفاتيح الصفحة (هواوي: esim_enable في global/module-switch) · raw: ردود القراءة كما هي (للسيرفر)
    */
   getEsimRaw?(): Promise<{ enabled: boolean | null; raw: Record<string, string> }>;
+  /**
+   * كود صفحة من واجهة الراوتر بجلستنا (قراءة بس — ٢٧ نوفمبر): هواوي Vue تحمّل صفحاتها «js/<اسم>-<اسم>-vue.js»
+   * بعد الدخول بس، فما تنسحب في «مو مدعوم؟». نرسلها للرسيفر عشان نشوف أوامر الصفحة بالضبط (البنق، الأجهزة…).
+   */
+  getPageChunk?(name: string): Promise<string>;
   /** مركز التحكم */
   getExtras?(): Promise<RouterExtras>;
   setNat?(t: 'cone' | 'symmetric'): Promise<void>;

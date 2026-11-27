@@ -117,6 +117,8 @@ export default function WifiChannel() {
   const [tried, setTried] = useState<Tried[]>([]);
   const [verdict, setVerdict] = useState<{ good: boolean; text: string } | null>(null);
   const [onWifi, setOnWifi] = useState<boolean | null>(null);
+  /** سبب فشل القراءة (كان ينبلع — تقرير H158-381 ٢٧ نوفمبر وصل بدونه) */
+  const [loadErr, setLoadErr] = useState('');
   const mounted = useRef(true);
   const demoRef = useRef<DemoDriver | null>(null);
 
@@ -124,7 +126,10 @@ export default function WifiChannel() {
     const list = await withSession(r, async d => {
       if (r.driverId === DEMO_DRIVER_ID) demoRef.current = d as DemoDriver;
       return d.getWifiRadios ? d.getWifiRadios() : [];
-    }, false).catch(() => [] as WifiRadio[]);
+    }, false).then(l => { setLoadErr(''); return l; }).catch((e: any) => {
+      if (mounted.current) setLoadErr(String(e?.message ?? e));
+      return [] as WifiRadio[];
+    });
     if (!mounted.current) return list;
     setRadios(list);
     return list;
@@ -272,12 +277,28 @@ export default function WifiChannel() {
     ]);
   };
 
+  const retryLoad = async () => {
+    if (!info) return;
+    setLoading(true);
+    try {
+      const list = await load(info);
+      if (list.length && mounted.current) setBand(list.some(x => x.band === '5') ? '5' : list[0].band);
+    } finally {
+      if (mounted.current) setLoading(false);
+    }
+  };
+
   const [sendingDbg, setSendingDbg] = useState(false);
   const sendDebug = async () => {
     if (!info || sendingDbg) return;
     setSendingDbg(true);
-    const txt = await withSession(info, async d => (d.wifiDebug ? d.wifiDebug() : 'غير مدعوم'), false).catch(e => String(e?.message ?? e));
-    const full = `Bandly — قناة الواي فاي\nالراوتر: ${info.driverName}\n${error ? `الخطأ: ${error}\n` : ''}\n${txt}`;
+    const txt = await withSession(info, async d => {
+      // نعيد القراءة نفسها في نفس الجلسة — عشان نعرف هل المشكلة بالقراءة ولا بالاتصال وقتها
+      let now = '';
+      try { now = JSON.stringify(d.getWifiRadios ? await d.getWifiRadios() : null); } catch (e: any) { now = `ERR ${String(e?.message ?? e)}`; }
+      return `[قراءة الحين] ${now}\n\n${d.wifiDebug ? await d.wifiDebug() : 'غير مدعوم'}`;
+    }, false).catch(e => String(e?.message ?? e));
+    const full = `Bandly — قناة الواي فاي\nالراوتر: ${info.driverName}\n${error ? `الخطأ: ${error}\n` : ''}${loadErr ? `فشل القراءة: ${loadErr}\n` : ''}\n${txt}`;
     const ok = await sendSupportReport('wifich', full, info);
     setSendingDbg(false);
     if (ok) Alert.alert('✓ وصلت التفاصيل', 'وصلت للمطوّر. نشتغل على الأجهزة بالدور، ونعلن في القروب أول ما يجهز راوترك.');
@@ -321,6 +342,10 @@ export default function WifiChannel() {
           <View style={s.card}>
             <Text style={s.cardTitle}>ما قدرنا نقرأ قناة الواي فاي من راوترك</Text>
             <Text style={s.cardSub}>بعض الموديلات تخفي هالإعداد. أرسل لنا التفاصيل ونضيف دعم راوترك.</Text>
+            {!!loadErr && <Text style={[s.cardSub, { color: C.red, marginTop: 8 }]}>{loadErr}</Text>}
+            <Pressable onPress={retryLoad} style={[s.ghost, { marginTop: 10 }]}>
+              <Text style={s.ghostTxt}>↻ جرّب مرة ثانية</Text>
+            </Pressable>
             <DevButtons />
           </View>
         ) : (
