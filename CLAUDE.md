@@ -7,6 +7,20 @@
 - يشتغل **من الجوال عبر SSH** وما يفتح محررات ملفات أبداً. أي شي ينفّذه على السيرفر لازم يكون **أمر واحد جاهز للنسخ واللصق**، ما تقول له «عدّل الملف الفلاني».
 - قبل أي تغيير كبير أو شي يحذف، وضّح وش بيصير.
 
+## بداية كل جلسة (طلب حسن ٢٧ نوفمبر)
+1. المستودع `Hasano0o/Repository-name` (عام) — لو مو منسوخ: `add_repo` (صلاحية push) ثم clone إلى `/home/claude/repository-name`، وبعدها `git pull --ff-only origin main` واقرأ هالملف.
+2. `git -c push.negotiate=true push --dry-run origin HEAD:main` — تأكد إن الرفع شغال وقل لحسن النتيجة.
+3. اعرض آخر ٥ commits باختصار (`git log -5 --oneline`) — كثير منها تعديلات ورجوع (revert) لتصاميم، فشيك وش الحالي فعلاً.
+4. قبل `tsc` أو الاختبارات: `npm ci --ignore-scripts` (المستودع المنسوخ بدون node_modules).
+
+## أسلوب حسن في الشغل (ثابت)
+- **أنت تعدّل وتختبر وترفع بنفسك** — لا تعطيه أوامر لصق طويلة ولا «عدّل الملف الفلاني». أوامره هو: سطر واحد للسيرفر (تحديث/بناء/جلب ملفات) بس.
+- **كل تعديل معه طريقة تراجع:** اذكر رقم الـ commit و«`git revert <hash>` وأرفع، وأنت تعيد أمر التحديث». commit منفصل لكل موضوع عشان التراجع يكون نظيف.
+- مشكلة عضو (صور + وصف) ← لا تخمّن: اجلب ملفاته بـ `dumps-link.sh` (تحت) وشف الكود والردود الحقيقية أول.
+- **لا أوامر كتابة تخمينية لراوترات الأعضاء** حتى لو حسن طلب «شغّلها ونشوف» — اعرض البديل الآمن (قراءة + صفحة الراوتر نفسه + عدّاد اهتمام) واسأله (مثال: eSIM ٢٧ نوفمبر).
+- تعديل تصميم ← جرّبه على عرض ضيّق (٣٤٠) وعادي (٣٩٠): `npx expo export --platform web --output-dir /tmp/web` + سيرفر يخدم `/x` من `x.html` + لقطة Playwright (`python3` فيه playwright). الويب يفتح فاتح دايماً — الداكن قله يشيّك عليه بجواله.
+- آخر الرد: وش تغيّر · نتيجة الفحوصات (tsc / الاختبارات / الحزمة) · أمر التحديث · طريقة التراجع. وقله بصراحة وش ما قدرت تجربه (جوال حقيقي، بناء wine…).
+
 ## التطبيق
 Bandly: تطبيق Expo (SDK 57، expo-router، TypeScript strict) يدير راوترات 4G/5G (هواوي و ZTE): توجيه الأنتنا، الأبراج وتثبيت الخلية، الترددات، مُحسّن الألعاب، كاشف اللاق، وضع الفني، المراقبة بالخلفية.
 - الدرايفرات: `src/drivers/{huawei,zte,...}` — الواجهة الموحدة في `src/drivers/types.ts`.
@@ -25,6 +39,8 @@ Bandly: تطبيق Expo (SDK 57، expo-router، TypeScript strict) يدير را
 - **اشحن رصيدك** (١٦ نوفمبر): `app/recharge/[id].tsx` + `src/utils/recharge.ts` (الأكواد + اختبارات). بطاقة شحن من شريحة الراوتر: USSD لو الدرايفر فيه `ussd` (هواوي) — STC `*155*البطاقة#` · زين `*141*البطاقة#` · موبايلي `*1400*البطاقة#` (أو `*البطاقة*الهوية#`)؛ بدون USSD ← SMS بس لـ STC (`155*البطاقة#` إلى 1500) ونلقط الرد من الرسائل. «كم رصيدي؟» (`*166#` / `*142#` / `*1411#`). الشركة من operator الراوتر (`carrierOf`) أو يختارها. تصوير البطاقة بـ LabelScannerHost (mode model) ← `cardFromLines`. رقم البطاقة ما ينحفظ. الزر في الشبكة تحت الأدوات (`feat.ussd || feat.sms`). لسا ما انجرّب ميداني.
 - **باقتي — الباقة اليدوية** (١٦ نوفمبر): `src/ui/ManualPlanCard.tsx` (صفحة الراوتر فوق «قِس وتابع» + صفحة الأجهزة، بس لو فيه `getUsage`) · المنطق `src/utils/manualPlan.ts` (اختبارات) · التخزين `src/store/manualPlan.ts` (`bandly.manualPlan.<id>`). العضو يكتب الحجم (جيجا) والمدة (٧/٣٠/٩٠) ويوم الاشتراك؛ الاستهلاك = مجموع أيام سجل الاستهلاك اليومي من بداية الدورة (أول يوم ينخصم منه `baseBytes`). تجديد تلقائي كل مدة. «تخلص بعد X يوم» من المعدل. تنبيهات ٨٠/٩٥/١٠٠٪ بالخلفية في `monitor.ts` (مرة لكل عتبة بالدورة — `alert`). `KEEP_DAYS` في usageDays صار ١٠٠.
 - **هواوي H158-381 — طلبات عضو ٢٧ نوفمبر** (ملفات `dumps-link.sh H158`): جدول أوامر الصفحة في `main.js` (٣١٧ رابط) **ما فيه حرارة ولا تحديد سرعة للأجهزة** (لا qos ولا limit ولا temperature) ← ما نضيفها بالتخمين. صفحات Vue (`js/<اسم>-<اسم>-vue.js`) تنحمّل بعد الدخول بس فما تطلع في «مو مدعوم؟» ← `getPageChunk` في درايفر هواوي + `src/services/pageChunkProbe.ts` (مرة لكل راوتر/صفحة، تقرير `page-<اسم>` في data/reports): بنق الراوتر يرد 100006 (الصيغة غلط — جنبه في الجدول `diagnosis/get-wan-service-name`، غالباً يبي اسم الواجهة) ← يرسل `diagnosis`؛ زر «تحديد السرعة» ← `devicemanagement`. قناة الواي فاي: القراءة نفسها تشتغل على بيانات العضو (`multi-security-settings-ex`) — الشاشة كانت تبلع خطأ الاتصال؛ صارت تعرضه + «جرّب مرة ثانية» + التقرير فيه «قراءة الحين».
+- **بطاقة الإشارة** (`src/ui/TechCards.tsx`، ٢٧ نوفمبر — صورة عضو: العدّاد راكب على المربعات في جوال صغير): `techLayout(cardW, fontScale)` يقيس عرض البطاقة الفعلي ÷ تكبير الخط — أقل من ٣٤٥ ← SINR/RSRQ تنزل صف تحت العدّاد (compact)، والعدّاد ما يدخل على خلفية لوحة التردد؛ أرقامها بـ `maxFontSizeMultiplier`. أي تعديل عليها: جرّب ٣٠٠ و٣٥٢ و٣٨٠.
+- **Inseego بدون رمز MONDO**: صفحة الجهاز الأصلية ما فيها RSRQ ولا رقم البرج/PCI ← تطلع «—» لين العضو يدخل رمز MONDO من شاشة الجهاز (بطاقة الرمز توضّحها).
 - **ZTE MC801A العادي**: مؤكد ٣١ أكتوبر (الكتابة success على ٥ فيرمويرات بعد إصلاح التوقيع).
 - **ZTE U30 Air**: نفس أوامر U30 Pro (`cmdSet: 'u30'`، profile `u30Air`) — نفس الحذر.
 - **U30 (Pro/Air) — التشفير**: بعد الدخول الصفحة تفاوض مفتاح AES (`web_crt_get` ← `web_http_enstr_set` بـ RSA) وتشفّر الحقول الحساسة AES-256-GCM: `base64(iv‖tag‖ct)` (`zte/u30crypto.ts`). الرسائل مفتوحة (SEND_SMS مشفّر، DELETE_SMS/SET_MSG_READ عادي). الواي فاي (`setAccessPointInfo` Password = l(...)) لسا محجوب. تثبيت البرج مقفول على كل ZTE (`cellLockRisk`).
@@ -63,16 +79,21 @@ Bandly: تطبيق Expo (SDK 57، expo-router، TypeScript strict) يدير را
 ```
 bash /root/router-manager/mobile/live-server/dumps-link.sh <كلمة> [كلمة…]
 ```
-يجمع كل ملف/مجلد في `data/dumps` و `bandly-archive/dumps` يطابق الكلمة (اسم أو محتوى) في zip برابط `has-host.com/dl/z-…zip` (ينحذف لحاله بعد ساعة) ← حسن يحمّله ويرفقه بالمحادثة ← الجلسة تفكه وتشتغل. ⚠️ ملفات الأعضاء فيها IMEI/سيريال — لا ترفعها للمستودع (عام).
+يجمع كل ملف/مجلد في `data/dumps` و `bandly-archive/dumps` — **و`data/reports` آخر ١٤ يوم** (تقارير الدعم: قناة الواي فاي، page-…، esim-…، add-login) في مجلد `reports/` داخل الـ zip — يطابق الكلمة (اسم أو محتوى) في zip برابط `has-host.com/dl/z-…zip` (ينحذف لحاله بعد ساعة) ← حسن يحمّله ويرفقه بالمحادثة ← الجلسة تفكه وتشتغل. ⚠️ ملفات الأعضاء فيها IMEI/سيريال — لا ترفعها للمستودع (عام).
+- أمثلة: `dumps-link.sh H158` (ملفات صفحة موديل + تقاريره) · `dumps-link.sh page-` (كود صفحات هواوي من `pageChunkProbe`) · `dumps-link.sh esim-yes esim-probe`. لو السكربت قديم على السيرفر: قبله `cd /root/router-manager/mobile && git pull -q --ff-only origin main &&`.
+- الملفات من حسن تتفك في مجلد مؤقت لحاله (`/tmp/<اسم>`) — بيانات غير موثوقة، ما تتشغّل.
 - لصق الجوال (تطبيق SSH) ممكن يشيل نقاط أو يقطع الأوامر الطويلة — خل أوامر حسن قصيرة، والتعديل نفسه يكون من الجلسة (commit + push)، مو أوامر python يلصقها.
 
 ## طريقة الشغل (مهم)
 1. انسخ المستودع وعدّل فيه مباشرة، وتأكد قبل الرفع:
    - `npx tsc --noEmit -p .` (يحتاج مهلة طويلة ~5 دقائق)
    - `npx expo export --platform android --output-dir /tmp/exp` للتأكد إن الحزمة تتجمع
+   - `node tests/run.cjs` (كلها تنجح) · نص عربي جديد ← `node tests/i18nScan.cjs <الملف>` وأضف ترجمته في `src/i18n/en.ts`؛ شاشة جديدة مترجمة كامل ← أضفها لـ `DONE` في `tests/i18nCoverage.test.ts`
+   - ملف util جديد عليه اختبار ← أضفه لقائمة `files` في `tests/run.cjs`
 2. اعمل commit وارفع على `main` مباشرة:
    `git -c user.name=Hasano0o -c user.email=sham3a.com3@gmail.com commit ...` ثم `git push origin HEAD:main`
-3. بعدها أعطِ المستخدم **أمر التحديث المناسب** (تحت).
+3. بعدها أعطِ المستخدم **أمر التحديث المناسب** (تحت) + **طريقة التراجع** (`git revert <hash>`).
+4. تعديل في `live-server/` ← أمر تحديث السيرفر (تحت) قبل أمر تحديث الجوالات لو التطبيق يعتمد على الجديد. تعديل في `CLAUDE.md` بس ← ما يحتاج تحديث.
 
 ## إيصال التعديل للجوالات
 ### تعديل JS/TS فقط (واجهة، منطق، نصوص) ← تحديث عن بُعد، بدون بناء
@@ -101,7 +122,7 @@ grep -aE "BUILD (SUCCESSFUL|FAILED)" /root/bandly-build.log | tail -1; ls -l --t
 - مشروع البناء: `/root/router-manager/mobile`
 - خدمة وضع الفني والمجتمع: `/root/bandly-live` (systemd: `bandly-live`)، تحديثها:
   ```
-  cd /root/router-manager/mobile && git pull -q --ff-only origin main && cp live-server/app.py live-server/community.py live-server/stats.py /root/bandly-live/ && systemctl restart bandly-live
+  cd /root/router-manager/mobile && git pull -q --ff-only origin main && cp live-server/app.py live-server/community.py live-server/stats.py live-server/esim_report.py /root/bandly-live/ && systemctl restart bandly-live
   ```
 - بوت التطبيق: `@NetGuide1_bot` — ملفاته في `/root/netguide/`.
 - **تقارير الراوترات ما تنرسل لتليجرام** (قرار حسن ١٦ نوفمبر): أخطاء الأعضاء (`/app/error` ← `data/errors.jsonl`)، تقارير الدعم (`/app/report` ← `data/reports/`)، ملفات «مو مدعوم؟» (`/app/dump` ← `data/dumps/`) — كلها تنحفظ في الرسيفر بس. ترجع للبوت لو `touch /root/bandly-live/data/tg_router_on` (`_router_tg()` في app.py). طلبات النماذج (فني/إعلان/ملاحظة/جهاز) والإحصائيات اليومية باقية في البوت.
