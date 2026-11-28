@@ -21,7 +21,7 @@ import { buildSnapshot } from '../../utils/snapshot';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import { ModelProfile } from '../models';
 import { aesCbcEncrypt, aesCbcDecrypt, b64, unb64, rsaPkcs1Encrypt, utf8, fromUtf8 } from './crypto';
-import { zxCells, zxPcc } from './ca';
+import { zxCells, zxPcc, zxNrMain } from './ca';
 
 const num = (v: unknown): number | undefined => {
   if (v === undefined || v === null || v === '') return undefined;
@@ -197,6 +197,29 @@ export class ZyxelDriver implements RouterDriver {
     const sinr = num(c.INTF_SINR);
     const nsinr = num(c.NSA_SINR);
     const lteIsNr = pcc?.tech === 'NR';
+    // NR5103EV2: أول 5G في القائمة = الأساسي 5G (مو NSA_Band) — وقراءات NSA له، مثل صفحة الراوتر
+    const nm = zxNrMain(c);
+    const nmOn = !!nm && (neg(c.NSA_RSRP) !== undefined || num(c.NSA_SINR) !== undefined);
+    if (nm) {
+      return {
+        network: str(c.INTF_Current_Access_Technology) || undefined,
+        band: b ? `B${b}` : undefined,
+        cellId: str(c.INTF_Cell_ID) || undefined,
+        pci: pcc?.pci || undefined,
+        earfcn: pcc?.arfcn || undefined,
+        rsrp: neg(c.INTF_RSRP),
+        rsrq: num(c.INTF_RSRQ),
+        sinr: sinr !== undefined && sinr > -20 && sinr < 50 ? sinr : undefined,
+        rssi: neg(c.INTF_RSSI),
+        cqi: num(c.INTF_CQI),
+        nrBand: 'n' + nm.band,
+        nrPci: nm.pci || (bandOf(c.NSA_Band) === nm.band ? str(c.NSA_PCI) || undefined : undefined),
+        nrArfcn: nm.arfcn || undefined,
+        nrRsrp: nmOn ? neg(c.NSA_RSRP) : undefined,
+        nrRsrq: nmOn ? num(c.NSA_RSRQ) : undefined,
+        nrSinr: nmOn && nsinr !== undefined && nsinr > -20 && nsinr < 50 ? nsinr : undefined,
+      };
+    }
     return {
       network: str(c.INTF_Current_Access_Technology) || undefined,
       band: b && !lteIsNr ? `B${b}` : undefined,
@@ -223,11 +246,30 @@ export class ZyxelDriver implements RouterDriver {
     const cells = zxCells(c);
     const pc = cells[0];
     if (pc?.band) out.push({ tech: pc.tech, role: 'PCC', band: pc.band, arfcn: pc.arfcn, pci: pc.pci, rsrp: neg(c.INTF_RSRP), rsrq: num(c.INTF_RSRQ) });
-    // باقي القائمة = نواقل ثانوية (NR5103EV2). 5G يجي من خانات NSA تحت (فيها القراءات) — ما نكرره
+    // باقي القائمة = نواقل ثانوية (NR5103EV2). 4G أول، بعدها 5G بترتيب القائمة — أول 5G = الأساسي 5G
+    // ومعه قراءات NSA (عضو ٢٨ نوفمبر: كنا نشيل 5G القائمة ونحط NSA_Band ← n41 أساسي و n78 يختفي)
+    const nm = zxNrMain(c);
     for (const x of cells.slice(1)) {
-      if (!x.band || (x.tech === 'NR' && c.NSA_Enable && bandOf(c.NSA_Band))) continue;
+      if (!x.band || x.tech !== 'LTE') continue;
       out.push({ tech: x.tech, role: 'SCC', band: x.band, arfcn: x.arfcn, pci: x.pci });
     }
+    if (nm) {
+      for (const x of cells.slice(1)) {
+        if (!x.band || x.tech !== 'NR') continue;
+        out.push(x.band === nm.band && x.arfcn === nm.arfcn
+          ? { tech: 'NR', role: 'SCC', band: x.band, arfcn: x.arfcn, pci: x.pci, rsrp: neg(c.NSA_RSRP), rsrq: num(c.NSA_RSRQ) }
+          : { tech: 'NR', role: 'SCC', band: x.band, arfcn: x.arfcn, pci: x.pci });
+      }
+    } else {
+      // SA (الأساسي 5G) — نفس السابق بالضبط
+      for (const x of cells.slice(1)) {
+        if (!x.band || x.tech !== 'NR' || (c.NSA_Enable && bandOf(c.NSA_Band))) continue;
+        out.push({ tech: x.tech, role: 'SCC', band: x.band, arfcn: x.arfcn, pci: x.pci });
+      }
+    }
+    // للتأكد من شكوى ٢٨ نوفمبر: القائمة الخام مرة كل ما تتغيّر (تطلع في تقرير «أرسل الخطأ للمطوّر»)
+    const bl = `${str(c.INTF_Current_Band)} | RFCN ${str(c.INTF_RFCN)} | NSA_Band ${str(c.NSA_Band) || '—'} | NSA_RFCN ${str(c.NSA_RFCN) || '—'}`;
+    if (bl !== this.bandsLogged) { this.bandsLogged = bl; diag(`[zyxel] الترددات خام: ${bl}`); }
     const listed = out.length > 1;
     // SCC_Info: أسماء الحقول تختلف بين الفيرموير — نلقط اللي فيه Band/PCI/RFCN/RSRP
     // صفحة الراوتر نفسها (NR5103EV2) ما تعرض SCC_Info أبداً، فما عندنا دليل على صيغته. شكوى ١٣ نوفمبر:
@@ -251,11 +293,12 @@ export class ZyxelDriver implements RouterDriver {
       out.push({ tech: /NR|n\d/i.test(str(pick(/band/i))) ? 'NR' : 'LTE', role: 'SCC', band: sb, arfcn: str(pick(/rfcn|earfcn|arfcn/i)) || undefined, pci: str(pick(/pci|phy.*cell/i)) || undefined, rsrp: neg(pick(/rsrp/i)) });
     }
     const nb = bandOf(c.NSA_Band);
-    if (c.NSA_Enable && nb) out.push({ tech: 'NR', role: out.length ? 'SCC' : 'PCC', band: nb, arfcn: num(c.NSA_RFCN) ? str(c.NSA_RFCN) : undefined, pci: str(c.NSA_PCI) || undefined, rsrp: neg(c.NSA_RSRP), rsrq: num(c.NSA_RSRQ) });
+    if (c.NSA_Enable && nb && !out.some(x => x.tech === 'NR' && x.band === nb)) out.push({ tech: 'NR', role: out.length ? 'SCC' : 'PCC', band: nb, arfcn: num(c.NSA_RFCN) ? str(c.NSA_RFCN) : undefined, pci: str(c.NSA_PCI) || undefined, rsrp: neg(c.NSA_RSRP), rsrq: num(c.NSA_RSRQ) });
     return out;
   }
 
   private sccLogged = '';
+  private bandsLogged = '';
   /** آخر قائمة مفضّلة قريناها (للتشخيص مع SCC_Info) */
   private prefSeen = '';
 

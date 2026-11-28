@@ -35,3 +35,15 @@ export function zxPcc(c: Record<string, any>): ZxCell | null {
   const cells = zxCells(c);
   return cells[0] ?? null;
 }
+
+/**
+ * NR5103EV2 في NSA (عضو ٢٨ نوفمبر: الأساسي 5G عنده n78 والثانوي n41، والتطبيق يعرض n41 أساسي ويخفي n78):
+ * صفحة الراوتر نفسها ما تعرض NSA_Band — تعرض قائمة INTF_Current_Band وتحتها «RSRP-NSA» بدون تردد.
+ * يعني ترتيب القائمة هو المرجع: أول 5G فيها = الأساسي 5G (ومعه قراءات NSA)، والباقي ثانوي.
+ * يرجع null لو القائمة ما فيها 5G والأساسي 4G (NR5103E العادي / FWA505 — ما يتغيّر شي عندهم).
+ */
+export function zxNrMain(c: Record<string, any>): ZxCell | null {
+  const cells = zxCells(c);
+  if (!cells.length || cells[0].tech !== 'LTE') return null;
+  return cells.slice(1).find(x => x.tech === 'NR' && x.band) ?? null;
+}
