@@ -16,6 +16,7 @@ const files = [
   'src/utils/antennaPorts.ts',
   'src/drivers/noChange.ts',
   'src/drivers/zte/ussd.ts',
+  'src/drivers/zte/caSig.ts',
   'src/utils/fiberAdvice.ts',
   'src/utils/fiberKit.ts',
   'src/utils/wifiBoost.ts',

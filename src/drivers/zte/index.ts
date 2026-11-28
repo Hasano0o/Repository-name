@@ -1,4 +1,5 @@
 import { sha256 } from '@noble/hashes/sha2';
+import { sccSigRows } from './caSig';
 import { u30Enc, u30NewKey } from './u30crypto';
 /** عشوائي آمن — نحمّل expo-crypto وقت الحاجة بس (تشفير U30) */
 const u30Rand = async () => { const C = await import('expo-crypto'); return (n: number) => C.getRandomBytes(n); };
@@ -1247,7 +1248,7 @@ export class ZteDriver implements RouterDriver {
     await this.ensure();
     const r = await this.get([
       'lte_band', 'wan_active_channel', 'lte_pci', 'lte_rsrp', 'lte_rsrq', 'lte_snr',
-      'lte_ca_pcell_bandwidth', 'wan_lte_ca', 'lte_multi_ca_scell_info',
+      'lte_ca_pcell_bandwidth', 'wan_lte_ca', 'lte_multi_ca_scell_info', 'lte_multi_ca_scell_sig_info',
       'nr5g_action_band', 'nr5g_action_channel', 'nr5g_pci',
       'Z5g_rsrp', 'Z5g_rsrq', 'Z5g_SINR', 'nr5g_bandwidth',
       'nr5g_band', 'nr5g_sa_band', 'nr5g_sa_pci', 'nr5g_dlEarfcn',
@@ -1268,16 +1269,21 @@ export class ZteDriver implements RouterDriver {
       });
     }
     if (/activ/i.test(r.wan_lte_ca || '') && !/deactiv|inactiv/i.test(r.wan_lte_ca || '')) {
-      for (const row of (r.lte_multi_ca_scell_info || '').split(';')) {
+      // إشارة كل ناقل (نفس ترتيب الصفوف) — من تقارير ca-sig ٢٨ نوفمبر
+      const sig = sccSigRows(r.lte_multi_ca_scell_sig_info);
+      const rows = (r.lte_multi_ca_scell_info || '').split(';').map(x => x.trim()).filter(Boolean);
+      rows.forEach((row, i) => {
         const f = row.split(',').map(x => x.trim());
-        if (f.length < 5) continue;
+        if (f.length < 5) return;
         const b = bandNum(f[3]) ?? lteBandOf(num(f[4]));
-        if (!b) continue;
+        if (!b) return;
+        const g = sig.length === rows.length ? sig[i] : undefined;
         out.push({
           tech: 'LTE', role: 'SCC', band: b, arfcn: f[4] || undefined,
           pci: pciDec(f[1]), bandwidth: num(f[5]),
+          rsrp: g?.rsrp, rsrq: g?.rsrq, sinr: g?.sinr,
         });
-      }
+      });
     }
     const nrBand = pick(r, 'nr5g_action_band', 'nr5g_action_nsa_band', 'nr_ca_pcell_band', 'nr5g_band', 'nr5g_sa_band');
     const nrRsrpV = pick(r, 'Z5g_rsrp', 'nr5g_rsrp');
