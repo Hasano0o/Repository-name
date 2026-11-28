@@ -50,6 +50,7 @@ import { ComboCard } from '../../src/ui/ComboCard';
 import { CodePairCard } from '../../src/ui/CodePairCard';
 import { EsimCard } from '../../src/ui/EsimCard';
 import { LabFixedCard } from '../../src/ui/LabFixedCard';
+import { enbOf } from '../../src/utils/towerMap';
 import { BandChips } from '../../src/ui/BandChips';
 import { OperatorBadge } from '../../src/ui/OperatorBadge';
 import { bandChips } from '../../src/utils/bandChips';
@@ -1023,6 +1024,7 @@ export default function RouterDashboard() {
                   bars={<Bars color={LEVEL_COLOR[level]} size={22} on={level === 'excellent' ? 4 : level === 'good' ? 3 : level === 'fair' ? 2 : 1} />}
                   tower={String(signal?.pci ?? signal?.nrPci ?? '—')}
                   tower5g={signal?.pci && signal?.nrPci ? String(signal.nrPci) : undefined}
+                  site={signal?.pci ? enbOf(signal) : undefined}
                   ca={{
                     text: nrCc >= 2 ? '⚡ 5G ×2' : caCount > 1 ? 'مدموج' : caIdle ? '💤 جاهز' : '◻️ تردد واحد',
                     color: caCount > 1 || nrCc >= 2 ? '#16a34a' : C.sub,
@@ -1053,8 +1055,9 @@ export default function RouterDashboard() {
               <>
                 <Pressable style={s.heroBox} onPress={() => router.push(`/towers/${info.id}` as Href)}>
                   <View style={s.heroCell}>
-                    <Text style={s.heroCellLbl}>البرج</Text>
+                    <Text style={s.heroCellLbl}>الخلية</Text>
                     <Text style={s.heroCellVal} numberOfLines={1}>{signal?.pci ?? signal?.nrPci ?? '—'}</Text>
+                    {!!signal?.pci && !!enbOf(signal) && <Text style={s.heroCellSub} numberOfLines={1}>البرج {enbOf(signal)}</Text>}
                     {!!signal?.pci && !!signal?.nrPci && <Text style={s.heroCellSub}>5G: {signal.nrPci}</Text>}
                   </View>
                   <View style={s.heroDiv} />

@@ -282,7 +282,8 @@ function TechRow({ r, onDetails, hist }: { r: Row; onDetails?: () => void; hist?
         color={LEVEL_COLOR[qlv]} bg={LEVEL_SOFT[qlv]} onPress={onDetails} spark={hist?.rsrq} />
     </View>
   );
-  const meta = [bwN && `${bwN} MHz`, r.arfcn && tr(`قناة ${r.arfcn}`), r.pci && `PCI ${r.pci}`].filter(Boolean).map(x => iso(String(x)));
+  // ملاحظة عضو ٢٨ نوفمبر: الـ PCI رقم الخلية (السيكتور) مو البرج — رقم البرج (eNB) في «اتصالك …» تحت
+  const meta = [bwN && `${bwN} MHz`, r.arfcn && tr(`قناة ${r.arfcn}`), r.pci && tr(`خلية ${r.pci}`)].filter(Boolean).map(x => iso(String(x)));
   return (
     <View style={s.card} onLayout={e => { const w = Math.round(e.nativeEvent.layout.width); if (Math.abs(w - cardW) > 2) setCardW(w); }}>
       <CardWaves color={accent} />

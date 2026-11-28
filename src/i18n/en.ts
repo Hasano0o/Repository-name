@@ -974,6 +974,14 @@ export const EN: Record<string, string> = {
   'السجل': 'History',
   'الأنتنا والباقة': 'Antenna & plan',
   'مزايا تجريبية': 'Lab features',
+  'الخلية': 'Cell',
+  'الخلية الأساسية': 'Primary cell',
+  'خلية بدون رقم': 'Cell without a number',
+  'الخلية نفسها': 'The cell itself',
+  'الراوتر يبقى على هذي الخلية بالذات (جهة وحدة من البرج) حتى لو ظهر غيرها. غالباً يوقف دمج الترددات، وممكن يعيد تشغيل الراوتر عشان يطبّق (دقيقة إلى دقيقتين).': 'The router stays on this exact cell (one side of the tower) even if others appear. It usually stops carrier aggregation, and the router may restart to apply it (one to two minutes).',
+  'البرج = العمود نفسه، ورقمه طويل (٥–٦ خانات، مثل 123456). وكل برج فيه عادة ٣ خلايا (سيكتورات) أو أكثر، كل وحدة تغطي جهة، ولها رقم قصير (PCI، مثل 214).': 'The tower is the mast itself, with a long number (5–6 digits, like 123456). Each tower usually has 3 or more cells (sectors), each covering one direction, with a short number (PCI, like 214).',
+  'كل بطاقة = خلية وحدة. نجمع الترددات اللي لها نفس رقم الخلية (PCI)، ولو الراوتر يعطينا رقم البرج يطلع جنبها «على البرج …».': 'Each card = one cell. We group bands with the same cell number (PCI), and if the router gives us the tower number it shows next to it as «on tower …».',
+  '📌 التثبيت: اضغط «📌 ثبّت» على أي خلية — مستخدمة أو مجاورة. تقدر تثبّت الخلية نفسها، أو ترددها فقط (أأمن).': '📌 Locking: tap «📌 Lock» on any cell — in use or nearby. You can lock the cell itself, or only its band (safer).',
   'حارس التثبيت': 'Lock guard',
   'تلقائي — لو التثبيت صار أضعف بعد ساعات نرجّع إعدادك': 'Automatic — if a lock gets weaker hours later, we restore your settings',
   'يسألني قبل ما يرجّع': 'Ask me before restoring',
@@ -2691,6 +2699,13 @@ export const EN: Record<string, string> = {
 };
 
 export const EN_PATTERNS: Record<string, string> = {
+  'البرج {0}': 'Tower {0}',
+  'خلية {0}': 'Cell {0}',
+  '· على البرج {0}': '· on tower {0}',
+  'خلية {0} · {1}': 'Cell {0} · {1}',
+  'ثبّت على الخلية {0} ({1})': 'Lock to cell {0} ({1})',
+  '🎮 أفضل للألعاب: خلية {0} · {1} — {2}ms': '🎮 Best for gaming: cell {0} · {1} — {2}ms',
+  '⬇️ أفضل للتحميل: خلية {0} · {1} — {2} ميقا': '⬇️ Best for downloads: cell {0} · {1} — {2} Mbps',
   '{0}\n\nنرجّع إعدادك اللي كان قبل التثبيت؟': '{0}\n\nRestore the settings you had before the lock?',
   "الراوتر رفض الكود ({0})": "The router rejected the code ({0})",
   '{0}، لكن فيه تداخل قوي (SINR سالب) — جرّب مكان ثاني أو قرّب من الشباك.': '{0}, but there is strong interference (negative SINR) — try another spot or move near a window.',

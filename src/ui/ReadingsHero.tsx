@@ -126,8 +126,10 @@ export function SpeedPill({ down, up }: { down: string; up: string }) {
 }
 
 /** بطاقة «اتصالك جيد»: العنوان بين خطين + صندوق البرج · الدمج · الترددات */
-export function SummaryCard({ title, color, bars, tower, tower5g, ca, chips, chipsSub, onPress }: {
+export function SummaryCard({ title, color, bars, tower, tower5g, site, ca, chips, chipsSub, onPress }: {
   title: string; color: string; bars: ReactNode; tower: string; tower5g?: string;
+  /** رقم البرج نفسه (eNB) — «tower» فوق = رقم الخلية (PCI) */
+  site?: number;
   ca: { text: string; color: string; sub?: string; linked?: boolean }; chips: ReactNode; chipsSub?: string; onPress?: () => void;
 }) {
   return (
@@ -140,11 +142,12 @@ export function SummaryCard({ title, color, bars, tower, tower5g, ca, chips, chi
       </View>
       <Pressable style={s.sumBox} onPress={onPress} disabled={!onPress}>
         <View style={s.sumCell}>
-          <Text style={s.sumLbl}>البرج</Text>
+          <Text style={s.sumLbl}>الخلية</Text>
           <View style={s.sumValRow}>
             <TowerIcon color={isDark ? '#93b4ff' : '#1e3a8a'} size={22} />
             <Text style={s.sumVal} numberOfLines={1} adjustsFontSizeToFit>{tower}</Text>
           </View>
+          {!!site && <Text style={s.sumSub} numberOfLines={1} adjustsFontSizeToFit>{`البرج ${site}`}</Text>}
           {!!tower5g && <Text style={s.sumSub}>{`5G: ${tower5g}`}</Text>}
         </View>
         <View style={s.sumDiv} />

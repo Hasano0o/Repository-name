@@ -31,6 +31,7 @@ import { runTowerTrials, TrialTarget } from '../../src/utils/towerTrial';
 import { quickDownload } from '../../src/utils/speedtest';
 
 import { sheet } from '../../src/i18n';
+import { enbOf } from '../../src/utils/towerMap';
 const BADGE_BG: Record<TowerGroup['badge'], string> = {
   active: tBg('#e8f8f0'), confirmed: tBg('#e8f8f0'), likely: tBg('#eaf0ff'), single: tBg('#f3f4fb'),
 };
@@ -38,7 +39,7 @@ const BADGE_FG: Record<TowerGroup['badge'], string> = {
   active: '#12b76a', confirmed: '#12b76a', likely: '#2f6bff', single: '#6b7291',
 };
 const ROLE_LABEL: Record<TowerGroup['role'], string> = {
-  primary: 'البرج الأساسي',
+  primary: 'الخلية الأساسية',
   helper: 'مساعد (مدموج)',
   neighbor: 'مجاور',
 };
@@ -88,13 +89,13 @@ function TowerGroupCard({ g, rank, lockedHere, canPin, busy, onLock, onCopy, not
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={s.titleRow}>
-            <Text style={s.towerName} numberOfLines={1}>{g.pci ? `برج ${g.pci}` : 'برج بدون رقم'}</Text>
+            <Text style={s.towerName} numberOfLines={1}>{g.pci ? `خلية ${g.pci}` : 'خلية بدون رقم'}</Text>
             <View style={[s.techTag, g.tech === 'NR' && { backgroundColor: C.violet }]}>
               <Text style={s.techTagText}>{g.tech === 'NR' ? '5G' : '4G'}</Text>
             </View>
           </View>
           <Text style={s.role} numberOfLines={1}>
-            {bands}{g.role !== 'neighbor' ? ` · ${ROLE_LABEL[g.role]}` : ''}{isLowBand(g.best) ? ' · تردد بعيد المدى' : ''}
+            {bands}{g.site ? ` · على البرج ${g.site}` : ''}{g.role !== 'neighbor' ? ` · ${ROLE_LABEL[g.role]}` : ''}{isLowBand(g.best) ? ' · تردد بعيد المدى' : ''}
           </Text>
         </View>
         <View style={s.rsrpBox}>
@@ -330,7 +331,7 @@ export default function TowersScreen() {
     for (const g of cands) {
       const cell = g.cells.find(c => c === g.best && c.arfcn) ?? g.cells.find(c => c.arfcn);
       if (!cell?.arfcn || !g.pci) continue;
-      targets.push({ tech: cell.tech, band: cell.band, arfcn: cell.arfcn, pci: g.pci, name: `برج ${g.pci} · ${bandName(cell)}` });
+      targets.push({ tech: cell.tech, band: cell.band, arfcn: cell.arfcn, pci: g.pci, name: `خلية ${g.pci} · ${bandName(cell)}` });
     }
     try {
       const run = await runTowerTrials(r, targets, [...locks], {
@@ -493,9 +494,9 @@ export default function TowersScreen() {
     if (canCell) {
       opts.push({
         key: 'cell',
-        title: `ثبّت على برج ${tower.pci} (${bandTxt})`,
-        tag: 'البرج نفسه',
-        desc: 'الراوتر يبقى على هذا البرج بالذات حتى لو ظهر غيره. غالباً يوقف دمج الترددات، وممكن يعيد تشغيل الراوتر عشان يطبّق (دقيقة إلى دقيقتين).',
+        title: `ثبّت على الخلية ${tower.pci} (${bandTxt})`,
+        tag: 'الخلية نفسها',
+        desc: 'الراوتر يبقى على هذي الخلية بالذات (جهة وحدة من البرج) حتى لو ظهر غيرها. غالباً يوقف دمج الترددات، وممكن يعيد تشغيل الراوتر عشان يطبّق (دقيقة إلى دقيقتين).',
         note: tCell ? trialNote(tCell) : undefined,
         run: () => runSafe({
           key: cellKey,
@@ -569,7 +570,7 @@ export default function TowersScreen() {
     }
 
     setSheet({
-      title: g.pci ? `برج ${g.pci} · ${bandTxt}` : `تردد ${bandTxt}`,
+      title: g.pci ? `خلية ${g.pci} · ${bandTxt}` : `تردد ${bandTxt}`,
       sub: 'نجرب بأمان: نقيس قبل وبعد، ولو صار أسوأ نرجع إعدادك تلقائياً.',
       opts,
     });
@@ -619,7 +620,7 @@ export default function TowersScreen() {
     );
   };
 
-  const groups = groupTowers(cells, confirmed);
+  const groups = groupTowers(cells, confirmed, enbOf(sigNow));
   const nrNow = cells.find(c => c.tech === 'NR' && (c.kind === 'serving' || c.kind === 'secondary'));
   const primary = groups.find(g => g.role === 'primary');
   const pinnedGroups = groups.filter(g => !!lockOf(g));
@@ -720,7 +721,7 @@ export default function TowersScreen() {
                   <View style={[s.avatar, { backgroundColor: C.blueSoft }]}><Text style={s.avatarRank}>📌</Text></View>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <View style={s.titleRow}>
-                      <Text style={s.towerName}>برج {l.pci}</Text>
+                      <Text style={s.towerName}>خلية {l.pci}</Text>
                       <View style={[s.techTag, l.tech === 'NR' && { backgroundColor: C.violet }]}>
                         <Text style={s.techTagText}>{l.tech === 'NR' ? '5G' : '4G'}</Text>
                       </View>
@@ -762,7 +763,7 @@ export default function TowersScreen() {
             ) : (
               <>
                 <Text style={s.recName}>
-                  برج {bestOther.pci} · {bandName(bestOther.best)}
+                  خلية {bestOther.pci} · {bandName(bestOther.best)}
                 </Text>
                 <Text style={s.hint}>
                   جودته أعلى من برجك الحالي بحسب القوة والجودة معاً.
@@ -872,7 +873,7 @@ export default function TowersScreen() {
               {!scan && best && pingOf(best) && (
                 <View style={s.scanBest}>
                   <Text style={s.scanBestTxt}>
-                    🎮 أفضل للألعاب: برج {best.pci} · {bandName(best.best)} — {pingOf(best)!.ping}ms
+                    🎮 أفضل للألعاب: خلية {best.pci} · {bandName(best.best)} — {pingOf(best)!.ping}ms
                   </Text>
                   {bestIsCurrent ? (
                     <Text style={s.muted}>وهو البرج اللي أنت عليه الحين 👌</Text>
@@ -886,7 +887,7 @@ export default function TowersScreen() {
               {!scan && bestDown && (
                 <View style={s.scanBest}>
                   <Text style={s.scanBestTxt}>
-                    ⬇️ أفضل للتحميل: برج {bestDown.pci} · {bandName(bestDown.best)} — {Math.round(pingOf(bestDown)!.mbps!)} ميقا
+                    ⬇️ أفضل للتحميل: خلية {bestDown.pci} · {bandName(bestDown.best)} — {Math.round(pingOf(bestDown)!.mbps!)} ميقا
                   </Text>
                   {downIsCurrent ? (
                     <Text style={s.muted}>وهو البرج اللي أنت عليه الحين 👌</Text>
@@ -939,10 +940,13 @@ export default function TowersScreen() {
         {!loading && (
           <GlassCard title="كيف نقرأ الأبراج؟" icon="ℹ️" tint={C.goldSoft} defaultOpen={false}>
             <Text style={s.hint}>
-              كل بطاقة = برج واحد. نجمع الترددات اللي لها نفس رقم البرج (PCI)، لأنها غالباً على نفس العمود.
+              البرج = العمود نفسه، ورقمه طويل (٥–٦ خانات، مثل 123456). وكل برج فيه عادة ٣ خلايا (سيكتورات) أو أكثر، كل وحدة تغطي جهة، ولها رقم قصير (PCI، مثل 214).
             </Text>
             <Text style={s.hint}>
-              📌 التثبيت: اضغط «ثبّت على هذا البرج» على أي برج — مستخدم أو مجاور. تقدر تثبّت البرج نفسه، أو تردده فقط (أأمن).
+              كل بطاقة = خلية وحدة. نجمع الترددات اللي لها نفس رقم الخلية (PCI)، ولو الراوتر يعطينا رقم البرج يطلع جنبها «على البرج …».
+            </Text>
+            <Text style={s.hint}>
+              📌 التثبيت: اضغط «📌 ثبّت» على أي خلية — مستخدمة أو مجاورة. تقدر تثبّت الخلية نفسها، أو ترددها فقط (أأمن).
             </Text>
             <Text style={s.hint}>
               ✅ مدموج الآن: الراوتر يدمج ترددات من هذا البرج حالياً. ✅ دمج مؤكد: شفناه يدمج عليه من قبل.

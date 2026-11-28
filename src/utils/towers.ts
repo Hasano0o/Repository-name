@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { enbOf } from './towerMap';
 import { CellTower } from '../drivers/types';
 import { bandFreq, nrFreq } from './bands';
 import { Level, LEVEL_COLOR, LEVEL_LABEL, overallLevel } from './signal';
@@ -55,6 +56,8 @@ export interface TowerGroup {
   freqCount: number;
   badge: CaBadge;
   score: number;
+  /** رقم البرج نفسه (موقع eNB) — من Cell ID لو الراوتر يعطيه. الـ PCI = رقم الخلية (السيكتور) على البرج */
+  site?: number;
 }
 
 const gKey = (c: CellTower) => `${c.tech}:${c.pci ?? `?${c.arfcn ?? c.band ?? ''}`}`;
@@ -64,7 +67,7 @@ const fKey = (c: CellTower) => `${c.arfcn ?? ''}|${c.band ?? ''}`;
  * يجمّع الخلايا في أبراج: نفس رقم PCI على ترددات مختلفة = غالباً نفس البرج.
  * confirmed = أبراج شفنا الراوتر يدمج عليها من قبل (محفوظة).
  */
-export function groupTowers(cells: CellTower[], confirmed: Set<string>): TowerGroup[] {
+export function groupTowers(cells: CellTower[], confirmed: Set<string>, servingSite?: number): TowerGroup[] {
   const aggregating = cells.some(c => c.kind === 'secondary');
   const map = new Map<string, CellTower[]>();
   for (const c of cells) {
@@ -108,6 +111,8 @@ export function groupTowers(cells: CellTower[], confirmed: Set<string>): TowerGr
       freqCount,
       badge,
       score: Math.max(...list.map(rankScore)),
+      site: list.map(c => (c.tech === 'LTE' ? enbOf({ cellId: c.cellId }) : undefined)).find(x => x !== undefined)
+        ?? (hasServing && list[0].tech === 'LTE' ? servingSite : undefined),
     });
   }
 
