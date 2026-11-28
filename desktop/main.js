@@ -25,6 +25,12 @@ function serveApp() {
     if (!file.startsWith(WEB_DIR)) return new Response('forbidden', { status: 403 });
     let ok = false;
     try { ok = rel !== '' && fs.statSync(file).isFile(); } catch {}
+    // ملف كود/أصل ناقص (مثل قطعة import() من نسخة قبل التحديث) ← 404 عشان import() يفشل وينمسك.
+    // قبل: كان يرجّع index.html ← المتصفح ينفّذ HTML كسكربت ← «Requiring unknown module» وتعطّل الشاشة
+    // (تقارير crash ٢٧ نوفمبر ١٠ م: شاشة الإعدادات وراوتراتي بعد التحديث التلقائي — القطعة pendingRecovery).
+    if (!ok && (/^_expo\//.test(rel) || /\.(js|css|map|json|wasm|png|jpe?g|svg|ttf|woff2?)$/i.test(rel))) {
+      return new Response('not found', { status: 404 });
+    }
     if (!ok) file = path.join(WEB_DIR, 'index.html'); // صفحة واحدة — كل المسارات ترجع للتطبيق
     return net.fetch(pathToFileURL(file).toString());
   });
