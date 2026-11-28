@@ -164,7 +164,8 @@ export default function WifiChannel() {
   const apply = async (r: SavedRouter, b: Band, ch: string, cancelled: () => boolean) => {
     await withSession(r, d => d.setWifiChannel!(b, ch), false).catch(e => {
       // الطلب ممكن ينقطع لأن الواي فاي نفسه طفى وهو يطبّق — نحكم بالقراءة بعدها
-      if (!/network|abort|timeout|مهلة|ما رد/i.test(String(e?.message ?? e))) throw e;
+      // («تعذر الاتصال بالراوتر (POST …)» = نفس الشي: الاتصال انقطع وسط الطلب — ٨ أخطاء wifich على MC801A/OPPO ٢٦–٢٨ نوفمبر)
+      if (!/network|abort|timeout|مهلة|ما رد|تعذر الاتصال/i.test(String(e?.message ?? e))) throw e;
     });
     const back = await waitWifi(r, b, demoRef.current, cancelled);
     if (!back) {
