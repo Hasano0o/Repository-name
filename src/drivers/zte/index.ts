@@ -1227,6 +1227,20 @@ export class ZteDriver implements RouterDriver {
     return { bands: c.locked, nrBands: c.nrLocked };
   }
 
+  /**
+   * ردود الدمج الخام (قراءة بس، ٢٨ نوفمبر): بعض الفيرمويرات تعطي lte_multi_ca_scell_sig_info
+   * (كود صفحاتها يطلبه مع lte_multi_ca_scell_info) — صيغته ما نعرفها للحين، فنرسله تقرير مرة وحدة قبل ما نقرأ منه.
+   */
+  async getCaRaw(): Promise<Record<string, string>> {
+    await this.ensure();
+    const keys = ['wan_lte_ca', 'lte_band', 'lte_rsrp', 'lte_snr', 'lte_multi_ca_scell_info', 'lte_multi_ca_scell_sig_info',
+      'lte_ca_scell_info', 'nr_multi_ca_scell_info', 'nr5g_action_band', 'Z5g_rsrp'];
+    const r = await this.get(keys);
+    const out: Record<string, string> = {};
+    for (const k of keys) out[k] = String(r[k] ?? '');
+    return out;
+  }
+
   /** النواقل: الأساسي 4G + 5G المرتبط (NSA) — الدمج الإضافي لو الراوتر يعطيه */
   async getCarriers(): Promise<Carrier[]> {
     await this.ensure();

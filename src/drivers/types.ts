@@ -436,6 +436,8 @@ export interface RouterDriver {
    * null = الراوتر ما يعطيها.
    */
   getAntennaPlugs?(): Promise<{ idx: number; plugged: boolean; external?: boolean }[] | null>;
+  /** ردود الدمج الخام (قراءة بس) — لفحص صيغة قراءة كل ثانوي مرة وحدة (ZTE lte_multi_ca_scell_sig_info) */
+  getCaRaw?(): Promise<Record<string, string>>;
   /**
    * دخول برمز من شاشة الجهاز (أداة MONDO على Inseego 8800L — ٢١ نوفمبر): needed() = true ← صفحة الراوتر تعرض خانة الرمز.
    * submit يرمي برسالة واضحة لو الرمز غلط/انتهى.

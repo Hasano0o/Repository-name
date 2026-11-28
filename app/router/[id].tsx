@@ -69,6 +69,7 @@ import { WelcomeTour } from '../../src/ui/WelcomeTour';
 import { sheet, tr } from '../../src/i18n';import { LabelCard } from '../../src/ui/LabelCard';
 import { rememberBands } from '../../src/store/bandsAvail';
 import { probeEsimOnce } from '../../src/services/esimProbe';
+import { probeCaSigOnce } from '../../src/services/caSigProbe';
 
 interface Features {
   bands: boolean; sms: boolean; ussd: boolean; block: boolean; reboot: boolean; devices: boolean; cells: boolean; details: boolean; plan: boolean; network: boolean; carriers: boolean; antenna: boolean;
@@ -323,7 +324,9 @@ export default function RouterDashboard() {
   useEffect(() => {
     if (!hasSignalNow || !info) return;
     const t = setTimeout(() => { probeEsimOnce(info).catch(() => {}); }, 8000);
-    return () => clearTimeout(t);
+    // ZTE: صيغة قراءة كل ثانوي (lte_multi_ca_scell_sig_info) — تقرير مرة وحدة (٢٨ نوفمبر)
+    const t2 = setTimeout(() => { probeCaSigOnce(info).catch(() => {}); }, 14000);
+    return () => { clearTimeout(t); clearTimeout(t2); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasSignalNow, info?.id]);
 
