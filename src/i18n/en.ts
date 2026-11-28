@@ -4,6 +4,15 @@
  * نص ما له ترجمة يطلع عربي — فزيد هنا بأي وقت.
  */
 export const EN: Record<string, string> = {
+  "الشريحة ما عليها خدمة الحين — جرّب بعد شوي": "The SIM has no service right now — try again shortly",
+  "الشبكة ما ردّت على الكود (انتهت المهلة)": "The network didn't answer the code (timed out)",
+  "الشبكة مشغولة — جرّب مرة ثانية": "The network is busy — try again",
+  "راوترك ما يدعم أكواد USSD": "Your router doesn't support USSD codes",
+  "الشبكة قطعت الجلسة": "The network ended the session",
+  "الكود لازم يكون أرقام و * و # بس": "The code must contain only digits, * and #",
+  "الراوتر رفض إرسال الكود": "The router refused to send the code",
+  "الشبكة ما ردّت على الكود خلال ٣٠ ثانية": "The network didn't answer the code within 30 seconds",
+  "الدعم للحين: الدخول والشركة وأرقام الإشارة (4G و5G) والتردد والبرج — قراءة بس. تثبيت الترددات والبرج بعد ما نتأكد من القراءة عند الأعضاء.": "Supported so far: login, carrier and signal readings (4G and 5G), band and tower — read only. Band and tower lock come after members confirm the readings.",
   // عدّة الألياف (٢٣ نوفمبر)
   'الجوال ما يسمح للتطبيقات تثبّت التردد — هذا يحدده الجوال والشبكة.': 'Phones don\'t let apps lock the band — the phone and network decide it.',
   'التردد الحالي والأبراج اللي حولك تشوفها من صفحة الجهاز.': 'You can see the current band and nearby towers on the device page.',
@@ -2628,6 +2637,7 @@ export const EN: Record<string, string> = {
 };
 
 export const EN_PATTERNS: Record<string, string> = {
+  "الراوتر رفض الكود ({0})": "The router rejected the code ({0})",
   '{0}، لكن فيه تداخل قوي (SINR سالب) — جرّب مكان ثاني أو قرّب من الشباك.': '{0}, but there is strong interference (negative SINR) — try another spot or move near a window.',
   '{0}. ما فيه 5G حالياً — شوف الأبراج حولك تعرف إذا فيه تغطية 5G.': '{0}. No 5G right now — check the towers around you to see if there is 5G coverage.',
   'شبكة 5 جيجا بيصير اسمها «{0}» بنفس كلمة المرور. كل الأجهزة اللي عليها بتنفصل وتحتاج تتصل فيها من جديد.': 'The 5 GHz network will be named “{0}” with the same password. Every device on it will disconnect and must reconnect.',
