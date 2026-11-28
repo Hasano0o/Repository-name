@@ -25,6 +25,8 @@ import {
 } from './parse';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+/** الجلسة انتهت أو الراوتر ما رد — لازم يوصل لـ withSession (يعيد الدخول) بدل ما ينبلع كـ«ما فيه إشارة» */
+export const gpFatal = (e: unknown) => /انتهت الجلسة|تعذر الاتصال|Network request failed|timed? ?out|timeout|abort|ما رد/i.test(String((e as any)?.message ?? e));
 const V = '/web/v1';
 interface GpLockData { lte: number[]; nr: number[]; cfg: string; cells: any[]; mode: string }
 
@@ -94,13 +96,18 @@ export class GreenPacketDriver implements RouterDriver {
 
   // ═══ الإشارة ═══
   private async raw(): Promise<GpRaw> {
-    const safe = (p: string) => this.get(p).catch(() => undefined);
+    // عضو ٢٨ نوفمبر (منقطع + «الأبراج طايحة» والراوتر شغال): من تعديل D5H صرنا نبلع كل الأخطاء،
+    // فلما الجلسة تنتهي (401) تطلع القراءة فاضية بدل ما ندخل من جديد. الحين: الجلسة/الاتصال يرمي (withSession يعيد الدخول)،
+    // ورفض أمر بعينه (D5H internetinfo 501) بس اللي نتجاهله. ولو كل القراءات فشلت نرمي أول خطأ.
+    const errs: unknown[] = [];
+    const safe = (p: string) => this.get(p).catch(e => { if (gpFatal(e)) throw e; errs.push(e); return undefined; });
     const [inet, ca, nsa, nr, score] = await Promise.all([
       // D5H (٢٨ نوفمبر): internetinfo يرد 501 ← ما نخليه يوقف باقي القراءة
       safe('/dashboard/internetinfo'), safe('/dashboard/radio/cainfo'), safe('/dashboard/radio/nsacellinfo'),
       safe('/dashboard/radio/nrcellinfo'), safe('/startup/radiocellsinfo'),
     ]);
     const raw: GpRaw = { inet, ca, nsa, nr, score };
+    if (!inet && !ca && !nsa && !nr && !score && errs.length === 5) throw errs[0];
     // D5H: ما فيه خلايا في cainfo ← قراءات لوحة الصفحة نفسها (deviceradioinfo ← ltecellinfo / 5gcellinfo)
     if (!caCells(ca).length) {
       const radio = await safe('/dashboard/radio/deviceradioinfo');
@@ -124,7 +131,7 @@ export class GreenPacketDriver implements RouterDriver {
     return antennasFrom(w, radio?.LTEBand);
   }
   private async wanUp(): Promise<boolean | undefined> {
-    const w = await this.get('/status/wanstatus').catch(() => null);
+    const w = await this.get('/status/wanstatus').catch(e => { if (gpFatal(e)) throw e; return null; });
     const st = String(w?.ConnectionStatus?.ConnectStatus ?? '');
     if (!st) return undefined;
     return /connect/i.test(st) && !/dis|not|un/i.test(st);
@@ -147,9 +154,9 @@ export class GreenPacketDriver implements RouterDriver {
     return { operator: r.inet?.Operator ? String(r.inet.Operator) : undefined, connected, mode: signalFrom(r).network, supports5g: true };
   }
   async isConnected(): Promise<boolean> {
-    try { return String((await this.get('/dashboard/internetinfo'))?.Status) === 'Connected'; } catch {}
-    // D5H: internetinfo يرد 501
-    const up = await this.wanUp();
+    try { return String((await this.get('/dashboard/internetinfo'))?.Status) === 'Connected'; } catch (e) { if (/انتهت الجلسة/.test(String((e as any)?.message ?? e))) throw e; }
+    // D5H: internetinfo يرد 501 (الجلسة بس ترمي — الانقطاع يبقى «مو متصل» مثل قبل عشان فحوص التثبيت)
+    const up = await this.wanUp().catch(e => { if (/انتهت الجلسة/.test(String((e as any)?.message ?? e))) throw e; return undefined; });
     if (up !== undefined) return up;
     try { return !!(await this.get('/dashboard/radio/deviceradioinfo'))?.WANExternalIPAddress; } catch { return false; }
   }

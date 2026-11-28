@@ -99,3 +99,16 @@ test('Green Packet: workModeOf يفرّق NSA عن SA', () => {
   assert.equal(workModeOf('LTE'), 'LTE');
   assert.equal(workModeOf('UNKNOWN'), '');
 });
+
+test('Green Packet (عضو ٢٨ نوفمبر): الجلسة انتهت ← يرمي «انتهت الجلسة» (التطبيق يدخل من جديد) بدل قراءة فاضية = «منقطع»', async () => {
+  router('NSA');
+  const d = driver();
+  await d.login('192.168.0.1', 'admin', 'admin');
+  (d as any).token = 'expired';
+  await assert.rejects(d.getSignal(), /انتهت الجلسة/);
+  await assert.rejects(d.getNetworkInfo(), /انتهت الجلسة/);
+  await assert.rejects(d.isConnected(), /انتهت الجلسة/);
+  // بعد الدخول من جديد القراءة ترجع
+  await d.login('192.168.0.1', 'admin', 'admin');
+  assert.equal((await d.getSignal()).rsrp, -97);
+});
