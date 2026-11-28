@@ -63,10 +63,37 @@ export function caCells(r: any): CaCell[] {
   return out;
 }
 
-export interface GpRaw { inet?: any; ca?: any; nsa?: any; nr?: any; score?: any }
+/**
+ * D5H (٢٨ نوفمبر — ملف «مو مدعوم؟» router-Green-packet-d5h-1128-0416، chunk-4326b00c «Dashboard»):
+ *   internetinfo يرد 501 و cainfo ما يعطي خلايا ← الصفحة تقرأ:
+ *   /dashboard/radio/deviceradioinfo  {WorkMode: LTE/NSA/SA/"5G NR SA"/"5G NR NSA"/WCDMA/UNKNOWN, WANExternalIPAddress, LTEBand, NRBand}
+ *   /dashboard/radio/ltecellinfo      {RSRP, RSRQ, RSSI, SINR}            (لما WorkMode = LTE/NSA)
+ *   /dashboard/radio/5gcellinfo       {SSB_RSRP, SSB_RSRQ, SSB_SINR, NR_RSSI} (لما WorkMode = SA/NSA)
+ *   /status/wanstatus                 {ConnectionStatus: {ConnectMode, ConnectStatus, USIMStatus, RSRP0, RSRP1, RSRQ, RSSI, SINR}, WanStatus: {IpAddress…}}
+ */
+export interface GpRaw { inet?: any; ca?: any; nsa?: any; nr?: any; score?: any; radio?: any; lte?: any; g5?: any }
+
+/** «5G NR NSA» «NSA» «SA» «LTE» ← وضع موحّد */
+export function workModeOf(v: unknown): 'SA' | 'NSA' | 'LTE' | 'WCDMA' | '' {
+  const u = String(v ?? '').toUpperCase();
+  if (/NSA/.test(u)) return 'NSA';
+  if (/(^|[^N])SA\b|NR5G-SA/.test(u)) return 'SA';
+  if (/LTE|4G/.test(u)) return 'LTE';
+  if (/WCDMA|3G/.test(u)) return 'WCDMA';
+  return '';
+}
+
+/** RSRP0/RSRP1 من wanstatus ← منافذ أنتنا 4G (لازم منفذين بقراءة) */
+export function antennasFrom(w: any, band?: string): { tech: 'LTE'; band?: number; ports: { idx: number; rsrp?: number }[] }[] {
+  const c = w?.ConnectionStatus ?? w;
+  const ports = [0, 1, 2, 3].map(i => ({ idx: i, rsrp: num(c?.['RSRP' + i], -156, -30) })).filter(p => p.rsrp !== undefined);
+  if (ports.length < 2) return [];
+  const b = bandOf(band);
+  return [{ tech: 'LTE', band: b?.tech === 'LTE' ? b.band : undefined, ports }];
+}
 
 export function signalFrom(r: GpRaw): Signal {
-  const wm = String(r.inet?.WorkMode ?? '').toUpperCase();
+  const wm = workModeOf(r.inet?.WorkMode) || workModeOf(r.radio?.WorkMode);
   const sa = wm === 'SA', nsa = wm === 'NSA';
   const s: Signal = { network: sa ? '5G SA' : nsa ? '5G NSA' : wm === 'LTE' ? '4G' : wm === 'WCDMA' ? '3G' : undefined };
   const cells = caCells(r.ca);
@@ -83,6 +110,15 @@ export function signalFrom(r: GpRaw): Signal {
     s.rsrq = lte?.rsrq;
     s.sinr = lte?.sinr ?? num(sl?.SINR, -30, 50);
     s.rssi = lte?.rssi;
+    // D5H: بدون cainfo ← deviceradioinfo + ltecellinfo
+    if (!lte && r.lte) {
+      const b = bandOf(r.radio?.LTEBand);
+      if (b?.tech === 'LTE') s.band = 'B' + b.band;
+      s.rsrp ??= num(r.lte.RSRP, -156, -30);
+      s.rsrq ??= num(r.lte.RSRQ, -43, 20);
+      s.sinr ??= num(r.lte.SINR, -30, 50);
+      s.rssi ??= num(r.lte.RSSI, -130, -10);
+    }
   }
   if (sa || nsa || nr) {
     const sn = sc(/NR|5G|SA/i);
@@ -93,6 +129,13 @@ export function signalFrom(r: GpRaw): Signal {
     s.nrRsrq = nr?.rsrq;
     s.nrSinr = nr?.sinr ?? num(sn?.SINR, -23, 40);
     if (sa) s.cellId = str(r.nr?.NCGI);
+    if (!nr && r.g5) {
+      const b = bandOf(r.radio?.NRBand, undefined, 'NR');
+      if (b) s.nrBand = 'n' + b.band;
+      s.nrRsrp ??= num(r.g5.SSB_RSRP, -156, -31);
+      s.nrRsrq ??= num(r.g5.SSB_RSRQ, -43, 20);
+      s.nrSinr ??= num(r.g5.SSB_SINR, -23, 40);
+    }
   }
   if (cells.length > 1) {
     s.caCount = cells.length;

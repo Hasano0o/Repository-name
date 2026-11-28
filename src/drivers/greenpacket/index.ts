@@ -11,7 +11,7 @@
  */
 import {
   RouterDriver, Capability, Signal, NetworkInfo, SignalSnapshot, CellTower, BandConfig, ActiveLock, CellLockTarget, CellLockState,
-  ConnectedDevice, DeviceDetails, Carrier, SmsMessage, RouterExtras, WifiRadio,
+  ConnectedDevice, DeviceDetails, Carrier, SmsMessage, RouterExtras, WifiRadio, AntennaSetInfo,
 } from '../types';
 import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { noChange } from '../noChange';
@@ -20,7 +20,7 @@ import { buildSnapshot } from '../../utils/snapshot';
 import { ModelProfile } from '../models';
 import {
   GpRaw, signalFrom, cellsFrom, carriersFrom, neighborsFrom, lockedRows, bandSubmit, bandNo, BandRow, modesFrom, modeOptions, GpMode,
-  devicesFrom, smsFrom, ssidError, wifiPassError, isIPv4,
+  devicesFrom, smsFrom, ssidError, wifiPassError, isIPv4, caCells, workModeOf, antennasFrom,
 } from './parse';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -99,7 +99,31 @@ export class GreenPacketDriver implements RouterDriver {
       safe('/dashboard/internetinfo'), safe('/dashboard/radio/cainfo'), safe('/dashboard/radio/nsacellinfo'),
       safe('/dashboard/radio/nrcellinfo'), safe('/startup/radiocellsinfo'),
     ]);
-    return { inet, ca, nsa, nr, score };
+    const raw: GpRaw = { inet, ca, nsa, nr, score };
+    // D5H: ما فيه خلايا في cainfo ← قراءات لوحة الصفحة نفسها (deviceradioinfo ← ltecellinfo / 5gcellinfo)
+    if (!caCells(ca).length) {
+      const radio = await safe('/dashboard/radio/deviceradioinfo');
+      const wm = workModeOf(inet?.WorkMode) || workModeOf(radio?.WorkMode);
+      const [lte, g5] = await Promise.all([
+        wm !== 'SA' ? safe('/dashboard/radio/ltecellinfo') : undefined,
+        wm === 'SA' || wm === 'NSA' ? safe('/dashboard/radio/5gcellinfo') : undefined,
+      ]);
+      Object.assign(raw, { radio, lte, g5 });
+    }
+    return raw;
+  }
+  /** منافذ الأنتنا (D5H: status/wanstatus RSRP0/RSRP1) */
+  async getAntennas(): Promise<AntennaSetInfo[]> {
+    const w = await this.get('/status/wanstatus').catch(() => null);
+    if (!w) return [];
+    const radio = await this.get('/dashboard/radio/deviceradioinfo').catch(() => null);
+    return antennasFrom(w, radio?.LTEBand);
+  }
+  private async wanUp(): Promise<boolean | undefined> {
+    const w = await this.get('/status/wanstatus').catch(() => null);
+    const st = String(w?.ConnectionStatus?.ConnectStatus ?? '');
+    if (!st) return undefined;
+    return /connect/i.test(st) && !/dis|not|un/i.test(st);
   }
   async getSignal(): Promise<Signal> { return signalFrom(await this.raw()); }
   async getCarriers(): Promise<Carrier[]> { return carriersFrom(await this.raw()); }
@@ -115,17 +139,23 @@ export class GreenPacketDriver implements RouterDriver {
   }
   async getNetworkInfo(): Promise<NetworkInfo> {
     const r = await this.raw();
-    return { operator: r.inet?.Operator ? String(r.inet.Operator) : undefined, connected: String(r.inet?.Status) === 'Connected', mode: signalFrom(r).network, supports5g: true };
+    const connected = r.inet ? String(r.inet.Status) === 'Connected' : (await this.wanUp()) ?? !!r.radio?.WANExternalIPAddress;
+    return { operator: r.inet?.Operator ? String(r.inet.Operator) : undefined, connected, mode: signalFrom(r).network, supports5g: true };
   }
   async isConnected(): Promise<boolean> {
-    try { return String((await this.get('/dashboard/internetinfo'))?.Status) === 'Connected'; } catch { return false; }
+    try { return String((await this.get('/dashboard/internetinfo'))?.Status) === 'Connected'; } catch {}
+    // D5H: internetinfo يرد 501
+    const up = await this.wanUp();
+    if (up !== undefined) return up;
+    try { return !!(await this.get('/dashboard/radio/deviceradioinfo'))?.WANExternalIPAddress; } catch { return false; }
   }
   async getDeviceDetails(): Promise<DeviceDetails> {
     const [d, w, i] = await Promise.all([
       this.get('/setting/deviceinfo').catch(() => ({} as any)), this.get('/dashboard/waninfo').catch(() => ({} as any)),
       this.get('/dashboard/internetinfo').catch(() => ({} as any)),
     ]);
-    return { model: d.ProductModel, software: d.SoftwareVersion, hardware: d.HardwareVersion, wanIp: w.IpAddress, operator: i.Operator };
+    const ip = w.IpAddress || (await this.get('/dashboard/radio/deviceradioinfo').catch(() => ({} as any))).WANExternalIPAddress;
+    return { model: d.ProductModel, software: d.SoftwareVersion, hardware: d.HardwareVersion, wanIp: ip, operator: i.Operator };
   }
 
   async reboot(): Promise<void> {
