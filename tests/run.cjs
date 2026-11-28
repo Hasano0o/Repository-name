@@ -13,6 +13,7 @@ const out = fs.mkdtempSync(path.join(os.tmpdir(), 'bandly-tests-'));
 // الملفات اللي تحتاجها الاختبارات (كلها بدون react-native)
 const files = [
   'src/utils/carrierQuality.ts',
+  'src/utils/antennaPorts.ts',
   'src/drivers/noChange.ts',
   'src/utils/fiberAdvice.ts',
   'src/utils/fiberKit.ts',

@@ -1,7 +1,7 @@
 import {
   RouterDriver, Capability, Signal, SignalSnapshot, CellTower, Carrier, NetworkInfo,
   DeviceDetails, Traffic, ConnectedDevice, Usage, BandConfig, CellLockTarget, CellLockState,
-  ActiveLock, DataPlan, SmsMessage, ApnProfile, DnsConfig, WifiRadio, RouterExtras, TimeRule, BandRoles,
+  ActiveLock, DataPlan, SmsMessage, ApnProfile, DnsConfig, WifiRadio, RouterExtras, TimeRule, BandRoles, AntennaSetInfo,
 } from '../types';
 import { buildSnapshot } from '../../utils/snapshot';
 import { listRouters, saveRouter } from '../../store/routers';
@@ -140,6 +140,16 @@ export class DemoDriver implements RouterDriver {
     if (pcc) out.push({ tech: 'LTE', band: pcc.band, role: 'PCC', arfcn: pcc.arfcn, pci: pcc.pci, bandwidth: 20, rsrp: pcc.rsrp, rsrq: pcc.rsrq, sinr: pcc.sinr });
     for (const c of scc) out.push({ tech: 'LTE', band: c.band, role: 'SCC', arfcn: c.arfcn, pci: c.pci, bandwidth: c.band === 40 ? 20 : 15, rsrp: c.rsrp, rsrq: c.rsrq, sinr: c.sinr });
     if (nr) out.push({ tech: 'NR', band: nr.band, role: pcc ? 'SCC' : 'PCC', arfcn: nr.arfcn, pci: nr.pci, bandwidth: 100, rsrp: nr.rsrp, rsrq: nr.rsrq, sinr: nr.sinr });
+    return out;
+  }
+
+  /** منافذ الأنتنا (تجريبي): 4G بأربع منافذ — RX2 أضعف بوضوح عشان تبان رسالة الكيبل · 5G بمنفذين */
+  async getAntennas(): Promise<AntennaSetInfo[]> {
+    await this.alive();
+    const { pcc, nr } = this.pick();
+    const out: AntennaSetInfo[] = [];
+    if (pcc) out.push({ tech: 'LTE', band: pcc.band, ports: [0, 1, 2, 3].map(i => ({ idx: i, rsrp: Math.round(pcc.rsrp + [0, -2, -15, -3][i] + wave(i + 20, 1)) })) });
+    if (nr) out.push({ tech: 'NR', band: nr.band, ports: [0, 1].map(i => ({ idx: i, rsrp: Math.round(nr.rsrp + [0, -2][i] + wave(i + 30, 1)) })) });
     return out;
   }
 

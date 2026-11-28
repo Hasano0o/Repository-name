@@ -218,6 +218,13 @@ export interface Carrier {
   sinr?: number;
 }
 
+/** قراءة منافذ الأنتنا لتقنية وحدة (RX0…RX3) — نفس شكل AntennaSet في utils/antennaPorts */
+export interface AntennaSetInfo {
+  tech: 'LTE' | 'NR';
+  band?: number;
+  ports: { idx: number; rsrp?: number; rsrq?: number; sinr?: number }[];
+}
+
 /** إعداد DNS للشبكة المحلية */
 export interface DnsConfig { manual: boolean; primary?: string; secondary?: string; }
 
@@ -419,6 +426,11 @@ export interface RouterDriver {
   getDns?(): Promise<DnsConfig>;
   setDns?(cfg: DnsConfig): Promise<void>;
   getCarriers?(): Promise<Carrier[]>;
+  /**
+   * قراءة كل منفذ أنتنا (MIMO: RX0…RX3) — حسن ٢٨ نوفمبر. تطلع بطاقة «منافذ الأنتنا» في صفحة الراوتر
+   * بس لو فيه منفذين أو أكثر. لا تنضاف لدرايفر إلا من أوامر صفحته الحقيقية (ملفات الأعضاء).
+   */
+  getAntennas?(): Promise<AntennaSetInfo[]>;
   /**
    * دخول برمز من شاشة الجهاز (أداة MONDO على Inseego 8800L — ٢١ نوفمبر): needed() = true ← صفحة الراوتر تعرض خانة الرمز.
    * submit يرمي برسالة واضحة لو الرمز غلط/انتهى.

@@ -54,6 +54,7 @@ import { OperatorBadge } from '../../src/ui/OperatorBadge';
 import { bandChips } from '../../src/utils/bandChips';
 import { wakeCa, getWoke, onWoke, WokeCa } from '../../src/services/caWake';
 import { TempCard } from '../../src/ui/TempCard';
+import { AntennaPortsCard } from '../../src/ui/AntennaPortsCard';
 import { setFeatCache } from '../../src/store/featCache';
 import { ModemsCard } from '../../src/ui/ModemsCard';
 import { canRescue, rescueRouter, freeRelease, restoreSavedSettings } from '../../src/utils/safeLock';
@@ -1154,6 +1155,7 @@ export default function RouterDashboard() {
             {feat.bands && <ComboCard r={info} />}
             <ModemsCard r={info} />
             <TempCard r={info} />
+            {feat.cellular && <AntennaPortsCard r={info} />}
             {feat.cellular && <EsimCard r={info} model={details?.model} />}
             {/* رجعت بطلب حسن (١٦ نوفمبر): المجموعتين و«باقتي» تبقى هنا، والباقي في «كل المزايا» */}
             {feat.cellular && (<>
