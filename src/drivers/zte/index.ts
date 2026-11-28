@@ -1716,7 +1716,10 @@ export class ZteDriver implements RouterDriver {
     await this.ensure();
     const ex = await zteExtras(this.io());
     // حجب المواقع بنظام ثاني (MC801A) ← ما نعرض البطاقة أصلاً
-    if ((await this.identify().catch(() => null))?.noUrlFilter) delete ex.urlBlocks;
+    const prof = await this.identify().catch(() => null);
+    if (prof?.noUrlFilter) delete ex.urlBlocks;
+    // MC801A: config.js حق الموديل WIFI_SLEEP_SUPPORT:!1 — الصفحة تخفيها والراوتر يرد failure (٩ أخطاء control ٢٦–٢٨ نوفمبر)
+    if (prof?.noWifiSleep) delete ex.wifiSleep;
     return ex;
   }
   async setUpnp(on: boolean) { await this.ensure(); return zteSetUpnp(this.io(), on); }

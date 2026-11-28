@@ -117,4 +117,6 @@ test('MC801A نسخة stc (BD_SASTCMC801AV1.0.0B15، web_version فاضي): نف
   assert.equal(m.id, 'mc801a');
   assert.equal(m.write, 'goform');
   assert.equal(m.noUrlFilter, true);
+  // نوم الواي فاي مخفي في صفحة MC801A (WIFI_SLEEP_SUPPORT:!1) ← ما نعرضه
+  assert.equal(m.noWifiSleep, true);
 });

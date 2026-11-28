@@ -19,6 +19,8 @@ export interface ModelProfile {
   note?: string;
   /** ZTE: حجب المواقع بنظام ثاني (قائمة مواقع مسموحة + قواعد الأجهزة) — أوامر URL_FILTER_* مو موجودة في صفحته */
   noUrlFilter?: boolean;
+  /** ZTE: صفحة الجهاز تخفي «نوم الواي فاي» (WIFI_SLEEP_SUPPORT:!1 في config الموديل) والراوتر يرد failure */
+  noWifiSleep?: boolean;
   /** جرّبناه مع مستخدم حقيقي */
   verified?: boolean;
   /**
@@ -64,7 +66,7 @@ export const MODELS = {
   // نسخة stc (BD_SASTCMC801AV1.0.0B15، ملف FULL ثاني) نفس التوقيع والأوامر · حجب المواقع: ADD_WHITE_SITE/CHILD_MAC_RULE_* بدل URL_FILTER_*
   // ٣١ أكتوبر (٧ ملفات FULL بعد إصلاح التوقيع): الكتابة شغالة على ٥ فيرمويرات — Elisa B06 · SASTC B15/B07 · SASTCOM…A1 B07 · HOLOLNE A1 B10:
   // BAND_SELECT · WAN_PERFORM_NR5G_BAND_LOCK · SET_BEARER_PREFERENCE · setWiFiChipAdvancedInfo كلها success
-  mc801a: P({ id: 'mc801a', label: 'ZTE MC801A', brand: 'zte', tech: '5G', write: 'goform', nrLock: true, noUrlFilter: true, verified: true }),
+  mc801a: P({ id: 'mc801a', label: 'ZTE MC801A', brand: 'zte', tech: '5G', write: 'goform', nrLock: true, noUrlFilter: true, noWifiSleep: true, verified: true }),
   mc888: P({ id: 'mc888', label: 'ZTE MC888', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
   mc889: P({ id: 'mc889', label: 'ZTE MC889', brand: 'zte', tech: '5G', write: 'goform', nrLock: true }),
   // U30 Pro (STC، U30Pro_GEN_MEASV1.0.0B07 · cr_version MU5358): صفحته goform القديمة (require.js) — تقرير ٢٥ أكتوبر، @Mjeeduk
