@@ -37,7 +37,8 @@ export function accelVerdict(direct: Leg | null, toServer: Leg | null, serverToG
   if (!direct?.samples) return { kind: 'helps', direct: 0, via, gain: 0, viaJitter, viaLoss };
   const gain = Math.round(direct.median - via);
   // الفقد يفرق أكثر من البنق في الألعاب
-  const lossBetter = direct.lossPct - viaLoss >= 10;
+  // بس لو البنق مو أبطأ بشكل واضح — تقرير ٢٧ نوفمبر: الدمام «يستفيد» ٥١٪ ومباشر 113 ← عبرنا 203 (طريق سيرفرنا مكسور)
+  const lossBetter = direct.lossPct - viaLoss >= 10 && gain > -GAIN_MIN;
   const kind: AccelKind = gain >= GAIN_MIN || lossBetter ? 'helps' : gain >= 4 ? 'small' : 'no';
   return { kind, direct: direct.median, via, gain, viaJitter, viaLoss };
 }

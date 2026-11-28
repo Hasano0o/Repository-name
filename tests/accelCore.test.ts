@@ -44,3 +44,10 @@ test('الإعدادات: https بس وبدون مسار', () => {
   assert.deepEqual(s, [{ id: 'ruh1', name: 'الرياض', url: 'https://1-2-3-4.sslip.io' }]);
   assert.deepEqual(parseAccelConfig(null), []);
 });
+
+test('فقد أقل بس البنق أبطأ بوضوح ← مو «يفيد» (الدمام ٢٧ نوفمبر: 113 ← 203)', () => {
+  const L2 = (median: number, lossPct: number) => ({ median, jitter: 2, lossPct, samples: 10 });
+  assert.equal(accelVerdict(L2(113, 20), L2(56, 0), L2(144, 0)).kind, 'no');
+  // فقد أقل والبنق قريب ← يفيد
+  assert.equal(accelVerdict(L2(80, 20), L2(50, 0), L2(30, 0)).kind, 'helps');
+});

@@ -28,6 +28,28 @@ REGION = {
     "se": "السويد", "sg": "سنغافورة", "kr": "كوريا", "us": "أمريكا", "br": "البرازيل",
 }
 MAIN = ["ae", "sa", "sa-ruh", "eu", "fr", "uk", "tr", "in"]
+# الشركة: التطبيق يرسل الاسم أو رمز الشبكة (PLMN) — نوحّدها (تقرير ٢٧ نوفمبر: «42004» سطر لحاله)
+OPS = {"42001": "STC", "42003": "موبايلي", "42004": "زين", "42005": "فيرجن", "42006": "ليبارا", "42021": "سلام"}
+OP_WORDS = [("stc", "STC"), ("al jawal", "STC"), ("mobily", "موبايلي"), ("موبايلي", "موبايلي"), ("zain", "زين"), ("زين", "زين"),
+            ("virgin", "فيرجن"), ("lebara", "ليبارا"), ("salam", "سلام"), ("سلام", "سلام")]
+# المدينة: نفس المدينة بكتابتين
+CITIES = {"جيزان": "جازان", "مكه": "مكة", "المدينه": "المدينة", "الطلاليع": "الطلائع"}
+
+
+def norm_op(op):
+    o = (op or "").strip()
+    if o in OPS:
+        return OPS[o]
+    low = o.lower()
+    for w, name in OP_WORDS:
+        if w in low:
+            return name
+    return o or "غير معروف"
+
+
+def fmt_gain(g):
+    """الوسيط موجب = ينقص البنق (−) · سالب = يزيد (+) — كان يطلع «−-4ms»"""
+    return f" −{g}ms" if g and g > 0 else (f" +{-g}ms" if g and g < 0 else "")
 
 
 def med(xs):
@@ -47,15 +69,19 @@ def per_user(rows):
     """(جهاز، منطقة) ← وسيط نتايجه"""
     g = {}
     for at, dev, op, city, region, direct, via, gain, kind, to_s, route in rows:
-        g.setdefault((dev, region), []).append((op, city or "—", direct, via, gain, kind, to_s))
+        g.setdefault((dev, region), []).append((norm_op(op), CITIES.get((city or "").strip(), (city or "").strip()) or "—",
+                                                direct, via, gain, kind, to_s, route))
     out = []
     for (dev, region), lst in g.items():
         d = dict(dev=dev, region=region, op=lst[-1][0], city=lst[-1][1],
                  direct=med([x[2] for x in lst]), via=med([x[3] for x in lst]),
-                 gain=med([x[4] for x in lst]), to_s=med([x[6] for x in lst]),
+                 gain=med([x[4] for x in lst]), to_s=med([x[6] for x in lst]), route=med([x[7] for x in lst]),
                  helps=sum(1 for x in lst if x[5] == "helps") * 2 > len(lst))
         d["noisy"] = (d["direct"] or 0) > NOISE_MS
-        if d["noisy"]:
+        # طريق سيرفرنا ← سيرفر اللعبة مكسور (الدمام ٨٨٨ms) ← «يستفيد» هنا كان من «فقد أقل» مع إن البنق أبطأ (٢٧ نوفمبر: الدمام
+        # «يستفيد 52 (51%)» ووسيطه −-4ms، مباشر 113 ← عبرنا 203) — ما نحسبه لا فايدة ولا ضرر
+        d["broken"] = (d["route"] or 0) > ROUTE_BAD_MS
+        if d["noisy"] or d["broken"]:
             d["helps"] = False
         out.append(d)
     return out
@@ -64,7 +90,7 @@ def per_user(rows):
 def net(users):
     """صافي الوسيط (مباشر − عبرنا) للقياسات الموثوقة — موجب = المسرّع أسرع للعضو العادي"""
     return med([u["direct"] - u["via"] for u in users
-                if not u["noisy"] and u["direct"] is not None and u["via"] is not None])
+                if not u["noisy"] and not u["broken"] and u["direct"] is not None and u["via"] is not None])
 
 
 def block(title, users, key, top=6, name=lambda k: k):
@@ -75,11 +101,17 @@ def block(title, users, key, top=6, name=lambda k: k):
         return []
     out = [f"\n{title}"]
     for k, us in sorted(groups.items(), key=lambda kv: -len(kv[1]))[:top]:
-        h = [u for u in us if u["helps"]]
+        ok = [u for u in us if not u["broken"]]
+        br = len(us) - len(ok)
+        if not ok:
+            out.append(f"• {name(k)}: {len(us)} · ⚠️ كلها على طريق سيرفرنا المكسور — ما نحكم")
+            continue
+        h = [u for u in ok if u["helps"]]
         gm = med([u["gain"] for u in h])
-        out.append(f"• {name(k)}: {len(us)} · يستفيد {len(h)} ({round(100 * len(h) / len(us))}%)"
-                   + (f" −{gm}ms" if gm else "")
-                   + f" · مباشر {med([u['direct'] for u in us])} ← عبرنا {med([u['via'] for u in us])}")
+        out.append(f"• {name(k)}: {len(ok)} · يستفيد {len(h)} ({round(100 * len(h) / len(ok))}%)"
+                   + fmt_gain(gm)
+                   + f" · مباشر {med([u['direct'] for u in ok])} ← عبرنا {med([u['via'] for u in ok])}"
+                   + (f" · (+{br} طريق مكسور ما انحسب)" if br else ""))
     return out
 
 
@@ -110,6 +142,7 @@ def servers_now():
 
 
 def verdict(users):
+    users = [u for u in users if not u["broken"]]
     devs = {u["dev"] for u in users}
     hdev = {u["dev"] for u in users if u["helps"]}
     gm = med([u["gain"] for u in users if u["helps"]])
@@ -138,22 +171,22 @@ def build(days=14):
     first = c.execute("SELECT MIN(at) FROM accel").fetchone()[0] if all_rows else None
     old_devs = {r[1] for r in all_rows if r[0] < day0}
     users = per_user(all_rows)
-    devs = {u["dev"] for u in users}
+    devs = {u["dev"] for u in users if not u["broken"]}
     hdev = {u["dev"] for u in users if u["helps"]}
     gm = med([u["gain"] for u in users if u["helps"]])
     kinds = {}
     for u in users:
-        k = "قياس مو موثوق" if u["noisy"] else "يفيد" if u["helps"] else ("فرق بسيط" if (u["gain"] or 0) >= 4 else "ما يفيد")
+        k = "طريق سيرفرنا مكسور" if u["broken"] else "قياس مو موثوق" if u["noisy"] else "يفيد" if u["helps"] else ("فرق بسيط" if (u["gain"] or 0) >= 4 else "ما يفيد")
         kinds[k] = kinds.get(k, 0) + 1
 
     L = [f"🚀 تقرير المسرّع — {now.strftime('%Y-%m-%d')}"]
     L.append(f"\n📅 اليوم: {len(today)} فحص · {len({r[1] for r in today})} جهاز"
              f" (جدد {len({r[1] for r in today} - old_devs)})")
     since = f" من {datetime.fromtimestamp(first, RIYADH).strftime('%m-%d')}" if first else ""
-    L.append(f"📈 آخر {days} يوم{since}: {len(all_rows)} فحص · {len(devs)} جهاز")
+    L.append(f"📈 آخر {days} يوم{since}: {len(all_rows)} فحص · {len({u['dev'] for u in users})} جهاز")
     if users:
-        L.append(f"✅ يستفيدون (≥{GAIN_MIN}ms أو فقد أقل): {len(hdev)} من {len(devs)} جهاز"
-                 + (f" · وسيط النقص {gm}ms" if gm else ""))
+        L.append(f"✅ يستفيدون (≥{GAIN_MIN}ms أو فقد أقل): {len(hdev)} من {len(devs)} جهاز (بدون طريق الدمام المكسور)"
+                 + (f" · وسيط النقص {gm}ms" if gm and gm > 0 else ""))
         L.append("📊 النتايج (جهاز×منطقة): " + " · ".join(f"{k} {v}" for k, v in kinds.items()))
         L.append(f"📶 بنق الأعضاء لسيرفرنا (وسيط): {med([u['to_s'] for u in users])}ms")
         n = net(users)
