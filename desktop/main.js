@@ -32,7 +32,11 @@ function serveApp() {
       return new Response('not found', { status: 404 });
     }
     if (!ok) file = path.join(WEB_DIR, 'index.html'); // صفحة واحدة — كل المسارات ترجع للتطبيق
-    return net.fetch(pathToFileURL(file).toString());
+    // بدون كاش: بعد التحديث ما ينخدم index.html أو قطعة من النسخة القديمة (crash ٢٨ نوفمبر «unknown module 1752»)
+    const r = await net.fetch(pathToFileURL(file).toString());
+    const h = new Headers(r.headers);
+    h.set('Cache-Control', 'no-store');
+    return new Response(r.body, { status: r.status, headers: h });
   });
 }
 
@@ -439,8 +443,21 @@ app.on('second-instance', () => {
   if (win) { if (win.isMinimized()) win.restore(); win.focus(); }
 });
 
-app.whenReady().then(() => {
+/** نسخة جديدة من البرنامج ← نمسح كاش كروميوم (السكربتات والصفحة) مرة وحدة قبل ما تفتح النافذة.
+ *  التخزين (الراوترات والإعدادات) ما ينلمس — clearCache يمسح كاش HTTP بس، و clearCodeCaches كاش V8. */
+async function clearCacheOnUpdate() {
+  const mark = path.join(app.getPath('userData'), 'last-version.txt');
+  let last = '';
+  try { last = fs.readFileSync(mark, 'utf8').trim(); } catch {}
+  if (last === app.getVersion()) return;
+  try { await session.defaultSession.clearCache(); } catch {}
+  try { await session.defaultSession.clearCodeCaches({}); } catch {}
+  try { fs.writeFileSync(mark, app.getVersion()); } catch {}
+}
+
+app.whenReady().then(async () => {
   serveApp();
+  await clearCacheOnUpdate();
   // الميكروفون والكاميرا لصفحة الفني ولواجهة التطبيق فقط
   session.defaultSession.setPermissionRequestHandler((wc, perm, cb, details) => {
     const u = String(details?.requestingUrl || wc.getURL() || '');
