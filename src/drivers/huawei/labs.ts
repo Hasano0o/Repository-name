@@ -6,6 +6,7 @@
  * الرد ممكن يجي JSON أو XML حسب الموديل — نقرأ الاثنين. لسا ما انجرّبت على راوتر حقيقي.
  */
 import type { LabItem } from '../types';
+import { tryVariants, type LabResult } from '../labVariants';
 
 export interface HwLabIo {
   /** GET بـ _ResponseFormat: JSON — يرجّع النص كما هو */
@@ -69,12 +70,18 @@ export async function hwLabs(io: HwLabIo): Promise<LabItem[]> {
   return out;
 }
 
-export async function hwRunLab(io: HwLabIo, id: string, value?: string): Promise<string | void> {
+/** صيغ القيمة — الصفحة ترسل true/false (JSON)، والبدائل للفيرمويرات اللي تقرأ نص */
+export const HIGAME_VARIANTS = ['bool', 'str', 'num'];
+export async function hwRunLab(io: HwLabIo, id: string, value?: string, prefer?: string): Promise<LabResult> {
   if (id !== 'hw-higame') throw new Error('ميزة غير معروفة: ' + id);
   const on = value === '1';
-  const r = await io.postJson('hilink/higamecontrol', { data: { HiGameControlEnable: on } });
+  return tryVariants(HIGAME_VARIANTS, prefer, v => higameSet(io, on, v));
+}
+async function higameSet(io: HwLabIo, on: boolean, variant: string): Promise<string> {
+  const val = variant === 'str' ? (on ? '1' : '0') : variant === 'num' ? (on ? 1 : 0) : on;
+  const r = await io.postJson('hilink/higamecontrol', { data: { HiGameControlEnable: val } });
   const code = hwErr(r);
-  if (code) throw new Error(`hilink/higamecontrol: الراوتر رفض (${code})`);
+  if (code) throw new Error(`hilink/higamecontrol: الراوتر رفض (${code}·${variant})`);
   await new Promise(res => setTimeout(res, 1500));
   const after = field(await io.get('hilink/higame'), 'HiGameControlEnable');
   if (isOn(after) !== on) throw new Error(`hilink/higamecontrol: الراوتر قبل الأمر بس القراءة بعده ${after ?? 'فاضية'}`);

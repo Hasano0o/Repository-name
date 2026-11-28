@@ -119,3 +119,50 @@ test('هواوي labs: HiGame JSON أو XML + الأمر', async () => {
   await hwRunLab(io, 'hw-higame', '1');
   assert.deepEqual(posts[0], { data: { HiGameControlEnable: true } });
 });
+
+import { tryVariants, orderVariants } from '../src/drivers/labVariants';
+import { pendingFixes } from '../src/utils/labFixCore';
+
+test('الإصلاح الذاتي: الصيغة المفضلة أول، والبدائل لين وحدة تنجح', async () => {
+  assert.deepEqual(orderVariants(['a', 'b', 'c'], 'c'), ['c', 'a', 'b']);
+  assert.deepEqual(orderVariants(['a', 'b'], 'zz'), ['a', 'b']);
+  const seen: string[] = [];
+  const r = await tryVariants(['a', 'b', 'c'], undefined, async v => { seen.push(v); if (v !== 'b') throw new Error('no'); return 'ok'; });
+  assert.equal(r.variant, 'b');
+  assert.deepEqual(seen, ['a', 'b']);
+  await assert.rejects(tryVariants(['a', 'b'], undefined, async () => { throw new Error('x'); }), /جرّبنا: a,b/);
+  // unsupported يوقف البدائل
+  let n = 0;
+  await assert.rejects(tryVariants(['a', 'b'], undefined, async () => { n++; const e: any = new Error('u'); e.unsupported = true; throw e; }));
+  assert.equal(n, 1);
+});
+
+test('الإصلاح الذاتي: ZTE يجرّب فاصل ثاني لو القراءة ما تطابقت، ويرجّع الصيغة', async () => {
+  const st: Record<string, string> = { wifi_speed_control_enable: '1', wifi_speed_high_mac_list: '', wifi_speed_low_mac_list: '' };
+  const acts: any[] = [];
+  const io = {
+    get: async (f: string[]) => Object.fromEntries(f.map(k => [k, st[k] ?? ''])),
+    act: async (b: any) => {
+      acts.push(b);
+      // راوتر يحفظ بس لو الفاصل فاصلة
+      if (/;/.test(b.wifi_speed_high_mac_list)) return '{"result":"success"}';
+      st.wifi_speed_high_mac_list = b.wifi_speed_high_mac_list; return '{"result":"success"}';
+    },
+  };
+  const labs = new ZteLabs(io, async () => []);
+  st.wifi_speed_high_mac_list = '';
+  const r: any = await labs.run('speed:AA:BB:CC:DD:EE:01', 'high', 'semiEnd');
+  // semiEnd أول (المفضّلة من الرسيفر) ← القراءة ما تطابقت ← auto (بدون ; في الآخر) تنحفظ
+  assert.equal(r.variant, 'auto');
+  assert.deepEqual(r.tried, ['semiEnd', 'auto']);
+  assert.equal(acts[0].wifi_speed_high_mac_list, 'AA:BB:CC:DD:EE:01;');
+});
+
+test('«انصلحت — جرّبها»: بس اللي فشل قبل الإصلاح وما انشاف', () => {
+  const fixes = { 'zte:speed': { at: '2026-11-29', note: 'n' } };
+  const before = Date.parse('2026-11-28T12:00:00+03:00'), after = Date.parse('2026-11-30T12:00:00+03:00');
+  const fails = { 'r1|zte:speed': before, 'r1|zte:ant-switch': before, 'r2|zte:speed': after };
+  assert.deepEqual(pendingFixes('r1', 'zte', fails, {}, fixes).map(x => x.lab), ['speed']);
+  assert.deepEqual(pendingFixes('r2', 'zte', fails, {}, fixes), []);
+  assert.deepEqual(pendingFixes('r1', 'zte', fails, { 'r1|zte:speed': 1 }, fixes), []);
+});

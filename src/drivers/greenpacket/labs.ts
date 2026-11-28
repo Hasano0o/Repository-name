@@ -7,6 +7,7 @@
  * لسا ما انجرّبت — أي رد غريب يطلع باسم المسار.
  */
 import type { LabItem } from '../types';
+import { tryVariants, type LabResult } from '../labVariants';
 
 export interface GpLabIo {
   get(p: string): Promise<any>;
@@ -27,6 +28,17 @@ export function turboKey(o: any): { key: string; on: boolean } | null {
     if (typeof v === 'string' && /^(1|0|true|false|enable|disable|enabled|disabled|on|off)$/i.test(v)) return { key: k, on: /^(1|true|enable|enabled|on)$/i.test(v) };
   }
   return null;
+}
+/** صيغ قيمة التشغيل: same = نفس نوع القيمة الأصلية، وبعدها البدائل */
+export const TURBO_VARIANTS = ['same', 'bool', 'num', 'str', 'enable'];
+export function encodeOn(variant: string, old: unknown, on: boolean): unknown {
+  switch (variant) {
+    case 'bool': return on;
+    case 'num': return on ? 1 : 0;
+    case 'str': return on ? '1' : '0';
+    case 'enable': return on ? 'Enable' : 'Disable';
+    default: return flipValue(old, on);
+  }
 }
 /** نفس نوع القيمة الأصلية */
 export function flipValue(old: unknown, on: boolean): unknown {
@@ -84,16 +96,19 @@ export async function gpLabs(io: GpLabIo): Promise<LabItem[]> {
   return out;
 }
 
-export async function gpRunLab(io: GpLabIo, id: string, value?: string): Promise<string | void> {
+export async function gpRunLab(io: GpLabIo, id: string, value?: string, prefer?: string): Promise<LabResult> {
   if (id !== 'gp-turbo') throw new Error('ميزة غير معروفة: ' + id);
   const cur = await io.get(TURBO);
   const k = turboKey(cur);
-  if (!k) throw new Error(`gamingturbo: ما لقينا مفتاح التشغيل في الرد (${JSON.stringify(cur).slice(0, 80)})`);
+  if (!k) { const e: any = new Error(`gamingturbo: ما لقينا مفتاح التشغيل في الرد (${JSON.stringify(cur).slice(0, 80)})`); e.noVariant = true; throw e; }
   const on = value === '1';
-  if (k.on === on) return 'تم';
-  await io.post(TURBO, { ...cur, [k.key]: flipValue(cur[k.key], on) });
+  if (k.on === on) return { msg: 'تم' };
+  return tryVariants(TURBO_VARIANTS, prefer, v => turboSet(io, cur, k.key, on, v));
+}
+async function turboSet(io: GpLabIo, cur: any, key: string, on: boolean, variant: string): Promise<string> {
+  await io.post(TURBO, { ...cur, [key]: encodeOn(variant, cur[key], on) });
   await new Promise(r => setTimeout(r, 1500));
   const after = turboKey(await io.get(TURBO));
-  if (!after || after.on !== on) throw new Error(`gamingturbo: الراوتر قبل الأمر بس القراءة بعده مختلفة (${k.key})`);
+  if (!after || after.on !== on) throw new Error(`gamingturbo: الراوتر قبل الأمر بس القراءة بعده مختلفة (${key}=${variant})`);
   return 'تم';
 }

@@ -49,6 +49,7 @@ import { TechStrip } from '../../src/ui/TechStrip';
 import { ComboCard } from '../../src/ui/ComboCard';
 import { CodePairCard } from '../../src/ui/CodePairCard';
 import { EsimCard } from '../../src/ui/EsimCard';
+import { LabFixedCard } from '../../src/ui/LabFixedCard';
 import { BandChips } from '../../src/ui/BandChips';
 import { OperatorBadge } from '../../src/ui/OperatorBadge';
 import { bandChips } from '../../src/utils/bandChips';
@@ -1161,6 +1162,7 @@ export default function RouterDashboard() {
             <ModemsCard r={info} />
             <TempCard r={info} />
             {feat.cellular && <AntennaPortsCard r={info} />}
+            <LabFixedCard r={info} />
             {feat.cellular && <EsimCard r={info} model={details?.model} />}
             {/* رجعت بطلب حسن (١٦ نوفمبر): المجموعتين و«باقتي» تبقى هنا، والباقي في «كل المزايا» */}
             {feat.cellular && (<>

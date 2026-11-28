@@ -12,6 +12,8 @@ import { SavedRouter, getRouter } from '../../src/store/routers';
 import { withSession, routerWrite } from '../../src/store/sessions';
 import { reportError } from '../../src/services/errors';
 import type { LabItem } from '../../src/drivers/types';
+import { fixesFor, reportVariant, markFail, markOk, noticesFor, ackNotice } from '../../src/services/labFix';
+import type { FixedNotice } from '../../src/utils/labFixCore';
 import { C, tBg } from '../../src/ui/theme';
 
 export default function LabsScreen() {
@@ -21,11 +23,18 @@ export default function LabsScreen() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<Record<string, { ok: boolean; msg: string }>>({});
+  const [model, setModel] = useState('');
+  const [fixed, setFixed] = useState<FixedNotice[]>([]);
 
   const load = useCallback(async (r: SavedRouter) => {
     try {
-      const l = await withSession(r, async d => (d.getLabs ? d.getLabs() : []), false);
+      const { l, m } = await withSession(r, async d => ({
+        l: d.getLabs ? await d.getLabs() : [],
+        m: d.getDeviceDetails ? await d.getDeviceDetails().then(x => String(x.model ?? '')).catch(() => '') : '',
+      }), false);
       setItems(l);
+      setModel(m);
+      setFixed(await noticesFor(r.id, r.driverId));
       setErr('');
     } catch (e: any) {
       setItems([]);
@@ -52,14 +61,20 @@ export default function LabsScreen() {
       setBusy(it.id);
       setNote(n => ({ ...n, [it.id]: { ok: true, msg: 'نطبّق…' } }));
       try {
-        const msg = await routerWrite(info, d => {
+        // الصيغة اللي نجحت عند أعضاء بنفس الراوتر أول (الإصلاح الذاتي — live-server/labfix.py)
+        const prefer = (await fixesFor(info.driverId, model))[it.id.split(':')[0]];
+        const res = await routerWrite(info, d => {
           if (!d.runLab) throw new Error('راوترك ما فيه هالميزة');
-          return d.runLab(it.id, value);
+          return d.runLab(it.id, value, prefer);
         }, { label: it.title });
-        setNote(n => ({ ...n, [it.id]: { ok: true, msg: msg || 'تم' } }));
+        const r = typeof res === 'object' && res ? res : { msg: res || undefined };
+        if ('variant' in r && r.variant) reportVariant(info.driverId, model, it.id, r.variant);
+        markOk(info.id, info.driverId, it.id);
+        setNote(n => ({ ...n, [it.id]: { ok: true, msg: r.msg || 'تم' } }));
       } catch (e: any) {
         const m = String(e?.message ?? e);
         setNote(n => ({ ...n, [it.id]: { ok: false, msg: m + ' — وصلنا الخطأ ونصلحه' } }));
+        markFail(info.id, info.driverId, it.id);
         reportError(`lab-${it.id.split(':')[0]}`, new Error(`${it.cmd ?? it.id}${value !== undefined ? '=' + value : ''} · ${m}`), info);
       } finally {
         setBusy(null);
@@ -82,6 +97,16 @@ export default function LabsScreen() {
         <Text style={s.bannerTitle}>مزايا تجريبية 🧪</Text>
         <Text style={s.bannerTxt}>ميزات لقيناها في صفحة راوترك نفسه وأضفناها قبل ما تنجرّب على كل الموديلات. لو وحدة ما مشت، الخطأ يوصلنا تلقائي ونصلحها.</Text>
       </View>
+
+      {fixed.map(f => (
+        <View key={f.key} style={[s.banner, { backgroundColor: tBg('#e8f8f0') }]}>
+          <Text style={s.bannerTitle}>انصلحت — جرّبها ✅</Text>
+          <Text style={s.bannerTxt}>{f.note}</Text>
+          <Pressable onPress={() => { ackNotice(f.key); setFixed(x => x.filter(y => y.key !== f.key)); }} accessibilityRole="button" style={[s.btn, { alignSelf: 'flex-start', marginTop: 8 }]}>
+            <Text style={s.btnTxt}>تمام</Text>
+          </Pressable>
+        </View>
+      ))}
 
       {items === null && <ActivityIndicator style={{ marginTop: 30 }} color={C.blue} />}
       {!!err && <Text style={s.err}>{err}</Text>}

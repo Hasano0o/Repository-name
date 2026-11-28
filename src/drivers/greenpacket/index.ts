@@ -115,7 +115,7 @@ export class GreenPacketDriver implements RouterDriver {
   }
   /** «مزايا تجريبية» — حمل الراوتر · Gaming Turbo · قراءات المهندس (greenpacket/labs.ts) */
   async getLabs(): Promise<LabItem[]> { return gpLabs({ get: p => this.get(p), post: (p, b) => this.post(p, b) }); }
-  async runLab(id: string, value?: string): Promise<string | void> { return gpRunLab({ get: p => this.get(p), post: (p, b) => this.post(p, b) }, id, value); }
+  async runLab(id: string, value?: string, prefer?: string) { return gpRunLab({ get: p => this.get(p), post: (p, b) => this.post(p, b) }, id, value, prefer); }
   /** منافذ الأنتنا (D5H: status/wanstatus RSRP0/RSRP1) */
   async getAntennas(): Promise<AntennaSetInfo[]> {
     const w = await this.get('/status/wanstatus').catch(() => null);

@@ -15,6 +15,7 @@
  *    تلقائي goformId=SET_BEARER_PREFERENCE بنفس net_select الحالي (نفس زر «تطبيق» في وضع تلقائي)
  */
 import type { LabItem } from '../types';
+import { tryVariants, type LabResult } from '../labVariants';
 
 export interface ZteLabIo {
   get(fields: string[]): Promise<Record<string, string>>;
@@ -46,10 +47,13 @@ export function parseNetList(raw: string): NetChoice[] {
 export function macList(raw: string): string[] {
   return String(raw ?? '').split(/[;,]/).map(x => x.trim().toUpperCase()).filter(x => /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(x));
 }
-export function joinMacs(list: string[], sample: string): string {
-  const sep = /,/.test(sample) && !/;/.test(sample) ? ',' : ';';
-  return list.length ? list.join(sep) + (sep === ';' && /;\s*$/.test(sample) ? ';' : '') : '';
+export function joinMacs(list: string[], sample: string, force?: 'semi' | 'comma' | 'semiEnd'): string {
+  const sep = force === 'comma' ? ',' : force ? ';' : /,/.test(sample) && !/;/.test(sample) ? ',' : ';';
+  const end = force === 'semiEnd' || (!force && sep === ';' && /;\s*$/.test(sample));
+  return list.length ? list.join(sep) + (end ? ';' : '') : '';
 }
+/** صيغ قائمة الأجهزة — child_mac_N في نفس الصفحة بفاصل ; ، فنبدأ فيها */
+export const SPEED_VARIANTS = ['auto', 'semi', 'semiEnd', 'comma'];
 
 export class ZteLabs {
   /** آخر بحث شبكات (يبقى بالذاكرة لين يطلع العضو من الشاشة) */
@@ -133,8 +137,8 @@ export class ZteLabs {
     return out;
   }
 
-  async run(id: string, value?: string): Promise<string | void> {
-    if (id === 'speed-on' || id.startsWith('speed:')) return this.setSpeed(id, value);
+  async run(id: string, value?: string, prefer?: string): Promise<string | void | LabResult> {
+    if (id === 'speed-on' || id.startsWith('speed:')) return tryVariants(SPEED_VARIANTS, prefer, v => this.setSpeed(id, value, v));
     if (id === 'ant-switch') {
       const out = await this.io.act({ goformId: 'WAN_ANT_SWITCH_SET', ant_switch_enable: value === '1' ? '1' : '0' });
       if (!ok(out)) throw fail('WAN_ANT_SWITCH_SET', out);
@@ -148,7 +152,8 @@ export class ZteLabs {
     throw new Error('ميزة غير معروفة: ' + id);
   }
 
-  private async setSpeed(id: string, value?: string): Promise<string> {
+  private async setSpeed(id: string, value?: string, variant = 'auto'): Promise<string> {
+    const force = variant === 'auto' ? undefined : variant as 'semi' | 'comma' | 'semiEnd';
     const r = await this.io.get(['wifi_speed_control_enable', 'wifi_speed_high_mac_list', 'wifi_speed_low_mac_list']);
     let enable = r.wifi_speed_control_enable === '1' ? '1' : '0';
     let hi = macList(r.wifi_speed_high_mac_list), lo = macList(r.wifi_speed_low_mac_list);
@@ -162,8 +167,8 @@ export class ZteLabs {
     }
     const body = {
       goformId: 'SET_WIFI_SPEED', wifi_speed_control_enable: enable,
-      wifi_speed_high_mac_list: joinMacs(hi, r.wifi_speed_high_mac_list ?? ''),
-      wifi_speed_low_mac_list: joinMacs(lo, r.wifi_speed_low_mac_list ?? ''),
+      wifi_speed_high_mac_list: joinMacs(hi, r.wifi_speed_high_mac_list ?? '', force),
+      wifi_speed_low_mac_list: joinMacs(lo, r.wifi_speed_low_mac_list ?? '', force),
     };
     const out = await this.io.act(body);
     if (!ok(out)) throw fail('SET_WIFI_SPEED', out);

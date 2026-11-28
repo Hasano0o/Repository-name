@@ -974,6 +974,7 @@ export const EN: Record<string, string> = {
   'السجل': 'History',
   'الأنتنا والباقة': 'Antenna & plan',
   'مزايا تجريبية': 'Lab features',
+  'انصلحت — جرّبها ✅': 'Fixed — try it ✅',
   'مزايا تجريبية 🧪': 'Lab features 🧪',
   'نطبّق…': 'Applying…',
   'راوترك ما فيه هالميزة': "Your router doesn't have this feature",

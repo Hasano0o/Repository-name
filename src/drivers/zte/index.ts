@@ -1727,10 +1727,10 @@ export class ZteDriver implements RouterDriver {
     return this.labs ??= new ZteLabs({ get: f => this.get(f), act: b => this.act(b) }, () => this.getDevices());
   }
   async getLabs(): Promise<LabItem[]> { await this.ensure(); return this.lab().list(); }
-  async runLab(id: string, value?: string): Promise<string | void> {
+  async runLab(id: string, value?: string, prefer?: string) {
     await this.ensure();
     await this.g5Guard(id);
-    return this.lab().run(id, value);
+    return this.lab().run(id, value, prefer);
   }
   async getExtras() {
     await this.ensure();

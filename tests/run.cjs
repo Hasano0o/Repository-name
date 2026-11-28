@@ -20,6 +20,8 @@ const files = [
   'src/drivers/zte/labs.ts',
   'src/drivers/greenpacket/labs.ts',
   'src/drivers/huawei/labs.ts',
+  'src/drivers/labVariants.ts',
+  'src/utils/labFixCore.ts',
   'src/utils/fiberAdvice.ts',
   'src/utils/fiberKit.ts',
   'src/utils/wifiBoost.ts',

@@ -461,8 +461,11 @@ export interface RouterDriver {
    * كل درايفر يعرض اللي لقيناه في صفحته؛ الشاشة عامة (app/labs/[id].tsx) وأي فشل يوصل الرسيفر باسم الأمر ورد الراوتر.
    */
   getLabs?(): Promise<LabItem[]>;
-  /** ينفّذ ميزة تجريبية — value للخيارات/التشغيل ("1"/"0") · يرجّع رسالة نجاح اختيارية */
-  runLab?(id: string, value?: string): Promise<string | void>;
+  /**
+   * ينفّذ ميزة تجريبية — value للخيارات/التشغيل ("1"/"0") · prefer = الصيغة اللي نجحت عند الأعضاء (من الرسيفر).
+   * يرجّع رسالة، أو {msg, variant} لو الميزة لها صيغ بديلة (الصيغة اللي نجحت تنرسل للرسيفر).
+   */
+  runLab?(id: string, value?: string, prefer?: string): Promise<string | void | { msg?: string; variant?: string }>;
   /**
    * دخول برمز من شاشة الجهاز (أداة MONDO على Inseego 8800L — ٢١ نوفمبر): needed() = true ← صفحة الراوتر تعرض خانة الرمز.
    * submit يرمي برسالة واضحة لو الرمز غلط/انتهى.

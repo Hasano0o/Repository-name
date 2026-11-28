@@ -2137,7 +2137,7 @@ export class HuaweiDriver implements RouterDriver {
     };
   }
   getLabs(): Promise<LabItem[]> { return hwLabs(this.labIo()); }
-  runLab(id: string, value?: string) { return hwRunLab(this.labIo(), id, value); }
+  runLab(id: string, value?: string, prefer?: string) { return hwRunLab(this.labIo(), id, value, prefer); }
   async getPageChunk(name: string): Promise<string> {
     if (!/^[a-z]{3,30}$/.test(name)) throw new Error('اسم صفحة غلط');
     const r = await this.http(`${this.base()}/js/${name}-${name}-vue.js`, { headers: this.headers() }, 15000);
