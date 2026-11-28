@@ -128,3 +128,50 @@ export function srtNetwork(sysmode?: string): string | undefined {
   if (m === 'wcdma' || m === 'td-scdma') return '3G';
   return undefined;
 }
+
+/** حقول صفحة «RF Parameters» (js/rfparamters.js — ملف AUTH ٢٢ نوفمبر) */
+export const SRT_RF_KEYS = ['mnet_rsrp', 'mnet_rssi', 'mnet_rsrq', 'mnet_sinr', 'mnet_snr', 'mnet_wnw_dlch', 'mnet_wnw_pci', 'mnet_wnw_band',
+  'mnet_wnw_pspci', 'mnet_wnw_psband', 'mnet_endc_rsrp', 'mnet_endc_snr', 'mnet_endc_rsrq', 'mnet_wnw_cellid', 'mnet_wnw_tac', 'mnet_wnw_psdlch'];
+
+/**
+ * تحويل الأرقام الخام مثل الصفحة بالضبط (القيمة الفاضية/٠ = ما فيه قراءة):
+ *  SA (nr5g): RSRP = x−157 · RSRQ = (x−1)/2−43 · SNR = (x−1)/2−23
+ *  غيره (LTE/NSA):  RSRP = x−141 · RSRQ = (x−40)/2 · SNR = (2x−202)/10
+ *  RSSI = x−111 · ENDC (5G في NSA): RSRP = x−157 · RSRQ = (x−1)/2−43 · SNR = (x−1)/2−23
+ *  mnet_sinr تنعرض كما هي (dB).
+ */
+export function srtSignal(d: Record<string, any>, sysmode?: string): import('../types').Signal {
+  const n = (k: string) => { const v = Number(d[k]); return d[k] === '' || d[k] == null || !Number.isFinite(v) || v === 0 ? undefined : v; };
+  const r1 = (v: number | undefined) => (v === undefined ? undefined : Math.round(v * 10) / 10);
+  const s = (k: string) => { const v = d[k]; return v === '' || v == null || String(v) === '0' ? undefined : String(v); };
+  const mode = String(sysmode ?? '').toLowerCase();
+  const sig: import('../types').Signal = { network: srtNetwork(sysmode) };
+  const rawSinr = n('mnet_sinr');
+  if (mode === 'nr5g') {
+    const rsrp = n('mnet_rsrp'), rsrq = n('mnet_rsrq'), snr = n('mnet_snr');
+    sig.nrRsrp = r1(rsrp !== undefined ? rsrp - 157 : undefined);
+    sig.nrRsrq = r1(rsrq !== undefined ? (rsrq - 1) / 2 - 43 : undefined);
+    sig.nrSinr = rawSinr ?? r1(snr !== undefined ? (snr - 1) / 2 - 23 : undefined);
+    sig.nrBand = s('mnet_wnw_band') ? 'n' + s('mnet_wnw_band') : undefined;
+    sig.nrPci = s('mnet_wnw_pci'); sig.nrArfcn = s('mnet_wnw_dlch');
+    sig.cellId = s('mnet_wnw_cellid'); sig.tac = s('mnet_wnw_tac');
+    return sig;
+  }
+  const rsrp = n('mnet_rsrp'), rsrq = n('mnet_rsrq'), snr = n('mnet_snr'), rssi = n('mnet_rssi');
+  sig.rsrp = r1(rsrp !== undefined ? rsrp - 141 : undefined);
+  sig.rsrq = r1(rsrq !== undefined ? (rsrq - 40) / 2 : undefined);
+  sig.sinr = rawSinr ?? r1(snr !== undefined ? (snr * 2 - 202) / 10 : undefined);
+  sig.rssi = r1(rssi !== undefined ? rssi - 111 : undefined);
+  sig.band = s('mnet_wnw_band') ? 'B' + s('mnet_wnw_band') : undefined;
+  sig.pci = s('mnet_wnw_pci'); sig.earfcn = s('mnet_wnw_dlch');
+  sig.cellId = s('mnet_wnw_cellid'); sig.tac = s('mnet_wnw_tac');
+  if (mode === 'nsa') {
+    const er = n('mnet_endc_rsrp'), eq = n('mnet_endc_rsrq'), es = n('mnet_endc_snr');
+    sig.nrRsrp = r1(er !== undefined ? er - 157 : undefined);
+    sig.nrRsrq = r1(eq !== undefined ? (eq - 1) / 2 - 43 : undefined);
+    sig.nrSinr = r1(es !== undefined ? (es - 1) / 2 - 23 : undefined);
+    sig.nrBand = s('mnet_wnw_psband') ? 'n' + s('mnet_wnw_psband') : undefined;
+    sig.nrPci = s('mnet_wnw_pspci'); sig.nrArfcn = s('mnet_wnw_psdlch');
+  }
+  return sig;
+}

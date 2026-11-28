@@ -1,5 +1,6 @@
 /**
  * زين 5G Indoor CPE SRT858M (WiFi 7) — واجهة «5G Device» (goform/action + JSON، تشفير MG اختياري).
+ * الأرقام (٢٨ نوفمبر): RSRP/RSRQ/SINR/RSSI والتردد والبرج و5G في NSA — بتحويل صفحة rfparamters.js نفسها.
  * المرحلة ١ (١٧ نوفمبر ٢٠٢٦، من ملفات «مو مدعوم؟» لعدة أعضاء): التعرّف + الدخول + الحالة (الشركة · الشبكة 4G/5G ·
  * أعمدة الإشارة · الشريحة · الاتصال) + كرت FULL — بدون أي أمر كتابة. الأرقام (RSRP/SINR) والترددات/البرج
  * (صفحاته فيها bandlock · celllock · rfparamters) بعد ما نشوف صفحاتها من FULL.
@@ -13,7 +14,7 @@ import { diag } from '../../services/diag';
 import { isLanHost } from '../../utils/host';
 import { isBadPassword, markBadPassword } from '../zte/formulaStore';
 import type { ModelProfile } from '../models';
-import { isSrtPage, srtLoginBody, srtEncryptOn, parseMgKey, mgEncode, mgDecode, srtNetwork, MgKey } from './parse';
+import { isSrtPage, srtLoginBody, srtEncryptOn, parseMgKey, mgEncode, mgDecode, srtNetwork, MgKey, srtSignal, SRT_RF_KEYS } from './parse';
 
 /** صفحات تغيّر شي — الجامع ما يفتحها */
 const SRT_DANGER = /reboot|reset|restore|upgrade|logout|backup|factory/i;
@@ -144,10 +145,15 @@ export class SrtDriver implements RouterDriver {
     return o.data;
   }
 
+  /** الأرقام من نفس طلب صفحة rfparamters.js (قراءة بس) — يرجع الحالة بس لو الطلب ما رد */
   async getSignal(): Promise<Signal> {
     const d = await this.read();
-    return { network: srtNetwork(d.mnet_sysmode) };
+    const rf = await this.call('/action/get_mgdb_params', JSON.stringify({ keys: SRT_RF_KEYS }), false).catch(() => null);
+    if (!(rf?.retcode === 0 && rf?.data)) return { network: srtNetwork(d.mnet_sysmode) };
+    if (!this.rfLogged) { this.rfLogged = true; diag(`[srt] rf: ${SRT_RF_KEYS.map(k => `${k}=${String(rf.data[k] ?? '').slice(0, 12)}`).join(' · ')}`); }
+    return srtSignal(rf.data, d.mnet_sysmode);
   }
+  private rfLogged = false;
 
   async getNetworkInfo(): Promise<NetworkInfo> {
     const d = this.last ?? await this.read();

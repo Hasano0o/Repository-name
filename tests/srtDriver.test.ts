@@ -129,3 +129,19 @@ test('SRT858M: صفحات FULL ما فيها شي خطر', () => {
   assert.ok(pages.includes('/html/rfparamters.html') && pages.includes('/js/bandlock.js'));
   assert.ok(!pages.some(p => /reboot|reset|upgrade|logout|backup/i.test(p)));
 });
+
+test('SRT858M: أرقام الإشارة بتحويل rfparamters.js', () => {
+  const P = require('../src/drivers/srt/parse');
+  // NSA: 4G أساسي + 5G (ENDC)
+  const s = P.srtSignal({ mnet_rsrp: '50', mnet_rsrq: '20', mnet_sinr: '12', mnet_snr: '', mnet_rssi: '40', mnet_wnw_band: '3', mnet_wnw_pci: '101',
+    mnet_wnw_dlch: '1300', mnet_endc_rsrp: '70', mnet_endc_rsrq: '61', mnet_endc_snr: '61', mnet_wnw_psband: '78', mnet_wnw_pspci: '300', mnet_wnw_cellid: 'abc', mnet_wnw_tac: '12' }, 'nsa');
+  assert.equal(s.rsrp, -91); assert.equal(s.rsrq, -10); assert.equal(s.sinr, 12); assert.equal(s.rssi, -71);
+  assert.equal(s.band, 'B3'); assert.equal(s.pci, '101'); assert.equal(s.earfcn, '1300');
+  assert.equal(s.nrRsrp, -87); assert.equal(s.nrRsrq, -13); assert.equal(s.nrSinr, 7); assert.equal(s.nrBand, 'n78');
+  // SA
+  const a = P.srtSignal({ mnet_rsrp: '70', mnet_rsrq: '61', mnet_sinr: '', mnet_snr: '61', mnet_wnw_band: '78' }, 'nr5g');
+  assert.equal(a.nrRsrp, -87); assert.equal(a.nrSinr, 7); assert.equal(a.nrBand, 'n78'); assert.equal(a.rsrp, undefined);
+  // فاضي = ما فيه قراءة
+  const z = P.srtSignal({ mnet_rsrp: '', mnet_rsrq: '0' }, 'lte');
+  assert.equal(z.rsrp, undefined); assert.equal(z.rsrq, undefined);
+});
