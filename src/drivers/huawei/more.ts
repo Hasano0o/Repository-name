@@ -28,6 +28,24 @@ export async function getAntenna(io: Io): Promise<AntennaInfo | null> {
   return { mode: Number.isFinite(m) && m >= 0 && m <= 3 ? m : undefined, canSet: !!set && Number.isFinite(m), raw };
 }
 
+/**
+ * كيبل الأنتنا الخارجية لكل منفذ — من كود صفحة هواوي (location.js، صفحة تركيب الأنتنا الخارجية):
+ * device/antenna_type ← antenna1type/antenna2type ("1" = خارجية) و antenna1insertstatus/antenna2insertstatus ("1" = موصول).
+ * الصفحة تعتبر الأنتنا جاهزة لو وحدة خارجية وكل المنافذ موصولة.
+ */
+export async function getAntennaPlugs(io: Io): Promise<{ idx: number; plugged: boolean; external?: boolean }[] | null> {
+  const ty = await tryGet(io, 'device/antenna_type');
+  if (!ty) return null;
+  const out: { idx: number; plugged: boolean; external?: boolean }[] = [];
+  for (let i = 1; i <= 4; i++) {
+    const ins = tag(ty, `antenna${i}insertstatus`);
+    if (ins === undefined) continue;
+    const t = tag(ty, `antenna${i}type`);
+    out.push({ idx: i, plugged: ins.trim() === '1', external: t === undefined ? undefined : t.trim() === '1' });
+  }
+  return out.length ? out : null;
+}
+
 export async function setAntenna(io: Io, mode: number): Promise<void> {
   await io.post('device/antenna_settings', `<antenna_type>${Math.round(mode)}</antenna_type>`);
 }

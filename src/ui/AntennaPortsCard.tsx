@@ -17,29 +17,48 @@ import { C, R, tBd, tBg } from './theme';
 import { FONT } from './fonts';
 import { sheet } from '../i18n';
 
+type Plug = { idx: number; plugged: boolean; external?: boolean };
+
+/** حالة الكيابل: كلها موصولة = سليمة · وحدة ناقصة = تنبيه · ولا وحدة = يمكن على الداخلية (عادي) */
+function plugVerdict(p: Plug[] | null): { plugs: Plug[]; state: PortState; msg: string } | null {
+  if (!p || p.length < 1) return null;
+  const n = p.filter(x => x.plugged).length;
+  if (n === p.length) return { plugs: p, state: 'ok', msg: 'كل منافذ الأنتنا الخارجية موصولة' };
+  if (n === 0) return { plugs: p, state: 'ok', msg: 'ما فيه كيبل أنتنا خارجية موصول' };
+  return { plugs: p, state: 'weak', msg: 'فيه منفذ مو موصول — وصّل كل الكيابل عشان الاستقبال يصير على كل المنافذ (MIMO) والسرعة أعلى' };
+}
+
 const COL: Record<PortState, string> = { ok: '#12b76a', low: '#f59e0b', weak: '#e5484d', dead: '#e5484d' };
 /** طول الشريط: ‎-125 فاضي · ‎-65 مليان */
 const fill = (v?: number) => (v === undefined ? 0.04 : Math.max(0.08, Math.min(1, (v + 125) / 60)));
 
 export function AntennaPortsCard({ r }: { r: SavedRouter }) {
   const [sets, setSets] = useState<AntennaVerdict[] | null>(null);
+  const [plugs, setPlugs] = useState<Plug[] | null>(null);
   const alive = useRef(true);
 
   useFocusEffect(useCallback(() => {
     alive.current = true;
-    const load = () => withSession(r, async d => (d.getAntennas ? d.getAntennas() : []))
-      .catch(() => [] as AntennaSetInfo[])
-      .then(l => {
+    const load = () => withSession(r, async d => ({
+      l: d.getAntennas ? await d.getAntennas().catch(() => [] as AntennaSetInfo[]) : [],
+      p: d.getAntennaPlugs ? await d.getAntennaPlugs().catch(() => null) : null,
+    }))
+      .catch(() => ({ l: [] as AntennaSetInfo[], p: null }))
+      .then(({ l, p }) => {
         if (!alive.current) return;
         setSets(l.map(antennaVerdict).filter((v): v is AntennaVerdict => !!v));
+        setPlugs(p);
       });
     load();
     const t = setInterval(load, 15_000);
     return () => { alive.current = false; clearInterval(t); };
   }, [r]));
 
-  if (!sets || sets.length === 0) return null;
-  const worst = sets.some(v => v.worst === 'weak' || v.worst === 'dead') ? 'weak' : sets.some(v => v.worst === 'low') ? 'low' : 'ok';
+  const pv = plugVerdict(plugs);
+  if ((!sets || sets.length === 0) && !pv) return null;
+  const all = sets ?? [];
+  const worst = all.some(v => v.worst === 'weak' || v.worst === 'dead') || pv?.state === 'weak' ? 'weak'
+    : all.some(v => v.worst === 'low') || pv?.state === 'low' ? 'low' : 'ok';
 
   return (
     <View style={s.card}>
@@ -56,7 +75,25 @@ export function AntennaPortsCard({ r }: { r: SavedRouter }) {
         </View>
       </View>
 
-      {sets.map((v, k) => (
+      {!!pv && (
+        <View style={s.group}>
+          <View style={s.gHead}>
+            <Text style={s.band}>كيبل الأنتنا الخارجية</Text>
+            <View style={{ flex: 1 }} />
+          </View>
+          <View style={s.plugs}>
+            {pv.plugs.map(p => (
+              <View key={p.idx} style={[s.plug, { backgroundColor: tBg(p.plugged ? '#e8f8f0' : '#ffeef0') }]}>
+                {p.plugged ? <Icon name="check" size={14} color={COL.ok} stroke={2.6} /> : <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: COL.weak }} />}
+                <Text style={[s.plugTxt, { color: p.plugged ? COL.ok : COL.weak }]}>{p.plugged ? `المنفذ ${p.idx} موصول` : `المنفذ ${p.idx} مو موصول`}</Text>
+              </View>
+            ))}
+          </View>
+          <Text style={[s.msg, { color: pv.state === 'ok' ? C.sub : COL[pv.state] }]}>{pv.msg}</Text>
+        </View>
+      )}
+
+      {all.map((v, k) => (
         <View key={k} style={s.group}>
           <View style={s.gHead}>
             <View style={[s.tech, { backgroundColor: v.tech === 'NR' ? '#7c3aed' : C.blue }]}>
@@ -112,5 +149,8 @@ const s = sheet({
   num: { fontSize: 13, fontFamily: FONT.numHeavy, writingDirection: 'ltr' },
   rx: { color: C.sub, fontSize: 9.5, fontFamily: FONT.numSemi },
   behind: { fontSize: 9.5, fontFamily: FONT.numSemi, writingDirection: 'ltr' },
+  plugs: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6 },
+  plug: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  plugTxt: { fontSize: 11.5, fontWeight: '800' },
   msg: { fontSize: 11, fontWeight: '800', textAlign: 'right' },
 });

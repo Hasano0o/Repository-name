@@ -774,6 +774,10 @@ export const EN: Record<string, string> = {
   'طافية — لو النت علّق، الراوتر يبقى معلّق لين تطفيه وتشغّله بنفسك.': 'Off — if the internet hangs, the router stays stuck until you power-cycle it yourself.',
   'الحرارة ممتازة': 'Temperature is great',
   'منافذ الأنتنا': 'Antenna ports',
+  'كل منافذ الأنتنا الخارجية موصولة': 'All external antenna ports are connected',
+  'ما فيه كيبل أنتنا خارجية موصول': 'No external antenna cable is connected',
+  'فيه منفذ مو موصول — وصّل كل الكيابل عشان الاستقبال يصير على كل المنافذ (MIMO) والسرعة أعلى': 'A port is not connected — plug in every cable so reception uses all ports (MIMO) for higher speed',
+  'كيبل الأنتنا الخارجية': 'External antenna cable',
   'قراءة كل منفذ — يكشف الكيبل المفصول': 'Reading per port — spots a loose cable',
   'سليمة': 'Healthy',
   'انتبه': 'Check',
@@ -3235,4 +3239,6 @@ export const EN_PATTERNS: Record<string, string> = {
   '{0} ضعيفة — ممكن تنزّل سرعة الدمج': '{0} are weak — they may slow down CA',
   '{0} أضعف من الأساسي بـ {1} dB — ممكن ينزّل سرعة الدمج': '{0} is {1} dB weaker than the primary — it may slow down CA',
   '{0} ضعيف — ممكن ينزّل سرعة الدمج': '{0} is weak — it may slow down CA',
+  'المنفذ {0} موصول': 'Port {0} connected',
+  'المنفذ {0} مو موصول': 'Port {0} not connected',
 };

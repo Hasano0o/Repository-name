@@ -2086,6 +2086,7 @@ export class HuaweiDriver implements RouterDriver {
     } catch { return null; }
   }
   getAntenna() { return more.getAntenna(this.io()); }
+  getAntennaPlugs() { return more.getAntennaPlugs(this.io()); }
   setAntenna(mode: number) { return more.setAntenna(this.io(), mode); }
   ussd(code: string) { return more.ussd(this.io(), code); }
   routerPing(host: string) { return more.routerPing(this.io(), host); }

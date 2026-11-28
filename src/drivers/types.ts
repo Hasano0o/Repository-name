@@ -432,6 +432,11 @@ export interface RouterDriver {
    */
   getAntennas?(): Promise<AntennaSetInfo[]>;
   /**
+   * هل كيبل الأنتنا الخارجية موصول في كل منفذ (هواوي device/antenna_type: antennaNinsertstatus — من كود صفحة الراوتر).
+   * null = الراوتر ما يعطيها.
+   */
+  getAntennaPlugs?(): Promise<{ idx: number; plugged: boolean; external?: boolean }[] | null>;
+  /**
    * دخول برمز من شاشة الجهاز (أداة MONDO على Inseego 8800L — ٢١ نوفمبر): needed() = true ← صفحة الراوتر تعرض خانة الرمز.
    * submit يرمي برسالة واضحة لو الرمز غلط/انتهى.
    */
