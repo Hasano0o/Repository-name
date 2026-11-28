@@ -29,6 +29,10 @@ export function parseBandField(band?: string): { tech: 'LTE' | 'NR'; band: numbe
 
 /** بدون حقل band المفصّل: أرقام الترددات من "B3" أو "B1+B3" */
 function lteBandsLoose(band?: string): number[] {
+  // H138-380 (فيرموير 11.0.5.51، جهاز حسن ٢٨ نوفمبر): band = "20" رقم بس — صفحة الراوتر تعرض «النطاق 20».
+  // كنا نبي «B20» فالأساسي ما يطلع ← النواقل فاضية («الأساسي والثانوي» فاضي والترددات «آخر دمج» بس)
+  const bare = (band ?? '').match(/^\s*(\d{1,3})\s*$/);
+  if (bare) { const n = parseInt(bare[1], 10); return n > 0 ? [n] : []; }
   return [...(band ?? '').matchAll(/\bB(\d{1,3})\b/gi)].map(m => parseInt(m[1], 10)).filter(n => n > 0);
 }
 
@@ -93,4 +97,13 @@ export function carriersFrom(sigXml: string, sig: Signal, secXml = ''): Carrier[
     out.push({ tech: 'NR', band: x.band, role: 'SCC', arfcn: x.arfcn, bandwidth: x.bandwidth });
   }
   return out;
+}
+
+/** قناة 5G: «DL:0 UL:0» أو «0» = ما فيه قناة (H138) ← undefined؛ غيرها نفس القيمة */
+export function nrChan(v?: string): string | undefined {
+  const t = (v ?? '').trim();
+  if (!t) return undefined;
+  const d = dl(t);
+  if (d !== undefined && Number(d) === 0) return undefined;
+  return t;
 }

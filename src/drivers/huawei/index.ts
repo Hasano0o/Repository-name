@@ -16,7 +16,7 @@ import { sesInfoCookie, hasSesTok, tokenFromReply, isHuaweiSessionReply, cookieS
 import { Platform } from 'react-native';
 import { trafficBurst } from '../../utils/nrprobe';
 import { getApnProfiles, setApn, selectApn, getDns, setDns } from './apn-dns';
-import { carriersFrom } from './carriers';
+import { carriersFrom, nrChan } from './carriers';
 import { getWifiRadios, setWifiChannel, wifiDebug } from './wifi';
 import * as extras from './extras';
 import * as more from './more';
@@ -1175,7 +1175,8 @@ export class HuaweiDriver implements RouterDriver {
       rssi: num(tag(xml, 'rssi')),
       nrBand: nrBandRaw || (nrFromBand ? 'n' + nrFromBand[1] : undefined),
       nrPci: tag(xml, 'nrpci') || undefined,
-      nrArfcn: tag(xml, 'nrarfcn') || tag(xml, 'nrearfcn') || undefined,
+      // H138: nrearfcn = «DL:0 UL:0» (ما يعطي القناة) ← فاضي بدل ما تطلع «قناة DL:0 UL:0» في بطاقة 5G
+      nrArfcn: nrChan(tag(xml, 'nrarfcn') || tag(xml, 'nrearfcn')),
       nrDlBandwidth: tag(xml, 'nrdlbandwidth') || undefined,
       nrRsrp: num(tag(xml, 'nrrsrp')),
       nrRsrq: num(tag(xml, 'nrrsrq')),
