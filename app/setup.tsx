@@ -18,7 +18,7 @@ import { router, Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { detectDriver } from '../src/drivers/registry';
 import { MESH_HOST, MESH_TIP } from '../src/utils/meshHint';
-import { huaweiModelNoLogin, confirmLabelMixup, modelLine } from '../src/services/labelHint';
+import { huaweiModelNoLogin, huaweiSamePwdNoLogin, confirmLabelMixup, modelLine } from '../src/services/labelHint';
 import type { RouterDriver } from '../src/drivers/types';
 import { listRouters, saveRouter, updateRouter, SavedRouter } from '../src/store/routers';
 import { dropSession } from '../src/store/sessions';
@@ -137,8 +137,8 @@ export default function SetupScreen() {
     const user = userName.trim() || 'admin';
     // هواوي: كلمة شكلها WPS PIN / كلمة الواي فاي ← نسأله قبل نصرف محاولة (labelHint)
     const isHw = /^huawei/.test(String((d as any).id ?? ''));
-    const hwModel = isHw ? await huaweiModelNoLogin(host) : null;
-    if (isHw && !lastTry && !(await confirmLabelMixup(cp, hwModel))) { setStep('password'); return; }
+    const [hwModel, hwSame] = isHw ? await Promise.all([huaweiModelNoLogin(host), huaweiSamePwdNoLogin(host)]) : [null, false];
+    if (isHw && !lastTry && !(await confirmLabelMixup(cp, hwModel, hwSame))) { setStep('password'); return; }
     try {
       setStatus('أسجّل الدخول عنك…');
       try { await d.login(host, user, cp, { fresh: true, lastTry }); }

@@ -51,6 +51,16 @@ export function passwordShape(pw: string): string {
  * كلمة شكلها سطر ثاني من ملصق هواوي (بدون ما نعرف الكلمة): ٨ أرقام = WPS PIN ·
  * ١٠–١٣ خانة حروف كبيرة وأرقام بس = Wi-Fi Password (كلمة الدخول فيها حروف صغيرة).
  */
+/**
+ * نصيحة قبل نرسل الكلمة لراوتر هواوي. samePwd = state-login فيه wifipwdsamewithwebpwd=1 (كلمة الدخول = كلمة الواي فاي).
+ * E5785-320a (٢٠ خطأ من أعضاء مختلفين ١٧–٢٦ نوفمبر): كتبوا «admin» اللي على الملصق والراوتر يبي كلمة الواي فاي ← 108006 ثم قفل.
+ * في هالراوترات كلمة الواي فاي هي الصح، فتحذيرات «شكلها كلمة الواي فاي/أرقام» ما تنطبق.
+ */
+export function labelAdvice(pw: string, samePwd: boolean): 'wifiPwd' | 'wps' | 'wifi' | 'digits' | null {
+  if (samePwd) return /^admin$/i.test((pw ?? '').trim()) ? 'wifiPwd' : null;
+  return labelMixup(pw);
+}
+
 export function labelMixup(pw: string): 'wps' | 'wifi' | 'digits' | null {
   const p = (pw ?? '').trim();
   if (/^\d{8}$/.test(p)) return 'wps';

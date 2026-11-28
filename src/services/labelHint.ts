@@ -7,7 +7,7 @@
  */
 import { Alert } from 'react-native';
 import { http } from '../drivers/http';
-import { labelMixup } from '../utils/password';
+import { labelAdvice } from '../utils/password';
 
 /** موديل هواوي اللي يرد على العنوان (device/basic_information — بدون دخول) */
 export async function huaweiModelNoLogin(host: string): Promise<string | null> {
@@ -19,15 +19,34 @@ export async function huaweiModelNoLogin(host: string): Promise<string | null> {
   } catch { return null; }
 }
 
+/** state-login (بدون دخول): wifipwdsamewithwebpwd=1 ← كلمة الدخول هي كلمة الواي فاي (E5785 · H122…) */
+export async function huaweiSamePwdNoLogin(host: string): Promise<boolean> {
+  try {
+    const base = 'http://' + host.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    const r = await http(`${base}/api/user/state-login`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }, 3000);
+    return /<wifipwdsamewithwebpwd>\s*1\s*<\/wifipwdsamewithwebpwd>/i.test(await r.text());
+  } catch { return false; }
+}
+
 /** سطر «الراوتر اللي رد» — يكشف إن الجوال على شبكة راوتر ثاني */
 export function modelLine(model: string | null): string {
   return model ? `\n\nالراوتر اللي جوالك متصل فيه: ${model}\nتأكد إنه نفس الموديل اللي على الملصق — لو غيره، جوالك على واي فاي راوتر ثاني.` : '';
 }
 
 /** true = كمّل الدخول · false = يرجع يعدّل الكلمة */
-export function confirmLabelMixup(password: string, model: string | null): Promise<boolean> {
-  const mix = labelMixup(password);
+export function confirmLabelMixup(password: string, model: string | null, samePwd = false): Promise<boolean> {
+  const mix = labelAdvice(password, samePwd);
   if (!mix) return Promise.resolve(true);
+  if (mix === 'wifiPwd') {
+    const body = 'راوترك يدخل بـ «كلمة الواي فاي» نفسها — اللي تتصل فيها بشبكته (في الملصق: WIFI KEY أو Wi-Fi Password)، مو «admin».'
+      + '\nالراوتر نفسه يقول كذا، فـ admin بيرفضها ويقفل الدخول ٥ دقايق بعد كم محاولة.'
+      + '\nلو أنت غيّرت كلمة الدخول بنفسك لـ admin، اضغط «متأكد، جرّب».'
+      + modelLine(model);
+    return new Promise(res => Alert.alert('اكتب كلمة الواي فاي', body, [
+      { text: 'أعدّل الكلمة', style: 'cancel', onPress: () => res(false) },
+      { text: 'متأكد، جرّب', onPress: () => res(true) },
+    ], { cancelable: true, onDismiss: () => res(false) }));
+  }
   const body = (mix === 'wps'
     ? 'الكلمة اللي كتبتها ٨ أرقام — هذا شكل «WPS PIN» في الملصق، مو كلمة الدخول.'
     : mix === 'digits'

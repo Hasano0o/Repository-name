@@ -45,3 +45,18 @@ test('labelMixup: WPS PIN وكلمة الواي فاي من ملصق هواوي 
   assert.equal(labelMixup('123'), null);
   assert.equal(labelMixup('ABCDEFGHIJK'), null);
 });
+
+test('labelAdvice: راوتر كلمة دخوله = كلمة الواي فاي (E5785-320a — ٢٠ خطأ ١٧–٢٦ نوفمبر)', async () => {
+  const { labelAdvice } = await import('../src/utils/password');
+  // wifipwdsamewithwebpwd=1: «admin» من الملصق غلط ← ننبّه قبل نرسل
+  assert.equal(labelAdvice('admin', true), 'wifiPwd');
+  assert.equal(labelAdvice(' Admin ', true), 'wifiPwd');
+  // كلمة الواي فاي هي الصح هنا ← بدون تحذيرات «شكلها كلمة الواي فاي/أرقام/WPS»
+  assert.equal(labelAdvice('neny9tq4a4', true), null);
+  assert.equal(labelAdvice('AA9A9AA9AA9', true), null);
+  assert.equal(labelAdvice('35219828', true), null);
+  // راوتر عادي ← نفس labelMixup
+  assert.equal(labelAdvice('admin', false), null);
+  assert.equal(labelAdvice('35219828', false), 'wps');
+  assert.equal(labelAdvice('AA9A9AA9AA9', false), 'wifi');
+});

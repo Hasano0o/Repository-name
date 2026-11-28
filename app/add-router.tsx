@@ -11,7 +11,7 @@ import { isLanHost, cleanHostInput } from '../src/utils/host';
 import { detectDriver } from '../src/drivers/registry';
 import { markAddStep } from '../src/services/stats';
 import { MESH_HOST, MESH_TIP } from '../src/utils/meshHint';
-import { huaweiModelNoLogin, confirmLabelMixup, modelLine } from '../src/services/labelHint';
+import { huaweiModelNoLogin, huaweiSamePwdNoLogin, confirmLabelMixup, modelLine } from '../src/services/labelHint';
 import { addDemoRouter } from '../src/drivers/demo';
 import { DesktopNetCard, explainDetectFailure, useDesktopNet } from '../src/ui/DesktopNet';
 import { getRouter, saveRouter, updateRouter, deleteRouter, listRouters, SavedRouter, setWifi, SavedWifi, getLabel, setLabel, LabelCreds } from '../src/store/routers';
@@ -509,8 +509,10 @@ export default function AddRouterScreen() {
 
       // هواوي: الموديل اللي رد فعلاً (بدون دخول) + كلمة شكلها WPS PIN / كلمة الواي فاي ← نسأله قبل نصرف محاولة
       const isHw = /^huawei/.test(String((driver as any).id ?? ''));
-      const hwModel = isHw ? await withTimeout(huaweiModelNoLogin(h), 3500, null) : null;
-      if (isHw && !over?.finishSetup && !(await confirmLabelMixup(password, hwModel))) return;
+      const [hwModel, hwSame] = isHw
+        ? await Promise.all([withTimeout(huaweiModelNoLogin(h), 3500, null), withTimeout(huaweiSamePwdNoLogin(h), 3500, false)])
+        : [null, false];
+      if (isHw && !over?.finishSetup && !(await confirmLabelMixup(password, hwModel, hwSame))) return;
       // «كمّل الإعداد عنّي»: الدخول يكمّل معالج الإعداد الأولي بدل ما يوقف (huawei finishSetupOnce)
       if (isHw && over?.finishSetup) { (driver as any).finishSetupOnce = true; setStep('نكمّل إعداد الراوتر عنك...'); }
 
