@@ -185,7 +185,7 @@ def build(days=14):
     since = f" من {datetime.fromtimestamp(first, RIYADH).strftime('%m-%d')}" if first else ""
     L.append(f"📈 آخر {days} يوم{since}: {len(all_rows)} فحص · {len({u['dev'] for u in users})} جهاز")
     if users:
-        L.append(f"✅ يستفيدون (≥{GAIN_MIN}ms أو فقد أقل): {len(hdev)} من {len(devs)} جهاز (بدون طريق الدمام المكسور)"
+        L.append(f"✅ يستفيدون (≥{GAIN_MIN}ms أو فقد أقل): {len(hdev)} من {len(devs)} جهاز (بدون الطرق المكسورة)"
                  + (f" · وسيط النقص {gm}ms" if gm and gm > 0 else ""))
         L.append("📊 النتايج (جهاز×منطقة): " + " · ".join(f"{k} {v}" for k, v in kinds.items()))
         L.append(f"📶 بنق الأعضاء لسيرفرنا (وسيط): {med([u['to_s'] for u in users])}ms")
