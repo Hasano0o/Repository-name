@@ -21,3 +21,11 @@ test('العنوان العادي ما يتغيّر', () => {
   assert.equal(cleanHostInput(''), '');
   assert.ok(isLanHost(cleanHostInput('https://hirouter.net/html/content.html#home')));
 });
+
+test('looksLikeAddress: كلام في خانة العنوان (أخطاء ٢٦–٢٨ نوفمبر) ← مو عنوان', () => {
+  const { looksLikeAddress } = require('../src/utils/host');
+  for (const bad of ['buooo', 'ماعرفه', 'admin', 'wifi', 'wi-fi', '92ed', '', '192.168.8', '192.168.300.1'])
+    assert.equal(looksLikeAddress(bad), false, bad);
+  for (const ok of ['192.168.8.1', '192.168.1.1', '10.1.1.1', '192.168.0.1:8080', 'hirouter.net', 'tplinkwifi.net', 'router.lan', 'fe80::1', 'localhost'])
+    assert.equal(looksLikeAddress(ok), true, ok);
+});

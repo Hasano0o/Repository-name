@@ -7,7 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Icon, IconName } from '../src/ui/Icon';
 import { C, R, S, T, tBd, tBg, tFg } from '../src/ui/theme';
-import { isLanHost, cleanHostInput } from '../src/utils/host';
+import { isLanHost, cleanHostInput, looksLikeAddress } from '../src/utils/host';
 import { detectDriver } from '../src/drivers/registry';
 import { markAddStep } from '../src/services/stats';
 import { MESH_HOST, MESH_TIP } from '../src/utils/meshHint';
@@ -433,6 +433,17 @@ export default function AddRouterScreen() {
     const junk = rawPass.length - password.length;
     const wifiNow = over?.wifi ?? wifi;
     const nameNow = (name.trim() || over?.name || '').trim();
+    // كلام مو عنوان («buooo» «ماعرفه» «wifi»…) ← ندوّر على الراوتر عنه بدل «ما رد»
+    if (!over?.findHost && !looksLikeAddress(h)) {
+      const gw = net.diag?.gateway;
+      Alert.alert('هذا مو عنوان الراوتر',
+        `«${h || '—'}» مو عنوان. عنوان الراوتر أرقام مثل 192.168.8.1 — مكتوب على الملصق تحت الراوتر بجنب IP.\n\nتبي ندوّر عليه عنك؟ (لازم جوالك متصل بواي فاي الراوتر)`,
+        [
+          { text: 'أعدّل العنوان', style: 'cancel' },
+          { text: 'دوّر عنّي', onPress: () => { const d = gw && looksLikeAddress(gw) ? gw : '192.168.8.1'; setHost(d); onSave({ ...over, host: d, findHost: true }); } },
+        ]);
+      return;
+    }
     if (!isLanHost(h)) {
       Alert.alert('عنوان غير صالح', 'أدخل عنواناً محلياً، مثال: 192.168.8.1');
       return;

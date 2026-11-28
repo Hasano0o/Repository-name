@@ -95,6 +95,22 @@ export function isLanHost(raw: string): boolean {
   return !h.includes('.');
 }
 
+/**
+ * شكل عنوان راوتر حقيقي؟ IPv4 كامل · IPv6 · اسم معروف (hirouter.net…) · اسم فيه نقطة · localhost.
+ * أخطاء الإضافة ٢٦–٢٨ نوفمبر: أعضاء كتبوا في خانة العنوان «buooo» «ماعرفه» «admin» «wifi» «92ed» —
+ * isLanHost يقبلها (أسماء بدون نقطة مسموحة لـ routerlogin وغيره) فتروح «ما رد». هذي تكشفها قبل.
+ */
+export function looksLikeAddress(raw: string): boolean {
+  const r = (raw ?? '').trim().replace(/^\[|\](:\d+)?$/g, '');
+  if (r.split(':').length > 2 && /^[0-9a-f:]+$/i.test(r)) return true; // IPv6
+  const h = hostOnly(raw).toLowerCase();
+  if (!h) return false;
+  if (/^\d{1,3}(\.\d{1,3}){3}(:\d+)?$/.test(h)) return h.split(/[.:]/).slice(0, 4).every(x => Number(x) <= 255);
+  if (h.includes(':')) return /^[0-9a-f:]+$/.test(h);
+  if (ROUTER_NAMES.includes(h) || h === 'localhost') return true;
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z][a-z0-9-]*$/.test(h);
+}
+
 export function assertLanHost(raw: string): void {
   if (!isLanHost(raw)) {
     throw new Error(
