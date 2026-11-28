@@ -23,6 +23,7 @@ import { classifyZteWrite, WRITE_ALLOWED_WHEN_UNVERIFIED } from './writeResult';
 import { LockSnapshot, restoreMismatch } from '../lockSnapshot';
 import { ZteNgDriver } from '../zteng';
 import { identifyZte, ModelProfile } from '../models';
+import { zteUssd } from './ussd';
 import { u30SetBands, u30ReadLock, u30Supported, u30Locked, u30CellLocks, u30UnlockAll, u30Neighbors, u30Summary, u30Diff, U30Lock } from './u30';
 import { ZTE_LOCK_KEYS, ZteLockData, checkComplete, zteDiff, zteSummary, ZTE_PART_LABEL, lteBands, nrBands, lteCell, nrCell } from './lockState';
 const sha256Upper = (s: string) => bytesToHex(sha256(utf8ToBytes(s))).toUpperCase();
@@ -1722,6 +1723,8 @@ export class ZteDriver implements RouterDriver {
     if (prof?.noWifiSleep) delete ex.wifiSleep;
     return ex;
   }
+  /** أكواد USSD من شريحة الراوتر (الرصيد والشحن) — USSD_PROCESS مثل الصفحة (zte/ussd.ts). لسا ما انجرّب ميداني. */
+  async ussd(code: string): Promise<string> { await this.ensure(); return zteUssd(this.io(), code); }
   async setUpnp(on: boolean) { await this.ensure(); return zteSetUpnp(this.io(), on); }
   async setDmz(on: boolean, ip: string) { await this.ensure(); return zteSetDmz(this.io(), on, ip); }
   async setLedNight(on: boolean, start: string, end: string) { await this.ensure(); return zteSetLedNight(this.io(), on, start, end); }
