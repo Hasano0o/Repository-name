@@ -64,7 +64,7 @@ export async function hwLabs(io: HwLabIo): Promise<LabItem[]> {
     });
   }
   if (d && !hwErr(d)) {
-    const rows = allFields(d, 16);
+    const rows = onekeyRows(d);
     if (rows.length) out.push({ id: 'hw-onekey', group: 'التشخيص', kind: 'info', title: 'التشخيص بضغطة', desc: 'فحص راوترك نفسه للاتصال والشريحة (من صفحة «التشخيص» في هواوي).', rows });
   }
   return out;
@@ -86,4 +86,52 @@ async function higameSet(io: HwLabIo, on: boolean, variant: string): Promise<str
   const after = field(await io.get('hilink/higame'), 'HiGameControlEnable');
   if (isOn(after) !== on) throw new Error(`hilink/higamecontrol: الراوتر قبل الأمر بس القراءة بعده ${after ?? 'فاضية'}`);
   return 'تم';
+}
+
+/**
+ * التشخيص بضغطة بالعربي (حسن ٢٨ نوفمبر: كانت تطلع أسماء الحقول الخام مقطوعة وأرقام بدون معنى).
+ * المعاني من صفحة onekey نفسها (تقرير page-onekey): connection_status 0 واي فاي · 1 كيبل · 2 شبكة الجوال
+ * (وبعدها signal_status 1 = ضعيفة · speedLimitStatus 1 = محدودة السرعة) · 3 يتصل · 4 فشل البيانات · 5 فشل الواي فاي
+ * · 6 فشل الاتصال · 7 متصل والإنترنت ما يوصل · 8 فشل التسجيل. باقي الخانات: 0 = سليم، غيره = فيه مشكلة.
+ */
+const OK = 'سليم ✓';
+const CONN: Record<string, string> = {
+  '0': 'متصل عن طريق واي فاي ✓', '1': 'متصل بالكيبل ✓', '2': 'متصل بشبكة الجوال ✓', '3': 'يحاول يتصل…',
+  '4': 'فشل اتصال البيانات ✗', '5': 'فشل اتصال الواي فاي ✗', '6': 'فشل الاتصال بالشبكة ✗',
+  '7': 'متصل بس الإنترنت ما يوصل ✗', '8': 'ما قدر يسجّل في الشبكة ✗',
+};
+const ITEMS: { re: RegExp; label: string; bad: (v: string) => string }[] = [
+  { re: /^signal_stat/i, label: 'الإشارة', bad: v => (v === '1' ? 'ضعيفة ✗' : `فيها مشكلة (${v})`) },
+  { re: /^sim_stat/i, label: 'الشريحة', bad: v => `فيها مشكلة (${v}) — شيك عليها` },
+  { re: /^dialupswitch/i, label: 'بيانات الجوال', bad: () => 'مطفية من الراوتر ✗' },
+  { re: /^datalimit/i, label: 'حد الاستهلاك', bad: () => 'وصلت الحد ✗' },
+  { re: /^roam/i, label: 'التجوال', bad: () => 'مطفي وأنت على شبكة تجوال ✗' },
+  { re: /^staticdns/i, label: 'DNS', bad: () => 'DNS يدوي فيه مشكلة ✗' },
+  { re: /^apnstatus/i, label: 'إعدادات APN', bad: v => `فيها مشكلة (${v}) ✗` },
+  { re: /^modemdialup/i, label: 'الاتصال بالمشغّل', bad: v => `خطأ رقم ${v} ✗` },
+  { re: /^speedlimit/i, label: 'تحديد السرعة', bad: () => 'المشغّل حادّ سرعتك ✗' },
+  { re: /^connection_wireless/i, label: 'الاتصال اللاسلكي', bad: v => `حالة ${v}` },
+];
+export function onekeyRows(text: string): { label: string; value: string }[] {
+  const raw = allFields(text, 24);
+  if (!raw.length) return [];
+  const out: { label: string; value: string }[] = [];
+  let problems = 0;
+  const cs = raw.find(r => /^connection_status$/i.test(r.label))?.value;
+  if (cs !== undefined) {
+    const v = CONN[cs] ?? `حالة ${cs}`;
+    if (/✗/.test(v)) problems++;
+    out.push({ label: 'الاتصال', value: v });
+  }
+  for (const r of raw) {
+    if (/^connection_status$/i.test(r.label)) continue;
+    const it = ITEMS.find(x => x.re.test(r.label));
+    if (!it) { if (r.value !== '0') out.push({ label: r.label, value: r.value }); continue; }
+    if (out.some(o => o.label === it.label)) continue;
+    const okv = r.value === '0' || r.value === '';
+    if (!okv) problems++;
+    out.push({ label: it.label, value: okv ? OK : it.bad(r.value) });
+  }
+  out.unshift({ label: 'النتيجة', value: problems ? `فيه ${problems === 1 ? 'مشكلة وحدة' : problems + ' مشاكل'} — شوف تحت` : 'كل شي سليم ✓' });
+  return out;
 }

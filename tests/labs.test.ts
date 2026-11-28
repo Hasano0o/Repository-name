@@ -115,7 +115,7 @@ test('هواوي labs: HiGame JSON أو XML + الأمر', async () => {
   };
   const l = await hwLabs(io);
   assert.equal(l.find(x => x.id === 'hw-higame')!.value, '0');
-  assert.equal(l.find(x => x.id === 'hw-onekey')!.rows![0].label, 'connection_status');
+  assert.equal(l.find(x => x.id === 'hw-onekey')!.rows![1].label, 'الاتصال');
   await hwRunLab(io, 'hw-higame', '1');
   assert.deepEqual(posts[0], { data: { HiGameControlEnable: true } });
 });
