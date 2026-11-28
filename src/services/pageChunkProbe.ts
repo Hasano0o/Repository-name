@@ -38,3 +38,16 @@ export async function sendPageChunkOnce(r: SavedRouter, name: string, reason: st
     running.delete(key);
   }
 }
+
+/**
+ * صفحات هواوي فيها ميزات مدفونة (تقرير hidden_features ٢٨ نوفمبر) — نسحب كودها مرة لكل راوتر عشان نشوف
+ * الطلبات بالضبط قبل ما نضيفها: التشخيص بضغطة · وضع الألعاب · الإحصائيات وحد الاستهلاك · تسريع التطبيقات ·
+ * حماية الأطفال · إدارة الأجهزة · الواي فاي المتقدم · بنق الدوري · تثبيت البرج. قراءة ملفات JS بس.
+ */
+export const HUAWEI_HARVEST = ['onekey', 'higame', 'statistic', 'appacceleration', 'childrenprotect', 'devicemanagement', 'wifiadvanced', 'pingpolling', 'celllock'];
+export async function harvestPagesOnce(r: SavedRouter): Promise<void> {
+  if (!/^huawei/.test(r.driverId ?? '')) return;
+  for (const p of HUAWEI_HARVEST) {
+    await sendPageChunkOnce(r, p, 'ميزات مدفونة').catch(() => false);
+  }
+}

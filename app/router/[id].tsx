@@ -10,7 +10,7 @@ import { SavedRouter, getRouter, deleteRouter, updateRouter } from '../../src/st
 import { detectDriver } from '../../src/drivers/registry';
 import { diag } from '../../src/services/diag';
 import { withSession, dropSession, routerWrite } from '../../src/store/sessions';
-import { sendPageChunkOnce } from '../../src/services/pageChunkProbe';
+import { sendPageChunkOnce, harvestPagesOnce } from '../../src/services/pageChunkProbe';
 import { discoverFeatures } from '../../src/services/autoprog';
 import { discoverySummary, writeLabels } from '../../src/utils/autoprogCore';
 import { Carrier, Signal, Usage, ConnectedDevice, Traffic, RouterDriver, DeviceDetails, DataPlan, ActiveLock, OpticReading } from '../../src/drivers/types';
@@ -326,7 +326,9 @@ export default function RouterDashboard() {
     const t = setTimeout(() => { probeEsimOnce(info).catch(() => {}); }, 8000);
     // ZTE: صيغة قراءة كل ثانوي (lte_multi_ca_scell_sig_info) — تقرير مرة وحدة (٢٨ نوفمبر)
     const t2 = setTimeout(() => { probeCaSigOnce(info).catch(() => {}); }, 14000);
-    return () => { clearTimeout(t); clearTimeout(t2); };
+    // هواوي: كود صفحات الميزات المدفونة مرة لكل راوتر (قراءة بس)
+    const t3 = setTimeout(() => { harvestPagesOnce(info).catch(() => {}); }, 25000);
+    return () => { clearTimeout(t); clearTimeout(t2); clearTimeout(t3); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasSignalNow, info?.id]);
 

@@ -233,6 +233,24 @@ def t_zip_list(a):
     return _cap(f'{len(infos)} ملف في {pid_of(p)}:\n' + '\n'.join(lines))
 
 
+def _grep_line(i, ln, rx, ctx, starts):
+    """سطر قصير يطلع كامل. سطر طويل (كود مضغوط) ← نافذة حول كل تطابق مع offset بالملف (يكمل بـ read_file offset)."""
+    if len(ln) <= 2000:
+        return f'{i + 1}: {ln}'
+    w = 500 * (ctx + 1)
+    out, last = [], -1
+    for m in rx.finditer(ln):
+        if m.start() < last:
+            continue
+        a, b = max(0, m.start() - w), min(len(ln), m.end() + w)
+        out.append(f'{i + 1}@{starts[i] + a}: …{ln[a:b]}…')
+        last = b
+        if len(out) >= 8:
+            out.append(f'{i + 1}: … (تطابقات أكثر)')
+            break
+    return '\n'.join(out)
+
+
 def t_read(a):
     p = resolve(a.get('path'))
     member = a.get('member') or None
@@ -249,12 +267,16 @@ def t_read(a):
         except re.error as e:
             raise Bad('grep غلط: ' + str(e))
         ctx = min(int(a.get('context') or 0), 5)
-        lines = text.splitlines()
+        lines = text.splitlines(True)
+        starts, pos = [], 0
+        for ln in lines:
+            starts.append(pos); pos += len(ln)
+        lines = [ln.rstrip('\r\n') for ln in lines]
         keep = set()
         for i, ln in enumerate(lines):
             if rx.search(ln):
                 keep.update(range(max(0, i - ctx), min(len(lines), i + ctx + 1)))
-        body = '\n'.join(f'{i + 1}: {lines[i][:2000]}' for i in sorted(keep))
+        body = '\n'.join(_grep_line(i, lines[i], rx, ctx, starts) for i in sorted(keep))
         head = f'{pid_of(p)}{" ← " + member if member else ""} · {len(keep)} سطر يطابق «{grep}»\n'
         return _cap(head + scrub(body))
     off = max(int(a.get('offset') or 0), 0)
