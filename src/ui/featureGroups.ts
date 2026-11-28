@@ -13,6 +13,9 @@ export interface FeatGroup {
 }
 export interface FeatFlags { usage?: boolean; cellular?: boolean; optic?: boolean; reboot?: boolean; network?: boolean; ussd?: boolean; sms?: boolean; antenna?: boolean; control?: boolean }
 
+/** درايفرات فيها «مزايا تجريبية» (getLabs) — ٢٨ نوفمبر */
+export const LAB_DRIVERS = ['huawei-lte', 'zte', 'greenpacket'];
+
 export const CONTROL_DRIVERS = ['huawei-lte', 'zte', 'fiberhome', 'oppo', 'greenpacket', 'zyxel', 'demo'];
 
 const ORANGE = '#f97316', BLUE = '#2563eb', GREEN = '#16a34a', PURPLE = '#9333ea', PINK = '#e11d48', TEAL = '#0d9488', VIOLET = '#7c3aed', AMBER = '#d97706';
@@ -48,6 +51,7 @@ export function buildFeatureGroups(info: SavedRouter, f: FeatFlags | undefined, 
         cell && { key: 'rooms', title: 'الواي فاي بالغرف', icon: 'wifi', color: BLUE, onPress: go(`/rooms/${rid}`) },
         { key: 'lag', title: 'كاشف اللاق', icon: 'target', color: TEAL, onPress: go(`/lag/${rid}`) },
         { key: 'monitor', title: 'المراقبة', icon: 'bell', color: VIOLET, onPress: go('/monitor') },
+        LAB_DRIVERS.includes(info.driverId) && { key: 'labs', title: 'مزايا تجريبية', icon: 'spark', color: AMBER, onPress: go(`/labs/${rid}`) },
       ]),
     },
     {

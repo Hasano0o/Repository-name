@@ -218,6 +218,24 @@ export interface Carrier {
   sinr?: number;
 }
 
+/** ميزة تجريبية من كود صفحة الراوتر (شاشة «مزايا تجريبية») */
+export interface LabItem {
+  id: string;
+  /** القسم (للتجميع في الشاشة) */
+  group: string;
+  title: string;
+  desc?: string;
+  /** toggle = تشغيل/إطفاء (value "1"/"0") · choice = خيارات · action = زر · info = قراءة بس */
+  kind: 'toggle' | 'choice' | 'action' | 'info';
+  value?: string;
+  options?: { value: string; label: string }[];
+  rows?: { label: string; value: string }[];
+  /** نص تأكيد قبل التنفيذ (أوامر تقطع النت شوي) */
+  confirm?: string;
+  /** اسم الأمر في الراوتر — يطلع في تقرير الخطأ */
+  cmd?: string;
+}
+
 /** قراءة منافذ الأنتنا لتقنية وحدة (RX0…RX3) — نفس شكل AntennaSet في utils/antennaPorts */
 export interface AntennaSetInfo {
   tech: 'LTE' | 'NR';
@@ -438,6 +456,13 @@ export interface RouterDriver {
   getAntennaPlugs?(): Promise<{ idx: number; plugged: boolean; external?: boolean }[] | null>;
   /** ردود الدمج الخام (قراءة بس) — لفحص صيغة قراءة كل ثانوي مرة وحدة (ZTE lte_multi_ca_scell_sig_info) */
   getCaRaw?(): Promise<Record<string, string>>;
+  /**
+   * «مزايا تجريبية» (٢٨ نوفمبر — قرار حسن: كل الميزات المكتشفة من كود صفحات الراوترات، حتى بدون تجربة ميدانية).
+   * كل درايفر يعرض اللي لقيناه في صفحته؛ الشاشة عامة (app/labs/[id].tsx) وأي فشل يوصل الرسيفر باسم الأمر ورد الراوتر.
+   */
+  getLabs?(): Promise<LabItem[]>;
+  /** ينفّذ ميزة تجريبية — value للخيارات/التشغيل ("1"/"0") · يرجّع رسالة نجاح اختيارية */
+  runLab?(id: string, value?: string): Promise<string | void>;
   /**
    * دخول برمز من شاشة الجهاز (أداة MONDO على Inseego 8800L — ٢١ نوفمبر): needed() = true ← صفحة الراوتر تعرض خانة الرمز.
    * submit يرمي برسالة واضحة لو الرمز غلط/انتهى.
