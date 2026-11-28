@@ -95,7 +95,8 @@ export class GreenPacketDriver implements RouterDriver {
   private async raw(): Promise<GpRaw> {
     const safe = (p: string) => this.get(p).catch(() => undefined);
     const [inet, ca, nsa, nr, score] = await Promise.all([
-      this.get('/dashboard/internetinfo'), safe('/dashboard/radio/cainfo'), safe('/dashboard/radio/nsacellinfo'),
+      // D5H (٢٨ نوفمبر): internetinfo يرد 501 ← ما نخليه يوقف باقي القراءة
+      safe('/dashboard/internetinfo'), safe('/dashboard/radio/cainfo'), safe('/dashboard/radio/nsacellinfo'),
       safe('/dashboard/radio/nrcellinfo'), safe('/startup/radiocellsinfo'),
     ]);
     return { inet, ca, nsa, nr, score };
