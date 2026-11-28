@@ -773,6 +773,8 @@ export const EN: Record<string, string> = {
   'مراقبة الاتصال': 'Connection watchdog',
   'طافية — لو النت علّق، الراوتر يبقى معلّق لين تطفيه وتشغّله بنفسك.': 'Off — if the internet hangs, the router stays stuck until you power-cycle it yourself.',
   'الحرارة ممتازة': 'Temperature is great',
+  'قراءة كل تردد': 'Per-band readings',
+  'ثانوي ضعيف': 'Weak secondary',
   'دافي وطبيعي وقت التحميل': 'Warm — normal while downloading',
   'حار شوي — ممكن يخفّض السرعة لحاله. بعّده عن الشمس المباشرة': 'A bit hot — it may slow itself down. Keep it out of direct sun',
   'الراوتر حار جداً — بعّده عن الشمس والأجهزة الحارة، وخلّ حوله تهوية': 'Very hot — move it away from sun and heat, and give it airflow',
@@ -3221,4 +3223,7 @@ export const EN_PATTERNS: Record<string, string> = {
   'كمّل بـ {0} ▶': 'Continue with {0} ▶',
   'هدفك أقل من {0}ms': 'Your goal: under {0}ms',
   'السيرفر المختار: {0}': 'Selected server: {0}',
+  '{0} ضعيفة — ممكن تنزّل سرعة الدمج': '{0} are weak — they may slow down CA',
+  '{0} أضعف من الأساسي بـ {1} dB — ممكن ينزّل سرعة الدمج': '{0} is {1} dB weaker than the primary — it may slow down CA',
+  '{0} ضعيف — ممكن ينزّل سرعة الدمج': '{0} is weak — it may slow down CA',
 };

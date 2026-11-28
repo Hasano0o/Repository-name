@@ -11,6 +11,8 @@ import { useCaActivate } from './useCaActivate';
 import { bandLabel, friendlyBand } from '../utils/bands';
 import { Icon } from './Icon';
 import { C, R, tBd, tBg } from './theme';
+import { carrierRows, hasPerCarrier, weakNote, CqLevel } from '../utils/carrierQuality';
+import { LEVEL_COLOR } from '../utils/signal';
 
 import { sheet } from '../i18n';
 import { FONT } from './fonts';
@@ -242,6 +244,38 @@ export function ComboCard({ r }: { r: SavedRouter }) {
         );
       })()}
 
+      {/* قراءة كل تردد لحاله (حسن ٢٨ نوفمبر) — بس لو الراوتر يعطي قراءة للثانوي */}
+      {!!shown && hasPerCarrier(shown) && (() => {
+        const rows = carrierRows(shown);
+        const note = weakNote(rows);
+        const colOf = (c: { role: string; tech: string }) => (c.role === 'PCC' ? C.blue : c.tech === 'NR' ? '#7c3aed' : SEC_ORANGE);
+        const lvCol = (l: CqLevel) => LEVEL_COLOR[l];
+        return (
+          <View style={s.per}>
+            <View style={s.perHead}>
+              <Text style={s.perTitle}>قراءة كل تردد</Text>
+              <Text style={[s.perCol, { width: 50 }]}>RSRP</Text>
+              <Text style={[s.perCol, { width: 34 }]}>SINR</Text>
+            </View>
+            {rows.map((c, i) => (
+              <View key={i} style={[s.perRow, c.weak && s.perWeak]}>
+                <View style={[s.perChip, { backgroundColor: colOf(c) }]}>
+                  <Text style={s.perChipTxt} numberOfLines={1}>{bandLabel(c.tech, c.band)}</Text>
+                </View>
+                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                  <Text style={s.perRole} numberOfLines={1}>{c.role === 'PCC' ? 'الأساسي' : nrMain && c.tech === 'NR' && c.band === nrMain.band && c.pci === nrMain.pci ? 'الأساسي 5G' : c.weak ? 'ثانوي ضعيف' : 'ثانوي'}</Text>
+                  {!!c.pci && <Text style={s.perPci} numberOfLines={1}>PCI {c.pci}</Text>}
+                </View>
+                <Text style={[s.perNum, { width: 50, color: c.rsrp !== undefined ? C.text : C.muted }]}>{c.rsrp !== undefined ? c.rsrp : '—'}</Text>
+                <Text style={[s.perNum, { width: 34, color: c.sinr !== undefined ? C.text : C.muted }]}>{c.sinr !== undefined ? Math.round(c.sinr) : '—'}</Text>
+                <View style={[s.perDot, { backgroundColor: lvCol(c.level) }]} />
+              </View>
+            ))}
+            {!!note && <Text style={s.perNote}>{note}</Text>}
+          </View>
+        );
+      })()}
+
       {/* «نشّط الدمج» — دايماً (حسن ٢٢ نوفمبر)؛ والدمج شغال ← يأكّده «الدمج شغال» */}
       {!!pcc && (
         <View style={{ gap: 6 }}>
@@ -333,5 +367,18 @@ const s = sheet({
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6,
   },
   wakeTxt: { color: SEC_ORANGE, fontSize: 13.5, fontWeight: '900' },
+  per: { backgroundColor: C.rowBg, borderRadius: 14, padding: 8, gap: 4 },
+  perHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, paddingHorizontal: 2, paddingBottom: 2 },
+  perTitle: { flex: 1, color: C.text, fontSize: 12, fontWeight: '900', textAlign: 'right' },
+  perCol: { color: C.sub, fontSize: 9.5, fontFamily: FONT.numSemi, textAlign: 'center' },
+  perRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, paddingVertical: 4, paddingHorizontal: 4, borderRadius: 10 },
+  perWeak: { backgroundColor: tBg('#fff1ec') },
+  perChip: { minWidth: 44, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3, alignItems: 'center' },
+  perChipTxt: { color: '#ffffff', fontSize: 12, fontFamily: FONT.numHeavy },
+  perRole: { color: C.text, fontSize: 11, fontWeight: '800' },
+  perPci: { color: C.muted, fontSize: 9.5, fontFamily: FONT.numSemi, writingDirection: 'ltr' },
+  perNum: { fontSize: 13, fontFamily: FONT.numHeavy, textAlign: 'center', writingDirection: 'ltr' },
+  perDot: { width: 8, height: 8, borderRadius: 4 },
+  perNote: { color: SEC_ORANGE, fontSize: 11, fontWeight: '800', textAlign: 'right', paddingHorizontal: 2, paddingTop: 2 },
   wakeMsg: { fontSize: 11.5, textAlign: 'center', fontWeight: '700' },
 });
