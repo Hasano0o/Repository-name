@@ -76,6 +76,12 @@ Bandly: تطبيق Expo (SDK 57، expo-router، TypeScript strict) يدير را
   - سيرفر المسرّع: `accel/` (probe.py بدون مكتبات على 127.0.0.1:8099 + Caddy للـ HTTPS — الآيفون ما يقبل http؛ بدون دومين = `<IP>.sslip.io`). مناطقه `accel/regions.json` من latency.ts (`node accel/regions.cjs > accel/regions.json` — الاختبار يفشل لو اختلفت). التركيب من الرسيفر: `tar c accel | ssh root@IP 'tar x -C /root && bash /root/accel/install.sh'`.
 - المراقبة بالخلفية: `src/tasks/monitor.ts` (ومعها الوضع الذكي والصيانة الليلية في `src/tasks/automation.ts`).
 
+## موصّل «الرسيفر» (٢٨ نوفمبر) — الجلسة تدوّر في ملفات الأعضاء بنفسها
+لو أدوات الموصّل موجودة في الجلسة (`search_files` · `list_recent` · `zip_list` · `read_file` · `recent_errors` — من موصّل حسن المخصص في claude.ai) **استخدمها أول** بدل `dumps-link.sh`: قراءة بس، الأسرار مخفية (IMEI/السيريال/الكلمات/الأرقام)، المسارات `dumps/…` · `archive/…` · `reports/…` · `knowledge/…` · `errors`. مثال: `search_files {query:"E5785"}` ← `zip_list` ← `read_file {member:"_bandly/diag.txt", grep:"login|signal"}`.
+- الكود: `live-server/mcp/bandly_mcp.py` (بدون مكتبات، 127.0.0.1:8094، nginx `/claude-mcp/<الرمز>`) · الاختبارات `python3 live-server/mcp/test_bandly_mcp.py`.
+- التركيب/التحديث على الرسيفر: `bash /root/router-manager/mobile/live-server/mcp/install.sh` (بعد git pull) · `--status` · `--rotate` (رمز جديد) · `--uninstall`.
+- لو الأدوات مو موجودة (الموصّل مو مضاف/طافي) ← `dumps-link.sh` تحت.
+
 ## ملفات الأعضاء من الرسيفر للجلسة (الطريقة المعتمدة — ٢١ نوفمبر)
 الجلسة ما توصل الرسيفر (has-host.com محجوب من الجلسة) — لا تطلب من حسن أوامر استكشاف طويلة يلصق ناتجها. بدالها أمر واحد:
 ```
