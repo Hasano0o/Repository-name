@@ -18,6 +18,7 @@ import { sheet, LANG, Lang, setLang } from '../src/i18n';
 import { REGIONS, REGION_KEY, regionById } from '../src/utils/latency';
 import { isMonitorRegistered } from '../src/tasks/monitor';
 import { Consent, getConsent, setConsent } from '../src/services/community';
+import { getWatchMode, setWatchMode, type WatchMode } from '../src/store/lockWatch';
 import { getCity, setCity } from '../src/services/stats';
 import { CityPicker } from '../src/ui/CityAsk';
 import { DiagRow, VersionRow, WAYS, openWay, APPSTORE_REVIEW } from '../src/ui/HomeFooter';
@@ -105,6 +106,7 @@ export default function Settings() {
   const [consent, setConsentState] = useState<Consent>(null);
   const [city, setCityState] = useState('');
   const [cityOpen, setCityOpen] = useState(false);
+  const [watch, setWatchState] = useState<WatchMode>('auto');
 
   useFocusEffect(useCallback(() => {
     let on = true;
@@ -112,6 +114,7 @@ export default function Settings() {
     isMonitorRegistered().then(v => on && setMonitorOn(v)).catch(() => on && setMonitorOn(false));
     getConsent().then(v => on && setConsentState(v)).catch(() => {});
     getCity().then(v => on && setCityState(v)).catch(() => {});
+    getWatchMode().then(v => on && setWatchState(v)).catch(() => {});
     return () => { on = false; };
   }, []));
 
@@ -131,6 +134,13 @@ export default function Settings() {
     setCity(v).catch(() => {});
   };
 
+  // «حارس التثبيت»: تلقائي ← اسألني ← طافي
+  const nextWatch = () => {
+    const n: WatchMode = watch === 'auto' ? 'ask' : watch === 'ask' ? 'off' : 'auto';
+    setWatchState(n);
+    setWatchMode(n).catch(() => {});
+  };
+  const watchTxt = watch === 'auto' ? 'تلقائي — لو التثبيت صار أضعف بعد ساعات نرجّع إعدادك' : watch === 'ask' ? 'يسألني قبل ما يرجّع' : 'طافي';
   const reg = regionById(region);
   const cityTxt = city && city !== '-' ? city : 'ما حددتها';
 
@@ -185,6 +195,7 @@ export default function Settings() {
               thumbColor={Platform.OS === 'android' ? '#ffffff' : undefined}
               ios_backgroundColor={isDark ? '#3a4660' : '#cfd6e4'} />
           } />
+        <Row icon="lock" tint={P.violet} label="حارس التثبيت" value={watchTxt} onPress={nextWatch} a11yHint="يبدّل بين تلقائي، يسألني، وطافي" />
         <Row icon="pin" tint={P.red} label="مدينتي" value={cityTxt} onPress={() => setCityOpen(true)} a11yHint="يفتح اختيار المدينة" />
       </Section>
 

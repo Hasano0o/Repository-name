@@ -19,6 +19,7 @@ import { runAutomation } from './automation';
 import { getAutoState } from '../store/automation';
 import { runGuard } from './guard5g';
 import { runHealer } from './healer';
+import { runLockWatch } from '../services/lockWatch';
 import { checkGameLock } from '../services/gameLockGuard';
 import { ipHeld } from '../store/ipGuard';
 
@@ -187,6 +188,8 @@ export async function runMonitorCheck(): Promise<boolean> {
 
       // ═══ الحارس — يصلّح لحاله بالتدريج (بدون خدمة / إشارة ضعيفة / 5G طاح) ═══
       if (!rebooting && !held && (await runHealer(r, sig, online).catch(() => false))) fired = true;
+      // «حارس التثبيت»: التثبيت صار أسوأ من وقت ما انضبط ← نرجّع إعداد العضو (services/lockWatch)
+      if (!rebooting && !held && (await runLockWatch(r, true, { sig, online }).catch(() => null))) fired = true;
 
       // ═══ الوضع الذكي والصيانة الليلية ═══
       if (!held && (await runAutomation(r, sig).catch(() => false))) fired = true;

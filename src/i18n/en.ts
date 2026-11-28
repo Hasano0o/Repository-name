@@ -974,6 +974,14 @@ export const EN: Record<string, string> = {
   'السجل': 'History',
   'الأنتنا والباقة': 'Antenna & plan',
   'مزايا تجريبية': 'Lab features',
+  'حارس التثبيت': 'Lock guard',
+  'تلقائي — لو التثبيت صار أضعف بعد ساعات نرجّع إعدادك': 'Automatic — if a lock gets weaker hours later, we restore your settings',
+  'يسألني قبل ما يرجّع': 'Ask me before restoring',
+  'طافي': 'Off',
+  'يبدّل بين تلقائي، يسألني، وطافي': 'Switches between automatic, ask me, and off',
+  '🛡️ حارس التثبيت': '🛡️ Lock guard',
+  'خله': 'Keep it',
+  'ما قدرنا': "Couldn't do it",
   'انصلحت — جرّبها ✅': 'Fixed — try it ✅',
   'مزايا تجريبية 🧪': 'Lab features 🧪',
   'نطبّق…': 'Applying…',
@@ -2683,6 +2691,7 @@ export const EN: Record<string, string> = {
 };
 
 export const EN_PATTERNS: Record<string, string> = {
+  '{0}\n\nنرجّع إعدادك اللي كان قبل التثبيت؟': '{0}\n\nRestore the settings you had before the lock?',
   "الراوتر رفض الكود ({0})": "The router rejected the code ({0})",
   '{0}، لكن فيه تداخل قوي (SINR سالب) — جرّب مكان ثاني أو قرّب من الشباك.': '{0}, but there is strong interference (negative SINR) — try another spot or move near a window.',
   '{0}. ما فيه 5G حالياً — شوف الأبراج حولك تعرف إذا فيه تغطية 5G.': '{0}. No 5G right now — check the towers around you to see if there is 5G coverage.',

@@ -15,6 +15,7 @@ import { LockSnapshot, mismatchOf, settleMsFor } from '../drivers/lockSnapshot';
 import { saveReleaseSnap, getReleaseSnap, clearReleaseSnap, releaseNeedsReboot, setReleaseNeedsReboot } from '../store/lockSnap';
 import type { BandConfig } from '../drivers/types';
 import { savePending, getPending, clearPending, PENDING_MAX_AGE } from '../store/pendingRestore';
+import { startWatch } from '../store/lockWatch';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 /** يرجّع undefined لو الخطوة طوّلت أكثر من المسموح (بدل ما يعلق المستخدم ٤٠ دقيقة) */
@@ -788,7 +789,11 @@ async function safeApplyInner(o: SafeApplyOpts, track: Tracker = progress.none):
     const rs = await restorePrev();
     extra = restoreFields(rs);
     if (rs.online) await clearPending(o.r.id);
-  } else await clearPending(o.r.id);
+  } else {
+    await clearPending(o.r.id);
+    // «حارس التثبيت»: نحفظ القراءة وقت التثبيت + إعدادك قبله — لو صار أسوأ بعد ساعات نرجّعك (services/lockWatch)
+    if (after) await startWatch(o.r.id, o.label, { rsrp: after.rsrp, sinr: after.sinr, pci: after.pci }, snap).catch(() => {});
+  }
 
   const res: TrialResult = {
     verdict, kept, before, after, change, towerChanged, userKeptAnyway, ...extra,

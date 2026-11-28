@@ -138,7 +138,20 @@ export default function RootLayout() {
         .then(msg => { if (msg) Alert.alert('✓ رجّعنا النت', msg); })
         // «ثبّت للعب» خلص وقته أو النت طاح عليه ← نرجّع إعداد العضو
         .then(() => import('../src/services/gameLockGuard')).then(m => m?.runGameLockRecovery())
-        .then(msg => { if (msg) Alert.alert('🎮 رجّعنا إعدادك', msg); }).catch(() => {});
+        .then(msg => { if (msg) Alert.alert('🎮 رجّعنا إعدادك', msg); })
+        // «حارس التثبيت»: الإعداد المثبّت صار أضعف من وقت الضبط ← نرجّعه (أو نسأل)
+        .then(() => import('../src/services/lockWatch')).then(m => m?.runLockWatchAll())
+        .then(list => {
+          for (const o of list ?? []) {
+            if (o.ask) {
+              const ask = o.ask;
+              Alert.alert('🛡️ حارس التثبيت', `${o.msg}\n\nنرجّع إعدادك اللي كان قبل التثبيت؟`, [
+                { text: 'خله', style: 'cancel' },
+                { text: 'رجّعه', onPress: () => { ask().then(m => Alert.alert('✓', m)).catch(e => Alert.alert('ما قدرنا', String(e?.message ?? e))); } },
+              ]);
+            } else Alert.alert('🛡️ حارس التثبيت', o.msg);
+          }
+        }).catch(() => {});
     };
     const t = setTimeout(go, 6000);
     const sub = AppState.addEventListener('change', st => { if (st === 'active') setTimeout(go, 3000); });

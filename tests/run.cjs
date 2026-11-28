@@ -22,6 +22,8 @@ const files = [
   'src/drivers/huawei/labs.ts',
   'src/drivers/labVariants.ts',
   'src/utils/labFixCore.ts',
+  'src/utils/lockWatchCore.ts',
+  'src/store/lockWatch.ts',
   'src/utils/fiberAdvice.ts',
   'src/utils/fiberKit.ts',
   'src/utils/wifiBoost.ts',
