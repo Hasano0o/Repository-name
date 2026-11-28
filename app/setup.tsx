@@ -50,7 +50,14 @@ const answers = async (host: string, ms = 2000) => (await probe(host, ms)).ok;
 
 /** ليش ما لقينا الراوتر:
  *  unknown = جهاز ردّ بس ما عرفنا نوعه (مو «مو متصل»!) · perm = آيفون والكل فشل فوراً (الشبكة المحلية مقفولة) · none = ولا رد */
-type Miss = { why: 'unknown' | 'perm' | 'none'; hosts: string[] };
+type Miss = { why: 'unknown' | 'perm' | 'none'; hosts: string[]; online?: boolean };
+
+/** الجوال يوصل للنت؟ (لما ولا راوتر رد) — يفرّق «على بيانات الجوال/واي فاي ثاني» عن «ما فيه نت أصلاً» */
+async function internetOk(): Promise<boolean> {
+  const c = new AbortController(); const t = setTimeout(() => c.abort(), 3500);
+  try { const r = await fetch('https://has-host.com/bandly/stores/active', { signal: c.signal }); return r.status > 0; }
+  catch { return false; } finally { clearTimeout(t); }
+}
 
 function Bubble({ children, tone }: { children: ReactNode; tone?: 'ok' | 'warn' }) {
   return (
@@ -117,6 +124,9 @@ export default function SetupScreen() {
     // الكل فشل بسرعة (بدون ما ينتظر المهلة) — في الآيفون هذا شكل «الشبكة المحلية» المقفولة
     const fast = probes.every(p => !p.ok && !p.timedOut && p.ms < 1200);
     const m: Miss = alive2.length ? { why: 'unknown', hosts: alive2 } : { why: Platform.OS === 'ios' && fast ? 'perm' : 'none', hosts: [] };
+    // ٢٦–٢٨ نوفمبر: ٢٩ آيفون «ولا واحد رد» والتقرير فاضي — نعرف هل الجوال عنده نت (يعني مو على واي فاي الراوتر غالباً)
+    if (m.why === 'none') m.online = await internetOk();
+    if (!alive.current) return;
     setMiss(m);
     setErr(unsupported && !alive2.length ? 'لقيت راوتر، بس نوعه للحين مو مدعوم بالكامل — جرّب «راوتري مو مدعوم؟» تحت ونضيفه.' : '');
     setStep('notfound');
@@ -124,7 +134,7 @@ export default function SetupScreen() {
     if (!reported.current) {
       reported.current = true;
       const slow = probes.filter(p => p.timedOut).length;
-      reportError('setup', `ما لقينا الراوتر: ${m.why} · ردّ: ${alive2.join(',') || 'ولا واحد'} · مهلة ${slow}/${probes.length} · فشل سريع ${fast ? 'كله' : 'لا'}`);
+      reportError('setup', `ما لقينا الراوتر: ${m.why} · ردّ: ${alive2.join(',') || 'ولا واحد'} · مهلة ${slow}/${probes.length} · فشل سريع ${fast ? 'كله' : 'لا'}${m.online === undefined ? '' : ` · نت الجوال ${m.online ? 'يوصل' : 'ما يوصل'}`}`);
     }
   };
 
@@ -283,7 +293,9 @@ export default function SetupScreen() {
                 <Text style={s.offTitle}>{miss.why === 'perm' ? 'Bandly ما يقدر يوصل لراوترك' : 'ما لقيت راوترك'}</Text>
                 <Text style={s.offSub}>{miss.why === 'perm'
                   ? 'غالباً صلاحية «الشبكة المحلية» مقفولة لـ Bandly في الآيفون — فعّلها من الزر تحت وارجع، أكمّل لحالي.'
-                  : 'تأكد إن جوالك متصل بواي فاي الراوتر (مو بيانات الجوال) — وأنا أكمّل لحالي أول ما يرد.'}</Text>
+                  : miss.online
+                    ? `جوالك يوصل للنت بس ولا راوتر رد — يعني غالباً أنت على بيانات الجوال أو واي فاي ثاني.\nاتصل بواي فاي الراوتر (اسمه على الملصق)${Platform.OS === 'ios' ? '، ولو أنت متصل فيه فعّل «الشبكة المحلية» لـ Bandly من الزر تحت' : ''} — وأنا أكمّل لحالي أول ما يرد.`
+                    : 'تأكد إن جوالك متصل بواي فاي الراوتر (مو بيانات الجوال) — وأنا أكمّل لحالي أول ما يرد.'}</Text>
                 <View style={s.row}><ActivityIndicator size="small" color={C.sub} /><Text style={s.offWait}>أنتظرك…</Text></View>
               </View>
             )}
