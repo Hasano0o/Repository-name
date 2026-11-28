@@ -303,6 +303,8 @@ from stats import router as stats_router, daily_loop as stats_daily  # noqa: E40
 app.include_router(stats_router)
 from autoprog import router as autoprog_router  # noqa: E402 — «برمج لي جهازي»: مطابقة ملفات راوتر غير معروف مع عائلاتنا
 app.include_router(autoprog_router)
+from labfix import router as labfix_router  # noqa: E402 — الإصلاح الذاتي للمزايا التجريبية (٢٨ نوفمبر)
+app.include_router(labfix_router)
 
 
 @app.on_event("startup")
