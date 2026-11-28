@@ -3,7 +3,9 @@
  *   device/antenna_settings  antenna_type: 0 داخلية · 1 خارجية (1+2) · 2 خارجية (1) · 3 تلقائي
  *   device/antenna_status · antenna_type · antenna_set_type  (قراءة — تختلف حسب الموديل)
  *   ussd/send → ussd/status (1 = ينتظر) → ussd/get <content>
- *   diagnosis/diagnose_ping  POST <Host><Timeout> ثم GET للنتيجة
+ *   diagnosis/diagnose_ping  POST <ServiceName><Host><Timeout> ثم GET للنتيجة (DiagnosticsState=Requested ← ينتظر)
+ *     ServiceName من diagnosis/get-wan-service-name — مثل صفحة diagnosis-vue (تقرير page-diagnosis ٢٨ نوفمبر،
+ *     كان الراوتر يرد 100006 لأننا ما نرسله)
  * أي مسار يرجع خطأ = الموديل ما يدعمه، فما نعرض الزر.
  */
 import type { Io } from './apn-dns';
@@ -67,23 +69,49 @@ export async function ussd(io: Io, code: string): Promise<string> {
   throw new Error('الشبكة ما ردّت على الكود خلال ٣٠ ثانية');
 }
 
+/** اسم الواجهة للتشخيص مثل الصفحة: الأولى «INTERNET»، وموديلات «module» أول اسم في القائمة */
+export function pingServiceName(xml: string | null): string {
+  const list = (xml ? tag(xml, 'service_name') ?? '' : '').split(',').map(x => x.trim()).filter(Boolean);
+  if (!list.length || list.includes('INTERNET')) return 'INTERNET';
+  return list[0];
+}
+
+/** نتيجة diagnose_ping بحقول الصفحة: SuccessCount · FailureCount · AverageResponseTime · Result (0 = نجح) */
+export function parsePingResult(xml: string): RouterPingResult | 'wait' {
+  const raw = fieldsOf(inner(xml));
+  const f = (k: string) => raw.find(r => r[0] === k)?.[1];
+  if (f('DiagnosticsState') === 'Requested') return 'wait';
+  const avg = parseFloat(f('AverageResponseTime') ?? '');
+  const okN = parseInt(f('SuccessCount') ?? '', 10);
+  if (f('Result') !== undefined || f('SuccessCount') !== undefined) {
+    const ok = f('Result') === '0' || okN > 0;
+    return { ok, ms: ok && Number.isFinite(avg) ? avg : undefined, raw };
+  }
+  // موديلات أقدم بأسماء ثانية — نلقط أي وقت
+  const timeF = raw.find(([k, v]) => /time|rtt|delay|avg/i.test(k) && /\d/.test(v) && !/timeout/i.test(k));
+  const resF = raw.find(([k]) => /result|status/i.test(k));
+  const ms = timeF ? parseFloat(timeF[1]) : undefined;
+  if (ms !== undefined && Number.isFinite(ms)) return { ok: true, ms, raw };
+  if (resF && /fail|timeout|unreach/i.test(resF[1])) return { ok: false, raw };
+  if (resF && /succ|ok|^0$/i.test(resF[1])) return { ok: true, raw };
+  return 'wait';
+}
+
 /** بنق من الراوتر نفسه — يفرّق: التأخير من الواي فاي ولا من شبكة الجوال */
 export async function routerPing(io: Io, host: string): Promise<RouterPingResult> {
-  await io.post('diagnosis/diagnose_ping', `<Host>${esc(host)}</Host><Timeout>4000</Timeout>`);
-  let raw: [string, string][] = [];
-  const end = Date.now() + 20_000;
+  const svc = pingServiceName(await tryGet(io, 'diagnosis/get-wan-service-name'));
+  await io.post('diagnosis/diagnose_ping', `<ServiceName>${esc(svc)}</ServiceName><Host>${esc(host)}</Host><Timeout>4000</Timeout>`);
+  let last: RouterPingResult = { ok: false, raw: [] };
+  const end = Date.now() + 30_000;
+  await sleep(3000);
   while (Date.now() < end) {
-    await sleep(2000);
     const x = await tryGet(io, 'diagnosis/diagnose_ping');
-    if (!x) continue;
-    raw = fieldsOf(inner(x));
-    // نلقط أي حقل فيه وقت (ms) — أسماء الحقول تختلف بين الموديلات
-    const timeF = raw.find(([k, v]) => /time|rtt|delay|avg/i.test(k) && /\d/.test(v) && !/timeout/i.test(k));
-    const resF = raw.find(([k]) => /result|status/i.test(k));
-    const ms = timeF ? parseFloat(timeF[1]) : undefined;
-    if (ms !== undefined && Number.isFinite(ms)) return { ok: true, ms, raw };
-    if (resF && /fail|timeout|unreach/i.test(resF[1])) return { ok: false, raw };
-    if (resF && /succ|ok|^0$/i.test(resF[1])) return { ok: true, raw };
+    if (x) {
+      const r = parsePingResult(x);
+      if (r !== 'wait') return r;
+      last = { ok: false, raw: fieldsOf(inner(x)) };
+    }
+    await sleep(3000);
   }
-  return { ok: false, raw };
+  return last;
 }
