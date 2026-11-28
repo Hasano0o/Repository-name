@@ -1823,6 +1823,23 @@ export class HuaweiDriver implements RouterDriver {
    * يرجّع اللقطة كما هي: وضع الشبكة أول، بعدها أقسام القفل — ونكتب بس اللي تغيّر.
    * بعدها نقرأ ونقارن: لو بقى فرق نرمي restoreMismatch بقائمة اللي ما رجع.
    */
+  /**
+   * قراءة lock-freq بعد ما رجّعنا وضع الشبكة: الراوتر يرد 100006 ثواني وهو يعيد تهيئة المودم
+   * (تقرير nrprim:78 — ٢٨ نوفمبر ١٤:٥٠: رجّعنا الوضع 00 ← lock-freq 100006 ← وقف الإرجاع وبقى قفل الترددات متغيّر).
+   * نعيد القراءة كم مرة (لين ~٢٠ ثانية) بدل ما نوقف الإرجاع.
+   */
+  private async lockFreqPatient(): Promise<string> {
+    let last: unknown;
+    for (const wait of [0, 2000, 3000, 4000, 5000, 6000]) {
+      if (wait) await new Promise(r => setTimeout(r, wait));
+      try { return await this.get('net/lock-freq'); } catch (e) {
+        last = e;
+        if (!(e instanceof HuaweiError) || e.code !== '100006') throw e;
+        diag(`[huawei] lock-freq 100006 بعد تغيير الوضع — ننتظر ${wait / 1000}ث ونعيد`);
+      }
+    }
+    throw last;
+  }
   async restoreLockState(snap: LockSnapshot): Promise<void> {
     if (snap.driver !== this.id) throw new Error('اللقطة من نوع راوتر ثاني — ما نرجّعها');
     const d = snap.data as HuaweiLockData;
@@ -1861,7 +1878,7 @@ export class HuaweiDriver implements RouterDriver {
       await new Promise(r => setTimeout(r, 2000));
     }
     if (d.lockFreq) {
-      const cur = parseLockRaw(await this.get('net/lock-freq'));
+      const cur = parseLockRaw(await this.lockFreqPatient());
       if (lockDiffForMode(d.lockFreq, cur, mode).length) {
         const body = lockRestoreBody(d.lockFreq, mode);
         this.log('restore lock-freq', body);
@@ -1872,7 +1889,7 @@ export class HuaweiDriver implements RouterDriver {
     // التحقق: نقرأ من الراوتر نفسه — ما نصدّق «OK» من الطلب
     // فيه lock-freq: هو المرجع لترددات 4G، وLTEBand في net-mode نسخة يكتبها الراوتر بنفسه بعد إرجاع
     // lock-freq (بصيغة «تلقائي» ثانية) — لو قفل 4G رجع مثل اللقطة ما نحاسب على LTEBand
-    const lfNow = d.lockFreq ? parseLockRaw(await this.get('net/lock-freq')) : null;
+    const lfNow = d.lockFreq ? parseLockRaw(await this.lockFreqPatient()) : null;
     const lfLeft = d.lockFreq && lfNow ? lockDiffForMode(d.lockFreq, lfNow, mode) : [];
     const skip = d.lockFreq && !lfLeft.some(x => x.startsWith('قفل 4G')) ? ['LTEBand'] : [];
     const left = netModeDiff(d.netMode, parseNetModeFields(await this.get('net/net-mode')), skip);
