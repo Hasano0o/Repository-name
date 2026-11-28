@@ -1,4 +1,6 @@
 import { sha256 } from '@noble/hashes/sha2';
+import { ZteLabs } from './labs';
+import type { LabItem } from '../types';
 import { sccSigRows } from './caSig';
 import { u30Enc, u30NewKey } from './u30crypto';
 /** عشوائي آمن — نحمّل expo-crypto وقت الحاجة بس (تشفير U30) */
@@ -1718,6 +1720,17 @@ export class ZteDriver implements RouterDriver {
 
   private io(): ZteIo {
     return { get: f => this.get(f), getRaw: f => this.getRaw(f), act: b => this.act(b) };
+  }
+  /** «مزايا تجريبية» — أولوية السرعة · تبديل الأنتنا · اختيار الشبكة (zte/labs.ts) */
+  private labs?: ZteLabs;
+  private lab(): ZteLabs {
+    return this.labs ??= new ZteLabs({ get: f => this.get(f), act: b => this.act(b) }, () => this.getDevices());
+  }
+  async getLabs(): Promise<LabItem[]> { await this.ensure(); return this.lab().list(); }
+  async runLab(id: string, value?: string): Promise<string | void> {
+    await this.ensure();
+    await this.g5Guard(id);
+    return this.lab().run(id, value);
   }
   async getExtras() {
     await this.ensure();
