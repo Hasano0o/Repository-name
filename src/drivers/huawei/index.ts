@@ -1,4 +1,6 @@
 import * as Crypto from 'expo-crypto';
+import { hwLabs, hwRunLab, type HwLabIo } from './labs';
+import type { LabItem } from '../types';
 import { diag } from '../../services/diag';
 import { huaweiEncrypt } from './rsaEnc';
 import { sha256 } from '@noble/hashes/sha2';
@@ -2118,6 +2120,24 @@ export class HuaweiDriver implements RouterDriver {
    *   sim/sim-info (sim_slot_num = esim؟) · sim/esim-profiles · sim/sim-mode · sim/esim-auto-download
    * ما نرسل أي أمر تغيير (down-profile / operate-profile / sim-mode-reboot) — المرحلة ٢ بعد ما نشوف الردود.
    */
+  /** «مزايا تجريبية» — HiGame · التشخيص بضغطة (huawei/labs.ts) */
+  private labIo(): HwLabIo {
+    return {
+      get: async p => (await this.http(this.url(p), { headers: this.headers({ _ResponseFormat: 'JSON' }) }, 8000)).text(),
+      postJson: async (p, body) => {
+        const tok = this.queue.shift() || await this.freshToken();
+        const r = await this.http(this.url(p), {
+          method: 'POST',
+          headers: this.headers({ 'Content-Type': 'application/json;charset=UTF-8', _ResponseFormat: 'JSON', __RequestVerificationToken: tok }),
+          body: JSON.stringify(body),
+        }, 10000);
+        this.captureTokens(r);
+        return r.text();
+      },
+    };
+  }
+  getLabs(): Promise<LabItem[]> { return hwLabs(this.labIo()); }
+  runLab(id: string, value?: string) { return hwRunLab(this.labIo(), id, value); }
   async getPageChunk(name: string): Promise<string> {
     if (!/^[a-z]{3,30}$/.test(name)) throw new Error('اسم صفحة غلط');
     const r = await this.http(`${this.base()}/js/${name}-${name}-vue.js`, { headers: this.headers() }, 15000);
