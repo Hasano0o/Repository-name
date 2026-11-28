@@ -7,6 +7,17 @@
  * ومن <meta name="csrf_token">. بدون هالاحتياط التطبيق يقول «راوترك مو مدعوم» وهو هواوي.
  */
 
+/**
+ * كوكي الجلسة من <SesInfo>. أغلب الفيرموير: «SessionID=xxx». احتياط: قيمة بدون «SessionID=» (رمز طويل بس) — B525s-23a
+ * (WebUI 17.100، أندرويد ٢٧ نوفمبر): الكوكي اليدوي انطفى لأن الصيغة ما طابقت ← رجعنا لجرة النظام ← 125003 على كل تحدي.
+ */
+export function sesInfoCookie(ses: string): string {
+  const s = (ses ?? '').trim();
+  const m = s.match(/SessionID=([^;,\s]+)/);
+  if (m) return `SessionID=${m[1]}`;
+  return /^[A-Za-z0-9+/=_-]{32,}$/.test(s) ? `SessionID=${s}` : '';
+}
+
 /** رد SesTokInfo فيه رمز؟ */
 export function hasSesTok(xml: string): boolean {
   return /<TokInfo>[^<]+<\/TokInfo>/.test(xml);

@@ -10,7 +10,7 @@ import {
   BandConfig, SmsMessage, DeviceDetails, CellTower, CellLockTarget, CellLockState, DataPlan, ActiveLock,
   ApnProfile, DnsConfig, Carrier, SignalSnapshot, TimeRule, BandRoles } from '../types';
 import { http as rawHttp } from '../http';
-import { hasSesTok, tokenFromReply, isHuaweiSessionReply, cookieShape, xmlUnesc, escCount, privacyNeed, privacyAccepted, privacyBrief, stateFlags } from './session';
+import { sesInfoCookie, hasSesTok, tokenFromReply, isHuaweiSessionReply, cookieShape, xmlUnesc, escCount, privacyNeed, privacyAccepted, privacyBrief, stateFlags } from './session';
 import { Platform } from 'react-native';
 import { trafficBurst } from '../../utils/nrprobe';
 import { getApnProfiles, setApn, selectApn, getDns, setDns } from './apn-dns';
@@ -443,6 +443,7 @@ export class HuaweiDriver implements RouterDriver {
     this.cookieNoted = true;
     diag(`[huawei] set-cookie: ${cookieShape(sc)} · ${this.manualCookie ? 'يدوي' : 'جرة النظام'}`);
   }
+  private sesNoted = false;
   /** جلسة جديدة من الراوتر: SesInfo = الكوكي، TokInfo = الرمز */
   private async sesTok(): Promise<string> {
     this.cookie = '';
@@ -450,8 +451,13 @@ export class HuaweiDriver implements RouterDriver {
     const x = await r.text();
     const ses = xmlUnesc(tag(x, 'SesInfo') ?? '');
     this.noteEsc('SesTokInfo', x);
-    const m = ses.match(/SessionID=([^;,\s]+)/);
-    if (m) this.cookie = `SessionID=${m[1]}`;
+    const ck = sesInfoCookie(ses);
+    const m = ck ? [ck, ck.slice(10)] : null;
+    if (ck) this.cookie = ck;
+    if (!this.sesNoted) {
+      this.sesNoted = true;
+      diag(`[huawei] SesInfo: ${!ses ? 'فاضي' : /SessionID=/.test(ses) ? 'SessionID=…' : ck ? 'رمز بدون «SessionID=» (استخدمناه)' : 'صيغة ثانية'} · طول ${ses.length} · TokInfo ${hasSesTok(x) ? '✓' : '✗'}`);
+    }
     // H155-383 (فيرموير Vue ٢٠٢٥): ما فيه SesTokInfo — الكوكي يجي من رأس set-cookie والرمز من webserver/token
     if (!hasSesTok(x)) {
       try {
@@ -520,7 +526,7 @@ export class HuaweiDriver implements RouterDriver {
     const x = await r.text();
     if (hasSesTok(x)) {
       this.noteEsc('SesTokInfo', x);
-      if (this.manualCookie) { const m = xmlUnesc(tag(x, 'SesInfo') ?? '').match(/SessionID=([^;,\s]+)/); if (m) this.cookie = `SessionID=${m[1]}`; }
+      if (this.manualCookie) { const ck = sesInfoCookie(xmlUnesc(tag(x, 'SesInfo') ?? '')); if (ck) this.cookie = ck; }
       return xmlUnesc(tag(x, 'TokInfo') ?? '');
     }
     // H155-383: ما فيه SesTokInfo — نرجع لـ webserver/token (حتى لو طُلب viaSes)

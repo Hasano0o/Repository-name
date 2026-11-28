@@ -25,3 +25,13 @@ test('صفحات ثانية فيها كلمة token ما تنحسب هواوي',
   assert.equal(isHuaweiSessionReply('{"token":"abcdefghijkl"}'), false);
   assert.equal(isHuaweiSessionReply(''), false);
 });
+
+test('sesInfoCookie: SesInfo بصيغة SessionID= أو رمز لحاله (B525s-23a ٢٧ نوفمبر)', async () => {
+  const { sesInfoCookie } = await import('../src/drivers/huawei/session');
+  const tok = 'Abc123'.repeat(16);
+  assert.equal(sesInfoCookie(`SessionID=${tok}`), `SessionID=${tok}`);
+  assert.equal(sesInfoCookie(`SessionID=${tok}; path=/`), `SessionID=${tok}`);
+  assert.equal(sesInfoCookie(tok), `SessionID=${tok}`);
+  assert.equal(sesInfoCookie(''), '');
+  assert.equal(sesInfoCookie('short'), '');
+});
